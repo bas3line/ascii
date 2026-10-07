@@ -1,31 +1,17 @@
 ---
-/* The author: a GPU rack at work, what he does on a typewriter, and where to find him. */
-import Ascii from "ascii.rest/astro";
-import * as rack from "../art/gpu-rack";
+/* The author: who made ascii.rest, what he does, and where to find him. */
 import Icon from "../components/Icon.astro";
 import Layout from "../layouts/Layout.astro";
 import { AUTHOR, LINKS, NAME } from "../lib/library";
-
-const typing = {
-  prefix: "i ",
-  phrases: ["build inference engines at commandcode", "maintain ascii.rest and ultrabalancer", "mostly write rust, go and python"],
-};
 ---
 
 <Layout title={`${AUTHOR.name} · ${NAME}`} description={`${AUTHOR.name} made ${NAME}.`} path="/author/">
   <h1 slot="heading">{AUTHOR.name}</h1>
-  <section class="block" style="margin-top: 2rem">
-    <div class="well big">
-      <pre
-        class="art"
-        data-rack
-        style={`--cols: ${rack.meta.cols}; --rows: ${rack.meta.rows}; --cell: 2`}
-        role="img"
-        aria-label="a gpu rack training, its meters rising with every step">{rack.default()(0)}</pre>
-    </div>
-  </section>
-  <Ascii piece="typewriter" options={typing} label={`i ${typing.phrases.join(", ")}`} class="art-typing" />
-  <p class="lede">I made {NAME}, a library of animated ascii art for the web.</p>
+  <div class="about">
+    <p>I build inference engines at CommandCode.</p>
+    <p>I maintain ascii.rest and ultrabalancer.</p>
+    <p>I mostly write Rust, Go and Python.</p>
+  </div>
   <ul class="links">
     {LINKS.map((link) => (
       <li><a href={link.href} rel="me"><Icon name={link.icon} /><span>{link.label}</span></a></li>
@@ -33,25 +19,19 @@ const typing = {
   </ul>
 </Layout>
 
-<script>
-  import { mount } from "ascii.rest";
-  import * as rack from "../art/gpu-rack";
-
-  const pre = document.querySelector<HTMLElement>("pre[data-rack]");
-  if (pre) mount(pre, rack);
-</script>
-
 <style>
-  :global(.art-typing) {
-    display: block;
-    margin: 1.25rem 0 0 -1ch;
+  .about {
+    margin-top: 2rem;
     color: var(--text);
+  }
+  .about p {
+    margin: 0 0 0.5rem;
   }
   .links {
     display: flex;
     flex-wrap: wrap;
     gap: 0.75rem 2.5ch;
-    margin: 1.75rem 0 0;
+    margin: 2rem 0 0;
     padding: 0;
     list-style: none;
   }
