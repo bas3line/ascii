@@ -17,7 +17,8 @@ export type Category =
   | "ui"
   | "data"
   | "type"
-  | "logos";
+  | "logos"
+  | "distros";
 
 export type Options = Record<string, unknown>;
 

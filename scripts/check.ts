@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Meta, Piece } from "../src/types.ts";
 
 const DIR = fileURLToPath(new URL("../src/pieces", import.meta.url));
-const CATS = ["scenes", "shapes", "space", "physics", "nature", "creatures", "objects", "generative", "effects", "ui", "data", "type", "logos"];
+const CATS = ["scenes", "shapes", "space", "physics", "nature", "creatures", "objects", "generative", "effects", "ui", "data", "type", "logos", "distros"];
 const CHARSET = /^[\x20-\x7E·°─-▟]*$/;
 const SCENE_CHARSET = /^[\x20-\x7E·°─-▟•●]*$/;
 const SHOW_AT = [0, 1, 2.5, 5];
