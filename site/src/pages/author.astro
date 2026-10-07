@@ -1,22 +1,57 @@
 ---
-/* The author: who made ascii.rest and where to find him. */
+/* The author: his name in big-text, what he does on a typewriter, and where to find him. */
+import Ascii from "ascii.rest/astro";
+import Icon from "../components/Icon.astro";
 import Layout from "../layouts/Layout.astro";
 import { AUTHOR, LINKS, NAME } from "../lib/library";
+
+const typing = {
+  prefix: "i ",
+  phrases: ["build inference engines at commandcode", "maintain ascii.rest and ultrabalancer", "mostly write rust, go and python"],
+};
 ---
 
 <Layout title={`${AUTHOR.name} · ${NAME}`} description={`${AUTHOR.name} made ${NAME}.`} path="/author/">
   <h1 slot="heading">{AUTHOR.name}</h1>
-  <p class="lede">I made {NAME}.</p>
-  <p class="links">
-    {LINKS.map((link) => <a href={link.href} rel="me">{link.label}</a>)}
-  </p>
+  <section class="block" style="margin-top: 2rem">
+    <div class="well big name">
+      <Ascii piece="big-text" options={{ text: AUTHOR.name.toLowerCase() }} label={AUTHOR.name} class="art-name" />
+    </div>
+  </section>
+  <Ascii piece="typewriter" options={typing} label={`i ${typing.phrases.join(", ")}`} class="art-typing" />
+  <p class="lede">I made {NAME}, a library of animated ascii art for the web.</p>
+  <ul class="links">
+    {LINKS.map((link) => (
+      <li><a href={link.href} rel="me"><Icon name={link.icon} /><span>{link.label}</span></a></li>
+    ))}
+  </ul>
 </Layout>
 
 <style>
+  .name :global(.art-name) {
+    color: var(--ink);
+    font-size: min(15px, calc(92cqi / 66 / 0.6));
+  }
+  :global(.art-typing) {
+    display: block;
+    margin: 1.25rem 0 0 -1ch;
+    color: var(--text);
+  }
   .links {
     display: flex;
     flex-wrap: wrap;
-    gap: 0 2ch;
-    margin-top: 1.5rem;
+    gap: 0.75rem 2.5ch;
+    margin: 1.75rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8ch;
+    text-decoration-line: none;
+  }
+  .links a:hover span {
+    text-decoration-line: underline;
   }
 </style>

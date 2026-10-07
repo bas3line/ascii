@@ -322,6 +322,16 @@ section + section,
   margin-top: 5rem;
 }
 
+.foot .source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6ch;
+}
+
+.icon {
+  flex: none;
+}
+
 /* --- usage tabs --------------------------------------------------------- */
 
 .tabs {
