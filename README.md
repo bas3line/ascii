@@ -1,31 +1,42 @@
-<p align="right"><sub>Sponsored by <a href="https://www.cloudflare.com"><img src=".github/cloudflare.svg" height="12" alt=""> Cloudflare</a></sub></p>
+<div align="center">
 
 # ascii.rest
 
-```text
-        @@@@$$$$
-    @@$$##*****#####
-   $##***************!
- ###**!=;:::::==!*****!
- ##*!!;~-....,~:=!****!=
-***!!;~,..    .~;!!***!=
-****!=;:-      =**#***!;,
-!*****!!==    #$$##**!=;
-;!*****###$@@@@$$#***!;~
- ;!****##$$$$$$#*!!*!;~
-  ~=!!*******!!*!!!=:,
-    -:==!!!!!!!==:~,
-        ,--~~--..
-```
+<a href="https://ascii.rest/donut/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/donut-dark.svg">
+    <img src=".github/donut-light.svg" alt="A lit donut turning, drawn in ascii">
+  </picture>
+</a>
 
-<sub>The <a href="https://ascii.rest/donut/">donut</a>, drawn small. On a page it turns: <code>&lt;ascii-art piece="donut"&gt;&lt;/ascii-art&gt;</code></sub>
+<sub>Sponsored by <a href="https://www.cloudflare.com"><img src=".github/cloudflare.svg" height="14" align="center" alt=""> Cloudflare</a></sub>
+
+<br>
+
+Animated ascii art for web pages.<br>
+142 pieces for React, Next.js, Astro or plain HTML.
+
+[ascii.rest](https://ascii.rest) · [install](#install) · [pieces](#pieces) · [contributing](CONTRIBUTING.md)
 
 [![by @bas3line](https://img.shields.io/badge/by-%40bas3line-181717?logo=github&logoColor=white)](https://github.com/bas3line)
 [![CI](https://github.com/bas3line/ascii/actions/workflows/ci.yml/badge.svg)](https://github.com/bas3line/ascii/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-181717)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-181717?logo=typescript&logoColor=white)](src/types.ts)
 
-Animated ascii art for web pages, written in TypeScript by [@bas3line](https://github.com/bas3line). 142 pieces, from spinning shapes and physics to loaders, charts and full-colour scenes, for React, Next.js, Astro, or a plain HTML page. See them all at [ascii.rest](https://ascii.rest).
+</div>
+
+<br>
+
+Written in TypeScript by [@bas3line](https://github.com/bas3line). 142 pieces, from spinning shapes and physics to loaders, charts and full-colour scenes. The donut above turns on a page with one tag: `<ascii-art piece="donut"></ascii-art>`. See them all at [ascii.rest](https://ascii.rest).
+
+<p align="center">
+  <a href="https://ascii.rest/night-coast/"><img src="https://ascii.rest/og/night-coast.png" width="32%" alt="night coast"></a>
+  <a href="https://ascii.rest/aurora-fjord/"><img src="https://ascii.rest/og/aurora-fjord.png" width="32%" alt="aurora fjord"></a>
+  <a href="https://ascii.rest/earthrise/"><img src="https://ascii.rest/og/earthrise.png" width="32%" alt="earthrise"></a>
+  <a href="https://ascii.rest/kyoto-dusk/"><img src="https://ascii.rest/og/kyoto-dusk.png" width="32%" alt="kyoto dusk"></a>
+  <a href="https://ascii.rest/torus-knot/"><img src="https://ascii.rest/og/torus-knot.png" width="32%" alt="torus knot"></a>
+  <a href="https://ascii.rest/taj-dawn/"><img src="https://ascii.rest/og/taj-dawn.png" width="32%" alt="taj dawn"></a>
+</p>
 
 ## Why
 
