@@ -6,6 +6,7 @@
  */
 import "../styles/site.css";
 import Credit from "../components/Credit.astro";
+import Icon from "../components/Icon.astro";
 import { AUTHOR, NAME, REPO, SITE, groups } from "../lib/library";
 
 interface Props {
@@ -64,7 +65,7 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
     <div class="frame">
       <aside class="side">
         <a class="home" href="/">{NAME}</a>
-        <p class="by"><Credit lead="by" /></p>
+        <p class="by">by <a href="/author/" rel="author">@{AUTHOR.name}</a></p>
         <nav aria-label="Pieces">
           {groups.map((group, i) => (
             <>
@@ -126,7 +127,7 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
         </div>
         <slot />
         <footer class="foot muted">
-          <span>{NAME}, MIT licensed. <a href={REPO}>Source on GitHub</a>.</span>
+          <span>{NAME}, MIT licensed. <a class="source" href={REPO}><Icon name="github" /><span>Source on GitHub</span></a></span>
           <Credit lead="Made by" />
         </footer>
       </main>

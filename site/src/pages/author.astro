@@ -1,0 +1,40 @@
+---
+/* The author: who made ascii.rest and where to find him. */
+import Icon from "../components/Icon.astro";
+import Layout from "../layouts/Layout.astro";
+import { AUTHOR, LINKS, NAME } from "../lib/library";
+---
+
+<Layout title={`${AUTHOR.name} · ${NAME}`} description={`${AUTHOR.name} made ${NAME}.`} path="/author/">
+  <h1 slot="heading">{AUTHOR.name}</h1>
+  <p class="about">I made {NAME}.</p>
+  <ul class="links">
+    {LINKS.map((link) => (
+      <li><a href={link.href} rel="me"><Icon name={link.icon} /><span>{link.label}</span></a></li>
+    ))}
+  </ul>
+</Layout>
+
+<style>
+  .about {
+    margin: 2rem 0 0;
+    color: var(--text);
+  }
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 2.5ch;
+    margin: 2rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8ch;
+    text-decoration-line: none;
+  }
+  .links a:hover span {
+    text-decoration-line: underline;
+  }
+</style>

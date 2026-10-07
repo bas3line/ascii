@@ -190,6 +190,7 @@ a[aria-current="page"] {
 .side .by {
   margin: 0.25rem 0 2rem;
   color: var(--muted);
+  font-size: 0.875em;
 }
 
 /* The author's credit: the GitHub mark and the handle, one link. */
@@ -319,6 +320,16 @@ section + section,
   justify-content: space-between;
   gap: 0.5rem 3ch;
   margin-top: 5rem;
+}
+
+.foot .source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6ch;
+}
+
+.icon {
+  flex: none;
 }
 
 /* --- usage tabs --------------------------------------------------------- */

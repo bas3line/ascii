@@ -1,9 +1,14 @@
 {
   // ascii.rest: the built site, served as static assets with no Worker code.
   // public/_headers opens the library files to other origins.
+  // Workers Builds deploys main and gives every other branch a Preview URL,
+  // which it posts on the pull request; workers.dev stays off for production.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ascii-rest",
   "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "preview_urls": true,
+  "previews": {},
   "assets": {
     "directory": "./dist",
     "not_found_handling": "404-page"
