@@ -1,5 +1,5 @@
 ---
-/* The author: who made ascii.rest, what he does, and where to find him. */
+/* The author: who made ascii.rest and where to find him. */
 import Icon from "../components/Icon.astro";
 import Layout from "../layouts/Layout.astro";
 import { AUTHOR, LINKS, NAME } from "../lib/library";
@@ -7,11 +7,7 @@ import { AUTHOR, LINKS, NAME } from "../lib/library";
 
 <Layout title={`${AUTHOR.name} · ${NAME}`} description={`${AUTHOR.name} made ${NAME}.`} path="/author/">
   <h1 slot="heading">{AUTHOR.name}</h1>
-  <div class="about">
-    <p>I build inference engines at CommandCode.</p>
-    <p>I maintain ascii.rest and ultrabalancer.</p>
-    <p>I mostly write Rust, Go and Python.</p>
-  </div>
+  <p class="about">I made {NAME}.</p>
   <ul class="links">
     {LINKS.map((link) => (
       <li><a href={link.href} rel="me"><Icon name={link.icon} /><span>{link.label}</span></a></li>
@@ -21,11 +17,8 @@ import { AUTHOR, LINKS, NAME } from "../lib/library";
 
 <style>
   .about {
-    margin-top: 2rem;
+    margin: 2rem 0 0;
     color: var(--text);
-  }
-  .about p {
-    margin: 0 0 0.5rem;
   }
   .links {
     display: flex;
