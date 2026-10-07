@@ -1,3 +1,5 @@
+<p align="right"><sub>Sponsored by <a href="https://www.cloudflare.com"><img src=".github/cloudflare.svg" height="12" alt=""> Cloudflare</a></sub></p>
+
 # ascii.rest
 
 ```text

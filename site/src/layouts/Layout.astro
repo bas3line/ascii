@@ -64,7 +64,7 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
     <div class="frame">
       <aside class="side">
         <a class="home" href="/">{NAME}</a>
-        <p class="by"><Credit lead="by" /></p>
+        <p class="by">by <a href="/author/" rel="author">@{AUTHOR.name}</a></p>
         <nav aria-label="Pieces">
           {groups.map((group, i) => (
             <>
