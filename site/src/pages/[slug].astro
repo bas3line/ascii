@@ -31,6 +31,7 @@ const kb = bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} kB`;
   description={`${piece.note}. An animated ascii piece for web pages, with the code to use it.`}
   path={`/${piece.slug}/`}
   current={piece.slug}
+  card={{ path: `/og/${piece.slug}.png`, alt: `${piece.name}, on ascii.rest: ${piece.note}, by @bas3line` }}
 >
   <h1 slot="heading">{piece.name}</h1>
 
