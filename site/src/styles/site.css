@@ -190,6 +190,7 @@ a[aria-current="page"] {
 .side .by {
   margin: 0.25rem 0 2rem;
   color: var(--muted);
+  font-size: 0.875em;
 }
 
 /* The author's credit: the GitHub mark and the handle, one link. */

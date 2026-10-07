@@ -61,7 +61,14 @@ export const groups = GROUPS.map((g) => ({
 export const SITE = "https://ascii.rest";
 export const NAME = "ascii.rest";
 export const REPO = "https://github.com/bas3line/ascii";
-export const AUTHOR = { handle: "bas3line", url: "https://github.com/bas3line" };
+export const AUTHOR = { name: "Shubham", handle: "bas3line", url: "https://github.com/bas3line" };
+/** Where to find the author, in the order the author page lists them. */
+export const LINKS = [
+  { label: "website", href: "https://yshubham.com" },
+  { label: "x", href: "https://x.com/inlovewithgo" },
+  { label: "linkedin", href: "https://www.linkedin.com/in/extractings/" },
+  { label: "github", href: "https://github.com/bas3line" },
+];
 /** Until the package is on npm, it installs from GitHub. */
 export const INSTALL = "npm install github:bas3line/ascii";
 

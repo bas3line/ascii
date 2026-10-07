@@ -1,0 +1,22 @@
+---
+/* The author: who made ascii.rest and where to find him. */
+import Layout from "../layouts/Layout.astro";
+import { AUTHOR, LINKS, NAME } from "../lib/library";
+---
+
+<Layout title={`${AUTHOR.name} · ${NAME}`} description={`${AUTHOR.name} made ${NAME}.`} path="/author/">
+  <h1 slot="heading">{AUTHOR.name}</h1>
+  <p class="lede">I made {NAME}.</p>
+  <p class="links">
+    {LINKS.map((link) => <a href={link.href} rel="me">{link.label}</a>)}
+  </p>
+</Layout>
+
+<style>
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 2ch;
+    margin-top: 1.5rem;
+  }
+</style>
