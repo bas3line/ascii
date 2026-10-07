@@ -16,7 +16,8 @@ export type Category =
   | "effects"
   | "ui"
   | "data"
-  | "type";
+  | "type"
+  | "logos";
 
 export type Options = Record<string, unknown>;
 
@@ -46,7 +47,10 @@ export interface Meta<O extends Options = Options> {
 export interface Env {
   /** True when the text is dark on a light ground, so shaded pieces can flip their ramp. */
   paper?: boolean;
-  /** For coloured pieces: one palette index a cell, row by row, written by the frame. */
+  /**
+   * For coloured pieces drawn in colour: one palette index a cell, row by row,
+   * written by the frame. Absent when the piece is drawn as text in one ink.
+   */
   color?: Uint8Array;
 }
 

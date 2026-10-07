@@ -70,7 +70,7 @@ export default function typewriter({ prefix = meta.options.prefix, phrases = met
 - **File**: `src/pieces/<slug>.ts`, the slug in kebab-case.
 - **`meta`**:
   - `name`: lowercase.
-  - `category`: one of scenes, shapes, space, physics, nature, creatures, objects, generative, effects, ui, data, type.
+  - `category`: one of scenes, shapes, space, physics, nature, creatures, objects, generative, effects, ui, data, type, logos.
   - `note`: one lowercase line of up to 72 characters, saying what you see.
   - `cols` and `rows`: up to 80 by 32.
   - `fps`: 0 to 60, 0 for a still.
@@ -88,6 +88,11 @@ A **scene** (`category: "scenes"`) is a coloured picture drawn on a canvas:
 - It may be up to 320 by 120 and may also use `•` and `●`.
 - Each frame writes a palette index for every cell into `env.color`, a `Uint8Array` of `cols * rows`, row by row.
 - Its budget is 10 ms a frame on average.
+
+A **logo** (`category: "logos"`) is a language's logo, coloured on a canvas with no `ground`, so it sits on the page:
+- It adds a `palette` and writes `env.color` like a scene. `env.paper` tells it the page is light, so it can lift colours that would sink into a dark one.
+- Without `env.color` it is drawn as text in one ink, in a `<pre>` (`mono` on the tag and the components), and must read that way too.
+- Draw it from the logo's own artwork, credit the source in its header, and keep it to the logo: no wordmark unless that is the logo.
 
 ### What makes a good piece
 

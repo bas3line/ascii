@@ -9,6 +9,7 @@
  *   ---
  *   <Ascii piece="night-coast" fps={12} />
  *   <Ascii piece="big-text" options={{ text: "hello" }} class="banner" />
+ *   <Ascii piece="rust" mono />
  */
 import { canvas, isPiece, load, type PieceName } from "../../dist/library.js";
 import type { MountOptions } from "../../dist/mount.js";
@@ -23,24 +24,26 @@ interface Props {
   fps?: number;
   /** What the picture shows, for screen readers. The piece's name otherwise. */
   label?: string;
+  /** Draws a coloured piece as text in one ink, like any other. */
+  mono?: boolean;
   class?: string;
 }
 
-const { piece, options = {}, fps, label, class: className } = Astro.props;
+const { piece, options = {}, fps, label, mono = false, class: className } = Astro.props;
 if (!isPiece(piece)) throw new Error(`ascii.rest: there is no piece named "${piece}"`);
 const mod: Piece = await load[piece]();
 const { meta } = mod;
-const onCanvas = canvas.has(piece);
+const onCanvas = !mono && canvas.has(piece);
 const { fps: _, ...pieceOptions } = options;
-// A scene keeps its space on its own ground until the canvas paints.
+// A coloured piece keeps its space, on its own ground if it has one, until the canvas paints.
 const still = onCanvas ? "" : mod.default({ ...meta.options, ...pieceOptions })(0, { paper: false });
 const json = Object.keys(options).length ? JSON.stringify(options) : undefined;
 ---
 
-<ascii-art piece={piece} options={json} fps={fps} label={label} class={className}>
+<ascii-art piece={piece} options={json} fps={fps} label={label} mono={mono || undefined} class={className}>
   {
     onCanvas ? (
-      <div style={`aspect-ratio: ${meta.cols} / ${meta.rows * (meta.cell ?? 2)}; background: ${meta.ground}`} />
+      <div style={`aspect-ratio: ${meta.cols} / ${meta.rows * (meta.cell ?? 2)}${meta.ground ? `; background: ${meta.ground}` : ""}`} />
     ) : (
       <pre role="img" aria-label={label ?? meta.name}>{still}</pre>
     )
