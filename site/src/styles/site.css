@@ -492,6 +492,18 @@ pre.art {
 }
 
 /*
+ * A logo in colour is a canvas in the box its text would take: the width the
+ * font size above gives, and the height its aspect ratio gives.
+ */
+.well .art {
+  --fit: min(calc(var(--cols) * 7.8px), 92cqi, calc(88cqb * var(--cols) / var(--rows) / 2));
+}
+
+.big .art {
+  --fit: min(calc(var(--cols) * 10.2px), 96cqi);
+}
+
+/*
  * A scene is a picture on its own ground, edge to edge, in either theme. Its
  * baked frame is plain text until the script paints it in colour on a canvas
  * of the same size.

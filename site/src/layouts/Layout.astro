@@ -177,6 +177,57 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
     <script>
       import { isPiece, load, mount, type Piece } from "ascii.rest";
 
+      // Logos come in colour or in one ink, and the choice holds from page to page.
+      let mono = false;
+      try {
+        mono = localStorage.getItem("ascii-ink") === "mono";
+      } catch {}
+      const isLogo = (piece: Piece) => Boolean(piece.meta.palette && !piece.meta.ground);
+      const logos: { pre: HTMLElement; piece: Piece; fps?: number; el: HTMLElement; stop: () => void }[] = [];
+
+      function play(pre: HTMLElement, piece: Piece, fps?: number) {
+        let el: HTMLElement = pre;
+        // A coloured piece swaps its baked text for a canvas painted in its palette, a
+        // logo in the box its text would take. A logo in one ink stays text.
+        if (piece.meta.palette && !(mono && isLogo(piece))) {
+          el = document.createElement("canvas");
+          el.className = "art";
+          el.setAttribute("role", "img");
+          el.setAttribute("aria-label", pre.getAttribute("aria-label") ?? "");
+          if (isLogo(piece)) {
+            el.setAttribute("style", pre.getAttribute("style") ?? "");
+            el.style.width = "var(--fit)";
+          }
+          pre.replaceWith(el);
+        }
+        const stop = mount(el, piece, fps ? { fps } : {});
+        if (isLogo(piece)) logos.push({ pre, piece, fps, el, stop });
+      }
+
+      const inks = document.querySelectorAll<HTMLButtonElement>("button[data-ink]");
+      const label = () =>
+        inks.forEach((button) => {
+          button.firstElementChild!.textContent = mono ? "[colour]" : "[mono]";
+          button.setAttribute("aria-label", mono ? "Show the logos in colour" : "Show the logos in one ink");
+        });
+      label();
+      inks.forEach((button) => {
+        button.hidden = false;
+        button.addEventListener("click", () => {
+          mono = !mono;
+          try {
+            localStorage.setItem("ascii-ink", mono ? "mono" : "colour");
+          } catch {}
+          label();
+          // Every logo playing starts again on its new element.
+          for (const logo of logos.splice(0)) {
+            logo.stop();
+            logo.el.replaceWith(logo.pre);
+            play(logo.pre, logo.piece, logo.fps);
+          }
+        });
+      });
+
       // Each piece is its own chunk, fetched the first time it nears the screen.
       const io = new IntersectionObserver(
         (entries) => {
@@ -189,16 +240,7 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
             load[name]().then((piece: Piece) => {
               // Previews in the grid run at 20 fps at most; there can be a dozen on screen.
               const grid = pre.closest(".grid") && piece.meta.fps > 20;
-              let el: HTMLElement = pre;
-              // A coloured piece swaps its baked text for a canvas painted in its palette.
-              if (piece.meta.palette) {
-                el = document.createElement("canvas");
-                el.className = "art";
-                el.setAttribute("role", "img");
-                el.setAttribute("aria-label", pre.getAttribute("aria-label") ?? "");
-                pre.replaceWith(el);
-              }
-              mount(el, piece, grid ? { fps: 20 } : {});
+              play(pre, piece, grid ? 20 : undefined);
             });
           }
         },

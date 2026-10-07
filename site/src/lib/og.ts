@@ -1,8 +1,9 @@
 /*
  * Share cards: one 1200x630 PNG a piece, served at /og/<slug>.png and drawn at
  * build time from the piece itself. A text piece is its frame in IBM Plex
- * Mono, light on the night ground, as large as fits; a scene is its coloured
- * dots, edge to edge. Along the bottom, the piece's name and the credit.
+ * Mono, light on the night ground, as large as fits, and a logo the same in
+ * its own colours; a scene is its coloured dots, edge to edge. Along the
+ * bottom, the piece's name and the credit.
  *
  * The card is built as SVG shapes, glyph outlines included, and rasterized by
  * sharp, so no system font is involved. Every character sits on its own cell,
@@ -270,7 +271,7 @@ class Ink {
 
 // --- the piece --------------------------------------------------------------
 
-/** The piece's frame at its chosen moment, and the colour of each cell for a scene. */
+/** The piece's frame at its chosen moment, and the colour of each cell for a coloured piece. */
 async function still(slug: PieceName) {
   const mod = await load[slug]();
   const { meta } = mod;
@@ -300,8 +301,11 @@ async function still(slug: PieceName) {
 
 type Box = { x: number; y: number; w: number; h: number };
 
-/** A text piece, trimmed to what it draws and set as large as fits whichever box gives it more room. */
-function textArt(lines: string[], meta: Meta, boxes: Box[]) {
+/**
+ * A text piece, trimmed to what it draws and set as large as fits whichever box
+ * gives it more room. A logo brings the colour of each cell.
+ */
+function textArt(lines: string[], meta: Meta, boxes: Box[], color?: Uint8Array) {
   let top = lines.length, bottom = -1, left = Infinity, right = -1;
   lines.forEach((line, r) => {
     const chars = [...line];
@@ -328,7 +332,8 @@ function textArt(lines: string[], meta: Meta, boxes: Box[]) {
   const base = (ch - ((REGULAR.ascender - REGULAR.descender) / em) * size) / 2 + (REGULAR.ascender / em) * size;
   const light = Math.max(1, Math.round(size * 0.075));
   const ink = new Ink(light, light * 2);
-  let glyphs = "";
+  // Glyph outlines by the colour they are drawn in: INK, or a palette colour.
+  const glyphs = new Map<string, string>();
   for (let r = 0; r < rows; r++) {
     const chars = [...(lines[top + r] ?? "")];
     for (let c = 0; c < cols; c++) {
@@ -337,10 +342,11 @@ function textArt(lines: string[], meta: Meta, boxes: Box[]) {
       const x0 = Math.round(ox + c * cw), x1 = Math.round(ox + (c + 1) * cw);
       const y0 = Math.round(oy + r * ch), y1 = Math.round(oy + (r + 1) * ch);
       if (ink.cell(char.codePointAt(0)!, x0, y0, x1, y1)) continue;
-      glyphs += outline(REGULAR, char, ox + c * cw, oy + r * ch + base, size);
+      const fill = color && meta.palette ? (meta.palette[color[(top + r) * meta.cols + left + c]] ?? INK) : INK;
+      glyphs.set(fill, (glyphs.get(fill) ?? "") + outline(REGULAR, char, ox + c * cw, oy + r * ch + base, size));
     }
   }
-  return `<path fill="${INK}" d="${glyphs}"/>` + ink.svg(INK);
+  return [...glyphs].map(([fill, d]) => `<path fill="${fill}" d="${d}"/>`).join("") + ink.svg(INK);
 }
 
 /** Dot sizes for a scene's cells, as a fraction of the cell. */
@@ -407,9 +413,10 @@ function footer(name: string, scene: boolean) {
 /** The share card for one piece, as PNG bytes. */
 export async function card(slug: PieceName, name: string): Promise<Uint8Array> {
   const { meta, lines, color } = await still(slug);
-  const foot = footer(name, !!color);
+  const scene = Boolean(color && meta.ground);
+  const foot = footer(name, scene);
   let body: string;
-  if (color) {
+  if (color && scene) {
     // A scene runs edge to edge; the bottom darkens just enough to carry the text.
     body =
       sceneArt(lines, meta, color) +
@@ -421,7 +428,7 @@ export async function card(slug: PieceName, name: string): Promise<Uint8Array> {
     const above = { x: SIDE, y: 52, w: WIDTH - 2 * SIDE, h: HEIGHT - 52 - 122 };
     const half = Math.min(WIDTH / 2 - foot.left, foot.right - WIDTH / 2) - 48;
     const between = { x: WIDTH / 2 - half, y: 52, w: 2 * half, h: HEIGHT - 104 };
-    body = `<rect width="${WIDTH}" height="${HEIGHT}" fill="${GROUND}"/>` + textArt(lines, meta, half > 0 ? [above, between] : [above]);
+    body = `<rect width="${WIDTH}" height="${HEIGHT}" fill="${GROUND}"/>` + textArt(lines, meta, half > 0 ? [above, between] : [above], color);
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">${body}${foot.svg}</svg>`;
   const png = await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();

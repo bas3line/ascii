@@ -17,7 +17,7 @@ export type Piece = Meta & {
 /** Sidebar order. Art first, then the pieces meant as page furniture. */
 export const GROUPS = [
   { label: "art", categories: ["scenes", "shapes", "space", "physics", "nature", "creatures", "objects", "generative", "effects"] },
-  { label: "components", categories: ["ui", "data", "type"] },
+  { label: "components", categories: ["ui", "data", "type", "logos"] },
 ] as const;
 
 const sources = import.meta.glob<string>("../../../src/pieces/*.ts", { eager: true, query: "?raw", import: "default" });
@@ -28,16 +28,16 @@ for (const slug of names) {
   const mod: Module = await load[slug]();
   try {
     const options = { ...mod.meta.options };
-    const { cols, rows, palette } = mod.meta;
-    const still = mod.default(options)(0, { paper: false, color: palette && new Uint8Array(cols * rows) });
+    // The baked frame is text: a scene's dots, or a logo in one ink.
+    const still = mod.default(options)(0, { paper: false });
     all.push({
       ...mod.meta,
       slug,
       id: camel(slug),
       source: sources[`../../../src/pieces/${slug}.ts`] ?? "",
       still,
-      // A coloured piece is a picture on its own ground, the same in either theme.
-      stillPaper: palette ? still : mod.default(options)(0, { paper: true }),
+      // A scene is a picture on its own ground, the same in either theme.
+      stillPaper: mod.meta.ground ? still : mod.default(options)(0, { paper: true }),
     });
   } catch (error) {
     console.warn(`ascii: skipping ${slug}: ${(error as Error).message}`);

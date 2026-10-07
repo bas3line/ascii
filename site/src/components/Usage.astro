@@ -10,26 +10,34 @@ interface Props {
 }
 
 const { piece } = Astro.props;
+// A logo comes in colour or in one ink, the page's text colour.
+const logo = Boolean(piece.palette && !piece.ground);
 const ways = [
   {
     name: "html",
     code: tagUsage(piece),
-    note: "No install and no build step. ascii.js defines the <ascii-art> tag, loads the piece from ascii.rest, plays it while it is on screen, and holds the first frame for anyone who prefers reduced motion.",
+    note:
+      "No install and no build step. ascii.js defines the <ascii-art> tag, loads the piece from ascii.rest, plays it while it is on screen, and holds the first frame for anyone who prefers reduced motion." +
+      (logo ? ` Add mono, <ascii-art piece="${piece.slug}" mono>, for one ink.` : ""),
   },
   {
     name: "react",
     code: reactUsage(piece),
-    note: `A client component, so it works in the Next.js app router as it is. Pass the name instead, piece="${piece.slug}", to fetch the piece only when it mounts.`,
+    note:
+      `A client component, so it works in the Next.js app router as it is. Pass the name instead, piece="${piece.slug}", to fetch the piece only when it mounts.` +
+      (logo ? " Add mono for one ink." : ""),
   },
   {
     name: "astro",
     code: astroUsage(piece),
-    note: "Renders the first frame on the server, so the page is whole before any script runs, then plays the piece once it loads.",
+    note: "Renders the first frame on the server, so the page is whole before any script runs, then plays the piece once it loads." + (logo ? " Add mono for one ink." : ""),
   },
   {
     name: "typescript",
     code: moduleUsage(piece),
-    note: "mount plays a piece in a <pre>, or on a <canvas> for the coloured scenes, and returns a function that stops it. Every piece, option and frame is typed.",
+    note:
+      "mount plays a piece in a <pre>, or on a <canvas> for the coloured ones, and returns a function that stops it. Every piece, option and frame is typed." +
+      (logo ? " Mount it in a <pre> for one ink." : ""),
   },
 ];
 const id = `use-${piece.slug}`;
