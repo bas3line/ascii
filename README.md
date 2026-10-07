@@ -2,21 +2,12 @@
 
 # ascii.rest
 
-<pre>
-        @@@@$$$$         
-    @@$$##*****#####     
-   $##***************!   
- ###**!=;:::::==!*****!  
- ##*!!;~-....,~:=!****!= 
-***!!;~,..    .~;!!***!= 
-****!=;:-      =**#***!;,
-!*****!!==    #$$##**!=; 
-;!*****###$@@@@$$#***!;~ 
- ;!****##$$$$$$#*!!*!;~  
-  ~=!!*******!!*!!!=:,   
-    -:==!!!!!!!==:~,     
-        ,--~~--..        
-</pre>
+<a href="https://ascii.rest/donut/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/donut-dark.svg">
+    <img src=".github/donut-light.svg" alt="A lit donut turning, drawn in ascii">
+  </picture>
+</a>
 
 <sub>Sponsored by <a href="https://www.cloudflare.com"><img src=".github/cloudflare.svg" height="14" align="center" alt=""> Cloudflare</a></sub>
 
@@ -37,6 +28,15 @@ Animated ascii art for web pages.<br>
 <br>
 
 Written in TypeScript by [@bas3line](https://github.com/bas3line). 142 pieces, from spinning shapes and physics to loaders, charts and full-colour scenes. The donut above turns on a page with one tag: `<ascii-art piece="donut"></ascii-art>`. See them all at [ascii.rest](https://ascii.rest).
+
+<p align="center">
+  <a href="https://ascii.rest/night-coast/"><img src="https://ascii.rest/og/night-coast.png" width="32%" alt="night coast"></a>
+  <a href="https://ascii.rest/aurora-fjord/"><img src="https://ascii.rest/og/aurora-fjord.png" width="32%" alt="aurora fjord"></a>
+  <a href="https://ascii.rest/earthrise/"><img src="https://ascii.rest/og/earthrise.png" width="32%" alt="earthrise"></a>
+  <a href="https://ascii.rest/kyoto-dusk/"><img src="https://ascii.rest/og/kyoto-dusk.png" width="32%" alt="kyoto dusk"></a>
+  <a href="https://ascii.rest/torus-knot/"><img src="https://ascii.rest/og/torus-knot.png" width="32%" alt="torus knot"></a>
+  <a href="https://ascii.rest/taj-dawn/"><img src="https://ascii.rest/og/taj-dawn.png" width="32%" alt="taj dawn"></a>
+</p>
 
 ## Why
 
