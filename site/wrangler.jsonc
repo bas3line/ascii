@@ -1,0 +1,12 @@
+{
+  // ascii.rest: the built site, served as static assets with no Worker code.
+  // public/_headers opens the library files to other origins.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ascii-rest",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page"
+  },
+  "routes": [{ "pattern": "ascii.rest", "custom_domain": true }]
+}
