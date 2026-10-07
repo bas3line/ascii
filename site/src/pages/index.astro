@@ -12,6 +12,7 @@ const hero = pieces.find((p) => p.slug === "aurora-fjord") ?? pieces[0];
 const example = pieces.find((p) => p.slug === "donut") ?? pieces[0];
 const scenes = pieces.filter((p) => p.category === "scenes").length;
 const logos = pieces.filter((p) => p.category === "logos").length;
+const distros = pieces.filter((p) => p.category === "distros").length;
 const description = `${pieces.length} animated ascii pieces for web pages, in TypeScript with no dependencies: for React, Next.js, Astro, or one HTML tag. MIT licensed.`;
 ---
 
@@ -26,7 +27,7 @@ const description = `${pieces.length} animated ascii pieces for web pages, in Ty
 
   <p class="pitch">
     {pieces.length} animated ascii pieces for web pages: 3D shapes, physics, creatures, loaders, charts, type,
-    {logos} language logos in colour or one ink, and {scenes} full-colour scenes like the one above. Each is a small, typed TypeScript module with no dependencies, for
+    {logos} language logos and {distros} Linux distros in colour or one ink, and {scenes} full-colour scenes like the one above. Each is a small, typed TypeScript module with no dependencies, for
     React, Next.js, Astro, or a plain HTML page, and free to use and change under the MIT license.
   </p>
 
@@ -43,7 +44,7 @@ const description = `${pieces.length} animated ascii pieces for web pages, in Ty
         <div class="head">
           <h2>{category.name}</h2>
           <span class="count">{category.pieces.length}</span>
-          {category.name === "logos" && (
+          {category.pieces.some((piece) => piece.palette && !piece.ground) && (
             <span class="tools">
               <button class="button" type="button" data-ink hidden><span>[mono]</span></button>
             </span>
