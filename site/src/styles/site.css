@@ -1,9 +1,18 @@
 /*
  * ascii.rest: one monospace face, ink on a pale ground or the reverse, and a
- * sidebar index on wide screens. The art sits in the system monospace face,
- * whose box drawing and block glyphs keep the one-cell width the pieces are
- * drawn for.
+ * sidebar index on wide screens. The art sits in the system monospace face.
+ * Where that face lacks the box drawing and block glyphs (Android's has none),
+ * they come from "ascii.rest mono", a 3 KB cut of JetBrains Mono (OFL) one
+ * cell wide like the rest, so every row keeps its width. A browser fetches it
+ * only when an earlier face lacks the glyph.
  */
+
+@font-face {
+  font-family: "ascii.rest mono";
+  src: url("/fonts/ascii-rest-mono.woff2") format("woff2");
+  unicode-range: U+00B0, U+00B7, U+2022, U+2500-259F, U+25CF;
+  font-display: swap;
+}
 
 :root {
   --bg: #f5f6f7;
@@ -12,7 +21,7 @@
   --muted: #5f6873;
   --well: #eceef0;
   --pad: 0.5ch;
-  --art: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --art: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "ascii.rest mono", monospace;
   color-scheme: light;
 }
 

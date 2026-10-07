@@ -34,7 +34,7 @@ if (!isPiece(piece)) throw new Error(`ascii.rest: there is no piece named "${pie
 const mod: Piece = await load[piece]();
 const { meta } = mod;
 const onCanvas = !mono && canvas.has(piece);
-const { fps: _, ...pieceOptions } = options;
+const { fps: _, motion: __, ...pieceOptions } = options;
 // A coloured piece keeps its space, on its own ground if it has one, until the canvas paints.
 const still = onCanvas ? "" : mod.default({ ...meta.options, ...pieceOptions })(0, { paper: false });
 const json = Object.keys(options).length ? JSON.stringify(options) : undefined;
@@ -55,7 +55,15 @@ const json = Object.keys(options).length ? JSON.stringify(options) : undefined;
 </script>
 
 <style is:global>
-  /* The tag's defaults, here too so the first frame is set right before the script runs. :where keeps them easy to override. */
+  /* The tag's defaults, here too so the first frame is set right before the script runs. :where keeps them easy to override.
+     The box drawing and block glyphs a system face lacks come from a 3 KB cut of JetBrains Mono on ascii.rest, so rows keep their width. */
+  @font-face {
+    font-family: "ascii.rest mono";
+    src: url("https://ascii.rest/fonts/ascii-rest-mono.woff2") format("woff2");
+    unicode-range: U+00B0, U+00B7, U+2022, U+2500-259F, U+25CF;
+    font-display: swap;
+  }
+
   :where(ascii-art) {
     display: block;
   }
@@ -63,7 +71,7 @@ const json = Object.keys(options).length ? JSON.stringify(options) : undefined;
   :where(ascii-art > pre) {
     margin: 0;
     font: inherit;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "ascii.rest mono", monospace;
     line-height: 1.2;
     letter-spacing: 0;
     white-space: pre;

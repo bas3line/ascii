@@ -25,9 +25,12 @@ import { isPiece, load } from "./library.ts";
 import { mount, type MountOptions } from "./mount.ts";
 import type { Piece } from "./types.ts";
 
-// :where gives these no specificity, so any rule of the page's own wins.
+// :where gives these no specificity, so any rule of the page's own wins. Where the system monospace face lacks the box
+// drawing and block glyphs (Android's has none), they come from a 3 KB cut of JetBrains Mono (OFL) on ascii.rest, one
+// cell wide like the rest, so every row keeps its width; a browser fetches it only when an earlier face lacks the glyph.
 const STYLE =
-  ':where(ascii-art){display:block}:where(ascii-art>pre){margin:0;font:inherit;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;line-height:1.2;letter-spacing:0;white-space:pre;font-variant-ligatures:none}';
+  '@font-face{font-family:"ascii.rest mono";src:url(https://ascii.rest/fonts/ascii-rest-mono.woff2) format("woff2");unicode-range:U+00B0,U+00B7,U+2022,U+2500-259F,U+25CF;font-display:swap}' +
+  ':where(ascii-art){display:block}:where(ascii-art>pre){margin:0;font:inherit;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono","ascii.rest mono",monospace;line-height:1.2;letter-spacing:0;white-space:pre;font-variant-ligatures:none}';
 
 // On a server there is no HTMLElement to extend; the class is never used there.
 const Base = (typeof HTMLElement === "undefined" ? class {} : HTMLElement) as typeof HTMLElement;

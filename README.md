@@ -104,7 +104,7 @@ Plays `piece` in `element` and returns a function that stops it.
 
 - `element`: a `<pre>` for text pieces, a `<canvas>` for the coloured ones (`canvas.has(name)` tells you which). A coloured piece in a `<pre>` is drawn in one ink.
 - `piece`: a piece module, such as `donut` from `ascii.rest/pieces`.
-- `options`: overrides the piece's option defaults, plus `fps` to change its frame rate.
+- `options`: overrides the piece's option defaults, plus `fps` to change its frame rate, and `motion: true` to play even when the reader prefers reduced motion. Pieces hold their first frame for those readers by default; set `motion` only behind a control the reader chooses, like the site's `[play anyway]`.
 
 ### `load`, `names`, `canvas`, `isPiece`
 
@@ -138,6 +138,17 @@ From `ascii.rest`. `load["night-coast"]()` imports any piece by name, `names` li
 ## Browser support
 
 Any current browser: it needs ES modules, custom elements and `IntersectionObserver`, plus `ResizeObserver` for the coloured pieces. Importing any module on a server, for server rendering, is safe: nothing touches the DOM until a piece is mounted.
+
+Many pieces draw with box drawing and block glyphs (`─ │ ╭ █ ▄ ░`). Where the system monospace face has none, as on Android, the tag and the Astro component take them from "ascii.rest mono", a 3 KB cut of [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) (OFL) served by ascii.rest, so every row keeps its width. Only a browser that lacks the glyphs fetches it. With React, put it in your own `<pre>`'s font stack:
+
+```css
+@font-face {
+  font-family: "ascii.rest mono";
+  src: url("https://ascii.rest/fonts/ascii-rest-mono.woff2") format("woff2");
+  unicode-range: U+00B0, U+00B7, U+2022, U+2500-259F, U+25CF;
+}
+pre.art { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "ascii.rest mono", monospace; }
+```
 
 ## Pieces
 

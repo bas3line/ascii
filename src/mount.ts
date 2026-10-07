@@ -9,7 +9,8 @@
  * shape of a character, or 1 for a square grid.
  *
  * Play time only advances while the element is on screen and the tab is open,
- * and prefers-reduced-motion keeps the first frame. Returns a stop function.
+ * and prefers-reduced-motion keeps the first frame unless `motion` is set (for
+ * a page that offers its own play control). Returns a stop function.
  *
  *   import { mount } from "ascii.rest";
  *   import { donut } from "ascii.rest/pieces";
@@ -17,13 +18,17 @@
  */
 import type { Env, Frame, Meta, Options, Piece } from "./types.ts";
 
-/** The piece's option overrides, and `fps` to override its frame rate. */
-export type MountOptions = Options & { fps?: number };
+/**
+ * The piece's option overrides, `fps` to override its frame rate, and `motion`
+ * to play even when the reader prefers reduced motion: only for a page that
+ * offers its own control, such as a play button the reader presses.
+ */
+export type MountOptions = Options & { fps?: number; motion?: boolean };
 
 export function mount(el: HTMLElement, piece: Piece | Piece["default"], options: MountOptions = {}): () => void {
   const make = typeof piece === "function" ? piece : piece.default;
   const meta: Partial<Meta> = typeof piece === "function" ? {} : piece.meta;
-  const { fps = meta.fps ?? 30, ...rest }: MountOptions = { ...meta.options, ...options };
+  const { fps = meta.fps ?? 30, motion = false, ...rest }: MountOptions = { ...meta.options, ...options };
   const frame: Frame = make(rest);
   const { cols = 80, rows = 24, palette, ground, cell = 2 } = meta;
   const canvas = el instanceof HTMLCanvasElement ? el : null;
@@ -42,7 +47,10 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
   };
 
   // On a canvas each (character, colour) pair is drawn once into an atlas and
-  // copied from there, so a frame is one drawImage a cell.
+  // copied from there into its cell, and a frame redraws only the cells that
+  // changed since the last one: on a phone a scene's 20,000 copies a frame were
+  // most of its time. Each cell is copied inside its own whole-pixel rectangle,
+  // so cells tile exactly and redrawing one never touches its neighbours.
   let ro: ResizeObserver | undefined;
   if (canvas) {
     const font = (px: number) => `${px}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
@@ -50,7 +58,12 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
     const atlas = document.createElement("canvas");
     const actx = atlas.getContext("2d")!;
     const slots = new Map<number, number>();
-    let w = 0, h = 0, sw = 0, sh = 0, width = -1, ink = "";
+    // A slot is a glyph's box with a pixel of clear space round it, which a cell's rectangle may reach into.
+    let w = 0, h = 0, sw = 0, sh = 0, pw = 0, ph = 0, width = -1, ink = "";
+    // Each column's and row's whole-pixel edges, and where its glyph's box starts.
+    let xs = new Int32Array(0), ys = new Int32Array(0), gx = new Int32Array(0), gy = new Int32Array(0);
+    let last = "", full = true;
+    const lastColor = color && new Uint8Array(cols * rows);
     canvas.style.display ||= "block";
     canvas.style.width ||= "100%";
     canvas.style.aspectRatio = `${cols} / ${rows * cell}`;
@@ -60,11 +73,18 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
       h = w * cell;
       sw = Math.ceil(w);
       sh = Math.ceil(h);
+      pw = sw + 2;
+      ph = sh + 2;
       canvas.width = Math.round(w * cols);
       canvas.height = Math.round(h * rows);
-      atlas.width = sw * 32;
-      atlas.height = sh * 32;
+      atlas.width = pw * 32;
+      atlas.height = ph * 32;
+      xs = Int32Array.from({ length: cols + 1 }, (_, x) => Math.round(x * w));
+      ys = Int32Array.from({ length: rows + 1 }, (_, y) => Math.round(y * h));
+      gx = Int32Array.from({ length: cols }, (_, x) => Math.round(x * w + (w - sw) / 2));
+      gy = Int32Array.from({ length: rows }, (_, y) => Math.round(y * h + (h - sh) / 2));
       slots.clear();
+      full = true;
     };
     const glyph = (code: number, i: number) => {
       const key = code * 256 + i;
@@ -75,7 +95,7 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
         slots.clear();
       }
       s = slots.size;
-      const x = (s % 32) * sw, y = Math.floor(s / 32) * sh;
+      const x = (s % 32) * pw + 1, y = Math.floor(s / 32) * ph + 1;
       actx.font = font(w / 0.6);
       actx.textAlign = "center";
       actx.textBaseline = "middle";
@@ -89,12 +109,14 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
         ink = getComputedStyle(canvas).color;
         slots.clear();
         actx.clearRect(0, 0, atlas.width, atlas.height);
+        full = true;
       }
       const text = frame(t, env());
-      if (ground) {
-        ctx.fillStyle = ground;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      } else ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (ground) ctx.fillStyle = ground;
+      if (full) {
+        if (ground) ctx.fillRect(0, 0, canvas.width, canvas.height);
+        else ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
       for (let k = 0, x = 0, y = 0; k < text.length; k++) {
         const c = text.charCodeAt(k);
         if (c === 10) {
@@ -102,13 +124,24 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
           y++;
           continue;
         }
-        if (c !== 32) {
-          const s = glyph(c, color ? color[y * cols + x] : 0);
-          const dx = Math.round(x * w + (w - sw) / 2), dy = Math.round(y * h + (h - sh) / 2);
-          ctx.drawImage(atlas, (s % 32) * sw, Math.floor(s / 32) * sh, sw, sh, dx, dy, sw, sh);
+        const i = y * cols + x;
+        if (full || c !== last.charCodeAt(k) || (color && color[i] !== lastColor![i])) {
+          const x0 = xs[x], y0 = ys[y], cw = xs[x + 1] - x0, ch = ys[y + 1] - y0;
+          if (!full) {
+            if (ground) ctx.fillRect(x0, y0, cw, ch);
+            else ctx.clearRect(x0, y0, cw, ch);
+          }
+          if (c !== 32) {
+            const s = glyph(c, color ? color[i] : 0);
+            // the cell's own rectangle of the glyph's slot, the glyph's box placed where it always sits
+            ctx.drawImage(atlas, (s % 32) * pw + 1 + x0 - gx[x], Math.floor(s / 32) * ph + 1 + y0 - gy[y], cw, ch, x0, y0, cw, ch);
+          }
         }
         x++;
       }
+      last = text;
+      if (color) lastColor!.set(color);
+      full = false;
     };
     size();
     ro = new ResizeObserver(() => {
@@ -135,7 +168,7 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
     draw();
   };
   const run = () => {
-    const go = seen && !document.hidden && !still.matches;
+    const go = seen && !document.hidden && (motion || !still.matches);
     if (go && !raf) {
       last = performance.now();
       raf = requestAnimationFrame(tick);
