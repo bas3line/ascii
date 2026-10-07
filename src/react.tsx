@@ -10,9 +10,10 @@
  *   <Ascii piece={donut} />                      // bundled with your page
  *   <Ascii piece="night-coast" />                // or fetched by name when it mounts
  *   <Ascii piece={donut} options={{ fps: 12 }} className="art" />
+ *   <Ascii piece="rust" mono />                  // a coloured piece in one ink
  *
  * Text pieces draw into a <pre> in the element's colour and font size; the
- * coloured scenes draw onto a <canvas> as wide as its container.
+ * coloured ones draw onto a <canvas> as wide as its container.
  */
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { canvas, isPiece, load, type PieceName } from "./library.ts";
@@ -26,11 +27,13 @@ export interface AsciiProps {
   options?: MountOptions;
   /** What the picture shows, for screen readers. The piece's name otherwise. */
   label?: string;
+  /** Draws a coloured piece as text in one ink, in a <pre> like any other. */
+  mono?: boolean;
   className?: string;
   style?: CSSProperties;
 }
 
-export function Ascii({ piece, options, label, className, style }: AsciiProps) {
+export function Ascii({ piece, options, label, mono = false, className, style }: AsciiProps) {
   const ref = useRef<HTMLElement>(null);
   const [loaded, setLoaded] = useState<Piece | null>(null);
   const mod = typeof piece === "string" ? loaded : piece;
@@ -47,13 +50,14 @@ export function Ascii({ piece, options, label, className, style }: AsciiProps) {
 
   // An inline options object is new every render; only a real change restarts the piece.
   const key = JSON.stringify(options ?? {});
+  // mono swaps the canvas for a <pre>, so the piece starts again on the new element.
   useEffect(() => {
     if (!mod || !ref.current) return;
     return mount(ref.current, mod, JSON.parse(key) as MountOptions);
-  }, [mod, key]);
+  }, [mod, key, mono]);
 
-  // Known before loading, so a scene gets its canvas from the first render.
-  const onCanvas = typeof piece === "string" ? canvas.has(piece) : Boolean(piece.meta.palette);
+  // Known before loading, so a coloured piece gets its canvas from the first render.
+  const onCanvas = !mono && (typeof piece === "string" ? canvas.has(piece) : Boolean(piece.meta.palette));
   const name = typeof piece === "string" ? piece : piece.meta.name;
   const props = { role: "img", "aria-label": label ?? mod?.meta.name ?? name, className, style };
   return onCanvas ? (

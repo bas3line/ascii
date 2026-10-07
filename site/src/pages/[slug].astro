@@ -22,6 +22,8 @@ interface Props {
 }
 
 const { piece, prev, next } = Astro.props;
+// A logo comes in colour or in one ink; a scene is always on its own ground.
+const logo = Boolean(piece.palette && !piece.ground);
 const bytes = new TextEncoder().encode(piece.source).length;
 const kb = bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} kB`;
 ---
@@ -40,13 +42,15 @@ const kb = bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} kB`;
     <a href={`/#${piece.category}`}>{piece.category}</a>
     <span>{piece.cols}×{piece.rows}</span>
     <span>{piece.fps ? `${piece.fps} fps` : "still"}</span>
-    {piece.palette && <span>{piece.palette.length} colours, on a canvas</span>}
+    {piece.ground && <span>{piece.palette?.length} colours, on a canvas</span>}
+    {logo && <span>in colour or one ink</span>}
     <span>{kb}</span>
     {piece.clock && <span>reads the clock</span>}
+    {logo && <button class="button" type="button" data-ink hidden><span>[mono]</span></button>}
   </p>
 
   <section class="block" style="margin-top: 2rem">
-    <div class:list={["well big", piece.palette && "scene"]} style={piece.ground && `--ground: ${piece.ground}`}>
+    <div class:list={["well big", piece.ground && "scene"]} style={piece.ground && `--ground: ${piece.ground}`}>
       <Art piece={piece} />
     </div>
   </section>

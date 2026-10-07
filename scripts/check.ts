@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Meta, Piece } from "../src/types.ts";
 
 const DIR = fileURLToPath(new URL("../src/pieces", import.meta.url));
-const CATS = ["scenes", "shapes", "space", "physics", "nature", "creatures", "objects", "generative", "effects", "ui", "data", "type"];
+const CATS = ["scenes", "shapes", "space", "physics", "nature", "creatures", "objects", "generative", "effects", "ui", "data", "type", "logos"];
 const CHARSET = /^[\x20-\x7E·°─-▟]*$/;
 const SCENE_CHARSET = /^[\x20-\x7E·°─-▟•●]*$/;
 const SHOW_AT = [0, 1, 2.5, 5];
@@ -24,7 +24,8 @@ if (!slugs.length)
 type Run = { frames: (string | undefined)[]; colors: (Uint8Array | undefined)[]; ms: number[] };
 
 // Plays a fresh instance from t = 0 in 1/fps steps, sampling at the given times.
-function play(make: Piece["default"], meta: Meta, times: number[], paper = false): Run {
+// A coloured piece plays in colour unless `mono`, as it would in a <pre>.
+function play(make: Piece["default"], meta: Meta, times: number[], paper = false, mono = false): Run {
   const frame = make({ ...(meta.options || {}) });
   const fps = meta.fps || 0;
   const out = new Map<number, string>();
@@ -32,7 +33,7 @@ function play(make: Piece["default"], meta: Meta, times: number[], paper = false
   const ms: number[] = [];
   const end = Math.max(...times);
   const step = fps ? 1 / fps : 0.5;
-  const color = meta.palette ? new Uint8Array(meta.cols * meta.rows) : undefined;
+  const color = meta.palette && !mono ? new Uint8Array(meta.cols * meta.rows) : undefined;
   let first = true;
   for (let i = 0; ; i++) {
     const t = Math.round(i * step * 1e6) / 1e6;
@@ -101,18 +102,21 @@ for (const slug of slugs) {
     continue;
   }
 
-  let run: Run, run2: Run, runPaper: Run;
+  let run: Run, run2: Run, runPaper: Run, runMono: Run | null;
   try {
     run = play(mod.default, m, SAMPLE_AT);
     run2 = play(mod.default, m, SAMPLE_AT);
     runPaper = play(mod.default, m, [0, 1], true);
+    // A coloured piece can be drawn as text too, with no colours to write.
+    runMono = m.palette ? play(mod.default, m, SAMPLE_AT, false, true) : null;
   } catch (e) {
     console.log(`FAIL ${slug}: frame threw: ${(e as Error).stack?.split("\n").slice(0, 3).join(" | ")}`);
     failed++;
     continue;
   }
-  run.frames.forEach((f, i) => {
-    const at = `t=${SAMPLE_AT[i]}`;
+  const sampled: [string | undefined, string][] = run.frames.map((f, i) => [f, `t=${SAMPLE_AT[i]}`]);
+  if (runMono) sampled.push(...runMono.frames.map((f, i): [string | undefined, string] => [f, `t=${SAMPLE_AT[i]} in one ink`]));
+  sampled.forEach(([f, at]) => {
     if (typeof f !== "string") return errors.push(`${at}: frame is not a string`);
     const lines = f.split("\n");
     if (lines.length !== m.rows) errors.push(`${at}: ${lines.length} lines, meta.rows is ${m.rows}`);
@@ -147,7 +151,8 @@ for (const slug of slugs) {
     run.colors[0]?.forEach((v, k) => {
       if (f0![k + Math.floor(k / m.cols)] !== " ") used.add(v);
     });
-    if (used.size < 4) errors.push(`only ${used.size} palette colours on inked cells in the first frame`);
+    // A scene is a picture in many colours; a logo may have only one.
+    if (m.category === "scenes" && used.size < 4) errors.push(`only ${used.size} palette colours on inked cells in the first frame`);
   }
   if (run.ms.length) {
     const avg = run.ms.reduce((a, b) => a + b, 0) / run.ms.length;

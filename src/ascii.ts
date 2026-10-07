@@ -14,9 +14,10 @@
  *   fps      overrides the piece's frame rate
  *   options  JSON overriding the piece's option defaults: '{"text":"hello"}'
  *   label    what the picture shows, for screen readers; the piece's name otherwise
+ *   mono     draws a coloured piece as text in one ink, like any other
  *
  * Text pieces draw into a <pre> in the element's colour and font size; the
- * coloured scenes draw onto a <canvas> as wide as the element. Whatever the
+ * coloured ones draw onto a <canvas> as wide as the element. Whatever the
  * element holds before it loads (a first frame rendered on the server, say)
  * stays until the piece is ready.
  */
@@ -32,7 +33,7 @@ const STYLE =
 const Base = (typeof HTMLElement === "undefined" ? class {} : HTMLElement) as typeof HTMLElement;
 
 export class AsciiArt extends Base {
-  static observedAttributes = ["piece", "src", "fps", "options", "label"];
+  static observedAttributes = ["piece", "src", "fps", "options", "label", "mono"];
   #stop: (() => void) | null = null;
   #run = 0;
 
@@ -70,7 +71,7 @@ export class AsciiArt extends Base {
     const fps = this.getAttribute("fps");
     if (fps !== null && fps !== "" && !Number.isNaN(+fps)) options.fps = +fps;
 
-    const el = document.createElement(piece.meta.palette ? "canvas" : "pre");
+    const el = document.createElement(piece.meta.palette && !this.hasAttribute("mono") ? "canvas" : "pre");
     el.setAttribute("role", "img");
     el.setAttribute("aria-label", this.getAttribute("label") || piece.meta.name);
     this.#stop?.();

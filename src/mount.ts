@@ -2,10 +2,11 @@
  * mount: plays an ascii piece in a <pre>, or on a <canvas> in colour.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
- * In a <pre> every piece is text in the pre's own colour. On a <canvas> it is
- * drawn in its palette (or the canvas's text colour, without one) over
- * `meta.ground`, filling the canvas's width with cells `meta.cell` widths
- * tall: 2 by default, the shape of a character, or 1 for a square grid.
+ * In a <pre> every piece is text in the pre's own colour, a coloured one too.
+ * On a <canvas> it is drawn in its palette (or the canvas's text colour,
+ * without one) over `meta.ground`, or over the page when it has none, filling
+ * the canvas's width with cells `meta.cell` widths tall: 2 by default, the
+ * shape of a character, or 1 for a square grid.
  *
  * Play time only advances while the element is on screen and the tab is open,
  * and prefers-reduced-motion keeps the first frame. Returns a stop function.
@@ -25,14 +26,15 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
   const { fps = meta.fps ?? 30, ...rest }: MountOptions = { ...meta.options, ...options };
   const frame: Frame = make(rest);
   const { cols = 80, rows = 24, palette, ground, cell = 2 } = meta;
-  const color = palette ? new Uint8Array(cols * rows) : undefined;
+  const canvas = el instanceof HTMLCanvasElement ? el : null;
+  // Colour only on a canvas: in a <pre> a coloured piece is text in one ink too.
+  const color = palette && canvas ? new Uint8Array(cols * rows) : undefined;
 
   const rgb = (css: string) => (css[0] === "#" ? [1, 3, 5].map((i) => parseInt(css.slice(i, i + 2), 16)) : (css.match(/[\d.]+/g) || []).map(Number));
   const dark = (css: string) => {
     const c = rgb(css);
     return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] < 128;
   };
-  const canvas = el instanceof HTMLCanvasElement ? el : null;
   const env = (): Env => ({ paper: canvas && ground ? !dark(ground) : dark(getComputedStyle(el).color), color });
   let t = 0;
   let draw = () => {
