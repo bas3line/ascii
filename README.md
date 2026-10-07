@@ -1,5 +1,17 @@
 # ascii.rest
 
+```text
+ ██╗   ███╗  ███╗ █╗ █╗    ███╗  ████╗  ███╗ █████╗
+█╔═█╗ █╔══╝ █╔══╝ █║ █║    █╔═█╗ █╔══╝ █╔══╝ ╚═█╔═╝
+████║ ╚██╗  █║    █║ █║    ███╔╝ ███╗  ╚██╗    █║
+█╔═█║  ╚═█╗ █║    █║ █║    █╔█║  █╔═╝   ╚═█╗   █║
+█║ █║ ███╔╝ ╚███╗ █║ █║ █╗ █║╚█╗ ████╗ ███╔╝   █║
+╚╝ ╚╝ ╚══╝   ╚══╝ ╚╝ ╚╝ ╚╝ ╚╝ ╚╝ ╚═══╝ ╚══╝    ╚╝
+                                        by @bas3line
+```
+
+<sub>That banner is one of the pieces, frozen: <code>&lt;ascii-art piece="big-text" options='{"text":"ascii.rest"}'&gt;&lt;/ascii-art&gt;</code> plays it with a shine sweeping across.</sub>
+
 [![by @bas3line](https://img.shields.io/badge/by-%40bas3line-181717?logo=github&logoColor=white)](https://github.com/bas3line)
 
 Animated ascii art for web pages, written in TypeScript by [@bas3line](https://github.com/bas3line). 142 pieces, from spinning shapes and physics to loaders, charts and full-colour scenes, for React, Next.js, Astro, or a plain HTML page. See them all at [ascii.rest](https://ascii.rest).
