@@ -1,0 +1,13 @@
+{
+  // Emits the package: dist/ holds plain .js and .d.ts for every module in src/.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": []
+  },
+  "include": ["src"],
+  "exclude": ["src/astro"]
+}

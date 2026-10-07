@@ -1,0 +1,60 @@
+---
+/*
+ * ascii.rest: a scene playing, what the library is, how to use a piece, and
+ * then every piece by category, each a live preview linking to its own page.
+ */
+import Layout from "../layouts/Layout.astro";
+import Art from "../components/Art.astro";
+import Usage from "../components/Usage.astro";
+import { categories, pieces } from "../lib/library";
+
+const hero = pieces.find((p) => p.slug === "aurora-fjord") ?? pieces[0];
+const example = pieces.find((p) => p.slug === "donut") ?? pieces[0];
+const scenes = pieces.filter((p) => p.palette).length;
+const description = `${pieces.length} animated ascii pieces for web pages, in TypeScript with no dependencies: for React, Next.js, Astro, or one HTML tag. MIT licensed.`;
+---
+
+<Layout title="ascii.rest: animated ascii art for web pages, by @bas3line" description={description} path="/">
+  <h1 slot="heading">animated ascii art for web pages</h1>
+
+  <a class="hero" href={`/${hero.slug}/`} aria-label={`${hero.name}, one of the scenes`}>
+    <div class:list={["well big", hero.palette && "scene"]} style={hero.ground && `--ground: ${hero.ground}`}>
+      <Art piece={hero} />
+    </div>
+  </a>
+
+  <p class="pitch">
+    {pieces.length} animated ascii pieces for web pages: 3D shapes, physics, creatures, loaders, charts, type, and
+    {scenes} full-colour scenes like the one above. Each is a small, typed TypeScript module with no dependencies, for
+    React, Next.js, Astro, or a plain HTML page, and free to use and change under the MIT license.
+  </p>
+
+  <section id="use" class="block">
+    <div class="head">
+      <h2>use one</h2>
+    </div>
+    <Usage piece={example} />
+  </section>
+
+  <div id="pieces">
+    {categories.map((category) => (
+      <section id={category.name}>
+        <div class="head">
+          <h2>{category.name}</h2>
+          <span class="count">{category.pieces.length}</span>
+        </div>
+        <div class:list={["grid", category.name === "scenes" && "wide"]}>
+          {category.pieces.map((piece) => (
+            <a class="card" href={`/${piece.slug}/`}>
+              <div class:list={["well", piece.palette && "scene"]} style={piece.ground && `--ground: ${piece.ground}`}>
+                <Art piece={piece} />
+              </div>
+              <span class="name">{piece.name}</span>
+              <span class="note">{piece.note}</span>
+            </a>
+          ))}
+        </div>
+      </section>
+    ))}
+  </div>
+</Layout>

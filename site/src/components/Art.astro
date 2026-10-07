@@ -1,0 +1,21 @@
+---
+/*
+ * One piece's first frame, drawn at build time in both inks so the page is
+ * whole without script. The layout's script mounts the live piece over it
+ * once it scrolls into view.
+ */
+import type { Piece } from "../lib/library";
+
+interface Props {
+  piece: Piece;
+}
+
+const { piece } = Astro.props;
+---
+
+<pre
+  class="art"
+  data-piece={piece.slug}
+  style={`--cols: ${piece.cols}; --rows: ${piece.rows}; --cell: ${piece.cell ?? 2}`}
+  role="img"
+  aria-label={piece.name}><span class="on-ink">{piece.still}</span><span class="on-paper">{piece.stillPaper}</span></pre>

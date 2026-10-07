@@ -1,0 +1,76 @@
+---
+/*
+ * One piece: a large live preview, the ways to put it on a page, and its
+ * source.
+ */
+import Layout from "../layouts/Layout.astro";
+import Art from "../components/Art.astro";
+import Usage from "../components/Usage.astro";
+import { REPO, pieces, type Piece } from "../lib/library";
+
+export function getStaticPaths() {
+  return pieces.map((piece, i) => ({
+    params: { slug: piece.slug },
+    props: { piece, prev: pieces[i - 1], next: pieces[i + 1] },
+  }));
+}
+
+interface Props {
+  piece: Piece;
+  prev?: Piece;
+  next?: Piece;
+}
+
+const { piece, prev, next } = Astro.props;
+const bytes = new TextEncoder().encode(piece.source).length;
+const kb = bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} kB`;
+---
+
+<Layout
+  title={`${piece.name} · ascii.rest`}
+  description={`${piece.note}. An animated ascii piece for web pages, with the code to use it.`}
+  path={`/${piece.slug}/`}
+  current={piece.slug}
+>
+  <h1 slot="heading">{piece.name}</h1>
+
+  <p class="lede">{piece.note}</p>
+  <p class="facts">
+    <a href={`/#${piece.category}`}>{piece.category}</a>
+    <span>{piece.cols}×{piece.rows}</span>
+    <span>{piece.fps ? `${piece.fps} fps` : "still"}</span>
+    {piece.palette && <span>{piece.palette.length} colours, on a canvas</span>}
+    <span>{kb}</span>
+    {piece.clock && <span>reads the clock</span>}
+  </p>
+
+  <section class="block" style="margin-top: 2rem">
+    <div class:list={["well big", piece.palette && "scene"]} style={piece.ground && `--ground: ${piece.ground}`}>
+      <Art piece={piece} />
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="head">
+      <h2>use it</h2>
+    </div>
+    <Usage piece={piece} />
+  </section>
+
+  <section class="block">
+    <div class="head">
+      <h2>{piece.slug}.ts</h2>
+      <span class="tools">
+        <button class="button" type="button" data-copy="source-code" hidden><span>[copy]</span></button>
+        <a href={`/pieces/${piece.slug}.js`}>[js]</a>
+        <a href={`${REPO}/blob/main/src/pieces/${piece.slug}.ts`}>[github]</a>
+      </span>
+    </div>
+    <pre class="code" id="source-code">{piece.source}</pre>
+  </section>
+
+  <nav class="pager" aria-label="Pieces">
+    {prev ? <a href={`/${prev.slug}/`}>&lt; {prev.name}</a> : <span></span>}
+    {next ? <a href={`/${next.slug}/`}>{next.name} &gt;</a> : <span></span>}
+  </nav>
+</Layout>

@@ -1,0 +1,69 @@
+---
+/*
+ * <Ascii piece="donut" />: the piece's first frame rendered on the server, so
+ * the page is whole before any script runs, then the live piece once it loads.
+ * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
+ *
+ *   ---
+ *   import Ascii from "ascii.rest/astro";
+ *   ---
+ *   <Ascii piece="night-coast" fps={12} />
+ *   <Ascii piece="big-text" options={{ text: "hello" }} class="banner" />
+ */
+import { canvas, isPiece, load, type PieceName } from "../../dist/library.js";
+import type { MountOptions } from "../../dist/mount.js";
+import type { Piece } from "../../dist/types.js";
+
+interface Props {
+  /** A piece's file name. */
+  piece: PieceName;
+  /** The piece's option overrides. */
+  options?: MountOptions;
+  /** Overrides the piece's frame rate. */
+  fps?: number;
+  /** What the picture shows, for screen readers. The piece's name otherwise. */
+  label?: string;
+  class?: string;
+}
+
+const { piece, options = {}, fps, label, class: className } = Astro.props;
+if (!isPiece(piece)) throw new Error(`ascii.rest: there is no piece named "${piece}"`);
+const mod: Piece = await load[piece]();
+const { meta } = mod;
+const onCanvas = canvas.has(piece);
+const { fps: _, ...pieceOptions } = options;
+// A scene keeps its space on its own ground until the canvas paints.
+const still = onCanvas ? "" : mod.default({ ...meta.options, ...pieceOptions })(0, { paper: false });
+const json = Object.keys(options).length ? JSON.stringify(options) : undefined;
+---
+
+<ascii-art piece={piece} options={json} fps={fps} label={label} class={className}>
+  {
+    onCanvas ? (
+      <div style={`aspect-ratio: ${meta.cols} / ${meta.rows * (meta.cell ?? 2)}; background: ${meta.ground}`} />
+    ) : (
+      <pre role="img" aria-label={label ?? meta.name}>{still}</pre>
+    )
+  }
+</ascii-art>
+
+<script>
+  import "../../dist/ascii.js";
+</script>
+
+<style is:global>
+  /* The tag's defaults, here too so the first frame is set right before the script runs. :where keeps them easy to override. */
+  :where(ascii-art) {
+    display: block;
+  }
+
+  :where(ascii-art > pre) {
+    margin: 0;
+    font: inherit;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    line-height: 1.2;
+    letter-spacing: 0;
+    white-space: pre;
+    font-variant-ligatures: none;
+  }
+</style>
