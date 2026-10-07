@@ -14,13 +14,16 @@ interface Props {
   path: string;
   /** Slug of the piece this page shows, marked in the sidebar. */
   current?: string;
+  /** The share card, 1200x630, when the page has its own: path and alt text. */
+  card?: { path: string; alt: string };
 }
 
-const { title, description, path, current } = Astro.props;
+const { title, description, path, current, card } = Astro.props;
 const canonical = new URL(path, SITE);
-// The share card: night coast with the name and credit, made from the scene itself.
-const image = new URL("/og.png", SITE);
-const imageAlt = "ascii.rest: a dot-drawn lighthouse and cottage under moonlit clouds, by @bas3line";
+// The site's share card is night coast with the name and credit, made from the
+// scene itself; a piece page shows its own piece (pages/og/[slug].png.ts).
+const image = new URL(card?.path ?? "/og.png", SITE);
+const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage under moonlit clouds, by @bas3line";
 ---
 
 <html lang="en">
