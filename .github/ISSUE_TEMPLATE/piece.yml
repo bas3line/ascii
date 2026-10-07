@@ -13,7 +13,7 @@ body:
     id: category
     attributes:
       label: Category
-      options: [scenes, shapes, space, physics, nature, creatures, objects, generative, effects, ui, data, type, logos, distros]
+      options: [scenes, ui, data, type, logos, distros, shapes, space, physics, nature, creatures, objects, generative, effects]
   - type: textarea
     id: details
     attributes:
