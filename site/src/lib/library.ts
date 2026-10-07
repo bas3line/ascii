@@ -17,7 +17,7 @@ export type Piece = Meta & {
 /** Sidebar order. Art first, then the pieces meant as page furniture. */
 export const GROUPS = [
   { label: "art", categories: ["scenes", "shapes", "space", "physics", "nature", "creatures", "objects", "generative", "effects"] },
-  { label: "components", categories: ["ui", "data", "type", "logos"] },
+  { label: "components", categories: ["ui", "data", "type", "logos", "distros"] },
 ] as const;
 
 const sources = import.meta.glob<string>("../../../src/pieces/*.ts", { eager: true, query: "?raw", import: "default" });
