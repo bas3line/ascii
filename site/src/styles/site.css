@@ -1,0 +1,625 @@
+/*
+ * ascii.rest: one monospace face, ink on a pale ground or the reverse, and a
+ * sidebar index on wide screens. The art sits in the system monospace face,
+ * whose box drawing and block glyphs keep the one-cell width the pieces are
+ * drawn for.
+ */
+
+:root {
+  --bg: #f5f6f7;
+  --ink: #1e2125;
+  --text: #3b4149;
+  --muted: #5f6873;
+  --well: #eceef0;
+  --pad: 0.5ch;
+  --art: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #131518;
+  --ink: #e8ebef;
+  --text: #c3c9d1;
+  --muted: #8c95a1;
+  --well: #1a1d21;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131518;
+    --ink: #e8ebef;
+    --text: #c3c9d1;
+    --muted: #8c95a1;
+    --well: #1a1d21;
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scrollbar-gutter: stable;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  font-variant-ligatures: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: inherit;
+  font-weight: 500;
+}
+
+p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+code {
+  font: inherit;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* --- links and controls: invert on hover ---------------------------------- */
+
+a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+a,
+.button > span {
+  padding: 0 var(--pad);
+  margin: 0 calc(var(--pad) * -1);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.foot a,
+.lede a {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--muted);
+  text-underline-offset: 0.25em;
+}
+
+@media (hover: hover) {
+  a:hover,
+  .button:hover > span {
+    background: var(--ink);
+    color: var(--bg);
+    text-decoration-line: none;
+  }
+}
+
+a:focus-visible,
+.button:focus-visible > span {
+  background: var(--ink);
+  color: var(--bg);
+  text-decoration-line: none;
+  outline: 1px dotted var(--ink);
+  outline-offset: 2px;
+}
+
+.button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.button:focus-visible {
+  outline: none;
+}
+
+.button[hidden],
+[hidden] {
+  display: none;
+}
+
+a[aria-current="page"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+/* --- frame: sidebar and page -------------------------------------------- */
+
+.frame {
+  display: grid;
+  grid-template-columns: 22ch minmax(0, 1fr);
+  gap: 5ch;
+  width: min(100% - 2.5rem, 150ch);
+  margin-inline: auto;
+}
+
+.side {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  padding: 4rem 1ch 3rem;
+  margin-inline: -1ch;
+  scrollbar-width: thin;
+}
+
+.side .home {
+  display: inline-block;
+  font-weight: 500;
+}
+
+.side .by {
+  margin: 0.25rem 0 2rem;
+  color: var(--muted);
+}
+
+/* The author's credit: the GitHub mark and the handle, one link. */
+.credit {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1ch;
+}
+
+.credit a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6ch;
+  text-decoration-line: none;
+}
+
+.credit svg {
+  flex: none;
+}
+
+.side h2 {
+  margin-top: 1.75rem;
+  font-weight: 400;
+}
+
+.side h2 a {
+  color: var(--muted);
+}
+
+.side h2:first-of-type {
+  margin-top: 0;
+}
+
+.side h3 {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+}
+
+.side h3 .count {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.side ul a {
+  color: var(--muted);
+}
+
+.side ul a[aria-current="page"] {
+  color: var(--bg);
+}
+
+.page {
+  min-width: 0;
+  padding: 4rem 0 3rem;
+}
+
+/* --- page header -------------------------------------------------------- */
+
+.top {
+  display: flex;
+  align-items: baseline;
+  gap: 2ch;
+}
+
+.top .tools {
+  display: flex;
+  gap: 2ch;
+  margin: 0 -1ch 0 auto;
+}
+
+.lede {
+  max-width: 72ch;
+  margin-top: 0.75rem;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.count {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+section + section,
+#pieces {
+  margin-top: 3.5rem;
+}
+
+/* --- landing ------------------------------------------------------------ */
+
+.hero {
+  display: block;
+  margin: 2rem 0 0;
+  padding: 0;
+}
+
+@media (hover: hover) {
+  .hero:hover {
+    background: none;
+  }
+}
+
+.hero:focus-visible {
+  background: none;
+  outline: 1px dotted var(--ink);
+  outline-offset: 4px;
+}
+
+.pitch {
+  max-width: 72ch;
+  margin-top: 1.75rem;
+  color: var(--ink);
+}
+
+.pitch + section {
+  margin-top: 3rem;
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 3ch;
+  margin-top: 5rem;
+}
+
+/* --- usage tabs --------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  gap: 3ch;
+  margin-bottom: 0.75rem;
+}
+
+.tabs [role="tab"] > span::before {
+  content: "[";
+  visibility: hidden;
+}
+
+.tabs [role="tab"] > span::after {
+  content: "]";
+  visibility: hidden;
+}
+
+.tabs [role="tab"][aria-selected="true"] {
+  color: var(--ink);
+}
+
+.tabs [role="tab"][aria-selected="true"] > span::before,
+.tabs [role="tab"][aria-selected="true"] > span::after {
+  visibility: visible;
+}
+
+.usage {
+  position: relative;
+}
+
+.usage [role="tabpanel"] + [role="tabpanel"] {
+  margin-top: 1.75rem;
+}
+
+.usage .head {
+  margin-bottom: 0.5rem;
+}
+
+.usage .head .tools {
+  display: flex;
+  gap: 2ch;
+  margin-left: auto;
+}
+
+/* As tabs, each panel's own heading goes and its [copy] joins the tab row. */
+.tabbed .way {
+  display: none;
+}
+
+.tabbed [role="tabpanel"] .head {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: 0;
+}
+
+.usage .note {
+  max-width: 72ch;
+  margin-top: 0.75rem;
+}
+
+/* --- the grid of pieces -------------------------------------------------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 30ch), 1fr));
+  gap: 2.5rem 3ch;
+}
+
+.grid.wide {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 52ch), 1fr));
+}
+
+.card {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  color: var(--text);
+}
+
+@media (hover: hover) {
+  .card:hover {
+    background: none;
+    color: var(--text);
+  }
+
+  .card:hover .name {
+    background: var(--ink);
+    color: var(--bg);
+  }
+}
+
+.card:focus-visible {
+  background: none;
+  color: var(--text);
+  outline: none;
+}
+
+.card:focus-visible .name {
+  background: var(--ink);
+  color: var(--bg);
+  outline: 1px dotted var(--ink);
+  outline-offset: 2px;
+}
+
+.card .name {
+  display: inline-block;
+  margin-top: 0.75rem;
+  padding: 0 var(--pad);
+  margin-left: calc(var(--pad) * -1);
+  color: var(--ink);
+}
+
+.card .note {
+  display: block;
+  color: var(--muted);
+}
+
+/*
+ * A well sized in cells. The <pre> takes the largest font that fits both
+ * ways: the width over cols at 0.6em a glyph, the height over rows at 1.2em a
+ * line, capped so small pieces are not blown up.
+ */
+.well {
+  container-type: size;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: var(--well);
+}
+
+.well.big {
+  height: auto;
+  aspect-ratio: auto;
+  min-height: 16rem;
+  padding: 2rem 1rem;
+  container-type: inline-size;
+}
+
+pre.art {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--art);
+  font-size: min(13px, calc(92cqi / var(--cols) / 0.6), calc(88cqb / var(--rows) / 1.2));
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: pre;
+  font-variant-ligatures: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.big pre.art {
+  font-size: min(17px, calc(96cqi / var(--cols) / 0.6));
+}
+
+/*
+ * A scene is a picture on its own ground, edge to edge, in either theme. Its
+ * baked frame is plain text until the script paints it in colour on a canvas
+ * of the same size.
+ */
+.well.scene,
+.well.big.scene {
+  display: block;
+  container-type: inline-size;
+  aspect-ratio: auto;
+  min-height: 0;
+  padding: 0;
+  background: var(--ground, #0b0e14);
+}
+
+.well.scene pre.art {
+  color: #9aa6b6;
+  font-size: calc(100cqi / var(--cols) / 0.6);
+  line-height: calc(0.6 * var(--cell));
+  overflow: hidden;
+}
+
+.well.scene canvas {
+  display: block;
+  width: 100%;
+}
+
+/* Without script, the light page shows the frame drawn for paper. */
+.art .on-paper {
+  display: none;
+}
+
+:root[data-theme="light"] .art .on-paper {
+  display: inline;
+}
+
+:root[data-theme="light"] .art .on-ink {
+  display: none;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .art .on-paper {
+    display: inline;
+  }
+
+  :root:not([data-theme="dark"]) .art .on-ink {
+    display: none;
+  }
+}
+
+/* --- piece page --------------------------------------------------------- */
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 3ch;
+  color: var(--muted);
+}
+
+.block + .block {
+  margin-top: 2.5rem;
+}
+
+.block .head {
+  margin-bottom: 0.5rem;
+}
+
+.block > .head .tools {
+  display: flex;
+  gap: 2ch;
+  margin-left: auto;
+}
+
+pre.code {
+  margin: 0;
+  padding: 1rem 2ch;
+  overflow-x: auto;
+  background: var(--well);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 3ch;
+  margin-top: 3.5rem;
+}
+
+/* --- narrow screens: the sidebar becomes a line of categories ------------ */
+
+@media (max-width: 860px) {
+  .frame {
+    display: block;
+  }
+
+  .side {
+    position: static;
+    height: auto;
+    overflow: visible;
+    padding: 2.5rem 0 0;
+    margin: 0;
+  }
+
+  .side .by {
+    margin-bottom: 1rem;
+  }
+
+  .side nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 3ch;
+  }
+
+  .side h2,
+  .side ul {
+    display: none;
+  }
+
+  .side h3 {
+    display: inline;
+    margin: 0;
+    font-weight: 400;
+  }
+
+  .side h3 .count {
+    display: none;
+  }
+
+  .page {
+    padding-top: 2.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    font-size: 0.8125rem;
+    line-height: 1.6;
+  }
+}

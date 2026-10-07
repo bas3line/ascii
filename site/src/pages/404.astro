@@ -1,0 +1,25 @@
+---
+/*
+ * Not found: the 404 piece, through the package's own Astro component, so the
+ * site uses it the way an Astro app would.
+ */
+import Ascii from "ascii.rest/astro";
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="not found · ascii.rest" description="There is no page here." path="/404">
+  <h1 slot="heading">not found</h1>
+  <section class="block" style="margin-top: 2rem">
+    <div class="well big lost">
+      <Ascii piece="not-found" class="art-404" />
+    </div>
+  </section>
+  <p class="lede"><a href="/">Back to every piece</a></p>
+</Layout>
+
+<style>
+  .lost :global(.art-404) {
+    color: var(--ink);
+    font-size: min(15px, calc(92cqi / 60 / 0.6));
+  }
+</style>

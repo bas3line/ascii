@@ -1,0 +1,60 @@
+{
+  "name": "ascii.rest",
+  "version": "0.1.0",
+  "description": "Animated ascii art for web pages, in TypeScript: React, Next.js, Astro, or one HTML tag.",
+  "license": "MIT",
+  "author": "bas3line (https://github.com/bas3line)",
+  "homepage": "https://ascii.rest",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bas3line/ascii.git"
+  },
+  "keywords": ["ascii", "ascii-art", "animation", "react", "nextjs", "astro", "web-component", "astro-component"],
+  "type": "module",
+  "sideEffects": ["./dist/ascii.js", "./src/astro/*.astro"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./pieces": {
+      "types": "./dist/pieces/index.d.ts",
+      "default": "./dist/pieces/index.js"
+    },
+    "./pieces/*": {
+      "types": "./dist/pieces/*.d.ts",
+      "default": "./dist/pieces/*.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    },
+    "./element": {
+      "types": "./dist/ascii.d.ts",
+      "default": "./dist/ascii.js"
+    },
+    "./astro": "./src/astro/Ascii.astro"
+  },
+  "files": ["dist", "src/astro"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "node scripts/check.ts",
+    "gen": "node scripts/gen.ts",
+    "prepare": "tsc -p tsconfig.build.json"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/react": "^19.3.0",
+    "react": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

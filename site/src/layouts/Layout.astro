@@ -1,0 +1,236 @@
+---
+/*
+ * The shell for every page: a sidebar index of every category and piece, the
+ * header with the theme switch, [copy] buttons for code blocks, tabs, and the
+ * script that mounts each piece as it scrolls into view.
+ */
+import "../styles/site.css";
+import Credit from "../components/Credit.astro";
+import { AUTHOR, NAME, REPO, SITE, groups } from "../lib/library";
+
+interface Props {
+  title: string;
+  description: string;
+  path: string;
+  /** Slug of the piece this page shows, marked in the sidebar. */
+  current?: string;
+}
+
+const { title, description, path, current } = Astro.props;
+const canonical = new URL(path, SITE);
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script is:inline>(function(){var r=document.documentElement,s=null;try{s=localStorage.getItem("ascii-theme")}catch(e){}var t=s==="light"||s==="dark"?s:(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");r.dataset.theme=t;})();</script>
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="author" content={`@${AUTHOR.handle}`} />
+    <link rel="author" href={AUTHOR.url} />
+    <meta name="theme-color" content="#f5f6f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#131518" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={NAME} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:creator" content={`@${AUTHOR.handle}`} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  </head>
+
+  <body>
+    <div class="frame">
+      <aside class="side">
+        <a class="home" href="/">{NAME}</a>
+        <p class="by"><Credit lead="by" /></p>
+        <nav aria-label="Pieces">
+          {groups.map((group, i) => (
+            <>
+              <h2><a href={i ? `/#${group.categories[0].name}` : "/#pieces"}>{group.label}</a></h2>
+              {group.categories.map((category) => (
+                <>
+                  <h3>
+                    <a href={`/#${category.name}`}>{category.name}</a>
+                    <span class="count">{category.pieces.length}</span>
+                  </h3>
+                  <ul role="list">
+                    {category.pieces.map((piece) => (
+                      <li>
+                        <a href={`/${piece.slug}/`} aria-current={piece.slug === current ? "page" : undefined}>
+                          {piece.name}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ))}
+            </>
+          ))}
+        </nav>
+      </aside>
+
+      <script is:inline>
+        // Every piece is a full page load, which would reset the sidebar to its top. Put
+        // it back where it was, and bring the current piece into view if that leaves it out.
+        (function () {
+          var side = document.querySelector(".side");
+          var key = "ascii-side";
+          if (side.scrollHeight <= side.clientHeight) return;
+          try {
+            var y = sessionStorage.getItem(key);
+            if (y !== null) side.scrollTop = +y;
+          } catch (e) {}
+          var cur = side.querySelector('[aria-current="page"]');
+          if (cur) {
+            var s = side.getBoundingClientRect();
+            var c = cur.getBoundingClientRect();
+            if (c.top < s.top + 48 || c.bottom > s.bottom - 48) side.scrollTop += c.top - s.top - (s.height - c.height) / 2;
+          }
+          addEventListener("pagehide", function () {
+            try {
+              sessionStorage.setItem(key, String(side.scrollTop));
+            } catch (e) {}
+          });
+        })();
+      </script>
+
+      <main class="page">
+        <div class="top">
+          <slot name="heading" />
+          <span class="tools">
+            <a href={REPO}>[github]</a>
+            <button id="theme" class="button" type="button" aria-label="Switch to dark theme" hidden><span>[dark]</span></button>
+          </span>
+        </div>
+        <slot />
+        <footer class="foot muted">
+          <span>{NAME}, MIT licensed. <a href={REPO}>Source on GitHub</a>.</span>
+          <Credit lead="Made by" />
+        </footer>
+      </main>
+    </div>
+
+    <script is:inline>
+      (function () {
+        var r = document.documentElement;
+        var b = document.getElementById("theme");
+        var metas = document.querySelectorAll('meta[name="theme-color"]');
+        function saved() {
+          try {
+            var s = localStorage.getItem("ascii-theme");
+            return s === "light" || s === "dark" ? s : null;
+          } catch (e) {
+            return null;
+          }
+        }
+        function show(t) {
+          var next = t === "dark" ? "light" : "dark";
+          r.dataset.theme = t;
+          b.firstChild.textContent = "[" + next + "]";
+          b.setAttribute("aria-label", "Switch to " + next + " theme");
+        }
+        function paintBar(t) {
+          for (var i = 0; i < metas.length; i++) metas[i].setAttribute("content", t === "dark" ? "#131518" : "#f5f6f7");
+        }
+        show(r.dataset.theme === "dark" ? "dark" : "light");
+        if (saved()) paintBar(r.dataset.theme);
+        b.hidden = false;
+        b.addEventListener("click", function () {
+          var t = r.dataset.theme === "dark" ? "light" : "dark";
+          show(t);
+          paintBar(t);
+          try {
+            localStorage.setItem("ascii-theme", t);
+          } catch (e) {}
+        });
+        var mq = matchMedia("(prefers-color-scheme: dark)");
+        if (mq.addEventListener)
+          mq.addEventListener("change", function (e) {
+            if (!saved()) show(e.matches ? "dark" : "light");
+          });
+      })();
+    </script>
+
+    <script>
+      import { isPiece, load, mount, type Piece } from "ascii.rest";
+
+      // Each piece is its own chunk, fetched the first time it nears the screen.
+      const io = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            const pre = entry.target as HTMLElement;
+            io.unobserve(pre);
+            const name = pre.dataset.piece ?? "";
+            if (!isPiece(name)) continue;
+            load[name]().then((piece: Piece) => {
+              // Previews in the grid run at 20 fps at most; there can be a dozen on screen.
+              const grid = pre.closest(".grid") && piece.meta.fps > 20;
+              let el: HTMLElement = pre;
+              // A coloured piece swaps its baked text for a canvas painted in its palette.
+              if (piece.meta.palette) {
+                el = document.createElement("canvas");
+                el.className = "art";
+                el.setAttribute("role", "img");
+                el.setAttribute("aria-label", pre.getAttribute("aria-label") ?? "");
+                pre.replaceWith(el);
+              }
+              mount(el, piece, grid ? { fps: 20 } : {});
+            });
+          }
+        },
+        { rootMargin: "200px 0px" },
+      );
+      document.querySelectorAll<HTMLElement>("pre[data-piece]").forEach((pre) => io.observe(pre));
+
+      document.querySelectorAll<HTMLButtonElement>("button[data-copy]").forEach((button) => {
+        button.hidden = false;
+        const label = button.firstElementChild as HTMLElement;
+        button.addEventListener("click", async () => {
+          const text = document.getElementById(button.dataset.copy!)?.textContent ?? "";
+          try {
+            await navigator.clipboard.writeText(text);
+            label.textContent = "[copied]";
+          } catch {
+            label.textContent = "[select and copy]";
+          }
+          setTimeout(() => (label.textContent = "[copy]"), 1600);
+        });
+      });
+
+      // Tabs: without script every panel shows, one after another.
+      document.querySelectorAll<HTMLElement>("[data-tabs]").forEach((box) => {
+        const tabs = [...box.querySelectorAll<HTMLButtonElement>("[role=tab]")];
+        const panels = [...box.querySelectorAll<HTMLElement>("[role=tabpanel]")];
+        const select = (i: number, focus = false) => {
+          tabs.forEach((tab, j) => {
+            tab.setAttribute("aria-selected", String(i === j));
+            tab.tabIndex = i === j ? 0 : -1;
+          });
+          panels.forEach((panel, j) => (panel.hidden = i !== j));
+          if (focus) tabs[i].focus();
+        };
+        box.querySelector("[role=tablist]")?.removeAttribute("hidden");
+        box.classList.add("tabbed");
+        tabs.forEach((tab, i) => {
+          tab.addEventListener("click", () => select(i));
+          tab.addEventListener("keydown", (e) => {
+            const n = tabs.length;
+            const to = { ArrowRight: (i + 1) % n, ArrowLeft: (i - 1 + n) % n, Home: 0, End: n - 1 }[e.key];
+            if (to === undefined) return;
+            e.preventDefault();
+            select(to, true);
+          });
+        });
+        select(0);
+      });
+    </script>
+  </body>
+</html>

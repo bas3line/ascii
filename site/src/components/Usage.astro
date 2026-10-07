@@ -1,0 +1,58 @@
+---
+/*
+ * The ways to put a piece on a page, as tabs. Without script every way shows,
+ * one after another, under its own heading.
+ */
+import { astroUsage, moduleUsage, reactUsage, tagUsage, type Piece } from "../lib/library";
+
+interface Props {
+  piece: Piece;
+}
+
+const { piece } = Astro.props;
+const ways = [
+  {
+    name: "html",
+    code: tagUsage(piece),
+    note: "No install and no build step. ascii.js defines the <ascii-art> tag, loads the piece from ascii.rest, plays it while it is on screen, and holds the first frame for anyone who prefers reduced motion.",
+  },
+  {
+    name: "react",
+    code: reactUsage(piece),
+    note: `A client component, so it works in the Next.js app router as it is. Pass the name instead, piece="${piece.slug}", to fetch the piece only when it mounts.`,
+  },
+  {
+    name: "astro",
+    code: astroUsage(piece),
+    note: "Renders the first frame on the server, so the page is whole before any script runs, then plays the piece once it loads.",
+  },
+  {
+    name: "typescript",
+    code: moduleUsage(piece),
+    note: "mount plays a piece in a <pre>, or on a <canvas> for the coloured scenes, and returns a function that stops it. Every piece, option and frame is typed.",
+  },
+];
+const id = `use-${piece.slug}`;
+---
+
+<div class="usage" data-tabs>
+  <div class="tabs" role="tablist" aria-label="Ways to use it" hidden>
+    {ways.map((way, i) => (
+      <button class="button" type="button" role="tab" id={`${id}-tab-${i}`} aria-controls={`${id}-panel-${i}`}>
+        <span>{way.name}</span>
+      </button>
+    ))}
+  </div>
+  {ways.map((way, i) => (
+    <div role="tabpanel" id={`${id}-panel-${i}`} aria-labelledby={`${id}-tab-${i}`}>
+      <div class="head">
+        <h3 class="way">{way.name}</h3>
+        <span class="tools">
+          <button class="button" type="button" data-copy={`${id}-code-${i}`} hidden><span>[copy]</span></button>
+        </span>
+      </div>
+      <pre class="code" id={`${id}-code-${i}`}>{way.code}</pre>
+      <p class="muted note">{way.note}</p>
+    </div>
+  ))}
+</div>

@@ -1,0 +1,4 @@
+# Everything here is public, and the library files (/ascii.js, /mount.js,
+# /library.js, /pieces/...) import each other, so any site may load them.
+/*
+  Access-Control-Allow-Origin: *
