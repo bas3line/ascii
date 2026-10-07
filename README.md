@@ -19,12 +19,23 @@
 <sub>The <a href="https://ascii.rest/donut/">donut</a>, drawn small. On a page it turns: <code>&lt;ascii-art piece="donut"&gt;&lt;/ascii-art&gt;</code></sub>
 
 [![by @bas3line](https://img.shields.io/badge/by-%40bas3line-181717?logo=github&logoColor=white)](https://github.com/bas3line)
+[![CI](https://github.com/bas3line/ascii/actions/workflows/ci.yml/badge.svg)](https://github.com/bas3line/ascii/actions/workflows/ci.yml)
+[![MIT](https://img.shields.io/badge/license-MIT-181717)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-181717?logo=typescript&logoColor=white)](src/types.ts)
 
 Animated ascii art for web pages, written in TypeScript by [@bas3line](https://github.com/bas3line). 142 pieces, from spinning shapes and physics to loaders, charts and full-colour scenes, for React, Next.js, Astro, or a plain HTML page. See them all at [ascii.rest](https://ascii.rest).
+
+## Why
+
+I've always been a fan of Markdown files and terminal-style websites: plain text, one monospace face, nothing that moves without a reason. The kind of quiet web that [planetscale.com](https://planetscale.com) does well. So I made this, a way to put a little motion on pages like that without giving up the style. If you like minimalism, this library is for you.
+
+## Install
 
 ```sh
 npm install github:bas3line/ascii
 ```
+
+It installs as `ascii.rest` and builds itself on install. Or skip installing: the [HTML tag](#html-no-build-step) loads everything from ascii.rest.
 
 ## React and Next.js
 
@@ -60,7 +71,7 @@ The first frame is rendered on the server, so the page is whole before any scrip
 <ascii-art piece="donut"></ascii-art>
 ```
 
-The tag takes `piece`, `fps`, `options` (JSON, such as `'{"text":"hello"}'`), `label` for screen readers, and `src` to play a module of your own. Style it like text: `ascii-art { font-size: 10px; color: teal; }`. In a bundled app, `import "ascii.rest/element"` defines the same tag.
+Style it like text: `ascii-art { font-size: 10px; color: teal; }`. In a bundled app, `import "ascii.rest/element"` defines the same tag.
 
 ## TypeScript, anywhere
 
@@ -71,54 +82,46 @@ import { donut } from "ascii.rest/pieces";
 const stop = mount(document.querySelector("pre")!, donut, { fps: 12 });
 ```
 
-`mount(element, piece, options)` plays a piece in a `<pre>`, or on a `<canvas>` for the scenes, and returns a function that stops it. `load["night-coast"]()` fetches any piece by name, and `names` lists them all.
+## API
 
-Wherever it runs, a piece only plays while it is on screen and the tab is open, and holds its first frame for anyone who prefers reduced motion. Each piece is its own module, so a bundle carries only the pieces it uses.
+### `mount(element, piece, options?)`
 
-## Write a piece
+Plays `piece` in `element` and returns a function that stops it.
 
-A piece exports `meta` and a default function. The function takes the options and returns a `Frame`: `(t, env) => string`, the picture at `t` seconds as exactly `rows` lines of `cols` characters.
+- `element`: a `<pre>` for text pieces, a `<canvas>` for the coloured scenes (`canvas.has(name)` tells you which).
+- `piece`: a piece module, such as `donut` from `ascii.rest/pieces`.
+- `options`: overrides the piece's option defaults, plus `fps` to change its frame rate.
 
-```ts
-import type { Frame, Meta } from "../types.ts";
+### `load`, `names`, `canvas`, `isPiece`
 
-export const meta = {
-  name: "spinner",
-  category: "ui",
-  note: "a line turning while something loads",
-  cols: 10,
-  rows: 1,
-  fps: 6,
-} satisfies Meta;
+From `ascii.rest`. `load["night-coast"]()` imports any piece by name, `names` lists every name, `canvas` is the set of pieces drawn on a canvas, and `isPiece(name)` narrows a string to a piece name.
 
-export default function spinner(): Frame {
-  return (t) => `${"|/-\\"[Math.floor(t * 3) % 4]} loading `;
-}
-```
+### `<Ascii>` (React)
 
-- `meta`: `name`, `category` (one from the table below), `note` (up to 72 characters), `cols` and `rows` (up to 80 by 32), `fps` (0 to 60, 0 for a still), and optional `options` defaults, typed with `satisfies Meta<YourOptions>`.
-- `env.paper` is true when the text is dark on a light ground, so a shaded piece can flip its ramp and keep ink meaning shadow.
-- Characters: printable ASCII, `·`, `°`, and the box drawing and block elements, U+2500 to U+259F.
-- Deterministic: the same `t` gives the same frame. Use a seeded PRNG, never `Math.random`, and `Date` only with `meta.clock: true`.
-- Self-contained: no imports but types, and no DOM. Frame 0 should be a good still, since that is what reduced motion shows.
+| prop | type | |
+| --- | --- | --- |
+| `piece` | piece module or name | a module is bundled, a name is fetched when it mounts |
+| `options` | object | option overrides, and `fps` |
+| `label` | string | what it shows, for screen readers; the piece's name by default |
+| `className`, `style` | | passed to the `<pre>` or `<canvas>` |
 
-A scene (`category: "scenes"`) is a coloured picture. It adds `palette` (up to 64 colours as `#rrggbb`), `ground` (the colour behind it) and `cell: 1` for square cells, may be up to 320 by 120, may also use `•` and `●`, and writes each cell's palette index into `env.color`, a `Uint8Array` of `cols * rows`, row by row.
+### `<Ascii>` (Astro)
 
-Put it in `src/pieces/`, then:
+`piece` (a name), `options`, `fps`, `label` and `class`.
 
-```sh
-npm run gen                       # add it to the indexes
-npm run check -- spinner --show   # check it, printing frames at 0, 1, 2.5 and 5 seconds
-npm run typecheck
-```
+### `<ascii-art>`
 
-The checker plays each piece for six seconds and fails it on things like a wrong size, a character outside the set, a missing field, frames that differ between two runs, or frames slower than 4 ms on average (10 ms for a scene). Node 23.6 or later runs the TypeScript directly, so there is nothing to build first.
+| attribute | |
+| --- | --- |
+| `piece` | a piece's name: `donut`, `night-coast` |
+| `src` | or the URL of any module that follows the piece contract |
+| `fps` | overrides the frame rate |
+| `options` | JSON overriding the option defaults: `'{"text":"hello"}'` |
+| `label` | what it shows, for screen readers |
 
-## Layout
+## Browser support
 
-- `src/`: the library. `mount.ts`, `ascii.ts` (the tag), `react.tsx`, `astro/Ascii.astro`, `types.ts`, and `pieces/`.
-- `dist/`: what the package ships, built by `npm run build` (`tsc`): `.js` and `.d.ts` for each module.
-- `site/`: [ascii.rest](https://ascii.rest), an Astro site that uses the package like any app would. `npm run dev` and `npm run deploy` inside it.
+Any current browser: it needs ES modules, custom elements and `IntersectionObserver`, plus `ResizeObserver` for the scenes. Importing any module on a server, for server rendering, is safe: nothing touches the DOM until a piece is mounted.
 
 ## Pieces
 
@@ -137,9 +140,13 @@ The checker plays each piece for six seconds and fails it on things like a wrong
 | data | [bar chart](https://ascii.rest/bar-chart/), [candlesticks](https://ascii.rest/candlesticks/), [cpu meters](https://ascii.rest/cpu-meters/), [equalizer](https://ascii.rest/equalizer/), [gauge](https://ascii.rest/gauge/), [heartbeat](https://ascii.rest/heartbeat/), [heatmap](https://ascii.rest/heatmap/), [radar](https://ascii.rest/radar/), [sparkline](https://ascii.rest/sparkline/), [uptime bar](https://ascii.rest/uptime-bar/) |
 | type | [big text](https://ascii.rest/big-text/), [dissolve](https://ascii.rest/dissolve/), [glitch](https://ascii.rest/glitch/), [marquee](https://ascii.rest/marquee/), [morse](https://ascii.rest/morse/), [scramble](https://ascii.rest/scramble/), [split-flap](https://ascii.rest/split-flap/), [typewriter](https://ascii.rest/typewriter/), [wave text](https://ascii.rest/wave-text/) |
 
+## Contributing
+
+New pieces, fixes and ideas are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the piece contract, the checks and how to open a pull request, and the [code of conduct](CODE_OF_CONDUCT.md) applies everywhere. Found a security problem? See [SECURITY.md](SECURITY.md).
+
 ## Author
 
-Made by [@bas3line](https://github.com/bas3line). If you use it, a link back is appreciated.
+Made by [@bas3line](https://github.com/bas3line). If you use it, a link back is appreciated, and so is a star.
 
 ## License
 

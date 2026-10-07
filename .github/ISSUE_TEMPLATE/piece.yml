@@ -1,0 +1,21 @@
+name: Piece idea
+description: Something you'd like to see drawn in ascii.
+labels: [piece]
+body:
+  - type: input
+    id: subject
+    attributes:
+      label: What it shows
+      placeholder: a paper boat drifting on a pond
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options: [scenes, shapes, space, physics, nature, creatures, objects, generative, effects, ui, data, type]
+  - type: textarea
+    id: details
+    attributes:
+      label: How it moves
+      description: Optional. Motion, mood, a reference.
