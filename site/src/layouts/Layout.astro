@@ -121,6 +121,7 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
         <div class="top">
           <slot name="heading" />
           <span class="tools">
+            <button id="motion" class="button" type="button" hidden><span>[play anyway]</span></button>
             <a href={REPO}>[github]</a>
             <button id="theme" class="button" type="button" aria-label="Switch to dark theme" hidden><span>[dark]</span></button>
           </span>
@@ -182,8 +183,25 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
       try {
         mono = localStorage.getItem("ascii-ink") === "mono";
       } catch {}
+      // Pieces hold their first frame when the system asks for reduced motion. The header says so with a button that
+      // plays them anyway, and that choice holds from page to page too.
+      const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+      let motion = false;
+      try {
+        motion = localStorage.getItem("ascii-motion") === "play";
+      } catch {}
       const isLogo = (piece: Piece) => Boolean(piece.meta.palette && !piece.meta.ground);
-      const logos: { pre: HTMLElement; piece: Piece; fps?: number; el: HTMLElement; stop: () => void }[] = [];
+      const playing: { pre: HTMLElement; piece: Piece; fps?: number; el: HTMLElement; stop: () => void }[] = [];
+      // Every piece that `which` picks starts again on a new element.
+      const replay = (which: (piece: Piece) => boolean) => {
+        const again = playing.filter((p) => which(p.piece));
+        for (const p of again) {
+          p.stop();
+          if (p.el !== p.pre) p.el.replaceWith(p.pre);
+          playing.splice(playing.indexOf(p), 1);
+        }
+        for (const p of again) play(p.pre, p.piece, p.fps);
+      };
 
       function play(pre: HTMLElement, piece: Piece, fps?: number) {
         let el: HTMLElement = pre;
@@ -200,9 +218,29 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
           }
           pre.replaceWith(el);
         }
-        const stop = mount(el, piece, fps ? { fps } : {});
-        if (isLogo(piece)) logos.push({ pre, piece, fps, el, stop });
+        const stop = mount(el, piece, { ...(fps ? { fps } : {}), motion });
+        playing.push({ pre, piece, fps, el, stop });
       }
+
+      const motionButton = document.getElementById("motion") as HTMLButtonElement;
+      const showMotion = () => {
+        motionButton.hidden = !reduced.matches;
+        motionButton.firstElementChild!.textContent = motion ? "[hold still]" : "[play anyway]";
+        motionButton.setAttribute(
+          "aria-label",
+          motion ? "Hold the pieces still, as your system asks" : "Your system asks for reduced motion, so the pieces hold still. Play them anyway",
+        );
+      };
+      showMotion();
+      reduced.addEventListener("change", showMotion);
+      motionButton.addEventListener("click", () => {
+        motion = !motion;
+        try {
+          localStorage.setItem("ascii-motion", motion ? "play" : "still");
+        } catch {}
+        showMotion();
+        replay(() => true);
+      });
 
       const inks = document.querySelectorAll<HTMLButtonElement>("button[data-ink]");
       const label = () =>
@@ -219,12 +257,7 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
             localStorage.setItem("ascii-ink", mono ? "mono" : "colour");
           } catch {}
           label();
-          // Every logo playing starts again on its new element.
-          for (const logo of logos.splice(0)) {
-            logo.stop();
-            logo.el.replaceWith(logo.pre);
-            play(logo.pre, logo.piece, logo.fps);
-          }
+          replay(isLogo);
         });
       });
 
