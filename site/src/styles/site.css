@@ -449,10 +449,19 @@ section + section,
 
 /* --- usage tabs --------------------------------------------------------- */
 
+/* The row wraps on a phone, where a logo's five tabs are wider than the page, and leaves the panel's [copy] its corner. */
 .tabs {
   display: flex;
-  gap: 3ch;
+  flex-wrap: wrap;
+  gap: 0.25rem 3ch;
+  padding-right: 8ch;
   margin-bottom: 0.75rem;
+}
+
+@media (max-width: 480px) {
+  .tabs {
+    column-gap: 2ch;
+  }
 }
 
 .tabs [role="tab"] > span::before {
@@ -507,6 +516,49 @@ section + section,
 .usage .note {
   max-width: 72ch;
   margin-top: 0.75rem;
+}
+
+/* The readme tab's previews: each SVG on GitHub's own ground, whatever the site's theme. */
+.previews {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3ch;
+  margin-top: 1rem;
+}
+
+.preview {
+  margin: 0;
+}
+
+.preview .sheet {
+  display: grid;
+  place-items: center;
+  padding: 1.5rem 1rem;
+  border: 1px solid #d0d7de;
+  background: #ffffff;
+}
+
+.preview.dark .sheet {
+  border-color: #30363d;
+  background: #0d1117;
+}
+
+.preview img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.preview figcaption {
+  margin-top: 0.5rem;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .previews {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+  }
 }
 
 /* --- the grid of pieces -------------------------------------------------- */
