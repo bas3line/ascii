@@ -179,6 +179,7 @@ export * as tajDawn from "./taj-dawn.ts";
 export * as terminal from "./terminal.ts";
 export * as tesseract from "./tesseract.ts";
 export * as threeBody from "./three-body.ts";
+export * as tokyoRain from "./tokyo-rain.ts";
 export * as torusKnot from "./torus-knot.ts";
 export * as train from "./train.ts";
 export * as tunnel from "./tunnel.ts";
