@@ -11,7 +11,7 @@
 
 <sub>Thanks to the sponsors who make running ascii.rest possible</sub>
 
-<a href="https://commandcode.ai"><picture><source media="(prefers-color-scheme: dark)" srcset="https://ascii.rest/svg/command-code.dark.svg"><img alt="Command Code" src="https://ascii.rest/svg/command-code.svg" height="96"></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://www.cloudflare.com"><picture><source media="(prefers-color-scheme: dark)" srcset="https://ascii.rest/svg/cloudflare.dark.svg"><img alt="Cloudflare" src="https://ascii.rest/svg/cloudflare.svg" height="96"></picture></a>
+<a href="https://commandcode.ai"><picture><source media="(prefers-color-scheme: dark)" srcset="site/public/sponsors/command-code.dark.svg"><img alt="Command Code" src="site/public/sponsors/command-code.svg" height="28"></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://www.cloudflare.com"><picture><source media="(prefers-color-scheme: dark)" srcset="site/public/sponsors/cloudflare.dark.svg"><img alt="Cloudflare" src="site/public/sponsors/cloudflare.svg" height="52"></picture></a>
 
 <br>
 
