@@ -3,7 +3,7 @@
  * The ways to put a piece on a page, as tabs. Without script every way shows,
  * one after another, under its own heading.
  */
-import { astroUsage, moduleUsage, reactUsage, readmeUsage, tagUsage, type Piece } from "../lib/library";
+import { astroUsage, moduleUsage, reactUsage, readmeUsage, tagUsage, terminalUsage, type Piece } from "../lib/library";
 import { looping } from "../lib/svg";
 
 interface Props {
@@ -39,6 +39,16 @@ const ways = [
     note:
       "mount plays a piece in a <pre>, or on a <canvas> for the coloured ones, and returns a function that stops it. Every piece, option and frame is typed." +
       (logo ? " Mount it in a <pre> for one ink." : ""),
+  },
+  {
+    name: "terminal",
+    code: terminalUsage(piece),
+    // A scene keeps its own ground in a terminal too, so --light only matters to the rest.
+    note:
+      `Plays it in your terminal${piece.palette ? ", in colour," : ""} until you press a key.` +
+      (logo ? " Add --mono for the terminal's own colour." : "") +
+      (piece.ground ? "" : " Add --light for a light terminal.") +
+      ` Add --seconds 5 to stop it on its own; npx ascii.rest list shows every piece. In a CLI of your own, play("${piece.slug}", { seconds: 2 }) from ascii.rest/terminal shows it as a splash screen.`,
   },
   ...(looping(piece.category, piece.options)
     ? [
@@ -94,7 +104,8 @@ const grounds = [
           ))}
         </div>
       )}
-      <p class="muted note">{way.note}</p>
+      {/* a flag such as --mono stays on one line rather than breaking after its dashes */}
+      <p class="muted note">{way.note.split(/(--[a-z]+)/).map((part, j) => (j % 2 ? <span class="flag">{part}</span> : part))}</p>
     </div>
   ))}
 </div>

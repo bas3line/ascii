@@ -223,7 +223,20 @@ a[aria-current="page"] {
 /* Search, at the head of the index: a line to type on, with / to say how to get there. */
 .find {
   position: relative;
+  margin-bottom: 0.75rem;
+}
+
+/* Under it, the asks: on every page, rather than only at the foot of it. */
+.side .asks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 2ch;
   margin-bottom: 1.75rem;
+  font-size: 0.875em;
+}
+
+.side .asks a {
+  color: var(--muted);
 }
 
 .find input {
@@ -417,7 +430,8 @@ section + section,
   color: var(--ink);
 }
 
-.pitch + section {
+.pitch + section,
+.term + section {
   margin-top: 3rem;
 }
 
@@ -617,6 +631,38 @@ section + section,
 .card .note {
   display: block;
   color: var(--muted);
+}
+
+/* The card at the end of a logo grid that asks for the one missing: an empty well, its words in the middle. */
+.card.ask .well {
+  place-items: center;
+  color: var(--muted);
+}
+
+@media (hover: hover) {
+  .card.ask:hover .well span {
+    background: var(--ink);
+    color: var(--bg);
+  }
+}
+
+.note .flag {
+  white-space: nowrap;
+}
+
+/* The home page's line for the terminal, under the pitch. */
+.term {
+  max-width: 72ch;
+  margin-top: 0.75rem;
+  color: var(--muted);
+}
+
+.term code {
+  color: var(--ink);
+}
+
+.term .button {
+  margin-left: 1ch;
 }
 
 /*

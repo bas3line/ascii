@@ -7,7 +7,7 @@ import Layout from "../layouts/Layout.astro";
 import Art from "../components/Art.astro";
 import Downloads from "../components/Downloads.astro";
 import Usage from "../components/Usage.astro";
-import { REPO, pieces, type Piece } from "../lib/library";
+import { REPO, issue, pieces, type Piece } from "../lib/library";
 
 export function getStaticPaths() {
   return pieces.map((piece, i) => ({
@@ -48,6 +48,7 @@ const kb = bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} kB`;
     <span>{kb}</span>
     {piece.clock && <span>reads the clock</span>}
     {logo && <button class="button" type="button" data-ink hidden><span>[mono]</span></button>}
+    <a href={issue("bug", { title: `${piece.slug}: `, where: piece.slug })}>[report a bug]</a>
   </p>
 
   <section class="block" style="margin-top: 2rem">
