@@ -188,6 +188,7 @@ export * as sundial from "./sundial.ts";
 export * as sunrise from "./sunrise.ts";
 export * as supabase from "./supabase.ts";
 export * as supermemory from "./supermemory.ts";
+export * as svelte from "./svelte.ts";
 export * as swift from "./swift.ts";
 export * as synthwave from "./synthwave.ts";
 export * as tajDawn from "./taj-dawn.ts";
