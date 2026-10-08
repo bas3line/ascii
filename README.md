@@ -179,6 +179,8 @@ New pieces, fixes and ideas are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) cove
 
 Made by [@bas3line](https://github.com/bas3line). If you use it, a link back is appreciated, and so is a star.
 
+To support it: [GitHub Sponsors](https://github.com/sponsors/bas3line), [Buy Me a Coffee](https://buymeacoffee.com/bas3line) or [PayPal](https://paypal.me/ShubhamYadav886).
+
 ## License
 
 MIT, © [@bas3line](https://github.com/bas3line)

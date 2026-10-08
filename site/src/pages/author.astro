@@ -1,8 +1,8 @@
 ---
-/* The author: who made ascii.rest and where to find him. */
+/* The author: who made ascii.rest, where to find him, and how to support it. */
 import Icon from "../components/Icon.astro";
 import Layout from "../layouts/Layout.astro";
-import { AUTHOR, LINKS, NAME } from "../lib/library";
+import { AUTHOR, LINKS, NAME, SUPPORT } from "../lib/library";
 ---
 
 <Layout title={`${AUTHOR.name} · ${NAME}`} description={`${AUTHOR.name} made ${NAME}.`} path="/author/">
@@ -11,6 +11,12 @@ import { AUTHOR, LINKS, NAME } from "../lib/library";
   <ul class="links">
     {LINKS.map((link) => (
       <li><a href={link.href} rel="me"><Icon name={link.icon} /><span>{link.label}</span></a></li>
+    ))}
+  </ul>
+  <p class="about" id="support">If it is useful to you, you can support it.</p>
+  <ul class="links">
+    {SUPPORT.map((link) => (
+      <li><a href={link.href}><Icon name={link.icon} /><span>{link.label}</span></a></li>
     ))}
   </ul>
 </Layout>
