@@ -109,7 +109,7 @@ npx ascii.rest night-coast --seconds 10
 npx ascii.rest list                        # every piece's name, by category
 ```
 
-The logos, companies, distros and scenes play in their own colours, in 24-bit colour; a scene shows two of its rows in each of the terminal's, as half blocks. `--mono` draws a coloured piece in the terminal's own colour, for a terminal without 24-bit colour, and `--light` takes the colours meant for a light background. `--fps` and `--seconds` set the speed and the length. The piece plays centred; in a terminal smaller than the piece only its middle shows, and it says so when it stops. Piped or redirected, it prints its first frame as text.
+The logos, companies, distros and scenes play in their own colours, in 24-bit colour. A scene is shrunk to fit the terminal, whatever its size, and drawn in tones, two of its rows in each of the terminal's as half blocks, so the dots it is made of blend as they do on a page. `--mono` draws a coloured piece in the terminal's own colour, for a terminal without 24-bit colour, and `--light` takes the colours meant for a light background. `--fps` and `--seconds` set the speed and the length. The piece plays centred; any other piece wider or taller than the terminal shows only its middle, and it says so when it stops. Piped or redirected, it prints its first frame as text.
 
 ### As a splash screen
 
