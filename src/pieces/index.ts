@@ -12,6 +12,7 @@ export * as aquarium from "./aquarium.ts";
 export * as archLinux from "./arch-linux.ts";
 export * as aurora from "./aurora.ts";
 export * as auroraFjord from "./aurora-fjord.ts";
+export * as autumn from "./autumn.ts";
 export * as barChart from "./bar-chart.ts";
 export * as bigText from "./big-text.ts";
 export * as blackHole from "./black-hole.ts";
