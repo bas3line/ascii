@@ -103,6 +103,7 @@ export * as kotlin from "./kotlin.ts";
 export * as kyotoDusk from "./kyoto-dusk.ts";
 export * as landscape from "./landscape.ts";
 export * as langtonsAnt from "./langtons-ant.ts";
+export * as lanternLake from "./lantern-lake.ts";
 export * as lavaLamp from "./lava-lamp.ts";
 export * as lighthouse from "./lighthouse.ts";
 export * as lightning from "./lightning.ts";
