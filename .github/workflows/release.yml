@@ -1,0 +1,38 @@
+name: Release
+
+# Pushing a tag vX.Y.Z publishes that version to npm. It publishes through npm's
+# trusted publishing: GitHub vouches for this workflow, so no npm token is kept
+# anywhere, and npm adds the provenance itself. That needs npm 11.5.1 or later,
+# which Node 24.5 and up bring. The trusted publisher is set up once on
+# npmjs.com; CONTRIBUTING.md has the steps.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          # A release builds from a clean install, never from a cache.
+          package-manager-cache: false
+      - name: Check the tag is the version in package.json
+        run: |
+          version="v$(node -p 'require("./package.json").version')"
+          if [ "$GITHUB_REF_NAME" != "$version" ]; then
+            echo "::error::the tag is $GITHUB_REF_NAME but package.json says $version"
+            exit 1
+          fi
+      # npm ci runs the prepare script, which builds dist/ with tsc.
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+      - run: npm publish

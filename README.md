@@ -20,6 +20,7 @@ Animated ascii art for web pages.<br>
 
 [![by @bas3line](https://img.shields.io/badge/by-%40bas3line-181717?logo=github&logoColor=white)](https://github.com/bas3line)
 [![CI](https://github.com/bas3line/ascii/actions/workflows/ci.yml/badge.svg)](https://github.com/bas3line/ascii/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/ascii.rest?color=181717&logo=npm&logoColor=white)](https://www.npmjs.com/package/ascii.rest)
 [![MIT](https://img.shields.io/badge/license-MIT-181717)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-181717?logo=typescript&logoColor=white)](src/types.ts)
 

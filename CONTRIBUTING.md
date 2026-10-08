@@ -130,6 +130,22 @@ Then look at it on a page: with `npm run dev` running in `site/`, open `http://l
 - **Match the code around you**: plain names and sparse comments, like [`donut.ts`](src/pieces/donut.ts).
 - **License**: by contributing you agree your work is released under the [MIT license](LICENSE).
 
+## Releasing
+
+A release is a tag. Pushing a tag `vX.Y.Z` runs [release.yml](.github/workflows/release.yml), which checks and builds the package and publishes it to npm with provenance, through npm's trusted publishing: no npm token is stored anywhere.
+
+1. Bump the version in a pull request and merge it: `npm version 0.3.0 --no-git-tag-version` sets it in `package.json` and `package-lock.json`.
+2. Tag the merged commit on `main` and push the tag:
+
+   ```sh
+   git tag v0.3.0
+   git push origin v0.3.0
+   ```
+
+The workflow stops before publishing if the tag is not `v` and the version in `package.json`.
+
+Once, before the first release from Actions, the owner sets up the trusted publisher on npmjs.com: in the package's **Settings**, under **Trusted Publisher**, choose **GitHub Actions** and enter `bas3line` as the user, `ascii` as the repository and `release.yml` as the workflow, with no environment. The fields are case-sensitive, and npm does not check them when they are saved, so a mistake shows up as a failed publish.
+
 ## Reporting bugs and ideas
 
 Open an issue with one of the templates: a bug report (what you did, what you saw, which browser) or a piece idea. Security problems go through [SECURITY.md](SECURITY.md), not public issues.
