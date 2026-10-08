@@ -62,6 +62,15 @@ export const groups = GROUPS.map((g) => ({
 export const SITE = "https://ascii.rest";
 export const NAME = "ascii.rest";
 export const REPO = "https://github.com/bas3line/ascii";
+/**
+ * A new issue on one of the repo's forms (.github/ISSUE_TEMPLATE), opened with
+ * some fields filled: GitHub fills a form's text fields, and the title, from
+ * query parameters named by their ids.
+ */
+export function issue(form: "bug" | "logo" | "piece", fields: Record<string, string> = {}) {
+  const query = Object.entries(fields).map(([key, value]) => `&${key}=${encodeURIComponent(value)}`);
+  return `${REPO}/issues/new?template=${form}.yml${query.join("")}`;
+}
 export const AUTHOR = { name: "Shubham", handle: "bas3line", url: "https://github.com/bas3line" };
 /** Where to find the author, in the order the author page lists them. */
 export const LINKS = [

@@ -1,13 +1,14 @@
 ---
 /*
  * The shell for every page: a sidebar index of every category and piece, the
- * header with the theme switch, [copy] buttons for code blocks, tabs, and the
- * script that mounts each piece as it scrolls into view.
+ * header with the theme switch, a footer with links to open an issue, [copy]
+ * buttons for code blocks, tabs, and the script that mounts each piece as it
+ * scrolls into view.
  */
 import "../styles/site.css";
 import Credit from "../components/Credit.astro";
 import Icon from "../components/Icon.astro";
-import { AUTHOR, NAME, REPO, SITE, groups } from "../lib/library";
+import { AUTHOR, NAME, REPO, SITE, groups, issue } from "../lib/library";
 
 interface Props {
   title: string;
@@ -25,6 +26,8 @@ const canonical = new URL(path, SITE);
 // scene itself; a piece page shows its own piece (pages/og/[slug].png.ts).
 const image = new URL(card?.path ?? "/og.png", SITE);
 const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage under moonlit clouds, by @bas3line";
+// On a piece's page, a bug report starts out naming the piece.
+const bug = issue("bug", current ? { title: `${current}: `, where: current } : {});
 ---
 
 <html lang="en">
@@ -133,6 +136,11 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
         </div>
         <slot />
         <footer class="foot muted">
+          <p class="asks">
+            <a href={issue("logo")}>[request a logo]</a>
+            <a href={issue("piece")}>[suggest a piece]</a>
+            <a href={bug}>[report a bug]</a>
+          </p>
           <span>{NAME}, MIT licensed. <a class="source" href={REPO}><Icon name="github" /><span>Source on GitHub</span></a></span>
           <Credit lead="Made by" />
         </footer>

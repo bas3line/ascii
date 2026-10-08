@@ -117,7 +117,7 @@ a,
   box-decoration-break: clone;
 }
 
-.foot a,
+.foot .source,
 .lede a {
   text-decoration-line: underline;
   text-decoration-style: dotted;
@@ -288,6 +288,11 @@ a[aria-current="page"] {
   color: var(--muted);
 }
 
+#pieces .head .tools {
+  display: flex;
+  gap: 2ch;
+}
+
 section + section,
 #pieces {
   margin-top: 3.5rem;
@@ -329,6 +334,14 @@ section + section,
   justify-content: space-between;
   gap: 0.5rem 3ch;
   margin-top: 5rem;
+}
+
+/* The bracket links for issues, on a line of their own above the credit. */
+.foot .asks {
+  display: flex;
+  flex-wrap: wrap;
+  flex-basis: 100%;
+  gap: 0.5rem 3ch;
 }
 
 .foot .source {

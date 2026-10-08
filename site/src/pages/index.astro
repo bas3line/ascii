@@ -8,7 +8,7 @@ import Layout from "../layouts/Layout.astro";
 import Art from "../components/Art.astro";
 import Sponsors from "../components/Sponsors.astro";
 import Usage from "../components/Usage.astro";
-import { categories, pieces } from "../lib/library";
+import { categories, issue, pieces } from "../lib/library";
 
 const hero = pieces.find((p) => p.slug === "aurora-fjord") ?? pieces[0];
 const example = pieces.find((p) => p.slug === "donut") ?? pieces[0];
@@ -49,6 +49,7 @@ const description = `${pieces.length} animated ascii pieces for web pages, in Ty
             <span class="count">{category.pieces.length}</span>
             {category.pieces.some((piece) => piece.palette && !piece.ground) && (
               <span class="tools">
+                <a href={issue("logo")}>[request a logo]</a>
                 <button class="button" type="button" data-ink hidden><span>[mono]</span></button>
               </span>
             )}
