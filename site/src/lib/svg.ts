@@ -5,9 +5,10 @@
  * run by run from the piece's palette, and CSS shows each group in its turn.
  * Rows are stretched to the cell grid with textLength, so they line up in any
  * monospace face. Light pages get the palette's light half, dark pages the
- * dark half; for reduced motion it holds the first frame, a still.
+ * dark half; for reduced motion it holds the first frame, a still. It touches
+ * no DOM, so /make/ draws its logos' SVGs with it in the browser.
  */
-import type { PieceName } from "ascii.rest";
+import type { Piece, PieceName } from "ascii.rest";
 import { load } from "ascii.rest";
 
 /** The categories that loop with a fixed period, and the option that sets it. */
@@ -23,8 +24,13 @@ export const looping = (category: string, options?: Record<string, unknown>) =>
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 export async function svg(slug: PieceName, dark: boolean): Promise<string> {
-  const { meta, default: make } = await load[slug]();
-  if (!looping(meta.category, meta.options) || !meta.palette) throw new Error(`svg: ${slug} does not loop`);
+  return svgOf(await load[slug](), dark);
+}
+
+/** The same for a piece in hand, such as one made on /make/. */
+export function svgOf({ meta, default: make }: Piece, dark: boolean): string {
+  const { name } = meta;
+  if (!looping(meta.category, meta.options) || !meta.palette) throw new Error(`svg: ${name} does not loop`);
   const every = meta.options![LOOPS[meta.category]] as number;
   const frame = make(meta.options);
   const { cols, rows, palette } = meta;
@@ -38,7 +44,7 @@ export async function svg(slug: PieceName, dark: boolean): Promise<string> {
   const same = (a: { text: string; color: Uint8Array }, b: { text: string; color: Uint8Array }) => a.text === b.text && inked(a, b);
   // The pass must come round every `every` seconds. Its colours show where it is; a distro's scan scrambles the letters
   // under it with noise that differs from pass to pass, so the letters are not compared.
-  if (![0.37, 1.53, 2.21].every((x) => inked(at(t0 + x), at(t0 + x + every)))) throw new Error(`svg: ${slug} does not repeat every ${every} s`);
+  if (![0.37, 1.53, 2.21].every((x) => inked(at(t0 + x), at(t0 + x + every)))) throw new Error(`svg: ${name} does not repeat every ${every} s`);
 
   // each distinct frame, with the slots it shows in
   const frames: { shot: (typeof shots)[number]; slots: Set<number> }[] = [];
