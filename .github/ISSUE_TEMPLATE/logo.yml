@@ -1,0 +1,32 @@
+name: Logo request
+description: A company, language or distro whose logo you'd like in ascii.
+labels: [enhancement]
+title: "logo: "
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Whose logo
+      placeholder: github
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Kind
+      options: [company, language, linux distro, other]
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Where the official logo is
+      description: The owner's brand or press page, or an SVG on Simple Icons or devicon.
+      placeholder: https://github.com/logos
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Optional. Which version of the mark, its colours, where you'd use it.

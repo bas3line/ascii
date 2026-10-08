@@ -6,9 +6,9 @@
 # By default a browser asks again for every file on every page, and gets a 304
 # back. Astro's build files carry a hash of their contents in their names, so
 # they never change and need never be asked for again. The icons, the social
-# card and the font keep their names when they change, so they keep a day.
-# Pages and the library files keep the default and are always fresh. No path
-# may match two Cache-Control rules: the values would be joined.
+# card, the font and the README SVGs keep their names when they change, so they
+# keep a day. Pages and the library files keep the default and are always
+# fresh. No path may match two Cache-Control rules: the values would be joined.
 /_astro/*
   Cache-Control: public, max-age=31536000, immutable
 
@@ -25,4 +25,7 @@
   Cache-Control: public, max-age=86400
 
 /fonts/*
+  Cache-Control: public, max-age=86400
+
+/svg/*
   Cache-Control: public, max-age=86400

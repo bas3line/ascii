@@ -32,6 +32,10 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script is:inline>(function(){var r=document.documentElement,s=null;try{s=localStorage.getItem("ascii-theme")}catch(e){}var t=s==="light"||s==="dark"?s:(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");r.dataset.theme=t;})();</script>
+    <!-- After a deploy, a page left open or restored from cache still names the old build's files, which are gone. The
+    first one that fails to load reloads the page, which brings the new build; at most once a minute, so a real outage
+    cannot loop. Safari reports no unhandled rejection for a failed import, so the piece loader calls asciiReload itself. -->
+    <script is:inline>(function(){var k="ascii-reload",go=window.asciiReload=function(){try{if(Date.now()-(+sessionStorage.getItem(k)||0)<6e4)return;sessionStorage.setItem(k,String(Date.now()))}catch(e){return}location.reload()};addEventListener("error",function(e){var t=e.target;if(t&&(t.tagName==="SCRIPT"||t.tagName==="LINK")&&/\/_astro\//.test(t.src||t.href||""))go()},true);addEventListener("unhandledrejection",function(e){var m=String(e.reason&&e.reason.message||e.reason);if(/dynamically imported module|Importing a module script failed/i.test(m))go()});addEventListener("vite:preloadError",go);})();</script>
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="author" content={`@${AUTHOR.handle}`} />
@@ -271,11 +275,15 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
             io.unobserve(pre);
             const name = pre.dataset.piece ?? "";
             if (!isPiece(name)) continue;
-            load[name]().then((piece: Piece) => {
-              // Previews in the grid run at 20 fps at most; there can be a dozen on screen.
-              const grid = pre.closest(".grid") && piece.meta.fps > 20;
-              play(pre, piece, grid ? 20 : undefined);
-            });
+            load[name]().then(
+              (piece: Piece) => {
+                // Previews in the grid run at 20 fps at most; there can be a dozen on screen.
+                const grid = pre.closest(".grid") && piece.meta.fps > 20;
+                play(pre, piece, grid ? 20 : undefined);
+              },
+              // the piece's file is gone: the page is from an older build (the script at the top of <head>)
+              () => (window as Window & { asciiReload?: () => void }).asciiReload?.(),
+            );
           }
         },
         { rootMargin: "200px 0px" },

@@ -76,8 +76,7 @@ export const SUPPORT = [
   { label: "Buy Me a Coffee", icon: "coffee", href: "https://buymeacoffee.com/bas3line" },
   { label: "PayPal", icon: "paypal", href: "https://paypal.me/ShubhamYadav886" },
 ] as const;
-/** Until the package is on npm, it installs from GitHub. */
-export const INSTALL = "npm install github:bas3line/ascii";
+export const INSTALL = "npm install ascii.rest";
 
 const optionsOf = (piece: Piece) => (piece.options && Object.keys(piece.options).length ? piece.options : null);
 
@@ -110,6 +109,16 @@ export function astroUsage(piece: Piece) {
     `---`,
     ``,
     `<Ascii piece="${piece.slug}"${options ? ` options={${JSON.stringify(options)}}` : ""} />`,
+  ].join("\n");
+}
+
+/** A GitHub README, which runs no script: the animated SVG, the dark one in GitHub's dark theme. */
+export function readmeUsage(piece: Piece) {
+  return [
+    `<picture>`,
+    `  <source media="(prefers-color-scheme: dark)" srcset="${SITE}/svg/${piece.slug}.dark.svg">`,
+    `  <img alt="${piece.name}" src="${SITE}/svg/${piece.slug}.svg" width="${piece.cols * 5}">`,
+    `</picture>`,
   ].join("\n");
 }
 

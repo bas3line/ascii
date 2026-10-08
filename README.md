@@ -45,10 +45,10 @@ I've always been a fan of Markdown files and terminal-style websites: plain text
 ## Install
 
 ```sh
-npm install github:bas3line/ascii
+npm install ascii.rest
 ```
 
-It installs as `ascii.rest` and builds itself on install. Or skip installing: the [HTML tag](#html-no-build-step) loads everything from ascii.rest.
+Or skip installing: the [HTML tag](#html-no-build-step) loads everything from ascii.rest.
 
 ## React and Next.js
 
@@ -86,6 +86,19 @@ The first frame is rendered on the server, so the page is whole before any scrip
 ```
 
 Style it like text: `ascii-art { font-size: 10px; color: teal; }`. The logos, companies and distros come in their own colours; add `mono`, `<ascii-art piece="rust" mono>`, to draw one in the text's colour instead. In a bundled app, `import "ascii.rest/element"` defines the same tag.
+
+## In a GitHub README
+
+A README runs no script, so every logo, company and distro also comes as an animated SVG, one loop of its glint or scan, at `https://ascii.rest/svg/<name>.svg` for light pages and `<name>.dark.svg` for dark ones:
+
+```html
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://ascii.rest/svg/rust.dark.svg">
+  <img alt="rust" src="https://ascii.rest/svg/rust.svg" width="320">
+</picture>
+```
+
+GitHub shows the dark one in its dark theme. Each piece's page on ascii.rest has its snippet under `readme`.
 
 ## TypeScript, anywhere
 
