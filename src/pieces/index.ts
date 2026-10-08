@@ -33,6 +33,7 @@ export * as clojure from "./clojure.ts";
 export * as cloudflare from "./cloudflare.ts";
 export * as coderabbit from "./coderabbit.ts";
 export * as coffee from "./coffee.ts";
+export * as collabute from "./collabute.ts";
 export * as commandCode from "./command-code.ts";
 export * as contourMap from "./contour-map.ts";
 export * as cpp from "./cpp.ts";
