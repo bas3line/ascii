@@ -2,3 +2,27 @@
 # /library.js, /pieces/...) import each other, so any site may load them.
 /*
   Access-Control-Allow-Origin: *
+
+# By default a browser asks again for every file on every page, and gets a 304
+# back. Astro's build files carry a hash of their contents in their names, so
+# they never change and need never be asked for again. The icons, the social
+# card and the font keep their names when they change, so they keep a day.
+# Pages and the library files keep the default and are always fresh. No path
+# may match two Cache-Control rules: the values would be joined.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/favicon.svg
+  Cache-Control: public, max-age=86400
+
+/favicon.ico
+  Cache-Control: public, max-age=86400
+
+/apple-touch-icon.png
+  Cache-Control: public, max-age=86400
+
+/og.png
+  Cache-Control: public, max-age=86400
+
+/fonts/*
+  Cache-Control: public, max-age=86400
