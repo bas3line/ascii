@@ -202,7 +202,7 @@ a[aria-current="page"] {
   font-size: 0.875em;
 }
 
-/* The docs and the banner maker, under the credit. */
+/* The docs, the banner maker and the image to ascii maker, under the credit. */
 .side .make {
   display: flex;
   flex-wrap: wrap;

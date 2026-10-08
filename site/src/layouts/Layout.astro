@@ -78,6 +78,7 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
         <p class="make">
           <a href="/docs/" aria-current={path.startsWith("/docs/") ? "page" : undefined}>[docs]</a>
           <a href="/banner/" aria-current={path === "/banner/" ? "page" : undefined}>[make a banner]</a>
+          <a href="/make/" aria-current={path === "/make/" ? "page" : undefined}>[image to ascii]</a>
         </p>
         {Astro.slots.has("side") ? (
           <slot name="side" />
