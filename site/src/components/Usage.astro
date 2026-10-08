@@ -3,7 +3,8 @@
  * The ways to put a piece on a page, as tabs. Without script every way shows,
  * one after another, under its own heading.
  */
-import { astroUsage, moduleUsage, reactUsage, tagUsage, type Piece } from "../lib/library";
+import { astroUsage, moduleUsage, reactUsage, readmeUsage, tagUsage, type Piece } from "../lib/library";
+import { looping } from "../lib/svg";
 
 interface Props {
   piece: Piece;
@@ -39,6 +40,15 @@ const ways = [
       "mount plays a piece in a <pre>, or on a <canvas> for the coloured ones, and returns a function that stops it. Every piece, option and frame is typed." +
       (logo ? " Mount it in a <pre> for one ink." : ""),
   },
+  ...(looping(piece.category, piece.options)
+    ? [
+        {
+          name: "readme",
+          code: readmeUsage(piece),
+          note: "An animated SVG that needs no script, so it plays in a GitHub README, which runs none. GitHub shows the dark one in its dark theme. It holds still for anyone who prefers reduced motion.",
+        },
+      ]
+    : []),
 ];
 const id = `use-${piece.slug}`;
 ---
