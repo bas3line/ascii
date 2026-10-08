@@ -100,7 +100,14 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
       actx.textAlign = "center";
       actx.textBaseline = "middle";
       actx.fillStyle = palette ? palette[i] || palette[0] : ink;
+      // Kept to its slot: a box drawing glyph stands taller than its box and would reach into the slot below, which
+      // the cells of that slot's glyph would then show.
+      actx.save();
+      actx.beginPath();
+      actx.rect(x - 1, y - 1, pw, ph);
+      actx.clip();
       actx.fillText(String.fromCharCode(code), x + sw / 2, y + sh / 2);
+      actx.restore();
       slots.set(key, s);
       return s;
     };
