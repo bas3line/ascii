@@ -31,6 +31,7 @@ export * as cat from "./cat.ts";
 export * as centos from "./centos.ts";
 export * as cherryBlossom from "./cherry-blossom.ts";
 export * as chladni from "./chladni.ts";
+export * as cliffTemple from "./cliff-temple.ts";
 export * as clojure from "./clojure.ts";
 export * as cloudflare from "./cloudflare.ts";
 export * as coderabbit from "./coderabbit.ts";
