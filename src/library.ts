@@ -8,6 +8,7 @@ export const load = {
   "alpine-dawn": () => import("./pieces/alpine-dawn.ts"),
   "alpine-linux": () => import("./pieces/alpine-linux.ts"),
   "analog-clock": () => import("./pieces/analog-clock.ts"),
+  "apple": () => import("./pieces/apple.ts"),
   "aquarium": () => import("./pieces/aquarium.ts"),
   "arch-linux": () => import("./pieces/arch-linux.ts"),
   "aurora": () => import("./pieces/aurora.ts"),
@@ -30,7 +31,9 @@ export const load = {
   "cherry-blossom": () => import("./pieces/cherry-blossom.ts"),
   "chladni": () => import("./pieces/chladni.ts"),
   "clojure": () => import("./pieces/clojure.ts"),
+  "cloudflare": () => import("./pieces/cloudflare.ts"),
   "coffee": () => import("./pieces/coffee.ts"),
+  "command-code": () => import("./pieces/command-code.ts"),
   "contour-map": () => import("./pieces/contour-map.ts"),
   "cpp": () => import("./pieces/cpp.ts"),
   "cpu-meters": () => import("./pieces/cpu-meters.ts"),
@@ -129,6 +132,7 @@ export const load = {
   "php": () => import("./pieces/php.ts"),
   "planet": () => import("./pieces/planet.ts"),
   "plasma": () => import("./pieces/plasma.ts"),
+  "playstation": () => import("./pieces/playstation.ts"),
   "plucked-string": () => import("./pieces/plucked-string.ts"),
   "pond-ripples": () => import("./pieces/pond-ripples.ts"),
   "pop-os": () => import("./pieces/pop-os.ts"),
@@ -185,6 +189,7 @@ export const load = {
   "ubuntu": () => import("./pieces/ubuntu.ts"),
   "uptime-bar": () => import("./pieces/uptime-bar.ts"),
   "varanasi-ghats": () => import("./pieces/varanasi-ghats.ts"),
+  "vercel": () => import("./pieces/vercel.ts"),
   "vinyl": () => import("./pieces/vinyl.ts"),
   "void-linux": () => import("./pieces/void-linux.ts"),
   "voronoi": () => import("./pieces/voronoi.ts"),
@@ -203,7 +208,7 @@ export type PieceName = keyof typeof load;
 export const names = Object.keys(load) as PieceName[];
 
 /** The coloured pieces, which draw on a <canvas> rather than a <pre>. */
-export const canvas: ReadonlySet<PieceName> = new Set<PieceName>(["almalinux","alpine-dawn","alpine-linux","arch-linux","aurora-fjord","c","centos","clojure","cpp","csharp","css","dart","debian","deep-reef","deepin","desert-night","earthrise","elementary-os","elixir","endeavouros","erlang","fedora","gentoo","go","haskell","html","java","javascript","julia","kali-linux","kotlin","kyoto-dusk","linux-mint","lua","manjaro","marine-drive","misty-forest","night-coast","nixos","ocaml","ocean-sunset","opensuse","perl","php","pop-os","python","r","red-hat","rocky-linux","ruby","rust","scala","storm-plains","swift","taj-dawn","tux","typescript","ubuntu","varanasi-ghats","void-linux","zig","zorin-os"]);
+export const canvas: ReadonlySet<PieceName> = new Set<PieceName>(["almalinux","alpine-dawn","alpine-linux","apple","arch-linux","aurora-fjord","c","centos","clojure","cloudflare","command-code","cpp","csharp","css","dart","debian","deep-reef","deepin","desert-night","earthrise","elementary-os","elixir","endeavouros","erlang","fedora","gentoo","go","haskell","html","java","javascript","julia","kali-linux","kotlin","kyoto-dusk","linux-mint","lua","manjaro","marine-drive","misty-forest","night-coast","nixos","ocaml","ocean-sunset","opensuse","perl","php","playstation","pop-os","python","r","red-hat","rocky-linux","ruby","rust","scala","storm-plains","swift","taj-dawn","tux","typescript","ubuntu","varanasi-ghats","vercel","void-linux","zig","zorin-os"]);
 
 /** Whether a name is a piece in the library. */
 export const isPiece = (name: string): name is PieceName => Object.hasOwn(load, name);
