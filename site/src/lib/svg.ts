@@ -20,18 +20,27 @@ const CW = 10, CH = 20; // a cell, in SVG units: the canvas's 1:2
 export const looping = (category: string, options?: Record<string, unknown>) =>
   category in LOOPS && typeof options?.[LOOPS[category]] === "number" && (options[LOOPS[category]] as number) > 0;
 
+/**
+ * One loop of such a piece: its period in seconds and the time it starts. A second of still, then the pass, then
+ * still again: the loop starts and ends between passes. The README SVG and the downloads both play this loop.
+ */
+export function loop(category: string, options?: Record<string, unknown>) {
+  if (!looping(category, options)) return null;
+  const every = options![LOOPS[category]] as number;
+  return { every, from: START + every - 1 };
+}
+
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 export async function svg(slug: PieceName, dark: boolean): Promise<string> {
   const { meta, default: make } = await load[slug]();
-  if (!looping(meta.category, meta.options) || !meta.palette) throw new Error(`svg: ${slug} does not loop`);
-  const every = meta.options![LOOPS[meta.category]] as number;
+  const span = loop(meta.category, meta.options);
+  if (!span || !meta.palette) throw new Error(`svg: ${slug} does not loop`);
+  const { every, from: t0 } = span;
   const frame = make(meta.options);
   const { cols, rows, palette } = meta;
   const color = new Uint8Array(cols * rows);
   const at = (t: number) => ({ text: frame(t, { paper: !dark, color }), color: color.slice() });
-  // A second of still, then the pass, then still again: the loop starts and ends between passes.
-  const t0 = START + every - 1;
   const n = Math.round(every * FPS);
   const shots = Array.from({ length: n }, (_, i) => at(t0 + i / FPS));
   const inked = (a: { color: Uint8Array }, b: { color: Uint8Array }) => a.color.every((v, i) => v === b.color[i]);

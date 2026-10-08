@@ -10,7 +10,8 @@
     "added": "node scripts/added.mjs"
   },
   "dependencies": {
-    "ascii.rest": "file:.."
+    "ascii.rest": "file:..",
+    "gifenc": "^1.0.3"
   },
   "devDependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",

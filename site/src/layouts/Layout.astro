@@ -296,6 +296,7 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
 
     <script>
       import { isPiece, load, mount, type Piece } from "ascii.rest";
+      import { shown } from "../lib/shown";
 
       // Logos come in colour or in one ink, and the choice holds from page to page.
       let mono = false;
@@ -337,7 +338,15 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
           }
           pre.replaceWith(el);
         }
-        const stop = mount(el, piece, { ...(fps ? { fps } : {}), motion });
+        // Each frame notes its time, for the downloads.
+        const timed: Piece = {
+          meta: piece.meta,
+          default: (options) => {
+            const frame = piece.default(options);
+            return (t, env) => (shown.set(el, t), frame(t, env));
+          },
+        };
+        const stop = mount(el, timed, { ...(fps ? { fps } : {}), motion });
         playing.push({ pre, piece, fps, el, stop });
       }
 

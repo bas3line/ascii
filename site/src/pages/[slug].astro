@@ -1,10 +1,11 @@
 ---
 /*
- * One piece: a large live preview, the ways to put it on a page, and its
- * source.
+ * One piece: a large live preview with its downloads, the ways to put it on a
+ * page, and its source.
  */
 import Layout from "../layouts/Layout.astro";
 import Art from "../components/Art.astro";
+import Downloads from "../components/Downloads.astro";
 import Usage from "../components/Usage.astro";
 import { REPO, pieces, type Piece } from "../lib/library";
 
@@ -53,6 +54,7 @@ const kb = bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} kB`;
     <div class:list={["well big", piece.ground && "scene"]} style={piece.ground && `--ground: ${piece.ground}`}>
       <Art piece={piece} />
     </div>
+    <Downloads piece={piece} />
   </section>
 
   <section class="block">

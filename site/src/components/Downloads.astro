@@ -1,0 +1,114 @@
+---
+/*
+ * The downloads under a piece's preview: a PNG of the frame on screen, a five
+ * second video and a GIF, all made in the browser (lib/download.ts), and for a
+ * logo that loops, its README SVG. A clip of such a logo is one whole loop.
+ * It all needs script, so the row shows once the script runs.
+ */
+import type { Piece } from "../lib/library";
+import { loop } from "../lib/svg";
+
+interface Props {
+  piece: Piece;
+}
+
+const { piece } = Astro.props;
+const span = loop(piece.category, piece.options);
+---
+
+<p class="saves" data-saves={piece.slug} data-loop={span?.every} data-from={span?.from} hidden>
+  <span>download</span>
+  <button class="button" type="button" data-save="png"><span>[png]</span></button>
+  {piece.fps > 0 && <button class="button" type="button" data-save="video"><span>[video]</span></button>}
+  {piece.fps > 0 && <button class="button" type="button" data-save="gif"><span>[gif]</span></button>}
+  {span && <button class="button" type="button" data-save="svg"><span>[svg]</span></button>}
+</p>
+
+<script>
+  import { isPiece, load } from "ascii.rest";
+  import { gif, png, video, videoType, type Look } from "../lib/download";
+  import { shown } from "../lib/shown";
+
+  const row = document.querySelector<HTMLElement>("[data-saves]");
+  const slug = row?.dataset.saves ?? "";
+  if (row && isPiece(slug)) {
+    if (!videoType()) row.querySelector('[data-save="video"]')?.remove();
+    const buttons = [...row.querySelectorAll<HTMLButtonElement>("button[data-save]")];
+    const span = row.dataset.loop ? { seconds: +row.dataset.loop, from: +(row.dataset.from ?? 0) } : null;
+    // the time of the frame on screen, in the preview beside the row, canvas or <pre>
+    const now = () => {
+      const art = row.parentElement?.querySelector(".art");
+      return (art && shown.get(art)) ?? 0;
+    };
+    const look = (): Look => {
+      const css = getComputedStyle(document.documentElement);
+      let mono = false;
+      try {
+        mono = localStorage.getItem("ascii-ink") === "mono";
+      } catch {}
+      return { mono, ink: css.getPropertyValue("--ink").trim(), well: css.getPropertyValue("--well").trim() };
+    };
+    const save = (href: string, ext: string) => {
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = `ascii-rest-${slug}.${ext}`;
+      document.body.append(a);
+      a.click();
+      a.remove();
+    };
+
+    let busy = false;
+    for (const button of buttons) {
+      const label = button.firstElementChild as HTMLElement;
+      const name = label.textContent;
+      const say = (text: string) => (label.textContent = `[${text}]`);
+      let reset = 0;
+      const later = () => (reset = window.setTimeout(() => (label.textContent = name), 1600));
+      button.addEventListener("click", async () => {
+        if (busy) return;
+        clearTimeout(reset);
+        const kind = button.dataset.save;
+        if (kind === "svg") {
+          save(`/svg/${slug}${document.documentElement.dataset.theme === "dark" ? ".dark" : ""}.svg`, "svg");
+          say("saved");
+          later();
+          return;
+        }
+        // one at a time: the others wait, and say so
+        busy = true;
+        buttons.forEach((b) => b.setAttribute("aria-disabled", "true"));
+        button.setAttribute("aria-busy", "true");
+        try {
+          const piece = await load[slug]();
+          // a loop of a looping logo; anything else, five seconds on from the frame on screen
+          const from = span?.from ?? now();
+          const seconds = span?.seconds ?? 5;
+          let blob: Blob, ext: string;
+          if (kind === "video") {
+            blob = await video(piece, look(), from, seconds, (s) => say(`recording ${s}s`));
+            ext = blob.type.startsWith("video/mp4") ? "mp4" : "webm";
+          } else if (kind === "gif") {
+            say("encoding 0%");
+            blob = await gif(piece, look(), from, seconds, (part) => say(`encoding ${Math.floor(part * 100)}%`));
+            ext = "gif";
+          } else {
+            blob = await png(piece, look(), now());
+            ext = "png";
+          }
+          const url = URL.createObjectURL(blob);
+          save(url, ext);
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+          say("saved");
+        } catch (error) {
+          console.error(error);
+          say("failed");
+        }
+        busy = false;
+        buttons.forEach((b) => b.removeAttribute("aria-disabled"));
+        button.removeAttribute("aria-busy");
+        later();
+      });
+    }
+    row.hidden = false;
+  }
+</script>

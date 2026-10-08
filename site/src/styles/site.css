@@ -729,6 +729,27 @@ pre.art {
   color: var(--muted);
 }
 
+/* The downloads, a line under the preview. The one at work says how far it is; the rest wait. */
+.saves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 2ch;
+  margin-top: 0.75rem;
+  color: var(--muted);
+}
+
+.saves[hidden] {
+  display: none;
+}
+
+.saves [aria-busy="true"] {
+  color: var(--ink);
+}
+
+.saves [aria-disabled="true"] {
+  cursor: progress;
+}
+
 .block + .block {
   margin-top: 2.5rem;
 }
