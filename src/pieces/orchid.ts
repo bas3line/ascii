@@ -20,7 +20,7 @@ export interface OrchidOptions {
 export const meta = {
   name: "orchid",
   category: "companies",
-  note: "the five-petal flower, in navy, glinting now and then",
+  note: "the five-petal flower, glinting now and then",
   cols: 57,
   rows: 28,
   fps: 30,
