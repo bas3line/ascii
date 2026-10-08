@@ -9,7 +9,9 @@
   </picture>
 </a>
 
-<sub>Sponsored by <a href="https://www.cloudflare.com"><img src=".github/cloudflare.svg" height="14" align="center" alt=""> Cloudflare</a></sub>
+<sub>Thanks to the sponsors who make running ascii.rest possible</sub>
+
+<a href="https://commandcode.ai"><picture><source media="(prefers-color-scheme: dark)" srcset="https://ascii.rest/svg/command-code.dark.svg"><img alt="Command Code" src="https://ascii.rest/svg/command-code.svg" height="96"></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://www.cloudflare.com"><picture><source media="(prefers-color-scheme: dark)" srcset="https://ascii.rest/svg/cloudflare.dark.svg"><img alt="Cloudflare" src="https://ascii.rest/svg/cloudflare.svg" height="96"></picture></a>
 
 <br>
 
