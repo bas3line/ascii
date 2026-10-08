@@ -32,6 +32,7 @@ export const load = {
   "chladni": () => import("./pieces/chladni.ts"),
   "clojure": () => import("./pieces/clojure.ts"),
   "cloudflare": () => import("./pieces/cloudflare.ts"),
+  "coderabbit": () => import("./pieces/coderabbit.ts"),
   "coffee": () => import("./pieces/coffee.ts"),
   "command-code": () => import("./pieces/command-code.ts"),
   "contour-map": () => import("./pieces/contour-map.ts"),
@@ -81,6 +82,7 @@ export const load = {
   "glitch": () => import("./pieces/glitch.ts"),
   "glxgears": () => import("./pieces/glxgears.ts"),
   "go": () => import("./pieces/go.ts"),
+  "greptile": () => import("./pieces/greptile.ts"),
   "gyroscope": () => import("./pieces/gyroscope.ts"),
   "harmonograph": () => import("./pieces/harmonograph.ts"),
   "haskell": () => import("./pieces/haskell.ts"),
@@ -103,6 +105,7 @@ export const load = {
   "kyoto-dusk": () => import("./pieces/kyoto-dusk.ts"),
   "landscape": () => import("./pieces/landscape.ts"),
   "langtons-ant": () => import("./pieces/langtons-ant.ts"),
+  "lantern-lake": () => import("./pieces/lantern-lake.ts"),
   "lava-lamp": () => import("./pieces/lava-lamp.ts"),
   "lighthouse": () => import("./pieces/lighthouse.ts"),
   "lightning": () => import("./pieces/lightning.ts"),
@@ -115,6 +118,7 @@ export const load = {
   "marquee": () => import("./pieces/marquee.ts"),
   "matrix-rain": () => import("./pieces/matrix-rain.ts"),
   "maze": () => import("./pieces/maze.ts"),
+  "mintlify": () => import("./pieces/mintlify.ts"),
   "misty-forest": () => import("./pieces/misty-forest.ts"),
   "mobius-strip": () => import("./pieces/mobius-strip.ts"),
   "moon-phases": () => import("./pieces/moon-phases.ts"),
@@ -125,6 +129,7 @@ export const load = {
   "not-found": () => import("./pieces/not-found.ts"),
   "ocaml": () => import("./pieces/ocaml.ts"),
   "ocean-sunset": () => import("./pieces/ocean-sunset.ts"),
+  "omarchy": () => import("./pieces/omarchy.ts"),
   "opensuse": () => import("./pieces/opensuse.ts"),
   "owl": () => import("./pieces/owl.ts"),
   "pendulum-wave": () => import("./pieces/pendulum-wave.ts"),
@@ -178,6 +183,7 @@ export const load = {
   "terminal": () => import("./pieces/terminal.ts"),
   "tesseract": () => import("./pieces/tesseract.ts"),
   "three-body": () => import("./pieces/three-body.ts"),
+  "tokyo-rain": () => import("./pieces/tokyo-rain.ts"),
   "torus-knot": () => import("./pieces/torus-knot.ts"),
   "train": () => import("./pieces/train.ts"),
   "tunnel": () => import("./pieces/tunnel.ts"),
@@ -208,7 +214,7 @@ export type PieceName = keyof typeof load;
 export const names = Object.keys(load) as PieceName[];
 
 /** The coloured pieces, which draw on a <canvas> rather than a <pre>. */
-export const canvas: ReadonlySet<PieceName> = new Set<PieceName>(["almalinux","alpine-dawn","alpine-linux","apple","arch-linux","aurora-fjord","c","centos","clojure","cloudflare","command-code","cpp","csharp","css","dart","debian","deep-reef","deepin","desert-night","earthrise","elementary-os","elixir","endeavouros","erlang","fedora","gentoo","go","haskell","html","java","javascript","julia","kali-linux","kotlin","kyoto-dusk","linux-mint","lua","manjaro","marine-drive","misty-forest","night-coast","nixos","ocaml","ocean-sunset","opensuse","perl","php","playstation","pop-os","python","r","red-hat","rocky-linux","ruby","rust","scala","storm-plains","swift","taj-dawn","tux","typescript","ubuntu","varanasi-ghats","vercel","void-linux","zig","zorin-os"]);
+export const canvas: ReadonlySet<PieceName> = new Set<PieceName>(["almalinux","alpine-dawn","alpine-linux","apple","arch-linux","aurora-fjord","c","centos","clojure","cloudflare","coderabbit","command-code","cpp","csharp","css","dart","debian","deep-reef","deepin","desert-night","earthrise","elementary-os","elixir","endeavouros","erlang","fedora","gentoo","go","greptile","haskell","html","java","javascript","julia","kali-linux","kotlin","kyoto-dusk","lantern-lake","linux-mint","lua","manjaro","marine-drive","mintlify","misty-forest","night-coast","nixos","ocaml","ocean-sunset","omarchy","opensuse","perl","php","playstation","pop-os","python","r","red-hat","rocky-linux","ruby","rust","scala","storm-plains","swift","taj-dawn","tokyo-rain","tux","typescript","ubuntu","varanasi-ghats","vercel","void-linux","zig","zorin-os"]);
 
 /** Whether a name is a piece in the library. */
 export const isPiece = (name: string): name is PieceName => Object.hasOwn(load, name);

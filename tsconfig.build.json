@@ -1,12 +1,13 @@
 {
   // Emits the package: dist/ holds plain .js and .d.ts for every module in src/.
+  // Node's types are there for terminal.ts and cli.ts; the browser modules use none.
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
     "declaration": true,
     "rootDir": "src",
     "outDir": "dist",
-    "types": []
+    "types": ["node"]
   },
   "include": ["src"],
   "exclude": ["src/astro"]

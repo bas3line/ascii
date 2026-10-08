@@ -6,10 +6,12 @@
     "dev": "npm --prefix .. run build && astro dev",
     "build": "npm --prefix .. run build && astro build",
     "preview": "npm run build && wrangler dev",
-    "deploy": "npm --prefix .. run check && npm run build && wrangler deploy"
+    "deploy": "npm --prefix .. run check && npm run build && wrangler deploy",
+    "added": "node scripts/added.mjs"
   },
   "dependencies": {
-    "ascii.rest": "file:.."
+    "ascii.rest": "file:..",
+    "gifenc": "^1.0.3"
   },
   "devDependencies": {
     "@fontsource/ibm-plex-mono": "^5.3.0",

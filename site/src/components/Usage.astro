@@ -51,6 +51,11 @@ const ways = [
     : []),
 ];
 const id = `use-${piece.slug}`;
+// Under the readme snippet, what it puts in a README: both SVGs at its width, on GitHub's light and dark grounds.
+const grounds = [
+  { theme: "light", file: `${piece.slug}.svg` },
+  { theme: "dark", file: `${piece.slug}.dark.svg` },
+];
 ---
 
 <div class="usage" data-tabs>
@@ -70,6 +75,25 @@ const id = `use-${piece.slug}`;
         </span>
       </div>
       <pre class="code" id={`${id}-code-${i}`}>{way.code}</pre>
+      {way.name === "readme" && (
+        <div class="previews">
+          {grounds.map((g) => (
+            <figure class:list={["preview", g.theme]}>
+              <div class="sheet">
+                <img
+                  src={`/svg/${g.file}`}
+                  alt={`${piece.name}, as a ${g.theme} README shows it`}
+                  width={piece.cols * 5}
+                  height={piece.rows * 10}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
+              <figcaption>{g.theme}, {g.file}</figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
       <p class="muted note">{way.note}</p>
     </div>
   ))}

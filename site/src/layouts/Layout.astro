@@ -1,13 +1,14 @@
 ---
 /*
  * The shell for every page: a sidebar index of every category and piece, the
- * header with the theme switch, [copy] buttons for code blocks, tabs, and the
- * script that mounts each piece as it scrolls into view.
+ * header with the theme switch, a footer with links to open an issue, [copy]
+ * buttons for code blocks, tabs, and the script that mounts each piece as it
+ * scrolls into view.
  */
 import "../styles/site.css";
 import Credit from "../components/Credit.astro";
 import Icon from "../components/Icon.astro";
-import { AUTHOR, NAME, REPO, SITE, groups } from "../lib/library";
+import { AUTHOR, NAME, REPO, SITE, groups, issue, pieces } from "../lib/library";
 
 interface Props {
   title: string;
@@ -25,6 +26,8 @@ const canonical = new URL(path, SITE);
 // scene itself; a piece page shows its own piece (pages/og/[slug].png.ts).
 const image = new URL(card?.path ?? "/og.png", SITE);
 const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage under moonlit clouds, by @bas3line";
+// On a piece's page, a bug report starts out naming the piece.
+const bug = issue("bug", current ? { title: `${current}: `, where: current } : {});
 ---
 
 <html lang="en">
@@ -71,6 +74,20 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
       <aside class="side">
         <a class="home" href="/">{NAME}</a>
         <p class="by">by <a href="/author/" rel="author">@{AUTHOR.name}</a></p>
+        <form class="find" role="search" hidden>
+          <label class="sr" for="find">Search the pieces</label>
+          <input
+            id="find"
+            type="search"
+            placeholder={`search ${pieces.length} pieces`}
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+            enterkeyhint="go"
+          />
+          <span class="key" aria-hidden="true">/</span>
+          <p class="found sr" role="status"></p>
+        </form>
         <nav aria-label="Pieces">
           {groups.map((group, i) => (
             <>
@@ -87,6 +104,7 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
                         <a href={`/${piece.slug}/`} aria-current={piece.slug === current ? "page" : undefined}>
                           {piece.name}
                         </a>
+                        {piece.recent && <span class="new">new</span>}
                       </li>
                     ))}
                   </ul>
@@ -96,6 +114,97 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
           ))}
         </nav>
       </aside>
+
+      <script is:inline>
+        // Search: as you type, the sidebar keeps the pieces whose name holds each word, or
+        // whose category starts with it, and drops the headings left empty. Enter opens the
+        // first, Esc clears, and / comes here from anywhere but a field. It shows before the
+        // script below puts the sidebar's scroll back, so that lands where it was.
+        (function () {
+          var form = document.querySelector(".find");
+          var input = form.querySelector("input");
+          var found = form.querySelector(".found");
+          var nav = document.querySelector(".side nav");
+          var groups = [];
+          var group, category;
+          for (var el = nav.firstElementChild; el; el = el.nextElementSibling) {
+            if (el.tagName === "H2") groups.push((group = { head: el, categories: [] }));
+            else if (el.tagName === "H3") {
+              var count = el.querySelector(".count");
+              category = { head: el, count: count, all: count.textContent, name: el.querySelector("a").textContent, list: null, items: [] };
+              group.categories.push(category);
+            } else if (el.tagName === "UL") {
+              category.list = el;
+              for (var li = el.firstElementChild; li; li = li.nextElementSibling) {
+                var a = li.querySelector("a");
+                category.items.push({ li: li, a: a, words: [a.textContent.trim(), a.getAttribute("href").replace(/\//g, "")].join(" ") });
+              }
+            }
+          }
+          function filter() {
+            var words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+            var first = null;
+            var total = 0;
+            var lead = true;
+            groups.forEach(function (g) {
+              var any = false;
+              g.categories.forEach(function (c) {
+                var n = 0;
+                c.items.forEach(function (item) {
+                  var hit = words.every(function (w) {
+                    return item.words.indexOf(w) >= 0 || c.name.indexOf(w) === 0;
+                  });
+                  item.li.hidden = !hit;
+                  if (hit) n++;
+                  if (hit && !first) first = item.a;
+                });
+                c.head.hidden = c.list.hidden = !n;
+                c.count.textContent = words.length ? n : c.all;
+                total += n;
+                if (n) any = true;
+              });
+              g.head.hidden = !any;
+              // the first group left takes the top, as the first does unfiltered
+              g.head.classList.toggle("lead", any && lead);
+              if (any) lead = false;
+            });
+            nav.classList.toggle("searching", words.length > 0);
+            found.textContent = !words.length ? "" : !total ? "nothing matches" : total + (total === 1 ? " piece" : " pieces");
+            found.classList.toggle("sr", total > 0 || !words.length);
+            mark();
+            return words.length ? first : null;
+          }
+          // the / hint gives way while the field has focus or text
+          function mark() {
+            form.classList.toggle("on", input.value !== "" || document.activeElement === input);
+          }
+          form.hidden = false;
+          input.addEventListener("input", filter);
+          input.addEventListener("focus", mark);
+          input.addEventListener("blur", mark);
+          form.addEventListener("submit", function (e) {
+            e.preventDefault();
+            var first = filter();
+            if (first) location.href = first.href;
+          });
+          input.addEventListener("keydown", function (e) {
+            if (e.key !== "Escape") return;
+            e.preventDefault();
+            input.value = "";
+            input.blur();
+            filter();
+          });
+          addEventListener("keydown", function (e) {
+            var t = e.target;
+            if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+            if (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+            e.preventDefault();
+            input.focus();
+            input.select();
+            mark();
+          });
+        })();
+      </script>
 
       <script is:inline>
         // Every piece is a full page load, which would reset the sidebar to its top. Put
@@ -133,6 +242,11 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
         </div>
         <slot />
         <footer class="foot muted">
+          <p class="asks">
+            <a href={issue("logo")}>[request a logo]</a>
+            <a href={issue("piece")}>[suggest a piece]</a>
+            <a href={bug}>[report a bug]</a>
+          </p>
           <span>{NAME}, MIT licensed. <a class="source" href={REPO}><Icon name="github" /><span>Source on GitHub</span></a></span>
           <Credit lead="Made by" />
         </footer>
@@ -182,6 +296,7 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
 
     <script>
       import { isPiece, load, mount, type Piece } from "ascii.rest";
+      import { shown } from "../lib/shown";
 
       // Logos come in colour or in one ink, and the choice holds from page to page.
       let mono = false;
@@ -223,7 +338,15 @@ const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage un
           }
           pre.replaceWith(el);
         }
-        const stop = mount(el, piece, { ...(fps ? { fps } : {}), motion });
+        // Each frame notes its time, for the downloads.
+        const timed: Piece = {
+          meta: piece.meta,
+          default: (options) => {
+            const frame = piece.default(options);
+            return (t, env) => (shown.set(el, t), frame(t, env));
+          },
+        };
+        const stop = mount(el, timed, { ...(fps ? { fps } : {}), motion });
         playing.push({ pre, piece, fps, el, stop });
       }
 
