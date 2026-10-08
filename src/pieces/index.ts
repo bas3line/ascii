@@ -40,6 +40,7 @@ export * as csharp from "./csharp.ts";
 export * as css from "./css.ts";
 export * as cube from "./cube.ts";
 export * as dart from "./dart.ts";
+export * as databuddy from "./databuddy.ts";
 export * as debian from "./debian.ts";
 export * as deepReef from "./deep-reef.ts";
 export * as deepin from "./deepin.ts";
