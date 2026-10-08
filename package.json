@@ -1,6 +1,6 @@
 {
   "name": "ascii.rest",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Animated ascii art for web pages, in TypeScript: React, Next.js, Astro, or one HTML tag.",
   "license": "MIT",
   "author": "bas3line (https://github.com/bas3line)",
@@ -9,8 +9,11 @@
     "type": "git",
     "url": "git+https://github.com/bas3line/ascii.git"
   },
-  "keywords": ["ascii", "ascii-art", "animation", "react", "nextjs", "astro", "web-component", "astro-component"],
+  "keywords": ["ascii", "ascii-art", "animation", "react", "nextjs", "astro", "web-component", "astro-component", "terminal", "cli"],
   "type": "module",
+  "bin": {
+    "ascii.rest": "dist/cli.js"
+  },
   "sideEffects": ["./dist/ascii.js", "./src/astro/*.astro"],
   "exports": {
     ".": {
@@ -32,6 +35,10 @@
     "./element": {
       "types": "./dist/ascii.d.ts",
       "default": "./dist/ascii.js"
+    },
+    "./terminal": {
+      "types": "./dist/terminal.d.ts",
+      "default": "./dist/terminal.js"
     },
     "./astro": "./src/astro/Ascii.astro"
   },

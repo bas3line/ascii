@@ -100,6 +100,38 @@ A README runs no script, so every logo, company and distro also comes as an anim
 
 GitHub shows the dark one in its dark theme. Each piece's page on ascii.rest has its snippet under `readme`.
 
+## In a terminal
+
+```sh
+npx ascii.rest rust                        # plays until you press a key
+npx ascii.rest night-coast --seconds 10
+npx ascii.rest list                        # every piece's name, by category
+```
+
+The logos, companies, distros and scenes play in their own colours, in 24-bit colour; a scene shows two of its rows in each of the terminal's, as half blocks. `--mono` draws a coloured piece in the terminal's own colour, for a terminal without 24-bit colour, and `--light` takes the colours meant for a light background. `--fps` and `--seconds` set the speed and the length. The piece plays centred; in a terminal smaller than the piece only its middle shows, and it says so when it stops. Piped or redirected, it prints its first frame as text.
+
+### As a splash screen
+
+```ts
+import { play } from "ascii.rest/terminal";
+
+const { interrupted } = await play("command-code", { seconds: 2 });
+if (interrupted) process.exit(130);
+```
+
+`play(piece, options?)` takes a piece module or a name and resolves when the piece stops: after `seconds`, on any key, or on Ctrl+C, which sets `interrupted`. It plays on the alternate screen with the cursor hidden, and puts the terminal back however it stops, on an error too. When the output is not a terminal it draws nothing and resolves at once, so a pipe or a CI log never gets a splash. It uses only Node's own modules.
+
+| option | |
+| --- | --- |
+| `seconds` | how long it plays; until a key is pressed by default |
+| `mono` | draws a coloured piece in the terminal's own colour |
+| `light` | for a light terminal: the light colours, and shaded pieces flipped |
+| `fps` | frames a second, instead of the piece's own |
+| `options` | the piece's option overrides: `{ text: "hello" }` |
+| `out` | where it draws: `process.stdout` by default |
+
+It resolves with `{ interrupted, cropped, piece, terminal }`: `cropped` is true when the terminal was smaller than the piece, whose size and the terminal's are in `piece` and `terminal`.
+
 ## TypeScript, anywhere
 
 ```ts
