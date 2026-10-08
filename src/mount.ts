@@ -25,6 +25,18 @@ import type { Env, Frame, Meta, Options, Piece } from "./types.ts";
  */
 export type MountOptions = Options & { fps?: number; motion?: boolean };
 
+// The solid block characters, which a canvas draws as rectangles rather than
+// from the font: a font's blocks rarely fill its cell, so side by side they
+// leave a seam round every cell. Each is its rectangles, as x0, y0, x1, y1 in
+// eighths of the cell.
+const BLOCKS = new Map<number, number[][]>([[0x2580, [[0, 0, 8, 4]]], [0x2590, [[4, 0, 8, 8]]], [0x2594, [[0, 0, 8, 1]]], [0x2595, [[7, 0, 8, 8]]]]);
+for (let i = 1; i <= 8; i++) BLOCKS.set(0x2580 + i, [[0, 8 - i, 8, 8]]); // ▁ to █, from the bottom
+for (let i = 1; i <= 7; i++) BLOCKS.set(0x2588 + i, [[0, 0, 8 - i, 8]]); // ▉ to ▏, from the left
+// the quarter blocks, by the quarters each fills: 1 top left, 2 top right, 4 bottom left, 8 bottom right
+[..." ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█"].forEach((ch, bits) => {
+  if (bits) BLOCKS.set(ch.charCodeAt(0), [[0, 0, 4, 4], [4, 0, 8, 4], [0, 4, 4, 8], [4, 4, 8, 8]].filter((_, q) => bits & (1 << q)));
+});
+
 export function mount(el: HTMLElement, piece: Piece | Piece["default"], options: MountOptions = {}): () => void {
   const make = typeof piece === "function" ? piece : piece.default;
   const meta: Partial<Meta> = typeof piece === "function" ? {} : piece.meta;
@@ -96,11 +108,21 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
       }
       s = slots.size;
       const x = (s % 32) * pw + 1, y = Math.floor(s / 32) * ph + 1;
-      actx.font = font(w / 0.6);
-      actx.textAlign = "center";
-      actx.textBaseline = "middle";
       actx.fillStyle = palette ? palette[i] || palette[0] : ink;
-      actx.fillText(String.fromCharCode(code), x + sw / 2, y + sh / 2);
+      const block = BLOCKS.get(code);
+      if (block) {
+        // to the slot's very edges where a rectangle meets the cell's, so the cells beside it join up
+        const at = (e: number, size: number, slot: number) => (e === 0 ? 0 : e === 8 ? slot : 1 + Math.round((size * e) / 8));
+        for (const [x0, y0, x1, y1] of block) {
+          const l = at(x0, sw, pw), t = at(y0, sh, ph);
+          actx.fillRect(x - 1 + l, y - 1 + t, at(x1, sw, pw) - l, at(y1, sh, ph) - t);
+        }
+      } else {
+        actx.font = font(w / 0.6);
+        actx.textAlign = "center";
+        actx.textBaseline = "middle";
+        actx.fillText(String.fromCharCode(code), x + sw / 2, y + sh / 2);
+      }
       slots.set(key, s);
       return s;
     };

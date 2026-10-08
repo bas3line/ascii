@@ -135,7 +135,8 @@ for (const slug of slugs) {
     const ink = [...f0].filter((c) => c !== " " && c !== "\n").length;
     if (ink / cells < 0.02 && ink < 3) errors.push("first frame is nearly empty (frame 0 should be a good still)");
   }
-  const distinct = new Set(run.frames).size;
+  // A frame differs from another in its text or, on a canvas, in its colours alone.
+  const distinct = new Set(run.frames.map((f, i) => `${f}${run.colors[i] ?? ""}`)).size;
   if (m.fps > 0 && distinct < 3) errors.push(`animated (fps ${m.fps}) but only ${distinct} distinct frames over 6s`);
   if (m.fps === 0 && distinct > 1 && !m.clock) errors.push("fps 0 but frames change");
   if (!m.clock && run.frames.some((f, i) => f !== run2.frames[i])) errors.push("not deterministic (seed your PRNG; Date only with meta.clock)");
