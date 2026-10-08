@@ -220,6 +220,86 @@ a[aria-current="page"] {
   flex: none;
 }
 
+/* Search, at the head of the index: a line to type on, with / to say how to get there. */
+.find {
+  position: relative;
+  margin-bottom: 1.75rem;
+}
+
+.find input {
+  width: 100%;
+  padding: 0.15rem 2ch 0.15rem 0;
+  border: 0;
+  border-bottom: 1px dotted var(--muted);
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.find input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.find input::-webkit-search-decoration,
+.find input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.find input:focus {
+  outline: none;
+  border-bottom-style: solid;
+  border-bottom-color: var(--ink);
+}
+
+.find .key {
+  position: absolute;
+  top: 0.15rem;
+  right: 0;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* Set by the script while the field has focus or text: WebKit can miss a change of :placeholder-shown on a sibling. */
+.find.on .key {
+  visibility: hidden;
+}
+
+/* No keyboard to press it on. iOS zooms into a field set under 16px. */
+@media (hover: none) and (pointer: coarse) {
+  .find .key {
+    display: none;
+  }
+
+  .find input {
+    font-size: 16px;
+  }
+}
+
+.find .found {
+  margin-top: 0.5rem;
+  color: var(--muted);
+}
+
+/* What search leaves out, over the display the sidebar's rules give each part. */
+.side [hidden] {
+  display: none;
+}
+
+/* For screen readers only. */
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .side h2 {
   margin-top: 1.75rem;
   font-weight: 400;
@@ -229,7 +309,8 @@ a[aria-current="page"] {
   color: var(--muted);
 }
 
-.side h2:first-of-type {
+.side h2:first-of-type,
+.side h2.lead {
   margin-top: 0;
 }
 
@@ -655,6 +736,29 @@ pre.code {
 
   .side h3 .count {
     display: none;
+  }
+
+  /* While searching, the line of categories gives way to the pieces found, under their categories. */
+  .find {
+    margin-bottom: 1rem;
+  }
+
+  .side nav.searching {
+    display: block;
+  }
+
+  .side nav.searching h3:not([hidden]) {
+    display: flex;
+    margin-top: 0.75rem;
+    font-weight: 500;
+  }
+
+  .side nav.searching ul:not([hidden]) {
+    display: block;
+  }
+
+  .side nav.searching h3 .count {
+    display: inline;
   }
 
   .page {
