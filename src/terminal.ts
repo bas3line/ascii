@@ -28,6 +28,13 @@ export interface Output {
   off?(event: "resize", listener: () => void): unknown;
 }
 
+/**
+ * The block characters a scene is drawn in, each splitting a terminal cell into parts it inks in one of two colours:
+ * halves (1 by 2), quadrants (2 by 2), sextants (2 by 3) or octants (2 by 4).
+ */
+export type Blocks = (typeof blockSets)[number];
+export const blockSets = ["halves", "quadrants", "sextants", "octants"] as const;
+
 export interface PlayOptions {
   /** Seconds to play. Until a key is pressed, by default. */
   seconds?: number;
@@ -37,6 +44,8 @@ export interface PlayOptions {
   light?: boolean;
   /** Frames a second, instead of the piece's own. */
   fps?: number;
+  /** The blocks a scene is drawn in: by default the finest the terminal is known to draw itself. */
+  blocks?: Blocks;
   /** The piece's option overrides. Kept apart from the rest because two clocks have a `seconds` option of their own. */
   options?: Options;
   /** Where to draw: process.stdout by default. Keys are read from process.stdin. */
@@ -52,6 +61,8 @@ export interface Played {
   piece: { cols: number; rows: number };
   /** The terminal's size as it stopped. */
   terminal: { cols: number; rows: number };
+  /** The blocks a scene was drawn in. Absent for any other piece. */
+  blocks?: Blocks;
 }
 
 // The alternate screen, the cursor hidden and no wrapping, so a glyph a terminal draws two cells wide can only clip its own row.
@@ -69,6 +80,51 @@ const mix = (a: number, b: number, k: number) =>
   [16, 8, 0].reduce((out, s) => out | (Math.round(((a >> s) & 255) + (((b >> s) & 255) - ((a >> s) & 255)) * k) << s), 0);
 const sgr = (layer: 38 | 48, c: number) => `\x1b[${layer};2;${(c >> 16) & 255};${(c >> 8) & 255};${c & 255}m`;
 const dark = (c: number) => 0.2126 * ((c >> 16) & 255) + 0.7152 * ((c >> 8) & 255) + 0.0722 * (c & 255) < 128;
+
+// How many parts across and down each set of blocks splits a cell into.
+const GRID: Record<Blocks, [number, number]> = { halves: [1, 2], quadrants: [2, 2], sextants: [2, 3], octants: [2, 4] };
+
+/*
+ * For each pattern of a cell's inked parts, bit i for the i-th part across then down: its character, and whether it
+ * is drawn turned round, its ground as ink and its ink as ground. Sextants and octants are each a run of code points in
+ * the order of their patterns, leaving out those another character already draws; a pattern that no character draws
+ * is its opposite turned round, so a scene needs no characters but these runs and the block elements every font has.
+ */
+function glyphs(parts: number, own: Record<number, string>, first = 0, elsewhere: number[] = []) {
+  const n = 2 ** parts, ch: string[] = [], flip = new Uint8Array(n);
+  for (let m = 0, k = 0; m < n; m++) {
+    if (first && !elsewhere.includes(m)) ch[m] = String.fromCodePoint(first + k++);
+    else if (own[m] !== undefined) ch[m] = own[m];
+  }
+  for (let m = 0; m < n; m++) if (ch[m] === undefined) (ch[m] = ch[n - 1 - m]), (flip[m] = 1);
+  return { ch, flip };
+}
+const GLYPHS: Record<Blocks, { ch: string[]; flip: Uint8Array }> = {
+  halves: glyphs(2, { 0: " ", 1: "▀", 2: "▄" }),
+  quadrants: glyphs(4, Object.fromEntries([..." ▘▝▀▖▌▞▛▗▚▐▜▄▙▟"].map((c, m) => [m, c]))),
+  sextants: glyphs(6, { 0: " ", 21: "▌", 42: "▐" }, 0x1fb00, [0, 21, 42, 63]),
+  octants: glyphs(
+    8,
+    { 0: " ", 5: "▘", 10: "▝", 15: "▀", 80: "▖", 85: "▌", 90: "▞", 95: "▛", 160: "▗", 165: "▚", 170: "▐", 175: "▜", 192: "▂", 240: "▄", 245: "▙", 250: "▟", 252: "▆" },
+    0x1cd00,
+    [0, 1, 2, 3, 5, 10, 15, 20, 40, 63, 64, 80, 85, 90, 95, 128, 160, 165, 170, 175, 192, 240, 245, 250, 252, 255],
+  ),
+};
+
+/*
+ * The finest blocks the terminal is known to draw itself, rather than from a font: most fonts have no sextants or
+ * octants, and a terminal that draws from the font shows a box for each. Ghostty draws octants from 1.2 and sextants
+ * before it, kitty and WezTerm draw sextants. Anywhere else, inside tmux or over ssh too, it is quadrants, which every
+ * font with half blocks has.
+ */
+function finest(env: NodeJS.ProcessEnv = process.env): Blocks {
+  if (env.TERM_PROGRAM === "ghostty") {
+    const [major = 0, minor = 0] = (env.TERM_PROGRAM_VERSION ?? "").split(".").map(Number);
+    return major > 1 || (major === 1 && minor >= 2) ? "octants" : "sextants";
+  }
+  if (env.TERM_PROGRAM === "WezTerm" || env.KITTY_WINDOW_ID || env.TERM === "xterm-kitty") return "sextants";
+  return "quadrants";
+}
 
 async function resolve(piece: Piece | PieceName): Promise<Piece> {
   if (typeof piece !== "string") return piece;
@@ -92,14 +148,15 @@ function spans(n: number, m: number) {
  * The terminal's cells for a piece's frames: each cell's character, and its ink and ground as 0xrrggbb, or -1 for the
  * terminal's own. A piece with character cells is drawn as it is, and cropped by play() if the terminal is smaller.
  *
- * A square-celled piece (cell: 1), a scene, is a picture of up to 320 by 120 cells, too big for most terminals, and its
- * dots are a texture that a canvas draws a few pixels across: one dot a solid cell reads as noise. So it is shrunk to
- * fit the terminal and drawn in tones. In colour, each of its cells is its ink mixed into the ground by how much its dot
- * inks, softened by a 1 4 1 blur each way, then averaged down onto the size that fits: two of those rows in each
- * terminal cell, as an upper half block whose ink is the top one and whose ground is the bottom. As text, each terminal
- * cell keeps the heaviest character of the cells it covers, so a star or a thin line survives. size() sets the room.
+ * A square-celled piece (cell: 1), a scene, is a picture of 200 by 100 cells, too big for most terminals, and its dots
+ * are a texture that a canvas draws a few pixels across: one dot a solid cell reads as noise. So it is shrunk to fit
+ * the terminal and drawn in tones. In colour, each of its cells is its ink mixed into the ground by how much its dot
+ * inks, averaged onto the parts of the terminal cells it fits in: two to a cell as halves, up to eight as octants. Each
+ * terminal cell then takes the two colours that draw its parts best, and the block whose inked parts are those nearer
+ * the one than the other. With octants a 100 column terminal shows every cell of a scene. As text, each terminal cell
+ * keeps the heaviest character of the cells it covers, so a star or a thin line survives. size() sets the room.
  */
-function painter({ cols, rows, palette, ground, cell = 2 }: Meta, colour: boolean) {
+function painter({ cols, rows, palette, ground, cell = 2 }: Meta, colour: boolean, blocks: Blocks = "halves") {
   const square = cell === 1;
   const color = colour && palette ? new Uint8Array(cols * rows) : undefined;
   const inks = palette?.map(int) ?? [];
@@ -117,10 +174,22 @@ function painter({ cols, rows, palette, ground, cell = 2 }: Meta, colour: boolea
   // Tones only make sense over a ground; a square piece in colour with none keeps one cell a half, as drawn.
   const tones = square && color !== undefined && base >= 0;
   const pic = tones ? new Float32Array(cols * rows * 3) : new Float32Array(0);
-  const soft = tones ? new Float32Array(cols * rows * 3) : new Float32Array(0);
+  // Text keeps one character a cell, so it has one part.
+  const [gw, gh] = tones ? GRID[blocks] : [1, 1];
+  const parts = gw * gh, { ch: glyph, flip } = GLYPHS[blocks];
+  const part = new Float32Array(parts * 3), on = [0, 0, 0], off = [0, 0, 0];
 
-  const out = { cols, rows: square ? Math.ceil(rows / 2) : rows, color, base, ch: [] as string[], fg: new Int32Array(0), bg: new Int32Array(0) };
-  let across: [number, number][][] = [], down: [number, number][][] = [], half = rows;
+  const out = {
+    cols,
+    rows: square ? Math.ceil(rows / 2) : rows,
+    color,
+    base,
+    blocks: tones ? blocks : undefined,
+    ch: [] as string[],
+    fg: new Int32Array(0),
+    bg: new Int32Array(0),
+  };
+  let across: [number, number][][] = [], down: [number, number][][] = [];
   let wide = new Float32Array(0), small = new Float32Array(0);
   const room = (w: number, h: number) => {
     out.cols = w;
@@ -134,32 +203,47 @@ function painter({ cols, rows, palette, ground, cell = 2 }: Meta, colour: boolea
   const size = (W: number, H: number) => {
     if (!square || (color && !tones)) return void (out.ch.length || room(cols, square ? Math.ceil(rows / 2) : rows));
     const s = Math.min(1, W / cols, (2 * H) / rows), w = Math.max(1, Math.round(cols * s));
-    half = Math.max(2, Math.round(rows * s));
-    across = spans(cols, w);
-    down = spans(rows, tones ? half : Math.ceil(half / 2));
-    wide = new Float32Array(w * rows * 3);
-    small = new Float32Array(w * half * 3);
-    room(w, Math.ceil(half / 2));
+    const h = Math.ceil(Math.max(2, Math.round(rows * s)) / 2);
+    across = spans(cols, w * gw);
+    down = spans(rows, h * gh);
+    wide = new Float32Array(w * gw * rows * 3);
+    small = new Float32Array(w * gw * h * gh * 3);
+    room(w, h);
   };
 
-  // pic, blurred 1 4 1 across into soft and then down back into pic, the edges weighed by what they have
-  const blur = () => {
-    for (let y = 0; y < rows; y++)
-      for (let x = 0; x < cols; x++)
-        for (let c = 0, i = (y * cols + x) * 3; c < 3; c++, i++) {
-          let sum = 4 * pic[i], n = 4;
-          if (x > 0) (sum += pic[i - 3]), n++;
-          if (x < cols - 1) (sum += pic[i + 3]), n++;
-          soft[i] = sum / n;
-        }
-    const stride = cols * 3;
-    for (let y = 0; y < rows; y++)
-      for (let i = y * stride; i < (y + 1) * stride; i++) {
-        let sum = 4 * soft[i], n = 4;
-        if (y > 0) (sum += soft[i - stride]), n++;
-        if (y < rows - 1) (sum += soft[i + stride]), n++;
-        pic[i] = sum / n;
+  // The two colours that draw the parts in `part` best, split on the channel they differ most in and then settled by
+  // moving each part to the nearer of the two: the parts nearer the first as bits, and both colours.
+  const fit = () => {
+    let c = 0, widest = -1, mid = 0;
+    for (let j = 0; j < 3; j++) {
+      let lo = 255, hi = 0;
+      for (let p = j; p < parts * 3; p += 3) (lo = Math.min(lo, part[p])), (hi = Math.max(hi, part[p]));
+      if (hi - lo > widest) (widest = hi - lo), (c = j), (mid = (lo + hi) / 2);
+    }
+    let mask = 0;
+    for (let p = 0; p < parts; p++) if (part[p * 3 + c] > mid) mask |= 1 << p;
+    const all = (1 << parts) - 1;
+    for (let round = 0; ; round++) {
+      let n = 0;
+      on.fill(0);
+      off.fill(0);
+      for (let p = 0; p < parts; p++) {
+        const into = mask & (1 << p) ? (n++, on) : off;
+        for (let j = 0; j < 3; j++) into[j] += part[p * 3 + j];
       }
+      for (let j = 0; j < 3; j++) (on[j] = n ? on[j] / n : 0), (off[j] = n < parts ? off[j] / (parts - n) : 0);
+      if (round === 2 || mask === 0 || mask === all) break;
+      let next = 0;
+      for (let p = 0; p < parts; p++) {
+        let a = 0, b = 0;
+        for (let j = 0; j < 3; j++) (a += (part[p * 3 + j] - on[j]) ** 2), (b += (part[p * 3 + j] - off[j]) ** 2);
+        if (a < b) next |= 1 << p;
+      }
+      if (next === mask) break;
+      mask = next;
+    }
+    const hex = (v: number[]) => (Math.round(v[0]) << 16) | (Math.round(v[1]) << 8) | Math.round(v[2]);
+    return { mask, ink: hex(mask ? on : off), ground: hex(mask === all ? on : off) };
   };
 
   const paint = (text: string) => {
@@ -173,32 +257,34 @@ function painter({ cols, rows, palette, ground, cell = 2 }: Meta, colour: boolea
           pic[i + 1] = (s >> 8) & 255;
           pic[i + 2] = s & 255;
         }
-      blur();
-      // averaged across, then down
+      // averaged across, then down, onto the parts
+      const pw = w * gw;
       for (let y = 0; y < rows; y++)
-        for (let x = 0; x < w; x++)
+        for (let x = 0; x < pw; x++)
           for (let c = 0; c < 3; c++) {
             let sum = 0;
             for (const [j, k] of across[x]) sum += pic[(y * cols + j) * 3 + c] * k;
-            wide[(y * w + x) * 3 + c] = sum;
+            wide[(y * pw + x) * 3 + c] = sum;
           }
-      for (let y = 0; y < half; y++)
-        for (let x = 0; x < w; x++)
+      for (let y = 0; y < out.rows * gh; y++)
+        for (let x = 0; x < pw; x++)
           for (let c = 0; c < 3; c++) {
             let sum = 0;
-            for (const [j, k] of down[y]) sum += wide[(j * w + x) * 3 + c] * k;
-            small[(y * w + x) * 3 + c] = sum;
+            for (const [j, k] of down[y]) sum += wide[(j * pw + x) * 3 + c] * k;
+            small[(y * pw + x) * 3 + c] = sum;
           }
-      const at = (x: number, y: number) => {
-        if (y >= half) return base;
-        const i = (y * w + x) * 3;
-        return (Math.round(small[i]) << 16) | (Math.round(small[i + 1]) << 8) | Math.round(small[i + 2]);
-      };
       for (let y = 0, k = 0; y < out.rows; y++)
         for (let x = 0; x < w; x++, k++) {
-          const top = at(x, 2 * y), bottom = at(x, 2 * y + 1);
-          if (top === bottom) (ch[k] = " "), (fg[k] = -1), (bg[k] = top);
-          else (ch[k] = "▀"), (fg[k] = top), (bg[k] = bottom);
+          for (let v = 0, p = 0; v < gh; v++)
+            for (let u = 0; u < gw; u++, p++) {
+              const i = ((y * gh + v) * pw + x * gw + u) * 3;
+              (part[p * 3] = small[i]), (part[p * 3 + 1] = small[i + 1]), (part[p * 3 + 2] = small[i + 2]);
+            }
+          const { mask, ink, ground } = fit();
+          ch[k] = glyph[mask];
+          // turned round, the parts nearer the ink are drawn as ground
+          fg[k] = ch[k] === " " ? -1 : flip[mask] ? ground : ink;
+          bg[k] = flip[mask] ? ink : ground;
         }
     } else if (square && color) {
       // No ground to mix into: one cell a half, as drawn, cropped by play() when it does not fit.
@@ -246,14 +332,16 @@ export async function still(piece: Piece | PieceName, { light = false, options =
 /** Plays a piece in the terminal. Resolves when it stops: after `seconds`, on a key or on Ctrl+C. */
 export async function play(
   piece: Piece | PieceName,
-  { seconds, mono = false, light = false, fps, options = {}, out = process.stdout }: PlayOptions = {},
+  { seconds, mono = false, light = false, fps, blocks = finest(), options = {}, out = process.stdout }: PlayOptions = {},
 ): Promise<Played> {
+  if (!blockSets.includes(blocks)) throw new Error(`ascii.rest: blocks are ${blockSets.join(", ")}, not "${blocks}"`);
   const { meta, default: make } = await resolve(piece);
-  const cells = painter(meta, !mono);
+  const cells = painter(meta, !mono, blocks);
   const { color } = cells;
   // A terminal that reports no size (some ptys) is taken to be 80 by 24.
   cells.size(out.columns || 80, out.rows || 24);
   const played: Played = { cropped: false, interrupted: false, piece: { cols: cells.cols, rows: cells.rows }, terminal: { cols: 0, rows: 0 } };
+  if (cells.blocks) played.blocks = cells.blocks;
   if (!out.isTTY) return played;
 
   const frame = make({ ...meta.options, ...options });

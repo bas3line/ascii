@@ -109,7 +109,7 @@ npx ascii.rest night-coast --seconds 10
 npx ascii.rest list                        # every piece's name, by category
 ```
 
-The logos, companies, distros and scenes play in their own colours, in 24-bit colour. A scene is shrunk to fit the terminal, whatever its size, and drawn in tones, two of its rows in each of the terminal's as half blocks, so the dots it is made of blend as they do on a page. `--mono` draws a coloured piece in the terminal's own colour, for a terminal without 24-bit colour, and `--light` takes the colours meant for a light background. `--fps` and `--seconds` set the speed and the length. The piece plays centred; any other piece wider or taller than the terminal shows only its middle, and it says so when it stops. Piped or redirected, it prints its first frame as text.
+The logos, companies, distros and scenes play in their own colours, in 24-bit colour. A scene is shrunk to fit the terminal, whatever its size, and drawn in block characters that split each cell into parts: octants (2 by 4) in Ghostty 1.2 and later, where a 100 column window shows every dot of a scene; sextants (2 by 3) in kitty, WezTerm and older Ghostty; quadrants (2 by 2) anywhere else, since most fonts have nothing finer. `--blocks octants` (or `sextants`, `quadrants`, `halves`) picks them yourself. `--mono` draws a coloured piece in the terminal's own colour, for a terminal without 24-bit colour, and `--light` takes the colours meant for a light background. `--fps` and `--seconds` set the speed and the length. The piece plays centred; any other piece wider or taller than the terminal shows only its middle, and it says so when it stops. Piped or redirected, it prints its first frame as text.
 
 ### As a splash screen
 
@@ -128,10 +128,11 @@ if (interrupted) process.exit(130);
 | `mono` | draws a coloured piece in the terminal's own colour |
 | `light` | for a light terminal: the light colours, and shaded pieces flipped |
 | `fps` | frames a second, instead of the piece's own |
+| `blocks` | what a scene is drawn in: `"halves"`, `"quadrants"`, `"sextants"` or `"octants"`; the finest the terminal is known to draw by default |
 | `options` | the piece's option overrides: `{ text: "hello" }` |
 | `out` | where it draws: `process.stdout` by default |
 
-It resolves with `{ interrupted, cropped, piece, terminal }`: `cropped` is true when the terminal was smaller than the piece, whose size and the terminal's are in `piece` and `terminal`.
+It resolves with `{ interrupted, cropped, piece, terminal, blocks }`: `cropped` is true when the terminal was smaller than the piece, whose size and the terminal's are in `piece` and `terminal`, and `blocks` is what a scene was drawn in.
 
 ## TypeScript, anywhere
 
