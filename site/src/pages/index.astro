@@ -1,8 +1,8 @@
 ---
 /*
- * ascii.rest: a scene playing, what the library is, how to use a piece, and
- * then every piece by category, each a live preview linking to its own page,
- * with the sponsors after the scenes.
+ * ascii.rest: a scene playing, the sponsors, what the library is, how to use a
+ * piece, and then every piece by category, each a live preview linking to its
+ * own page.
  */
 import Layout from "../layouts/Layout.astro";
 import Art from "../components/Art.astro";
@@ -30,6 +30,8 @@ const description = `${pieces.length} animated ascii pieces for web pages, in Ty
     </div>
   </a>
 
+  <Sponsors home />
+
   <p class="pitch">
     {pieces.length} animated ascii pieces for web pages: {scenes} full-colour scenes like the one above, loaders, charts, type,
     {logos} language logos, {companies} company logos and {distros} Linux distros in colour or one ink, and 3D shapes, physics and creatures. Each is a small, typed TypeScript module with no dependencies, for
@@ -49,40 +51,37 @@ const description = `${pieces.length} animated ascii pieces for web pages, in Ty
 
   <div id="pieces">
     {categories.map((category) => (
-      <>
-        <section id={category.name}>
-          <div class="head">
-            <h2>{category.name}</h2>
-            <span class="count">{category.pieces.length}</span>
-            {category.pieces.some((piece) => piece.palette && !piece.ground) && (
-              <span class="tools">
-                <a href={issue("logo")}>[request a logo]</a>
-                <button class="button" type="button" data-ink hidden><span>[mono]</span></button>
-              </span>
-            )}
-          </div>
-          <div class:list={["grid", category.name === "scenes" && "wide"]}>
-            {category.pieces.map((piece) => (
-              <a class="card" href={`/${piece.slug}/`}>
-                <div class:list={["well", piece.ground && "scene"]} style={piece.ground && `--ground: ${piece.ground}`}>
-                  <Art piece={piece} />
-                </div>
-                <span class="name">{piece.name}</span>
-                {piece.recent && <span class="new">new</span>}
-                <span class="note">{piece.note}</span>
-              </a>
-            ))}
-            {LOGOS.includes(category.name) && (
-              <a class="card ask" href={issue("logo")}>
-                <div class="well"><span>[request a logo]</span></div>
-                <span class="name">missing one?</span>
-                <span class="note">ask for a company, language or distro you'd like drawn like these</span>
-              </a>
-            )}
-          </div>
-        </section>
-        {category.name === "scenes" && <Sponsors />}
-      </>
+      <section id={category.name}>
+        <div class="head">
+          <h2>{category.name}</h2>
+          <span class="count">{category.pieces.length}</span>
+          {category.pieces.some((piece) => piece.palette && !piece.ground) && (
+            <span class="tools">
+              <a href={issue("logo")}>[request a logo]</a>
+              <button class="button" type="button" data-ink hidden><span>[mono]</span></button>
+            </span>
+          )}
+        </div>
+        <div class:list={["grid", category.name === "scenes" && "wide"]}>
+          {category.pieces.map((piece) => (
+            <a class="card" href={`/${piece.slug}/`}>
+              <div class:list={["well", piece.ground && "scene"]} style={piece.ground && `--ground: ${piece.ground}`}>
+                <Art piece={piece} />
+              </div>
+              <span class="name">{piece.name}</span>
+              {piece.recent && <span class="new">new</span>}
+              <span class="note">{piece.note}</span>
+            </a>
+          ))}
+          {LOGOS.includes(category.name) && (
+            <a class="card ask" href={issue("logo")}>
+              <div class="well"><span>[request a logo]</span></div>
+              <span class="name">missing one?</span>
+              <span class="note">ask for a company, language or distro you'd like drawn like these</span>
+            </a>
+          )}
+        </div>
+      </section>
     ))}
   </div>
 </Layout>

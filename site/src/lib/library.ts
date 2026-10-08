@@ -103,6 +103,8 @@ export const SUPPORT = [
   { label: "Buy Me a Coffee", icon: "coffee", href: "https://buymeacoffee.com/bas3line" },
   { label: "PayPal", icon: "paypal", href: "https://paypal.me/ShubhamYadav886" },
 ] as const;
+/** Who sponsors ascii.rest, each shown as our own ascii piece of its logo: under the home page's first scene and on the author page. */
+export const SPONSORS = [{ name: "Cloudflare", href: "https://www.cloudflare.com", slug: "cloudflare" }] as const;
 export const INSTALL = "npm install ascii.rest";
 
 const optionsOf = (piece: Piece) => (piece.options && Object.keys(piece.options).length ? piece.options : null);

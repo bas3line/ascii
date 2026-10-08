@@ -1,79 +1,76 @@
 ---
 /*
- * The sponsors: a row of logo slots in wells, Cloudflare first and open slots
- * after it, then the ways to sponsor. The home page shows it after the scenes
- * with a heading and a line of copy; compact drops both, for the author page,
- * whose own line leads into it. A sponsor's logo is our own ascii piece of it,
- * playing in its slot like any card, with its name under it.
+ * The sponsors: a row of logo slots in wells, the sponsors first and open
+ * slots after them. A sponsor's logo is our own ascii piece of it, playing in
+ * its slot like any card; logos only, its name the link's label for a screen
+ * reader. On the author page, whose own line leads into it, three open slots
+ * and then the ways to sponsor; on the home page, under its first scene, a
+ * line of thanks above and one open slot, asking for the next sponsor.
  */
 import Art from "./Art.astro";
 import Icon from "./Icon.astro";
-import { AUTHOR, SUPPORT, pieces } from "../lib/library";
+import { AUTHOR, SPONSORS, SUPPORT, pieces } from "../lib/library";
 
 interface Props {
-  /** Without the heading and the line of copy. */
-  compact?: boolean;
+  /** For the home page: the line of thanks, one open slot, and no ways to pay. */
+  home?: boolean;
 }
 
-const { compact = false } = Astro.props;
+const { home = false } = Astro.props;
 const sponsor = `https://github.com/sponsors/${AUTHOR.handle}`;
 const others = SUPPORT.filter((link) => link.href !== sponsor);
-const SPONSORS = [{ name: "Cloudflare", href: "https://www.cloudflare.com", slug: "cloudflare" }];
 const logos = SPONSORS.map((s) => {
   const piece = pieces.find((p) => p.slug === s.slug);
   if (!piece) throw new Error(`Sponsors: there is no piece named "${s.slug}"`);
   return { ...s, piece };
 });
-const open = 4 - logos.length;
+const open = home ? 1 : 4 - logos.length;
 ---
 
-<section
-  id="sponsors"
-  class:list={["sponsors", compact && "compact"]}
-  aria-labelledby={compact ? undefined : "sponsors-title"}
-  aria-label={compact ? "sponsors" : undefined}
->
-  {!compact && (
-    <>
-      <div class="head">
-        <h2 id="sponsors-title">sponsors</h2>
-      </div>
-      <p class="line">ascii.rest is free and MIT licensed. Sponsor it and your logo goes here.</p>
-    </>
-  )}
+<section id="sponsors" class:list={["sponsors", home && "home"]} aria-label="sponsors">
+  {home && <p class="thanks">Thanks to the sponsors who make running ascii.rest possible.</p>}
   <ul class="slots" role="list">
     {logos.map((s) => (
       <li>
         <a class="slot logo" href={s.href} aria-label={s.name}>
           <span class="mark well"><Art piece={s.piece} /></span>
-          <span class="label">{s.name}</span>
         </a>
       </li>
     ))}
     {Array.from({ length: open }, () => (
       <li>
-        <a class="slot open" href={sponsor} aria-label="Sponsor ascii.rest on GitHub and your logo goes here">
-          <span class="label">your logo</span>
-        </a>
+        {home ? (
+          <a class="slot open" href={sponsor}><span class="label">become a sponsor</span></a>
+        ) : (
+          <a class="slot open" href={sponsor} aria-label="Sponsor ascii.rest on GitHub and your logo goes here">
+            <span class="label">your logo</span>
+          </a>
+        )}
       </li>
     ))}
   </ul>
-  <p class="ways">
-    <a href={sponsor}>[sponsor on github]</a>
-    {others.map((link) => (
-      <a class="quiet" href={link.href}><Icon name={link.icon} /><span>{link.label}</span></a>
-    ))}
-  </p>
+  {!home && (
+    <p class="ways">
+      <a href={sponsor}>[sponsor on github]</a>
+      {others.map((link) => (
+        <a class="quiet" href={link.href}><Icon name={link.icon} /><span>{link.label}</span></a>
+      ))}
+    </p>
+  )}
 </section>
 
 <style>
-  .compact {
+  .sponsors {
     margin-top: 2rem;
   }
 
-  .line {
-    max-width: 72ch;
-    margin-bottom: 1rem;
+  .home {
+    margin-top: 1.5rem;
+  }
+
+  .thanks {
+    margin: 0 0 0.75rem;
+    color: var(--muted);
   }
 
   .slots {
@@ -111,11 +108,6 @@ const open = 4 - logos.length;
   .label {
     padding: 0 var(--pad);
     margin: 0 calc(var(--pad) * -1);
-  }
-
-  .logo .label {
-    font-size: 0.85em;
-    color: var(--text);
   }
 
   /* Like a card: the well stays, the name inverts. */
