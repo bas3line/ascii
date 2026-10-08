@@ -88,6 +88,10 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
           <span class="key" aria-hidden="true">/</span>
           <p class="found sr" role="status"></p>
         </form>
+        <p class="asks">
+          <a href={issue("logo")}>[request a logo]</a>
+          <a href={issue("piece")}>[suggest a piece]</a>
+        </p>
         <nav aria-label="Pieces">
           {groups.map((group, i) => (
             <>

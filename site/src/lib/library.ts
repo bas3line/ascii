@@ -162,3 +162,8 @@ export function moduleUsage(piece: Piece) {
     `const stop = mount(el, ${piece.id}${options ? `, ${JSON.stringify(options)}` : ""});`,
   ].join("\n");
 }
+
+/** A terminal: the package's own command plays it, nothing to install first. */
+export function terminalUsage(piece: Piece) {
+  return `npx ascii.rest ${piece.slug}`;
+}

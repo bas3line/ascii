@@ -15,6 +15,9 @@ const example = pieces.find((p) => p.slug === "donut") ?? pieces[0];
 const scenes = pieces.filter((p) => p.category === "scenes").length;
 const logos = pieces.filter((p) => p.category === "logos").length;
 const distros = pieces.filter((p) => p.category === "distros").length;
+const companies = pieces.filter((p) => p.category === "companies").length;
+// The categories whose grid ends in a card asking for the logo someone is missing.
+const LOGOS = ["logos", "companies", "distros"];
 const description = `${pieces.length} animated ascii pieces for web pages, in TypeScript with no dependencies: for React, Next.js, Astro, or one HTML tag. MIT licensed.`;
 ---
 
@@ -29,8 +32,12 @@ const description = `${pieces.length} animated ascii pieces for web pages, in Ty
 
   <p class="pitch">
     {pieces.length} animated ascii pieces for web pages: {scenes} full-colour scenes like the one above, loaders, charts, type,
-    {logos} language logos and {distros} Linux distros in colour or one ink, and 3D shapes, physics and creatures. Each is a small, typed TypeScript module with no dependencies, for
+    {logos} language logos, {companies} company logos and {distros} Linux distros in colour or one ink, and 3D shapes, physics and creatures. Each is a small, typed TypeScript module with no dependencies, for
     React, Next.js, Astro, or a plain HTML page, and free to use and change under the MIT license.
+  </p>
+  <p class="term">
+    Or play any of them in your terminal: <code id="term-command">npx ascii.rest {example.slug}</code>
+    <button class="button" type="button" data-copy="term-command" hidden><span>[copy]</span></button>
   </p>
 
   <section id="use" class="block">
@@ -65,6 +72,13 @@ const description = `${pieces.length} animated ascii pieces for web pages, in Ty
                 <span class="note">{piece.note}</span>
               </a>
             ))}
+            {LOGOS.includes(category.name) && (
+              <a class="card ask" href={issue("logo")}>
+                <div class="well"><span>[request a logo]</span></div>
+                <span class="name">missing one?</span>
+                <span class="note">ask for a company, language or distro you'd like drawn like these</span>
+              </a>
+            )}
           </div>
         </section>
         {category.name === "scenes" && <Sponsors />}
