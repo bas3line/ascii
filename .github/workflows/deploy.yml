@@ -1,0 +1,38 @@
+name: Deploy
+
+# Cloudflare's Workers Builds deploys ascii.rest on every push to main. Once, the push of a merge never reached it and
+# nothing was deployed. This waits for its build to show on the commit; if none comes, it starts one with the deploy
+# hook in the CLOUDFLARE_DEPLOY_HOOK secret, and without that secret it fails, so a missed deploy is never silent.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  checks: read
+  contents: read
+
+jobs:
+  deployed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Cloudflare's build of this commit, or start one
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOOK: ${{ secrets.CLOUDFLARE_DEPLOY_HOOK }}
+        run: |
+          for i in $(seq 1 18); do
+            n=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" --jq '[.check_runs[] | select(.name | startswith("Workers Builds"))] | length')
+            if [ "$n" -gt 0 ]; then
+              echo "Cloudflare is building ${GITHUB_SHA::7}."
+              exit 0
+            fi
+            sleep 10
+          done
+          if [ -n "$HOOK" ]; then
+            echo "No Cloudflare build of ${GITHUB_SHA::7} after 3 minutes: starting one with the deploy hook."
+            curl -fsS -X POST "$HOOK" > /dev/null
+          else
+            echo "::error::No Cloudflare build of ${GITHUB_SHA::7} after 3 minutes, and no CLOUDFLARE_DEPLOY_HOOK secret to start one. Start a build of main in the Cloudflare dashboard."
+            exit 1
+          fi

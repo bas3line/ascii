@@ -1,15 +1,14 @@
 ---
 /*
  * The sponsors: a row of logo slots in wells, the sponsors first and open
- * slots after them. A sponsor's logo is our own ascii piece of it, playing in
- * its slot like any card; logos only, its name the link's label for a screen
- * reader. On the author page, whose own line leads into it, three open slots
- * and then the ways to sponsor; on the home page, under its first scene, a
- * line of thanks above and one open slot, asking for the next sponsor.
+ * slots after them. A sponsor is shown by its own official logo, the version
+ * for the page's theme; logos only, its name the link's label for a screen
+ * reader. On the author page, whose own line leads into it, open slots and
+ * then the ways to sponsor; on the home page, under its first scene, a line of
+ * thanks above and one open slot, asking for the next sponsor.
  */
-import Art from "./Art.astro";
 import Icon from "./Icon.astro";
-import { AUTHOR, SPONSORS, SUPPORT, pieces } from "../lib/library";
+import { AUTHOR, SPONSORS, SUPPORT } from "../lib/library";
 
 interface Props {
   /** For the home page: the line of thanks, one open slot, and no ways to pay. */
@@ -19,21 +18,19 @@ interface Props {
 const { home = false } = Astro.props;
 const sponsor = `https://github.com/sponsors/${AUTHOR.handle}`;
 const others = SUPPORT.filter((link) => link.href !== sponsor);
-const logos = SPONSORS.map((s) => {
-  const piece = pieces.find((p) => p.slug === s.slug);
-  if (!piece) throw new Error(`Sponsors: there is no piece named "${s.slug}"`);
-  return { ...s, piece };
-});
-const open = home ? 1 : 4 - logos.length;
+const open = home ? 1 : Math.max(1, 4 - SPONSORS.length);
 ---
 
 <section id="sponsors" class:list={["sponsors", home && "home"]} aria-label="sponsors">
   {home && <p class="thanks">Thanks to the sponsors who make running ascii.rest possible.</p>}
   <ul class="slots" role="list">
-    {logos.map((s) => (
+    {SPONSORS.map((s) => (
       <li>
         <a class="slot logo" href={s.href} aria-label={s.name}>
-          <span class="mark well"><Art piece={s.piece} /></span>
+          <span class="mark" style={`--h: ${s.height}rem`}>
+            <img class="for-paper" src={`/sponsors/${s.logo}.svg`} alt="" />
+            <img class="for-ink" src={`/sponsors/${s.logo}.dark.svg`} alt="" />
+          </span>
         </a>
       </li>
     ))}
@@ -97,12 +94,43 @@ const open = home ? 1 : 4 - logos.length;
     color: var(--muted);
   }
 
-  /* The logo's own box: the site sizes a piece to the well it sits in. */
+  /* The logo, centred in its well at its own height, never wider than most of it. */
   .mark {
+    display: grid;
+    place-items: center;
     width: 100%;
     flex: 1;
     min-height: 0;
-    aspect-ratio: auto;
+  }
+
+  .mark img {
+    grid-area: 1 / 1;
+    height: var(--h);
+    max-width: 82%;
+    object-fit: contain;
+  }
+
+  /* The version for the page: the dark one on a dark page, as the site starts, the light one on a light page. */
+  .for-paper {
+    display: none;
+  }
+
+  :global(:root[data-theme="light"]) .for-paper {
+    display: block;
+  }
+
+  :global(:root[data-theme="light"]) .for-ink {
+    display: none;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :global(:root:not([data-theme="dark"])) .for-paper {
+      display: block;
+    }
+
+    :global(:root:not([data-theme="dark"])) .for-ink {
+      display: none;
+    }
   }
 
   .label {
