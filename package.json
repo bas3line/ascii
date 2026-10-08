@@ -1,6 +1,6 @@
 {
   "name": "ascii.rest",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Animated ascii art for web pages, in TypeScript: React, Next.js, Astro, or one HTML tag.",
   "license": "MIT",
   "author": "bas3line (https://github.com/bas3line)",
