@@ -53,7 +53,7 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => 
 const SKY = 0, WALL = 1, ROAD = 2, SIGN = 3, SIDE = 4, VEND = 5, POLE = 6, WIRE = 7, TOWER = 8;
 // how much of each the wet road gives back, and the least dot each may draw
 const GIVE = [0.25, 0.1, 0, 1, 0.5, 0.9, 0.12, 0.15, 0.2];
-const FLOOR = [0.12, 0.04, 0.05, 0.1, 0.06, 0.1, 0.03, 0, 0.08];
+const FLOOR = [0.12, 0.04, 0.05, 0.1, 0.06, 0.1, 0.03, 0, 0];
 
 const PINK = [1, 0.2, 0.62], CYAN = [0.14, 0.88, 1], AMBER = [1, 0.6, 0.14], RED = [1, 0.16, 0.1];
 const NEON = 0, PANEL = 1, WHITE = 2, BULBS = 3;
@@ -441,7 +441,8 @@ export default function tokyoRain(): Frame {
     SB[k] = 0.24 + 0.16 * v ** 1.6 + glow * END[2];
   }
 
-  // a tower far off beyond the street, its top lit
+  // a tower far off beyond the street, its top lit. It is darker than the cloud
+  // behind it, so it stands as a silhouette rather than melting into the glow.
   const towerTop = 15;
   for (let r = 8; r < 38; r++) {
     for (let x = 96; x <= 103; x++) {
@@ -451,11 +452,11 @@ export default function tokyoRain(): Frame {
       if (r < towerTop && !(spire && r >= 9)) continue;
       mat[k] = TOWER;
       S[k] = 0.05;
-      if (r < towerTop) emit(k, 0.16, 0.12, 0.2);
+      if (r < towerTop) emit(k, 0.015, 0.012, 0.025);
       else if (r < towerTop + 2) emit(k, 0.42, 0.36, 0.5);
       else {
         const lit = (x & 1) === 0 && (r & 1) === 1 && hash(x, r + 5) < 0.45;
-        emit(k, lit ? 0.32 : 0.08, lit ? 0.24 : 0.06, lit ? 0.18 : 0.13);
+        emit(k, lit ? 0.32 : 0.015, lit ? 0.24 : 0.012, lit ? 0.18 : 0.025);
       }
     }
   }
@@ -759,7 +760,7 @@ export default function tokyoRain(): Frame {
   const HZR = new Float32Array(N), HZG = new Float32Array(N), HZB = new Float32Array(N);
   for (let k = 0; k < N; k++) {
     const s = S[k];
-    fog[k] = mat[k] === TOWER ? 0.3 : s > 0 ? 1 - Math.exp(-F / s / ZF) : 0;
+    fog[k] = mat[k] === TOWER ? 0.1 : s > 0 ? 1 - Math.exp(-F / s / ZF) : 0;
     // the haze itself is lit, brightest down at the far end of the street
     const x = k % W, y = Math.floor(k / W) + 0.5;
     const g = endGlow(x + 0.5, y) * 1.1;
@@ -887,7 +888,7 @@ export default function tokyoRain(): Frame {
     for (let x = 0; x < CW; x++) cloud[r * CW + x] = fbm(x * 0.03, r * 0.09, 4, CW * 0.03);
 
   // rain in three depths: [count, speed in rows a second, length, brightness, slant]
-  const LAYERS = [[300, 40, 3, 0.18, 0.1], [190, 72, 6, 0.38, 0.13], [60, 125, 11, 0.7, 0.17]];
+  const LAYERS = [[150, 40, 3, 0.18, 0.1], [190, 72, 6, 0.38, 0.13], [60, 125, 11, 0.7, 0.17]];
   const drops: number[][] = [];
   LAYERS.forEach(([count, v, len, b, sl], li) => {
     for (let i = 0; i < count; i++) {
@@ -900,15 +901,17 @@ export default function tokyoRain(): Frame {
   const rain = new Float32Array(N);
   const hold = new Float32Array(N); // how solidly the walker covers a cell, so no stray dots show through
 
-  // where the walker is: walking out of the alley, then away down the street
+  // where the walker is: walking out of the alley, then away down the street.
+  // The walk is short, so the street is never empty for long, and it keeps time
+  // with the traffic light.
   const walker = (t: number) => {
-    const tau = (((t + 5.5) % 40) + 40) % 40;
+    const tau = (((t + 5.5) % 24) + 24) % 24;
     // they turn from walking out of the alley to walking away, without a jolt
     const k = clamp((tau - 3) / 4);
     const ramp = tau < 3 ? 0 : tau < 7 ? 4 * (k * k * k - (k * k * k * k) / 2) : 2 + tau - 7;
     const z = 5.6 + 0.06 * tau + 0.5 * ramp;
     const xw = 4.4 - 4.05 * smooth(0, 5.5, tau);
-    return { xw, z, s: F / z, fade: smooth(24, 18, z), ph: tau * 1.7 * Math.PI };
+    return { xw, z, s: F / z, fade: smooth(15, 12, z), ph: tau * 1.7 * Math.PI };
   };
 
   // a flickering group's brightness at time t: steady, then now and then a stutter
