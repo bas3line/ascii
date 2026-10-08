@@ -91,6 +91,7 @@ export const load = {
   "heart": () => import("./pieces/heart.ts"),
   "heartbeat": () => import("./pieces/heartbeat.ts"),
   "heatmap": () => import("./pieces/heatmap.ts"),
+  "helium": () => import("./pieces/helium.ts"),
   "hilbert-curve": () => import("./pieces/hilbert-curve.ts"),
   "hourglass": () => import("./pieces/hourglass.ts"),
   "html": () => import("./pieces/html.ts"),
@@ -132,14 +133,17 @@ export const load = {
   "ocean-sunset": () => import("./pieces/ocean-sunset.ts"),
   "omarchy": () => import("./pieces/omarchy.ts"),
   "opensuse": () => import("./pieces/opensuse.ts"),
+  "orchid": () => import("./pieces/orchid.ts"),
   "owl": () => import("./pieces/owl.ts"),
   "pendulum-wave": () => import("./pieces/pendulum-wave.ts"),
   "perl": () => import("./pieces/perl.ts"),
   "php": () => import("./pieces/php.ts"),
   "planet": () => import("./pieces/planet.ts"),
+  "planetscale": () => import("./pieces/planetscale.ts"),
   "plasma": () => import("./pieces/plasma.ts"),
   "playstation": () => import("./pieces/playstation.ts"),
   "plucked-string": () => import("./pieces/plucked-string.ts"),
+  "polar": () => import("./pieces/polar.ts"),
   "pond-ripples": () => import("./pieces/pond-ripples.ts"),
   "pop-os": () => import("./pieces/pop-os.ts"),
   "progress-bar": () => import("./pieces/progress-bar.ts"),
@@ -178,6 +182,7 @@ export const load = {
   "storm-plains": () => import("./pieces/storm-plains.ts"),
   "sundial": () => import("./pieces/sundial.ts"),
   "sunrise": () => import("./pieces/sunrise.ts"),
+  "supabase": () => import("./pieces/supabase.ts"),
   "swift": () => import("./pieces/swift.ts"),
   "synthwave": () => import("./pieces/synthwave.ts"),
   "taj-dawn": () => import("./pieces/taj-dawn.ts"),
@@ -215,7 +220,7 @@ export type PieceName = keyof typeof load;
 export const names = Object.keys(load) as PieceName[];
 
 /** The coloured pieces, which draw on a <canvas> rather than a <pre>. */
-export const canvas: ReadonlySet<PieceName> = new Set<PieceName>(["almalinux","alpine-dawn","alpine-linux","apple","arch-linux","aurora-fjord","c","centos","clojure","cloudflare","coderabbit","command-code","cpp","csharp","css","dart","databuddy","debian","deep-reef","deepin","desert-night","earthrise","elementary-os","elixir","endeavouros","erlang","fedora","gentoo","go","greptile","haskell","html","java","javascript","julia","kali-linux","kotlin","kyoto-dusk","lantern-lake","linux-mint","lua","manjaro","marine-drive","mintlify","misty-forest","night-coast","nixos","ocaml","ocean-sunset","omarchy","opensuse","perl","php","playstation","pop-os","python","r","red-hat","rocky-linux","ruby","rust","scala","storm-plains","swift","taj-dawn","tokyo-rain","tux","typescript","ubuntu","varanasi-ghats","vercel","void-linux","zig","zorin-os"]);
+export const canvas: ReadonlySet<PieceName> = new Set<PieceName>(["almalinux","alpine-dawn","alpine-linux","apple","arch-linux","aurora-fjord","c","centos","clojure","cloudflare","coderabbit","command-code","cpp","csharp","css","dart","databuddy","debian","deep-reef","deepin","desert-night","earthrise","elementary-os","elixir","endeavouros","erlang","fedora","gentoo","go","greptile","haskell","helium","html","java","javascript","julia","kali-linux","kotlin","kyoto-dusk","lantern-lake","linux-mint","lua","manjaro","marine-drive","mintlify","misty-forest","night-coast","nixos","ocaml","ocean-sunset","omarchy","opensuse","orchid","perl","php","planetscale","playstation","polar","pop-os","python","r","red-hat","rocky-linux","ruby","rust","scala","storm-plains","supabase","swift","taj-dawn","tokyo-rain","tux","typescript","ubuntu","varanasi-ghats","vercel","void-linux","zig","zorin-os"]);
 
 /** Whether a name is a piece in the library. */
 export const isPiece = (name: string): name is PieceName => Object.hasOwn(load, name);
