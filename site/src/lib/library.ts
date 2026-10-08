@@ -70,6 +70,12 @@ export const LINKS = [
   { label: "extractings", icon: "linkedin", href: "https://www.linkedin.com/in/extractings/" },
   { label: "@bas3line", icon: "github", href: "https://github.com/bas3line" },
 ] as const;
+/** Ways to support the work, on the author page. */
+export const SUPPORT = [
+  { label: "GitHub Sponsors", icon: "github", href: "https://github.com/sponsors/bas3line" },
+  { label: "Buy Me a Coffee", icon: "coffee", href: "https://buymeacoffee.com/bas3line" },
+  { label: "PayPal", icon: "paypal", href: "https://paypal.me/ShubhamYadav886" },
+] as const;
 /** Until the package is on npm, it installs from GitHub. */
 export const INSTALL = "npm install github:bas3line/ascii";
 
