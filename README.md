@@ -14,7 +14,7 @@
 <br>
 
 Animated ascii art for web pages.<br>
-169 pieces for React, Next.js, Astro or plain HTML.
+209 pieces for React, Next.js, Astro or plain HTML.
 
 [ascii.rest](https://ascii.rest) · [install](#install) · [pieces](#pieces) · [contributing](CONTRIBUTING.md)
 
