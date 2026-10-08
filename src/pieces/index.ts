@@ -3,6 +3,7 @@
 
 /** Every piece as a named export: import { donut, nightCoast } from "ascii.rest/pieces". */
 export * as a0 from "./a0.ts";
+export * as agentmail from "./agentmail.ts";
 export * as almalinux from "./almalinux.ts";
 export * as alpineDawn from "./alpine-dawn.ts";
 export * as alpineLinux from "./alpine-linux.ts";
@@ -104,6 +105,7 @@ export * as jellyfish from "./jellyfish.ts";
 export * as julia from "./julia.ts";
 export * as juliaSet from "./julia-set.ts";
 export * as kaliLinux from "./kali-linux.ts";
+export * as keiki from "./keiki.ts";
 export * as kite from "./kite.ts";
 export * as kotlin from "./kotlin.ts";
 export * as kyotoDusk from "./kyoto-dusk.ts";
@@ -185,6 +187,7 @@ export * as stormPlains from "./storm-plains.ts";
 export * as sundial from "./sundial.ts";
 export * as sunrise from "./sunrise.ts";
 export * as supabase from "./supabase.ts";
+export * as supermemory from "./supermemory.ts";
 export * as swift from "./swift.ts";
 export * as synthwave from "./synthwave.ts";
 export * as tajDawn from "./taj-dawn.ts";
