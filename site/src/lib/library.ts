@@ -17,7 +17,7 @@ export type Piece = Meta & {
 /** Sidebar order. The scenes first, then the pieces meant as page furniture with the logos last among them, then the rest. */
 export const GROUPS = [
   { label: "art", categories: ["scenes"] },
-  { label: "components", categories: ["ui", "data", "type", "logos", "distros"] },
+  { label: "components", categories: ["ui", "data", "type", "logos", "companies", "distros"] },
   { label: "more", categories: ["shapes", "space", "physics", "nature", "creatures", "objects", "generative", "effects"] },
 ] as const;
 

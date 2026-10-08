@@ -70,7 +70,7 @@ export default function typewriter({ prefix = meta.options.prefix, phrases = met
 - **File**: `src/pieces/<slug>.ts`, the slug in kebab-case.
 - **`meta`**:
   - `name`: lowercase.
-  - `category`: one of scenes, ui, data, type, logos, distros, shapes, space, physics, nature, creatures, objects, generative, effects.
+  - `category`: one of scenes, ui, data, type, logos, companies, distros, shapes, space, physics, nature, creatures, objects, generative, effects.
   - `note`: one lowercase line of up to 72 characters, saying what you see.
   - `cols` and `rows`: up to 80 by 32.
   - `fps`: 0 to 60, 0 for a still.
@@ -93,6 +93,8 @@ A **logo** (`category: "logos"`) is a language's logo, coloured on a canvas with
 - It adds a `palette` and writes `env.color` like a scene. `env.paper` tells it the page is light, so it can lift colours that would sink into a dark one.
 - Without `env.color` it is drawn as text in one ink, in a `<pre>` (`mono` on the tag and the components), and must read that way too.
 - Draw it from the logo's own artwork, credit the source in its header, and keep it to the logo: no wordmark unless that is the logo.
+
+A **company** (`category: "companies"`) is a company's logo, made the same way as a logo, glinting.
 
 A **distro** (`category: "distros"`) is a Linux distribution's logo, made the same way as a logo. Where a language logo glints, a distro has a scan line run down it now and then.
 

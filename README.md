@@ -27,7 +27,7 @@ Animated ascii art for web pages.<br>
 
 <br>
 
-Written in TypeScript by [@bas3line](https://github.com/bas3line). 191 pieces, from full-colour scenes to loaders, charts, language logos, Linux distros, spinning shapes and physics. The donut above turns on a page with one tag: `<ascii-art piece="donut"></ascii-art>`. See them all at [ascii.rest](https://ascii.rest).
+Written in TypeScript by [@bas3line](https://github.com/bas3line). 196 pieces, from full-colour scenes to loaders, charts, language logos, Linux distros, spinning shapes and physics. The donut above turns on a page with one tag: `<ascii-art piece="donut"></ascii-art>`. See them all at [ascii.rest](https://ascii.rest).
 
 <p align="center">
   <a href="https://ascii.rest/night-coast/"><img src="https://ascii.rest/og/night-coast.png" width="32%" alt="night coast"></a>
@@ -62,7 +62,7 @@ import { donut } from "ascii.rest/pieces";
 <Ascii piece="rust" mono />                            // a logo in one ink
 ```
 
-`Ascii` is a client component (`"use client"`), so it goes straight into the Next.js app router. Text pieces draw into a `<pre>` in its colour and font size; the coloured ones, scenes, logos and distros, draw onto a `<canvas>` as wide as its container, or into a `<pre>` in one ink with `mono`.
+`Ascii` is a client component (`"use client"`), so it goes straight into the Next.js app router. Text pieces draw into a `<pre>` in its colour and font size; the coloured ones, scenes, logos, companies and distros, draw onto a `<canvas>` as wide as its container, or into a `<pre>` in one ink with `mono`.
 
 ## Astro
 
@@ -85,7 +85,7 @@ The first frame is rendered on the server, so the page is whole before any scrip
 <ascii-art piece="donut"></ascii-art>
 ```
 
-Style it like text: `ascii-art { font-size: 10px; color: teal; }`. The logos and distros come in their own colours; add `mono`, `<ascii-art piece="rust" mono>`, to draw one in the text's colour instead. In a bundled app, `import "ascii.rest/element"` defines the same tag.
+Style it like text: `ascii-art { font-size: 10px; color: teal; }`. The logos, companies and distros come in their own colours; add `mono`, `<ascii-art piece="rust" mono>`, to draw one in the text's colour instead. In a bundled app, `import "ascii.rest/element"` defines the same tag.
 
 ## TypeScript, anywhere
 
@@ -159,6 +159,7 @@ pre.art { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberatio
 | data | [bar chart](https://ascii.rest/bar-chart/), [candlesticks](https://ascii.rest/candlesticks/), [cpu meters](https://ascii.rest/cpu-meters/), [equalizer](https://ascii.rest/equalizer/), [gauge](https://ascii.rest/gauge/), [heartbeat](https://ascii.rest/heartbeat/), [heatmap](https://ascii.rest/heatmap/), [radar](https://ascii.rest/radar/), [sparkline](https://ascii.rest/sparkline/), [uptime bar](https://ascii.rest/uptime-bar/) |
 | type | [big text](https://ascii.rest/big-text/), [dissolve](https://ascii.rest/dissolve/), [glitch](https://ascii.rest/glitch/), [marquee](https://ascii.rest/marquee/), [morse](https://ascii.rest/morse/), [scramble](https://ascii.rest/scramble/), [split-flap](https://ascii.rest/split-flap/), [typewriter](https://ascii.rest/typewriter/), [wave text](https://ascii.rest/wave-text/) |
 | logos | [c](https://ascii.rest/c/), [c#](https://ascii.rest/csharp/), [c++](https://ascii.rest/cpp/), [clojure](https://ascii.rest/clojure/), [css](https://ascii.rest/css/), [dart](https://ascii.rest/dart/), [elixir](https://ascii.rest/elixir/), [erlang](https://ascii.rest/erlang/), [go](https://ascii.rest/go/), [haskell](https://ascii.rest/haskell/), [html](https://ascii.rest/html/), [java](https://ascii.rest/java/), [javascript](https://ascii.rest/javascript/), [julia](https://ascii.rest/julia/), [kotlin](https://ascii.rest/kotlin/), [lua](https://ascii.rest/lua/), [ocaml](https://ascii.rest/ocaml/), [perl](https://ascii.rest/perl/), [php](https://ascii.rest/php/), [python](https://ascii.rest/python/), [r](https://ascii.rest/r/), [ruby](https://ascii.rest/ruby/), [rust](https://ascii.rest/rust/), [scala](https://ascii.rest/scala/), [swift](https://ascii.rest/swift/), [typescript](https://ascii.rest/typescript/), [zig](https://ascii.rest/zig/) |
+| companies | [apple](https://ascii.rest/apple/), [cloudflare](https://ascii.rest/cloudflare/), [command code](https://ascii.rest/command-code/), [playstation](https://ascii.rest/playstation/), [vercel](https://ascii.rest/vercel/) |
 | distros | [almalinux](https://ascii.rest/almalinux/), [alpine linux](https://ascii.rest/alpine-linux/), [arch linux](https://ascii.rest/arch-linux/), [centos](https://ascii.rest/centos/), [debian](https://ascii.rest/debian/), [deepin](https://ascii.rest/deepin/), [elementary os](https://ascii.rest/elementary-os/), [endeavouros](https://ascii.rest/endeavouros/), [fedora](https://ascii.rest/fedora/), [gentoo](https://ascii.rest/gentoo/), [kali linux](https://ascii.rest/kali-linux/), [linux mint](https://ascii.rest/linux-mint/), [manjaro](https://ascii.rest/manjaro/), [nixos](https://ascii.rest/nixos/), [opensuse](https://ascii.rest/opensuse/), [pop!_os](https://ascii.rest/pop-os/), [red hat](https://ascii.rest/red-hat/), [rocky linux](https://ascii.rest/rocky-linux/), [tux](https://ascii.rest/tux/), [ubuntu](https://ascii.rest/ubuntu/), [void linux](https://ascii.rest/void-linux/), [zorin os](https://ascii.rest/zorin-os/) |
 | shapes | [cube](https://ascii.rest/cube/), [dna helix](https://ascii.rest/dna-helix/), [donut](https://ascii.rest/donut/), [glxgears](https://ascii.rest/glxgears/), [gyroscope](https://ascii.rest/gyroscope/), [heart](https://ascii.rest/heart/), [icosahedron](https://ascii.rest/icosahedron/), [mobius strip](https://ascii.rest/mobius-strip/), [spring](https://ascii.rest/spring/), [tesseract](https://ascii.rest/tesseract/), [torus knot](https://ascii.rest/torus-knot/), [twisted ring](https://ascii.rest/twisted-ring/) |
 | space | [black hole](https://ascii.rest/black-hole/), [earth](https://ascii.rest/earth/), [eclipse](https://ascii.rest/eclipse/), [galaxy](https://ascii.rest/galaxy/), [moon phases](https://ascii.rest/moon-phases/), [planet](https://ascii.rest/planet/), [rocket](https://ascii.rest/rocket/), [saptarishi](https://ascii.rest/saptarishi/), [solar system](https://ascii.rest/solar-system/), [starfield](https://ascii.rest/starfield/), [three-body](https://ascii.rest/three-body/) |
@@ -169,7 +170,7 @@ pre.art { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberatio
 | generative | [epicycles](https://ascii.rest/epicycles/), [flow field](https://ascii.rest/flow-field/), [glider gun](https://ascii.rest/glider-gun/), [hilbert curve](https://ascii.rest/hilbert-curve/), [julia set](https://ascii.rest/julia-set/), [langton's ant](https://ascii.rest/langtons-ant/), [mandelbrot](https://ascii.rest/mandelbrot/), [maze](https://ascii.rest/maze/), [plasma](https://ascii.rest/plasma/), [reaction diffusion](https://ascii.rest/reaction-diffusion/), [rule 30](https://ascii.rest/rule-30/), [sierpinski](https://ascii.rest/sierpinski/), [voronoi](https://ascii.rest/voronoi/) |
 | effects | [doom fire](https://ascii.rest/doom-fire/), [fireworks](https://ascii.rest/fireworks/), [matrix rain](https://ascii.rest/matrix-rain/), [rotozoomer](https://ascii.rest/rotozoomer/), [sparks](https://ascii.rest/sparks/), [synthwave](https://ascii.rest/synthwave/), [tunnel](https://ascii.rest/tunnel/), [tv static](https://ascii.rest/tv-static/) |
 
-The logos and distros are drawn from [devicon](https://github.com/devicons/devicon) (MIT) and [Simple Icons](https://github.com/simple-icons/simple-icons) (CC0). Each is a trademark of its owner, shown here to name the language or the distribution.
+The logos and distros are drawn from [devicon](https://github.com/devicons/devicon) (MIT) and [Simple Icons](https://github.com/simple-icons/simple-icons) (CC0). The companies are drawn from Simple Icons too, and command code from its own mark on [commandcode.ai](https://commandcode.ai). Each is a trademark of its owner, shown here to name the language, the distribution or the company.
 
 ## Contributing
 
