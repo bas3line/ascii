@@ -4,6 +4,7 @@
  * pieces come through the package, as any app would get them.
  */
 import { load, names, type Meta, type Piece as Module } from "ascii.rest";
+import added from "../data/added.json";
 
 export type Piece = Meta & {
   slug: string;
@@ -12,6 +13,22 @@ export type Piece = Meta & {
   source: string;
   still: string;
   stillPaper: string;
+  /** Added lately, and marked new. */
+  recent: boolean;
+};
+
+/*
+ * A piece is new for 30 days from the day it was added, by the dates in
+ * data/added.json (npm run added). One the file does not know yet came after
+ * it was written, so it is new too. The pieces from the library's first day
+ * are what it opened with, not additions to it, so they are never new.
+ */
+const dates: Record<string, string> = added;
+const opened = Object.values(dates).sort()[0];
+const built = Date.now();
+const isRecent = (slug: string) => {
+  const day = dates[slug];
+  return !day || (day !== opened && built - Date.parse(day) <= 30 * 86_400_000);
 };
 
 /** Sidebar order. The scenes first, then the pieces meant as page furniture with the logos last among them, then the rest. */
@@ -39,6 +56,7 @@ for (const slug of names) {
       still,
       // A scene is a picture on its own ground, the same in either theme.
       stillPaper: mod.meta.ground ? still : mod.default(options)(0, { paper: true }),
+      recent: isRecent(slug),
     });
   } catch (error) {
     console.warn(`ascii: skipping ${slug}: ${(error as Error).message}`);

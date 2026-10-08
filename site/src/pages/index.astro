@@ -61,6 +61,7 @@ const description = `${pieces.length} animated ascii pieces for web pages, in Ty
                   <Art piece={piece} />
                 </div>
                 <span class="name">{piece.name}</span>
+                {piece.recent && <span class="new">new</span>}
                 <span class="note">{piece.note}</span>
               </a>
             ))}

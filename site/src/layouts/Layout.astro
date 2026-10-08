@@ -104,6 +104,7 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
                         <a href={`/${piece.slug}/`} aria-current={piece.slug === current ? "page" : undefined}>
                           {piece.name}
                         </a>
+                        {piece.recent && <span class="new">new</span>}
                       </li>
                     ))}
                   </ul>

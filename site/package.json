@@ -6,7 +6,8 @@
     "dev": "npm --prefix .. run build && astro dev",
     "build": "npm --prefix .. run build && astro build",
     "preview": "npm run build && wrangler dev",
-    "deploy": "npm --prefix .. run check && npm run build && wrangler deploy"
+    "deploy": "npm --prefix .. run check && npm run build && wrangler deploy",
+    "added": "node scripts/added.mjs"
   },
   "dependencies": {
     "ascii.rest": "file:.."

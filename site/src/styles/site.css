@@ -333,6 +333,18 @@ a[aria-current="page"] {
   color: var(--bg);
 }
 
+/* A piece added lately, beside its name here and on its card. */
+.new {
+  margin-left: 0.5ch;
+  color: var(--ink);
+  font-size: 0.75em;
+}
+
+/* Clear of the box a sidebar link fills when it is the current page or hovered. */
+.side .new {
+  margin-left: 1ch;
+}
+
 .page {
   min-width: 0;
   padding: 4rem 0 3rem;
