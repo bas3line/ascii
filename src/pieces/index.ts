@@ -57,6 +57,7 @@ export * as earthrise from "./earthrise.ts";
 export * as eclipse from "./eclipse.ts";
 export * as elementaryOs from "./elementary-os.ts";
 export * as elixir from "./elixir.ts";
+export * as elm from "./elm.ts";
 export * as endeavouros from "./endeavouros.ts";
 export * as epicycles from "./epicycles.ts";
 export * as equalizer from "./equalizer.ts";
