@@ -48,6 +48,10 @@
       "types": "./dist/svg.d.ts",
       "default": "./dist/svg.js"
     },
+    "./kit": {
+      "types": "./dist/kit/index.d.ts",
+      "default": "./dist/kit/index.js"
+    },
     "./astro": "./src/astro/Ascii.astro",
     "./astro/banner": "./src/astro/Banner.astro"
   },
@@ -56,6 +60,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "check": "node scripts/check.ts",
+    "test": "node --test \"src/kit/*.test.ts\"",
+    "kit": "node scripts/kit/show.ts",
     "gen": "node scripts/gen.ts",
     "prepare": "tsc -p tsconfig.build.json"
   },
