@@ -136,6 +136,7 @@ export * as notFound from "./not-found.ts";
 export * as ocaml from "./ocaml.ts";
 export * as oceanSunset from "./ocean-sunset.ts";
 export * as omarchy from "./omarchy.ts";
+export * as openapi from "./openapi.ts";
 export * as opensuse from "./opensuse.ts";
 export * as orchid from "./orchid.ts";
 export * as owl from "./owl.ts";
