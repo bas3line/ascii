@@ -320,6 +320,8 @@ New pieces, fixes and ideas are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) cove
 
 ## Acknowledgements
 
+<a href="https://www.greptile.com"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/thanks/greptile.dark.svg"><img alt="Greptile" src=".github/thanks/greptile.svg" height="28"></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://paper.design/mono"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/thanks/paper.dark.svg"><img alt="Paper" src=".github/thanks/paper.svg" height="28"></picture></a>
+
 Special thanks to:
 
 - [Greptile](https://www.greptile.com), for reviewing ascii.rest's pull requests for free, as it does for open-source projects.
