@@ -7,7 +7,7 @@ description: Play any piece, or draw any text as a banner, in a React or Next.js
 Two components do everything on this page. `<Ascii>` plays a **piece**, which is one animation, such as `donut`. `<Banner>` draws any text you give it in big block letters.
 
 <figure class="video">
-  <video src="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/react.mp4" poster="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/react.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <video src="https://cdn.ascii.rest/videos/react.mp4" poster="https://cdn.ascii.rest/videos/react.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
   <figcaption>A Next.js page with the Ascii and Banner components, changing their props.</figcaption>
 </figure>
 
