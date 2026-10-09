@@ -1,61 +1,138 @@
 ---
 /*
- * /banner/: a text in big text's block letters, with a glint that passes now
- * and then, as an animated SVG for a GitHub README, and the same in a
- * terminal. The Worker (src/worker.ts) serves each banner at
- * /banner/<text>.svg; this page draws the same SVG in the browser as you type
- * (lib/banner.ts), so what it shows is what a README gets. The text and the
- * colour ride in the page's URL, ?text=&color=, so a banner can be linked to.
+ * /banner/: a text in big text's block letters as an animated SVG for a
+ * GitHub README, and the same in a terminal. It can glint, type in or hold
+ * still, take a colour or a fade, a tagline typed out under it, and any of the
+ * library's logos, companies or distros beside or above it. The Worker
+ * (src/worker.ts) serves each banner at /banner/<text>.svg; this page draws
+ * the same SVG in the browser as you choose (lib/banner.ts), the art from its
+ * own README SVG, so what it shows is what a README gets. The choices ride in
+ * the page's URL, as they do in the banner's, so a banner can be linked to.
  * Without script the form stays hidden and the page shows its own banner.
  */
 import Layout from "../layouts/Layout.astro";
-import { MARKS, MAX, bannerPath, cliBanner, readmeBanner, terminalBanner } from "../lib/banner";
+import { groups } from "../lib/library";
+import { MARKS, MAX, PLAIN, TAGLINE, bannerPath, cliBanner, markdownBanner, readmeBanner, terminalBanner, type Look } from "../lib/banner";
+import { looping } from "../lib/svg";
 
 const text = "ascii.rest";
-// The letters' colours to pick from, after GitHub's own text colour; a colour input gives any other.
+const look: Look = PLAIN;
+// The letters' colours to pick from, after GitHub's own text colour: single colours, then fades.
 const COLOURS = [
   { name: "orange", value: "#f97316" },
   { name: "green", value: "#3fb950" },
   { name: "blue", value: "#4493f8" },
   { name: "purple", value: "#ab7df8" },
   { name: "pink", value: "#f778ba" },
+  { name: "sunset", value: "#f97316,#f778ba" },
+  { name: "ocean", value: "#22d3ee,#4493f8" },
+  { name: "aurora", value: "#3fb950,#ab7df8" },
+];
+const chip = (value: string) => {
+  const [a, b] = value.split(",");
+  return b ? `background: linear-gradient(90deg, ${a}, ${b})` : `background: ${a}`;
+};
+// The art: every piece with a README SVG, by category, as the sidebar orders them.
+const arts = groups
+  .flatMap((g) => g.categories)
+  .map((c) => ({ name: c.name, pieces: c.pieces.filter((p) => looping(p.category, p.options)) }))
+  .filter((c) => c.pieces.length);
+const count = arts.reduce((n, c) => n + c.pieces.length, 0);
+// To start from: each a link to this page with its choices.
+const EXAMPLES = [
+  { name: "ferris, beside rust, in its orange", query: "?text=ferris&art=rust&color=art" },
+  { name: "a fade and a tagline", query: "?text=bas3line&color=f97316,f778ba&tagline=making%20ascii.rest" },
+  { name: "i use arch, typed in under its logo", query: "?text=i%20use%20arch&art=arch-linux&place=above&effect=type&color=art" },
+  { name: "ocean, held still", query: "?text=hello%20world&color=22d3ee,4493f8&effect=still" },
 ];
 const grounds = [
   { theme: "light", dark: false },
   { theme: "dark", dark: true },
 ];
+const ways = [
+  { name: "html", id: "banner-html", code: readmeBanner(text, look) },
+  { name: "markdown", id: "banner-markdown", code: markdownBanner(text, look) },
+  { name: "url", id: "banner-url", code: `https://ascii.rest${bannerPath(text, false, look)}` },
+  { name: "terminal", id: "banner-terminal", code: terminalBanner(text, look) },
+  { name: "cli", id: "banner-cli", code: cliBanner(text, look) },
+];
 ---
 
 <Layout
   title="readme banners · ascii.rest"
-  description="Your name or your project's in animated ascii block letters, for a GitHub README or a terminal. Type it and copy the snippet."
+  description="Your name or your project's in animated ascii block letters, with a tagline and any of the library's logos, for a GitHub README or a terminal."
   path="/banner/"
   card={{ path: "/og/big-text.png", alt: "HELLO in ascii block letters with a line shadow, on ascii.rest, by @bas3line" }}
 >
   <h1 slot="heading">readme banners</h1>
 
   <p class="lede">
-    Your name, or your project's, in block letters with a glint that passes now and then: an animated SVG for a GitHub
-    README, which runs no script, or the same in a terminal. Type it, pick a colour and copy the snippet.
+    Your name, or your project's, in block letters that glint, type in or hold still: an animated SVG for a GitHub
+    README, which runs no script, or the same in a terminal. Give it a colour or a fade, a tagline typed out under it,
+    and any of the library's {count} logos, companies and distros beside it.
+  </p>
+
+  <p class="examples muted" data-maker-only hidden>
+    <span>try</span>
+    {EXAMPLES.map((e) => <a href={e.query}>[{e.name}]</a>)}
   </p>
 
   <form class="maker" data-maker hidden>
     <p class="field">
       <label for="banner-text">text</label>
-      <input id="banner-text" name="text" value={text} maxlength={MAX} autocomplete="off" autocapitalize="none" spellcheck="false" />
+      <input id="banner-text" class="line" name="text" value={text} maxlength={MAX} autocomplete="off" autocapitalize="none" spellcheck="false" />
       <span class="left muted" role="status"></span>
+    </p>
+    <p class="field">
+      <label for="banner-tagline">tagline</label>
+      <input id="banner-tagline" class="line wide" name="tagline" maxlength={TAGLINE} placeholder="a line under it, typed out" autocomplete="off" />
     </p>
     <p class="field" role="group" aria-label="colour of the letters">
       <span class="label">colour</span>
-      <button class="button swatch" type="button" data-colour="" aria-pressed="true"><span>github</span></button>
+      <button class="button pick" type="button" data-colour="" aria-pressed="true"><span>github</span></button>
       {COLOURS.map((c) => (
-        <button class="button swatch" type="button" data-colour={c.value} aria-pressed="false">
-          <span><i style={`background: ${c.value}`}></i>{c.name}</span>
+        <button class="button pick" type="button" data-colour={c.value} aria-pressed="false">
+          <span><i style={chip(c.value)}></i>{c.name}</span>
         </button>
       ))}
-      <label class="button swatch custom">
+      <button class="button pick" type="button" data-colour="art" aria-pressed="false" disabled title="pick some art first">
+        <span><i class="art-chip"></i>the art's</span>
+      </button>
+      <label class="button pick custom" data-custom="one">
         <span><input type="color" value="#e5534b" aria-label="any colour" />any</span>
       </label>
+      <span class="button pick custom" data-custom="two">
+        <span>
+          <input type="color" value="#e5534b" aria-label="a fade from this colour" /><input type="color" value="#4493f8" aria-label="to this colour" />fade
+        </span>
+      </span>
+    </p>
+    <p class="field" role="group" aria-label="how it moves">
+      <span class="label">motion</span>
+      <button class="button pick" type="button" data-effect="glint" aria-pressed="true"><span>glint</span></button>
+      <button class="button pick" type="button" data-effect="type" aria-pressed="false"><span>type in</span></button>
+      <button class="button pick" type="button" data-effect="still" aria-pressed="false"><span>still</span></button>
+    </p>
+    <p class="field">
+      <label for="banner-art">art</label>
+      <select id="banner-art" name="art">
+        <option value="">none</option>
+        {arts.map((c) => (
+          <optgroup label={c.name}>
+            {c.pieces.map((p) => <option value={p.slug}>{p.name}</option>)}
+          </optgroup>
+        ))}
+      </select>
+      <span class="places" role="group" aria-label="where the art goes">
+        <button class="button pick" type="button" data-place="left" aria-pressed="true" disabled><span>beside</span></button>
+        <button class="button pick" type="button" data-place="above" aria-pressed="false" disabled><span>above</span></button>
+      </span>
+    </p>
+    <p class="field" role="group" aria-label="size in a README">
+      <span class="label">size</span>
+      <button class="button pick" type="button" data-size="s" aria-pressed="false"><span>small</span></button>
+      <button class="button pick" type="button" data-size="m" aria-pressed="true"><span>medium</span></button>
+      <button class="button pick" type="button" data-size="l" aria-pressed="false"><span>large</span></button>
     </p>
   </form>
 
@@ -63,105 +140,233 @@ const grounds = [
     {grounds.map((g) => (
       <figure class:list={["preview", g.theme]}>
         <div class="sheet">
-          <img data-ground={g.theme} src={bannerPath(text, g.dark)} alt={`${text}, as a ${g.theme} README shows it`} />
+          <img data-ground={g.theme} src={bannerPath(text, g.dark, look)} alt={`${text}, as a ${g.theme} README shows it`} />
         </div>
-        <figcaption>{g.theme}</figcaption>
+        <figcaption>
+          {g.theme}
+          <button class="button" type="button" data-save={g.theme} hidden><span>[download svg]</span></button>
+        </figcaption>
       </figure>
     ))}
   </div>
 
   <section class="block">
     <div class="head">
-      <h2>readme</h2>
-      <span class="tools"><button class="button" type="button" data-copy="banner-readme" hidden><span>[copy]</span></button></span>
+      <h2>put it in your readme</h2>
+      <span class="tools" data-maker-only hidden>
+        <button class="button pick" type="button" data-align aria-pressed="false"><span>centred</span></button>
+      </span>
     </div>
-    <pre class="code" id="banner-readme">{readmeBanner(text)}</pre>
+    <div class="usage" data-tabs>
+      <div class="tabs" role="tablist" aria-label="Ways to use it" hidden>
+        {ways.map((way, i) => (
+          <button class="button" type="button" role="tab" id={`banner-tab-${i}`} aria-controls={`banner-panel-${i}`}>
+            <span>{way.name}</span>
+          </button>
+        ))}
+      </div>
+      {ways.map((way, i) => (
+        <div role="tabpanel" id={`banner-panel-${i}`} aria-labelledby={`banner-tab-${i}`}>
+          <div class="head">
+            <h3 class="way">{way.name}</h3>
+            <span class="tools">
+              <button class="button" type="button" data-copy={way.id} hidden><span>[copy]</span></button>
+            </span>
+          </div>
+          <pre class="code" id={way.id}>{way.code}</pre>
+        </div>
+      ))}
+    </div>
     <p class="muted note">
       The URL is the banner: <code>https://ascii.rest/banner/&lt;text&gt;.svg</code>, and <code>.dark.svg</code> for
-      GitHub's dark theme, with <code>?color=rrggbb</code> for the letters. Up to {MAX} characters: letters, digits, spaces
-      and <code>{MARKS}</code>; the letters come out in capitals. It holds still for anyone who prefers reduced motion.
-    </p>
-  </section>
-
-  <section class="block">
-    <div class="head">
-      <h2>terminal</h2>
-      <span class="tools"><button class="button" type="button" data-copy="banner-terminal" hidden><span>[copy]</span></button></span>
-    </div>
-    <pre class="code" id="banner-terminal">{terminalBanner(text)}</pre>
-  </section>
-
-  <section class="block">
-    <div class="head">
-      <h2>in your cli</h2>
-      <span class="tools"><button class="button" type="button" data-copy="banner-cli" hidden><span>[copy]</span></button></span>
-    </div>
-    <pre class="code" id="banner-cli">{cliBanner(text)}</pre>
-    <p class="muted note">
-      Prints it where the cursor is, lets the glint pass once in a second, and leaves it in the scrollback with the rest
-      of your output. Piped, or with NO_COLOR set, it prints plain text and returns at once.
+      GitHub's dark theme. Up to {MAX} characters: letters, digits, spaces and <code>{MARKS}</code>, in capitals. The
+      query carries the rest: <code>color=ff6a00</code>, <code>color=ff6a00,f778ba</code> for a fade or
+      <code>color=art</code>; <code>effect=type</code> or <code>still</code>; <code>tagline=</code>;
+      <code>art=rust</code> with <code>place=above</code>; <code>size=s</code> or <code>l</code>. Anyone who prefers reduced
+      motion gets it still. In a terminal the letters take the colour or the fade and the tagline; the art, the motion
+      and the size are the README's.
     </p>
   </section>
 </Layout>
 
 <script>
-  import { banner, cliBanner, clean, hex, readmeBanner, terminalBanner } from "../lib/banner";
+  import { inkOf, namespaced } from "../lib/animated";
+  import { PLAIN, banner, bannerPath, cliBanner, clean, cleanTagline, hex, markdownBanner, read, readmeBanner, terminalBanner, type Look } from "../lib/banner";
 
   const form = document.querySelector<HTMLFormElement>("[data-maker]")!;
   const input = form.querySelector<HTMLInputElement>("#banner-text")!;
+  const tagline = form.querySelector<HTMLInputElement>("#banner-tagline")!;
   const left = form.querySelector<HTMLElement>(".left")!;
-  const swatches = [...form.querySelectorAll<HTMLButtonElement>("[data-colour]")];
-  const custom = form.querySelector<HTMLInputElement>("input[type=color]")!;
+  const select = form.querySelector<HTMLSelectElement>("#banner-art")!;
+  const colours = [...form.querySelectorAll<HTMLButtonElement>("[data-colour]")];
+  const effects = [...form.querySelectorAll<HTMLButtonElement>("[data-effect]")];
+  const places = [...form.querySelectorAll<HTMLButtonElement>("[data-place]")];
+  const sizes = [...form.querySelectorAll<HTMLButtonElement>("[data-size]")];
+  const one = form.querySelector<HTMLElement>('[data-custom="one"]')!;
+  const two = form.querySelector<HTMLElement>('[data-custom="two"]')!;
+  const [anyInput] = one.querySelectorAll<HTMLInputElement>("input");
+  const [fromInput, toInput] = two.querySelectorAll<HTMLInputElement>("input");
+  const artChip = form.querySelector<HTMLElement>(".art-chip")!;
+  const align = document.querySelector<HTMLButtonElement>("[data-align]")!;
   const images = [...document.querySelectorAll<HTMLImageElement>("img[data-ground]")];
+  const saves = [...document.querySelectorAll<HTMLButtonElement>("[data-save]")];
   const code = (id: string) => document.getElementById(id)!;
 
-  let colour: string | null = null;
-  const urls: string[] = [];
+  // The page's URL holds the banner's own query, with its text and whether the snippet is centred.
+  const asked = new URLSearchParams(location.search);
+  const first = read(asked);
+  const look: Look = typeof first === "string" ? { ...PLAIN } : first;
+  let centred = asked.get("center") === "1";
+  if (asked.get("text")) input.value = asked.get("text")!.slice(0, input.maxLength);
+  tagline.value = look.tagline;
+  select.value = look.art;
+  if (select.value !== look.art) look.art = "";
+  if (look.color === "art" && !look.art) look.color = null;
 
-  const show = () => {
+  // Each logo's README SVG, light and dark, fetched once.
+  const arts = new Map<string, Promise<string | null>>();
+  const artOf = (slug: string, dark: boolean) => {
+    const key = `${slug}${dark ? ".dark" : ""}`;
+    if (!arts.has(key)) arts.set(key, fetch(`/svg/${key}.svg`).then((r) => (r.ok ? r.text() : null), () => null));
+    return arts.get(key)!;
+  };
+
+  const urls: string[] = [];
+  const drawn: Record<string, string> = {};
+  let turn = 0;
+  const show = async () => {
+    const mine = ++turn;
     const text = clean(input.value);
+    look.tagline = cleanTagline(tagline.value);
     // what the font has no letter for, said once each
     const out = [...new Set([...input.value].filter((ch) => !/\s/.test(ch) && !clean(ch)))].join(" ");
     left.textContent = out ? `left out: ${out}` : "";
+    mark();
     if (!text) return;
+    const svgs = await Promise.all(
+      images.map(async (img) => {
+        const dark = img.dataset.ground === "dark";
+        return banner(text, { dark, look, art: look.art ? await artOf(look.art, dark) : null })!.svg;
+      }),
+    );
+    if (mine !== turn) return;
     urls.splice(0).forEach((url) => URL.revokeObjectURL(url));
-    for (const img of images) {
-      const drawn = banner(text, { dark: img.dataset.ground === "dark", color: colour })!;
-      const url = URL.createObjectURL(new Blob([drawn.svg], { type: "image/svg+xml" }));
+    images.forEach((img, i) => {
+      const url = URL.createObjectURL(new Blob([svgs[i]], { type: "image/svg+xml" }));
       urls.push(url);
+      drawn[img.dataset.ground!] = svgs[i];
       img.src = url;
       img.alt = `${text}, as a ${img.dataset.ground} README shows it`;
+    });
+    code("banner-html").textContent = readmeBanner(text, look, centred);
+    code("banner-markdown").textContent = markdownBanner(text, look);
+    code("banner-url").textContent = `https://ascii.rest${bannerPath(text, false, look)}`;
+    code("banner-terminal").textContent = terminalBanner(text, look);
+    code("banner-cli").textContent = cliBanner(text, look);
+    const query = new URLSearchParams(bannerPath(text, false, look).split("?")[1] ?? "");
+    query.set("text", text);
+    if (centred) query.set("center", "1");
+    history.replaceState(null, "", `?${query.toString().replace(/%2C/g, ",")}`);
+  };
+
+  // The buttons pressed for the look, the art's own colour offered only with art, and its chip in that colour.
+  const same = (value: string) => {
+    const c = look.color;
+    return value === (c === null ? "" : c === "art" ? "art" : c.join(","));
+  };
+  const mark = () => {
+    for (const b of colours) b.setAttribute("aria-pressed", String(same(b.dataset.colour!)));
+    const preset = colours.some((b) => same(b.dataset.colour!));
+    one.classList.toggle("on", !preset && Array.isArray(look.color) && look.color.length === 1);
+    two.classList.toggle("on", !preset && Array.isArray(look.color) && look.color.length === 2);
+    for (const b of effects) b.setAttribute("aria-pressed", String(b.dataset.effect === look.effect));
+    for (const b of places) {
+      b.setAttribute("aria-pressed", String(b.dataset.place === look.place));
+      b.disabled = !look.art;
     }
-    code("banner-readme").textContent = readmeBanner(text, colour);
-    code("banner-terminal").textContent = terminalBanner(text, colour);
-    code("banner-cli").textContent = cliBanner(text, colour);
-    const query = new URLSearchParams({ text });
-    if (colour) query.set("color", colour.slice(1));
-    history.replaceState(null, "", `?${query}`);
+    for (const b of sizes) b.setAttribute("aria-pressed", String(b.dataset.size === look.size));
+    const artButton = colours.find((b) => b.dataset.colour === "art")!;
+    artButton.disabled = !look.art;
+    artButton.title = look.art ? "" : "pick some art first";
+    align.setAttribute("aria-pressed", String(centred));
   };
-
-  const pick = (value: string | null) => {
-    colour = value;
-    for (const s of swatches) s.setAttribute("aria-pressed", String((s.dataset.colour || null) === value));
-    custom.closest(".custom")!.classList.toggle("on", Boolean(value) && !swatches.some((s) => s.dataset.colour === value));
-    show();
+  const setArtChip = async () => {
+    artChip.style.background = "";
+    if (!look.art) return;
+    const svg = await artOf(look.art, document.documentElement.dataset.theme === "dark");
+    const art = svg && namespaced(svg, "");
+    const fill = art && inkOf(art);
+    if (fill) artChip.style.background = fill;
   };
-
-  // a banner linked to: its text and colour from the page's URL
-  const asked = new URLSearchParams(location.search);
-  if (asked.get("text")) input.value = asked.get("text")!.slice(0, input.maxLength);
-  const linked = hex(asked.get("color"));
-  if (linked) custom.value = linked;
 
   input.addEventListener("input", show);
+  tagline.addEventListener("input", show);
   form.addEventListener("submit", (e) => e.preventDefault());
-  swatches.forEach((s) => s.addEventListener("click", () => pick(s.dataset.colour || null)));
-  custom.addEventListener("input", () => pick(custom.value));
+  colours.forEach((b) =>
+    b.addEventListener("click", () => {
+      const v = b.dataset.colour!;
+      look.color = v === "" ? null : v === "art" ? "art" : (v.split(",") as [string] | [string, string]);
+      show();
+    }),
+  );
+  // Clicking "any" or "fade" takes the colours already in them; the pickers they open change them.
+  const any = () => ((look.color = [hex(anyInput.value)!]), show());
+  anyInput.addEventListener("input", any);
+  one.addEventListener("click", any);
+  const fade = () => ((look.color = [hex(fromInput.value)!, hex(toInput.value)!]), show());
+  fromInput.addEventListener("input", fade);
+  toInput.addEventListener("input", fade);
+  two.addEventListener("click", (e) => {
+    if (e.target === two || e.target === two.firstElementChild) fade();
+  });
+  effects.forEach((b) => b.addEventListener("click", () => ((look.effect = b.dataset.effect as Look["effect"]), show())));
+  places.forEach((b) => b.addEventListener("click", () => ((look.place = b.dataset.place as Look["place"]), show())));
+  sizes.forEach((b) => b.addEventListener("click", () => ((look.size = b.dataset.size as Look["size"]), show())));
+  select.addEventListener("change", () => {
+    look.art = select.value;
+    if (!look.art && look.color === "art") look.color = null;
+    setArtChip();
+    show();
+  });
+  align.addEventListener("click", () => ((centred = !centred), show()));
+  saves.forEach((b) => {
+    b.hidden = false;
+    b.addEventListener("click", () => {
+      const svg = drawn[b.dataset.save!];
+      if (!svg) return;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+      a.download = `${clean(input.value).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "banner"}${b.dataset.save === "dark" ? ".dark" : ""}.svg`;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+    });
+  });
+  // A colour a link asked for that is no preset sets the custom inputs, so they show it.
+  if (Array.isArray(look.color) && !colours.some((b) => same(b.dataset.colour!))) {
+    if (look.color.length === 1) anyInput.value = look.color[0];
+    else [fromInput.value, toInput.value] = look.color as [string, string];
+  }
+  document.querySelectorAll<HTMLElement>("[data-maker-only]").forEach((el) => (el.hidden = false));
   form.hidden = false;
-  pick(linked);
+  setArtChip();
+  show();
 </script>
 
 <style>
+  .examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 2ch;
+    max-width: 96ch;
+    margin-top: 1.25rem;
+  }
+
+  .examples a {
+    color: var(--muted);
+  }
+
   .maker {
     display: grid;
     gap: 0.75rem;
@@ -175,13 +380,14 @@ const grounds = [
     gap: 0.25rem 2ch;
   }
 
-  .field label,
+  .field label:not(.pick),
   .field .label {
-    min-width: 7ch;
+    min-width: 8ch;
     color: var(--muted);
   }
 
-  .field input:not([type="color"]) {
+  .line,
+  select {
     width: min(100%, 32ch);
     padding: 0.15rem 0;
     border: 0;
@@ -194,7 +400,29 @@ const grounds = [
     appearance: none;
   }
 
-  .field input:not([type="color"]):focus {
+  .line.wide {
+    width: min(100%, 60ch);
+  }
+
+  .line::placeholder {
+    color: var(--muted);
+    opacity: 1;
+  }
+
+  select {
+    width: auto;
+    min-width: 24ch;
+    cursor: pointer;
+  }
+
+  select option,
+  select optgroup {
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  .line:focus,
+  select:focus {
     outline: none;
     border-bottom-style: solid;
     border-bottom-color: var(--ink);
@@ -202,50 +430,72 @@ const grounds = [
 
   /* iOS zooms into a field set under 16px. */
   @media (hover: none) and (pointer: coarse) {
-    .field input:not([type="color"]) {
+    .line,
+    select {
       font-size: 16px;
     }
   }
 
-  /* The colour picked reads in ink and in brackets, as a selected tab does. */
-  .swatch > span {
+  .places {
+    display: inline-flex;
+    gap: 2ch;
+  }
+
+  /* A choice made reads in ink and in brackets, as a selected tab does. */
+  .pick > span {
     display: inline-flex;
     align-items: center;
     gap: 0.6ch;
   }
 
-  .swatch > span::before {
+  .pick > span::before {
     content: "[";
     margin-right: -0.6ch;
     visibility: hidden;
   }
 
-  .swatch > span::after {
+  .pick > span::after {
     content: "]";
     margin-left: -0.6ch;
     visibility: hidden;
   }
 
-  .swatch[aria-pressed="true"],
-  .swatch.on {
+  .pick[aria-pressed="true"],
+  .pick.on {
     color: var(--ink);
   }
 
-  .swatch[aria-pressed="true"] > span::before,
-  .swatch[aria-pressed="true"] > span::after,
-  .swatch.on > span::before,
-  .swatch.on > span::after {
+  .pick[aria-pressed="true"] > span::before,
+  .pick[aria-pressed="true"] > span::after,
+  .pick.on > span::before,
+  .pick.on > span::after {
     visibility: visible;
   }
 
-  .swatch i,
-  .swatch input {
+  .pick:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+
+  @media (hover: hover) {
+    .pick:disabled:hover > span {
+      background: none;
+      color: var(--muted);
+    }
+  }
+
+  .pick i,
+  .pick input {
     display: inline-block;
     width: 0.8em;
     height: 0.8em;
   }
 
-  .swatch input {
+  .pick i.art-chip {
+    background: repeating-linear-gradient(45deg, var(--muted) 0 2px, transparent 2px 4px);
+  }
+
+  .pick input {
     padding: 0;
     border: 0;
     background: none;
@@ -254,15 +504,19 @@ const grounds = [
     appearance: none;
   }
 
-  .swatch input::-webkit-color-swatch-wrapper {
+  .pick input + input {
+    margin-left: -0.4ch;
+  }
+
+  .pick input::-webkit-color-swatch-wrapper {
     padding: 0;
   }
 
-  .swatch input::-webkit-color-swatch {
+  .pick input::-webkit-color-swatch {
     border: 0;
   }
 
-  .swatch input::-moz-color-swatch {
+  .pick input::-moz-color-swatch {
     border: 0;
   }
 
@@ -274,12 +528,17 @@ const grounds = [
     min-height: 7rem;
   }
 
+  .preview figcaption {
+    display: flex;
+    gap: 2ch;
+  }
+
   .note {
     max-width: 72ch;
     margin-top: 0.75rem;
   }
 
-  /* A URL or the marks stay on one line. */
+  /* A URL, a query or the marks stay on one line. */
   .note code {
     white-space: nowrap;
   }

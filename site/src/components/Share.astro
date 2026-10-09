@@ -3,7 +3,8 @@
  * Under a piece's preview, beside its downloads: ways to post it. The link
  * unfurls as the piece's own card (pages/og). A logo, company or distro also
  * gets a line for whoever it belongs to: one click copies its README snippet,
- * and its video or GIF from the downloads makes a post that moves.
+ * another starts a README banner with it beside its name, and its video or
+ * GIF from the downloads makes a post that moves.
  */
 import { LINKS, SITE, readmeUsage, type Piece } from "../lib/library";
 import { looping } from "../lib/svg";
@@ -29,6 +30,7 @@ const id = `share-${piece.slug}`;
   <a href={linkedin}>[post on linkedin]</a>
   <button class="button" type="button" data-copy={`${id}-link`} hidden><span>[copy link]</span></button>
   {readme && <button class="button" type="button" data-copy={`${id}-readme`} hidden><span>[copy readme snippet]</span></button>}
+  {readme && <a href={`/banner/?${new URLSearchParams({ text: piece.name, art: piece.slug, color: "art" })}`}>[make a banner with it]</a>}
 </p>
 <span id={`${id}-link`} hidden>{url}</span>
 {readme && <pre id={`${id}-readme`} hidden>{readmeUsage(piece)}</pre>}
