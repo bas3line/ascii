@@ -23,14 +23,16 @@ const HELP = `ascii.rest: animated ascii art, in your terminal.
   --light         for a light terminal: the light colours, and shading flipped
   --fps <n>       frames a second, instead of the piece's own
   --seconds <n>   stops after n seconds; for a banner, how long its glint takes
-  --color <hex>   a banner's letters in this colour, like ff6a00
+  --color <hex>   a banner's letters in this colour, like ff6a00, or two
+                  for a fade, like ff6a00,f778ba
+  --tagline <s>   a line under a banner
   -h, --help      this help
   -v, --version   the version
 
   npx ascii.rest rust
   npx ascii.rest night-coast --seconds 10
   npx ascii.rest donut --light
-  npx ascii.rest banner 'my cli' --color ff6a00
+  npx ascii.rest banner 'my cli' --color ff6a00,f778ba --tagline 'v1.0, fast'
 
 Every piece, on a page: https://ascii.rest
 `;
@@ -114,6 +116,7 @@ async function main() {
       fps: { type: "string" },
       seconds: { type: "string" },
       color: { type: "string" },
+      tagline: { type: "string" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
     },
@@ -126,13 +129,16 @@ async function main() {
     // the words after it, as the shell split them
     const text = positionals.slice(1).join(" ");
     if (!drawable(text).trim()) throw new Usage(`a banner takes letters, digits, spaces and . , ! ? ' : - + = / _: npx ascii.rest banner 'my cli'`);
-    const color = values.color?.replace(/^#/, "");
-    if (color !== undefined && !/^[0-9a-f]{6}$/i.test(color)) throw new Usage(`--color takes six hex digits, like ff6a00, not "${values.color}"`);
-    const { interrupted } = await banner(text, { seconds, light: values.light === true, color: color && `#${color}` });
+    const colors = values.color?.split(",").map((c) => c.trim().replace(/^#/, ""));
+    if (colors && (colors.length > 2 || colors.some((c) => !/^[0-9a-f]{6}$/i.test(c))))
+      throw new Usage(`--color takes six hex digits, like ff6a00, or two for a fade, like ff6a00,f778ba, not "${values.color}"`);
+    const color = colors?.map((c) => `#${c}`) as [string] | [string, string] | undefined;
+    const { interrupted } = await banner(text, { seconds, light: values.light === true, color, tagline: values.tagline });
     if (interrupted) process.exitCode = 130;
     return;
   }
-  if (values.color !== undefined) throw new Usage(`--color is for a banner: npx ascii.rest banner <text> --color ff6a00`);
+  if (values.color !== undefined || values.tagline !== undefined)
+    throw new Usage(`--color and --tagline are for a banner: npx ascii.rest banner <text> --color ff6a00 --tagline 'v1.0'`);
   if (positionals.length > 1) throw new Usage(`one piece at a time: npx ascii.rest <piece>`);
   if (positionals[0] === "list") return list();
 

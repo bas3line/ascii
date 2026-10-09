@@ -116,7 +116,21 @@ Your name, or your project's, in [big text](https://ascii.rest/big-text/)'s bloc
 </a>
 ```
 
-The URL is the banner: `https://ascii.rest/banner/<text>.svg`, and `.dark.svg` for GitHub's dark theme. It takes up to 20 characters, letters, digits, spaces and `. , ! ? ' : - + = / _`, drawn in capitals, in GitHub's own text colour; `?color=ff6a00` colours the letters. [ascii.rest/banner](https://ascii.rest/banner/) makes one as you type and gives the snippet.
+The URL is the banner: `https://ascii.rest/banner/<text>.svg`, and `.dark.svg` for GitHub's dark theme. It takes up to 20 characters, letters, digits, spaces and `. , ! ? ' : - + = / _`, drawn in capitals, in GitHub's own text colour. The query carries the rest:
+
+| query | |
+| --- | --- |
+| `color` | the letters' colour, `ff6a00`; two for a fade, `ff6a00,f778ba`; or `art`, the art's own colour |
+| `effect` | `glint` by default, a glint every few seconds; `type`, the letters type in once and stay; `still` |
+| `tagline` | a line under the letters, typed out, up to 60 characters |
+| `art` | any logo, company or distro of the library, `rust`, beside the letters, or above them with `place=above` |
+| `size` | `s`, `m` by default, or `l`: how big a README shows it |
+
+```html
+<img alt="ferris" src="https://ascii.rest/banner/ferris.svg?art=rust&color=art&tagline=fast%2C%20safe%2C%20fun">
+```
+
+[ascii.rest/banner](https://ascii.rest/banner/) makes one as you choose and gives the snippet, in HTML, Markdown or as a URL. Every logo's page has a link that starts one with it. Anyone who prefers reduced motion gets it still.
 
 ## In a terminal
 
@@ -156,15 +170,16 @@ It resolves with `{ interrupted, cropped, piece, terminal }`: `cropped` is true 
 ```ts
 import { banner } from "ascii.rest/terminal";
 
-await banner("my-cli", { color: "#ff6a00" });
+await banner("my-cli", { color: ["#ff6a00", "#f778ba"], tagline: "v1.0, fast" });
 ```
 
-`banner(text, options?)` prints the text in [big text](https://ascii.rest/big-text/)'s block letters where the cursor is, lets the glint pass once and resolves, leaving the banner in the scrollback with the rest of your output, unlike `play()`, which takes over the screen. It is sized to the text, with narrower letters if the terminal is too narrow for square ones and the plain text if it is too narrow for those. Piped, it prints the banner with no colour and resolves at once; `NO_COLOR` leaves out the colours too. `npx ascii.rest banner <text>` takes the same options as `--seconds`, `--color` and `--light`.
+`banner(text, options?)` prints the text in [big text](https://ascii.rest/big-text/)'s block letters where the cursor is, lets the glint pass once and resolves, leaving the banner in the scrollback with the rest of your output, unlike `play()`, which takes over the screen. It is sized to the text, with narrower letters if the terminal is too narrow for square ones and the plain text if it is too narrow for those. Piped, it prints the banner with no colour and resolves at once; `NO_COLOR` leaves out the colours too. `npx ascii.rest banner <text>` takes the same options as `--seconds`, `--color`, `--tagline` and `--light`.
 
 | option | |
 | --- | --- |
 | `seconds` | how long the glint takes to pass; 1 by default, 0 prints it still |
-| `color` | the letters' colour as `#rrggbb`; the terminal's own by default, and the shadow is dimmed |
+| `color` | the letters' colour as `#rrggbb`, or two for a fade along them; the terminal's own by default, and the shadow is dimmed |
+| `tagline` | a line under the banner, dimmed, once the glint has passed |
 | `light` | for a light terminal: solid letters that the glint lightens |
 | `out` | where it prints: `process.stdout` by default |
 

@@ -16,8 +16,13 @@ import type { Output } from "./terminal.ts";
 export interface BannerOptions {
   /** Seconds the glint takes to pass, once; 0 prints the banner still. 1 by default. */
   seconds?: number;
-  /** The letters' colour as #rrggbb, in 24-bit colour; the terminal's own by default. The shadow is dimmed either way. */
-  color?: string;
+  /**
+   * The letters' colour as #rrggbb, in 24-bit colour, or two for a fade from the first letter to the last; the
+   * terminal's own by default. The shadow is dimmed either way.
+   */
+  color?: string | readonly [string] | readonly [string, string];
+  /** A line under the banner, dimmed, once the glint has passed. */
+  tagline?: string;
   /** For a light terminal: solid letters that the glint lightens, rather than shaded ones it brightens. */
   light?: boolean;
   /** Where to print: process.stdout by default. */
@@ -37,50 +42,58 @@ const HIDE = "\x1b[?25l", SHOW = "\x1b[?25h";
 const shadow = (c: string) => c >= "═" && c <= "╬";
 
 /**
- * Prints a banner and resolves once its glint has passed. Piped, or with NO_COLOR set, it is plain text; piped, it
- * prints at once. It throws if the text has nothing the font draws: letters, digits, spaces and . , ! ? ' : - + = / _.
+ * Prints a banner, and its tagline under it, and resolves once its glint has passed. Piped, or with NO_COLOR set, it
+ * has no colour; piped, it prints at once. It throws if the text has nothing the font draws: letters, digits, spaces
+ * and . , ! ? ' : - + = / _.
  */
-export async function banner(text: string, { seconds = 1, color, light = false, out = process.stdout }: BannerOptions = {}): Promise<Bannered> {
+export async function banner(text: string, { seconds = 1, color, tagline = "", light = false, out = process.stdout }: BannerOptions = {}): Promise<Bannered> {
   const words = drawable(text).trim().replace(/\s+/g, " ");
   if (!words) throw new Error(`ascii.rest: there is nothing in "${text}" to draw; a banner takes letters, digits, spaces and . , ! ? ' : - + = / _`);
-  const rgb = color === undefined ? null : /^#?([0-9a-f]{6})$/i.exec(color)?.[1];
-  if (rgb === undefined) throw new Error(`ascii.rest: color takes #rrggbb, not "${color}"`);
+  const asked = color === undefined ? [] : typeof color === "string" ? [color] : [...color];
+  const rgbs = asked.map((c) => {
+    const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
+    if (!m) throw new Error(`ascii.rest: color takes #rrggbb, or two of them for a fade, not "${c}"`);
+    return m.slice(1).map((h) => parseInt(h, 16));
+  });
+  if (rgbs.length > 2) throw new Error(`ascii.rest: color takes one colour, or two for a fade, not ${rgbs.length}`);
 
   const tty = out.isTTY === true;
   const width = out.columns || 80;
   const { cols, rows, frame, glint } = fit(words, width);
   const done: Bannered = { cols, rows, interrupted: false };
+  const plain = !tty || Boolean(process.env.NO_COLOR);
+  const under = tagline ? `${plain ? tagline : `\x1b[2m${tagline}\x1b[0m`}\n` : "";
   if (cols > width) {
-    out.write(`${words}\n`);
+    out.write(`${words}\n${under}`);
     return { cols: 0, rows: 0, interrupted: false };
   }
 
-  const plain = !tty || Boolean(process.env.NO_COLOR);
-  const ink = rgb ? `\x1b[38;2;${parseInt(rgb.slice(0, 2), 16)};${parseInt(rgb.slice(2, 4), 16)};${parseInt(rgb.slice(4), 16)}m` : "";
-  // Each line in runs of letters and of shadow, each run back to the terminal's own colours at its end.
+  // The letters' ink at a column: none, the one colour, or the fade's colour that far along.
+  const ink = (x: number) => {
+    if (!rgbs.length) return "";
+    const [a, b = a] = rgbs, k = cols > 1 ? x / (cols - 1) : 0;
+    const [r, g, bl] = a.map((v, i) => Math.round(v + (b[i] - v) * k));
+    return `\x1b[38;2;${r};${g};${bl}m`;
+  };
+  // Each line in runs of one ink, letters or dimmed shadow, back to the terminal's own colours at its end.
   const paint = (line: string) => {
     if (plain) return line;
-    let s = "", run = "", dim = false;
-    const flush = () => {
-      if (run.trim()) s += `${dim ? "\x1b[2m" : ink}${run}${dim || ink ? "\x1b[0m" : ""}`;
-      else s += run;
-      run = "";
-    };
-    for (const c of line) {
-      if (c !== " " && shadow(c) !== dim) {
-        flush();
-        dim = shadow(c);
+    let s = "", state = "";
+    [...line].forEach((c, x) => {
+      const next = c === " " ? state : shadow(c) ? "\x1b[2m" : ink(x);
+      if (next !== state) {
+        s += (state ? "\x1b[0m" : "") + next;
+        state = next;
       }
-      run += c;
-    }
-    flush();
-    return s;
+      s += c;
+    });
+    return state ? `${s}\x1b[0m` : s;
   };
   const lines = (t: number) => frame(t, { paper: light }).split("\n").map((line) => paint(line.trimEnd()));
   // Frame 0 is at rest, the glint out of sight.
   const rest = lines(0);
   if (!tty || !(seconds > 0)) {
-    out.write(rest.join("\n") + "\n");
+    out.write(rest.join("\n") + "\n" + under);
     return done;
   }
 
@@ -108,6 +121,8 @@ export async function banner(text: string, { seconds = 1, color, light = false, 
       process.off("SIGINT", interrupt);
       process.off("exit", show);
       out.off?.("resize", resize);
+      // the tagline once the glint is done, so the redraws above have only the banner's rows to go back over
+      out.write(under);
       show();
       resolve(done);
     };
