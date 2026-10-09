@@ -33,6 +33,7 @@ export const load = {
   "candlesticks": () => import("./pieces/candlesticks.ts"),
   "cat": () => import("./pieces/cat.ts"),
   "centos": () => import("./pieces/centos.ts"),
+  "charming": () => import("./pieces/charming.ts"),
   "cherry-blossom": () => import("./pieces/cherry-blossom.ts"),
   "chladni": () => import("./pieces/chladni.ts"),
   "clojure": () => import("./pieces/clojure.ts"),
@@ -248,7 +249,7 @@ export type PieceName = keyof typeof load;
 export const names = Object.keys(load) as PieceName[];
 
 /** The coloured pieces, which draw on a <canvas> rather than a <pre>. */
-export const canvas: ReadonlySet<PieceName> = new Set<PieceName>(["a0","agentmail","almalinux","alpine-dawn","alpine-linux","amer-fort","apple","arch-linux","aurora-fjord","autumn","black-prism","c","centos","clojure","cloud-sea","cloudflare","coderabbit","collabute","command-city","command-code","cpp","csharp","css","dart","databuddy","debian","deep-reef","deepin","desert-night","earthrise","edge-orbit","elementary-os","elixir","elm","endeavouros","erlang","fedora","gangaur-ghat","gentoo","go","green-storm","greptile","haskell","helium","helmcode","html","jal-mahal","java","javascript","julia","jungle-falls","kali-linux","keiki","kite-festival","kotlin","kyoto-dusk","lake-pichola","lantern-lake","lava-wall","linux-mint","lua","manjaro","marine-drive","mintlify","misty-forest","night-coast","night-highway","nixos","ocaml","ocean-sunset","omarchy","opensuse","orchid","perl","php","planet-scale","planetscale","playstation","polar","pop-os","prism-city","python","r","red-hat","rocky-linux","ruby","rust","salt-flat","saturn-rise","scala","snow-train","storm-plains","supabase","supermemory","svelte","swift","taj-dawn","tokyo-rain","tux","typescript","ubuntu","varanasi-ghats","vercel","void-linux","volcano-night","zig","zorin-os"]);
+export const canvas: ReadonlySet<PieceName> = new Set<PieceName>(["a0","agentmail","almalinux","alpine-dawn","alpine-linux","amer-fort","apple","arch-linux","aurora-fjord","autumn","black-prism","c","centos","charming","clojure","cloud-sea","cloudflare","coderabbit","collabute","command-city","command-code","cpp","csharp","css","dart","databuddy","debian","deep-reef","deepin","desert-night","earthrise","edge-orbit","elementary-os","elixir","elm","endeavouros","erlang","fedora","gangaur-ghat","gentoo","go","green-storm","greptile","haskell","helium","helmcode","html","jal-mahal","java","javascript","julia","jungle-falls","kali-linux","keiki","kite-festival","kotlin","kyoto-dusk","lake-pichola","lantern-lake","lava-wall","linux-mint","lua","manjaro","marine-drive","mintlify","misty-forest","night-coast","night-highway","nixos","ocaml","ocean-sunset","omarchy","opensuse","orchid","perl","php","planet-scale","planetscale","playstation","polar","pop-os","prism-city","python","r","red-hat","rocky-linux","ruby","rust","salt-flat","saturn-rise","scala","snow-train","storm-plains","supabase","supermemory","svelte","swift","taj-dawn","tokyo-rain","tux","typescript","ubuntu","varanasi-ghats","vercel","void-linux","volcano-night","zig","zorin-os"]);
 
 /** Whether a name is a piece in the library. */
 export const isPiece = (name: string): name is PieceName => Object.hasOwn(load, name);
