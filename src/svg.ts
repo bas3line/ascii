@@ -317,7 +317,13 @@ export function bannerSvg(text: string, options: Omit<BannerOptions, "color"> & 
   const ground = hex(themed(options.background, options.dark ?? false), "background");
   const dark = ground ? darkColor(ground) : (options.dark ?? false);
   const theme = dark ? "dark" : "light";
-  for (const k of ["taglineSize", "spacing", "padding", "radius", "artSize"] as const) num(options[k], k);
+  for (const k of ["taglineSize", "spacing", "padding", "radius", "artSize", "scale"] as const) num(options[k], k);
+  // Every colour it might use is checked, whichever the theme and whether or not there is a tagline.
+  for (const k of ["taglineColor", "background"] as const) for (const d of [false, true]) hex(themed(options[k], d), k);
+  if (options.place !== undefined && !["left", "right", "above", "below"].includes(options.place))
+    throw new Error(`ascii.rest: place takes "left", "right", "above" or "below", not ${JSON.stringify(options.place)}`);
+  if (options.align !== undefined && !["start", "center", "end"].includes(options.align))
+    throw new Error(`ascii.rest: align takes "start", "center" or "end", not ${JSON.stringify(options.align)}`);
   let art: Part | null = null;
   if (options.art && "svg" in options.art) {
     art = namespaced(options.art.svg, "a");

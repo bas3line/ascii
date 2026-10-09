@@ -26,10 +26,10 @@ interface Props extends BannerOptions {
 
 const { text, label, mono = false, class: className, ...options } = Astro.props;
 const piece = banner(text, options);
-const { meta, motion } = piece;
+const { meta } = piece;
 const onCanvas = !mono && Boolean(meta.palette);
-// Where it rests: every letter typed, or the glint out of sight.
-const still = onCanvas ? "" : piece.default()(motion.once ? motion.seconds : 0, { paper: false });
+// Where it rests, as the banner names it: every letter typed, or the glint out of sight.
+const still = onCanvas ? "" : piece.default()(meta.still ?? 0, { paper: false });
 const json = Object.keys(options).length ? JSON.stringify(options) : undefined;
 ---
 

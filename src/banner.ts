@@ -228,7 +228,8 @@ export function banner(text: string, options: BannerOptions = {}): BannerPiece {
   const h = font.height;
   // The letters' columns at s columns a pixel, the shadow's one included.
   const span = (s: number) => glyphs.reduce((w, g) => w + g[0].length * s, 0) + gap * (glyphs.length - 1) + (shade ? 1 : 0);
-  const pads: readonly unknown[] = typeof options.pad === "number" || options.pad === undefined ? [options.pad ?? 0, options.pad ?? 0] : options.pad;
+  const pad: unknown = options.pad;
+  const pads = pad === undefined || typeof pad === "number" ? [pad ?? 0, pad ?? 0] : Array.isArray(pad) && pad.length === 2 ? pad : fail(`pad takes a number, or [rows, columns], not ${JSON.stringify(pad)}`);
   const [padY, padX] = pads.map((p, i) => whole(p, i ? "pad's columns" : "pad", 0) ?? 0);
   const tall = h + (shade ? 1 : 0);
 
@@ -236,6 +237,7 @@ export function banner(text: string, options: BannerOptions = {}): BannerPiece {
   const max = positive(options.max, "max");
   let cols: number, rows: number, x0: number, y0: number;
   if (options.size) {
+    if (options.size.cols === undefined || options.size.rows === undefined) fail("size takes { cols, rows }, both of them");
     cols = whole(options.size.cols, "size.cols", 1)!;
     rows = whole(options.size.rows, "size.rows", 1)!;
     // Narrower pixels, a column at a time, until they leave a column each side; at one column a pixel it is cropped.

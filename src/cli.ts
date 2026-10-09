@@ -77,7 +77,12 @@ async function items(wanted: string[], registry: string): Promise<RegistryItem[]
     }
     if (visited.has(url)) return;
     visited.add(url);
-    const res = await fetch(url);
+    let res: Response;
+    try {
+      res = await fetch(url);
+    } catch (error) {
+      throw new Usage(`couldn't reach ${clean(url)}: ${clean(error instanceof Error ? ((error.cause as Error | undefined)?.message ?? error.message) : error)}`);
+    }
     if (!res.ok) throw new Usage(`there is no "${clean(ref)}" to add (${clean(url)} answered ${res.status}). npx ascii.rest list shows every piece.`);
     let item: RegistryItem;
     try {
@@ -233,6 +238,8 @@ async function main() {
   });
   if (values.version) return void process.stdout.write(`${version()}\n`);
   if (values.help || !positionals.length) return void process.stdout.write(HELP);
+  if (positionals[0] === "add" && [values.mono, values.light, values.fps, values.seconds, values.color, values.tagline, values.font, values.shadow, values.effect].some((v) => v !== undefined))
+    throw new Usage(`add takes only --dir, --overwrite and --registry: npx ascii.rest add donut --dir src/ascii`);
   if (positionals[0] === "add") return add(positionals.slice(1), { dir: values.dir, overwrite: values.overwrite === true, registry: (values.registry ?? REGISTRY).replace(/\/$/, "") });
   if ([values.dir, values.overwrite, values.registry].some((v) => v !== undefined))
     throw new Usage(`--dir, --overwrite and --registry are for add: npx ascii.rest add donut --dir src/ascii`);
@@ -288,6 +295,12 @@ async function main() {
   }
   if (played.interrupted) process.exitCode = 130;
 }
+
+// Piped into something that stops reading, `| head` say, the rest has nowhere to go: that is the end, not an error.
+process.stdout.on("error", (error: NodeJS.ErrnoException) => {
+  if (error.code === "EPIPE") process.exit(0);
+  throw error;
+});
 
 main().catch((error: unknown) => {
   // parseArgs reports a bad flag as a TypeError with a code; anything else is a real failure, shown with its stack.
