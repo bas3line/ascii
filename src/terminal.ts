@@ -412,4 +412,4 @@ export async function play(
 }
 
 // A text in block letters, printed where the cursor is: a CLI's name as it starts.
-export { banner, type BannerOptions, type Bannered } from "./banner.ts";
+export { banner, type Bannered, type PrintOptions } from "./print.ts";

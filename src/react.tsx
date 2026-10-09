@@ -11,11 +11,13 @@
  *   <Ascii piece="night-coast" />                // or fetched by name when it mounts
  *   <Ascii piece={donut} options={{ fps: 12 }} className="art" />
  *   <Ascii piece="rust" mono />                  // a coloured piece in one ink
+ *   <Banner text="hello" color="#f97316" />      // any text, in block letters
  *
  * Text pieces draw into a <pre> in the element's colour and font size; the
  * coloured ones draw onto a <canvas> as wide as its container.
  */
-import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { banner, type BannerOptions } from "./banner.ts";
 import { canvas, isPiece, load, type PieceName } from "./library.ts";
 import { mount, type MountOptions } from "./mount.ts";
 import type { Piece } from "./types.ts";
@@ -67,4 +69,38 @@ export function Ascii({ piece, options, label, mono = false, className, style }:
   );
 }
 
-export type { MountOptions, Piece, PieceName };
+export interface BannerProps extends BannerOptions {
+  /** The text, in block letters. */
+  text: string;
+  /** What the picture shows, for screen readers. The text otherwise. */
+  label?: string;
+  /** Draws a coloured banner as text in one ink, in a <pre>. */
+  mono?: boolean;
+  /** Overrides its frame rate. */
+  fps?: number;
+  className?: string;
+  style?: CSSProperties;
+}
+
+/**
+ * <Banner>: any text as a banner, every option of banner() a prop. With no colour it is text in the element's own
+ * colour; with one, a fade or one for each theme, it is drawn on a canvas.
+ *
+ *   <Banner text="hello" color={["#f97316", "#f778ba"]} shadow="rounded" effect="type" />
+ */
+export function Banner({ text, label, mono, fps, className, style, ...options }: BannerProps) {
+  // An inline options object is new every render; only a real change makes a new banner.
+  const key = JSON.stringify([text, options]);
+  const piece = useMemo(() => {
+    const [t, o] = JSON.parse(key) as [string, BannerOptions];
+    try {
+      return banner(t, o);
+    } catch {
+      return null;
+    }
+  }, [key]);
+  if (!piece) return null;
+  return <Ascii piece={piece} options={fps ? { fps } : undefined} label={label ?? piece.meta.name} mono={mono} className={className} style={style} />;
+}
+
+export type { BannerOptions, MountOptions, Piece, PieceName };

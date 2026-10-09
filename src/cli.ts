@@ -3,39 +3,107 @@
  * npx ascii.rest <piece>: plays a piece in the terminal until a key is pressed.
  * npx ascii.rest list: every piece's name, by category.
  * npx ascii.rest banner <text>: the text in block letters, with a passing glint.
+ * npx ascii.rest add <name...>: a piece's TypeScript, copied into your project.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 import process from "node:process";
 import { parseArgs } from "node:util";
+import { drawable, fonts, shadows, type Effect, type FontName, type ShadowName } from "./banner.ts";
 import { isPiece, load, names, type PieceName } from "./library.ts";
-import { drawable } from "./pieces/big-text.ts";
 import { banner, play, still } from "./terminal.ts";
 import type { Category } from "./types.ts";
 
-const HELP = `ascii.rest: animated ascii art, in your terminal.
+const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
 
   npx ascii.rest <piece>          plays a piece until you press a key
   npx ascii.rest list             every piece, by category
   npx ascii.rest banner <text>    your text in block letters, with a glint
+  npx ascii.rest add <name...>    copies pieces' TypeScript into your project
 
-  --mono          a coloured piece in the terminal's own colour
-  --light         for a light terminal: the light colours, and shading flipped
-  --fps <n>       frames a second, instead of the piece's own
-  --seconds <n>   stops after n seconds; for a banner, how long its glint takes
-  --color <hex>   a banner's letters in this colour, like ff6a00, or two
-                  for a fade, like ff6a00,f778ba
-  --tagline <s>   a line under a banner
-  -h, --help      this help
-  -v, --version   the version
+  --mono            a coloured piece in the terminal's own colour
+  --light           for a light terminal: the light colours, and shading flipped
+  --fps <n>         frames a second, instead of the piece's own
+  --seconds <n>     stops after n seconds; for a banner, how long it moves
+
+  a banner:
+  --color <hex>     its letters in this colour, like ff6a00, or two or more
+                    for a fade, like ff6a00,f778ba
+  --tagline <s>     a line under it
+  --font <name>     ${Object.keys(fonts).join(" or ")}
+  --shadow <name>   ${[...Object.keys(shadows), "none"].join(", ")}
+  --effect <name>   glint, type or still
+
+  add:
+  --dir <path>      where the files go: components/ascii, or src/components/ascii
+                    when there is a src folder
+  --overwrite       replace files that are already there
+
+  -h, --help        this help
+  -v, --version     the version
 
   npx ascii.rest rust
   npx ascii.rest night-coast --seconds 10
-  npx ascii.rest donut --light
   npx ascii.rest banner 'my cli' --color ff6a00,f778ba --tagline 'v1.0, fast'
+  npx ascii.rest add ascii donut banner
 
-Every piece, on a page: https://ascii.rest
+Every piece, on a page: https://ascii.rest. The docs: https://ascii.rest/docs/
 `;
+
+const REGISTRY = "https://ascii.rest/r";
+
+interface RegistryItem {
+  name: string;
+  files?: { path: string; content?: string; target?: string }[];
+  registryDependencies?: string[];
+  dependencies?: string[];
+}
+
+// Each name's registry item, and every item it depends on, once each, dependencies first.
+async function items(wanted: string[], registry: string): Promise<RegistryItem[]> {
+  const seen = new Map<string, RegistryItem>();
+  const visit = async (ref: string) => {
+    // A name, or an item's URL; ascii.rest's own follow --registry, so another copy of the registry serves them all.
+    const url = /^https?:\/\//.test(ref) ? ref.replace(/^https:\/\/ascii\.rest\/r(?=\/)/, registry) : `${registry}/${ref}.json`;
+    if (seen.has(url)) return;
+    const res = await fetch(url);
+    if (!res.ok) throw new Usage(`there is no "${ref}" to add (${url} answered ${res.status}). npx ascii.rest list shows every piece.`);
+    const item = (await res.json()) as RegistryItem;
+    for (const dep of item.registryDependencies ?? []) await visit(dep);
+    seen.set(url, item);
+  };
+  for (const name of wanted) await visit(name);
+  return [...seen.values()];
+}
+
+async function add(wanted: string[], { dir, overwrite, registry }: { dir?: string; overwrite: boolean; registry: string }) {
+  if (!wanted.length) throw new Usage(`add what? npx ascii.rest add ascii donut`);
+  const root = process.cwd();
+  const into = dir ?? (existsSync(join(root, "src")) ? join("src", "components", "ascii") : join("components", "ascii"));
+  const all = await items(wanted, registry);
+  const wrote: string[] = [], kept: string[] = [];
+  const deps = new Set<string>();
+  for (const item of all) {
+    item.dependencies?.forEach((d) => deps.add(d));
+    for (const file of item.files ?? []) {
+      // Every file names its place under the components folder: @components/ascii/<path>.
+      const rest = (file.target ?? file.path).replace(/^@components\/ascii\//, "");
+      const path = join(root, into, rest);
+      if (existsSync(path) && !overwrite) {
+        kept.push(relative(root, path));
+        continue;
+      }
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, file.content ?? "");
+      wrote.push(relative(root, path));
+    }
+  }
+  let s = wrote.length ? `wrote\n${wrote.map((p) => `  ${p}`).join("\n")}\n` : "";
+  if (kept.length) s += `kept, already there (--overwrite replaces them)\n${kept.map((p) => `  ${p}`).join("\n")}\n`;
+  if (deps.size) s += `it needs ${[...deps].join(", ")}: npm install ${[...deps].join(" ")}\n`;
+  process.stdout.write(`${s}\nThe docs for what you added: https://ascii.rest/docs/copy/\n`);
+}
 
 // The order of the sidebar on ascii.rest and of the table in the README.
 const ORDER: Category[] = ["scenes", "ui", "data", "type", "logos", "companies", "distros", "shapes", "space", "physics", "nature", "creatures", "objects", "generative", "effects"];
@@ -117,6 +185,12 @@ async function main() {
       seconds: { type: "string" },
       color: { type: "string" },
       tagline: { type: "string" },
+      font: { type: "string" },
+      shadow: { type: "string" },
+      effect: { type: "string" },
+      dir: { type: "string" },
+      overwrite: { type: "boolean" },
+      registry: { type: "string" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
     },
@@ -125,20 +199,34 @@ async function main() {
   if (values.help || !positionals.length) return void process.stdout.write(HELP);
   const fps = number("fps", values.fps, 60);
   const seconds = number("seconds", values.seconds);
+  if (positionals[0] === "add") return add(positionals.slice(1), { dir: values.dir, overwrite: values.overwrite === true, registry: (values.registry ?? REGISTRY).replace(/\/$/, "") });
   if (positionals[0] === "banner") {
     // the words after it, as the shell split them
     const text = positionals.slice(1).join(" ");
-    if (!drawable(text).trim()) throw new Usage(`a banner takes letters, digits, spaces and . , ! ? ' : - + = / _: npx ascii.rest banner 'my cli'`);
+    const font = values.font ?? "block";
+    if (!Object.hasOwn(fonts, font)) throw new Usage(`--font takes ${or(Object.keys(fonts))}, not "${font}"`);
+    if (!drawable(text, font as FontName).trim()) throw new Usage(`a banner takes letters, digits, spaces and . , ! ? ' : - + = / _: npx ascii.rest banner 'my cli'`);
     const colors = values.color?.split(",").map((c) => c.trim().replace(/^#/, ""));
-    if (colors && (colors.length > 2 || colors.some((c) => !/^[0-9a-f]{6}$/i.test(c))))
-      throw new Usage(`--color takes six hex digits, like ff6a00, or two for a fade, like ff6a00,f778ba, not "${values.color}"`);
-    const color = colors?.map((c) => `#${c}`) as [string] | [string, string] | undefined;
-    const { interrupted } = await banner(text, { seconds, light: values.light === true, color, tagline: values.tagline });
+    if (colors && colors.some((c) => !/^[0-9a-f]{6}$/i.test(c)))
+      throw new Usage(`--color takes six hex digits, like ff6a00, or more for a fade, like ff6a00,f778ba, not "${values.color}"`);
+    const shadow = values.shadow;
+    if (shadow !== undefined && shadow !== "none" && !Object.hasOwn(shadows, shadow)) throw new Usage(`--shadow takes ${or([...Object.keys(shadows), "none"])}, not "${shadow}"`);
+    const effect = values.effect;
+    if (effect !== undefined && !["glint", "type", "still"].includes(effect)) throw new Usage(`--effect takes glint, type or still, not "${effect}"`);
+    const { interrupted } = await banner(text, {
+      seconds,
+      light: values.light === true,
+      color: colors?.map((c) => `#${c}`),
+      tagline: values.tagline,
+      font: font as FontName,
+      shadow: shadow as ShadowName | "none" | undefined,
+      effect: effect as Effect | undefined,
+    });
     if (interrupted) process.exitCode = 130;
     return;
   }
-  if (values.color !== undefined || values.tagline !== undefined)
-    throw new Usage(`--color and --tagline are for a banner: npx ascii.rest banner <text> --color ff6a00 --tagline 'v1.0'`);
+  if ([values.color, values.tagline, values.font, values.shadow, values.effect].some((v) => v !== undefined))
+    throw new Usage(`--color, --tagline, --font, --shadow and --effect are for a banner: npx ascii.rest banner <text> --color ff6a00`);
   if (positionals.length > 1) throw new Usage(`one piece at a time: npx ascii.rest <piece>`);
   if (positionals[0] === "list") return list();
 

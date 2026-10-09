@@ -1,15 +1,15 @@
 {
   "name": "ascii.rest",
-  "version": "0.2.1",
-  "description": "Animated ascii art for web pages, in TypeScript: React, Next.js, Astro, or one HTML tag.",
+  "version": "0.3.0",
+  "description": "Animated ascii art for web pages, READMEs and terminals, in TypeScript: React, Next.js, Astro, one HTML tag, SVG, or copied into your project.",
   "license": "MIT",
   "author": "bas3line (https://github.com/bas3line)",
-  "homepage": "https://ascii.rest",
+  "homepage": "https://ascii.rest/docs/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bas3line/ascii.git"
   },
-  "keywords": ["ascii", "ascii-art", "animation", "react", "nextjs", "astro", "web-component", "astro-component", "terminal", "cli"],
+  "keywords": ["ascii", "ascii-art", "animation", "react", "nextjs", "astro", "web-component", "astro-component", "terminal", "cli", "banner", "svg", "readme", "github-readme", "shadcn"],
   "type": "module",
   "bin": {
     "ascii.rest": "dist/cli.js"
@@ -40,7 +40,16 @@
       "types": "./dist/terminal.d.ts",
       "default": "./dist/terminal.js"
     },
-    "./astro": "./src/astro/Ascii.astro"
+    "./banner": {
+      "types": "./dist/banner.d.ts",
+      "default": "./dist/banner.js"
+    },
+    "./svg": {
+      "types": "./dist/svg.d.ts",
+      "default": "./dist/svg.js"
+    },
+    "./astro": "./src/astro/Ascii.astro",
+    "./astro/banner": "./src/astro/Banner.astro"
   },
   "files": ["dist", "src/astro"],
   "scripts": {

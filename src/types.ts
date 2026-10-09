@@ -44,6 +44,8 @@ export interface Meta<O extends Options = Options> {
   ground?: string;
   /** Cell height in cell widths on a canvas: 2, the shape of a character, by default; 1 is square. */
   cell?: 1 | 2;
+  /** For a piece that repeats exactly: its period in seconds, the loop an SVG of it plays (svg() in ascii.rest/svg). */
+  loop?: number;
 }
 
 export interface Env {
