@@ -893,7 +893,7 @@ export function parseSvg(markup: string): Svg {
  * - spin: turns round its centre, once a period (4 s).
  * - flip: turns round its upright axis like a coin, once a period (4 s).
  * - bob: rises and falls `amount` rows (1), once a period (2 s).
- * - pulse: grows by `amount` (0.15) and back, once a period (1.5 s).
+ * - pulse: grows by `amount` (0.15) and back, once a period (1.6 s).
  * - sway: leans `amount` radians (0.15) each way from its bottom, once a period (4 s).
  * - blink: shuts, `amount` of the way (0.9), for a fifth of a second, every `every` seconds (4).
  * - glint: a light crosses it every `every` seconds (4), as the library's logos glint.
@@ -906,7 +906,9 @@ const MOTIONS: Record<Motion, { period: number; amount: number; every?: boolean 
   spin: { period: 4, amount: 1 },
   flip: { period: 4, amount: 1 },
   bob: { period: 2, amount: 1 },
-  pulse: { period: 1.5, amount: 0.15 },
+  // 1.6 s: a pulse looks the same a third and two thirds of the way round, so a period that whole seconds split
+  // into thirds would show only two frames to anything that looks once a second.
+  pulse: { period: 1.6, amount: 0.15 },
   sway: { period: 4, amount: 0.15 },
   blink: { period: 4, amount: 0.9, every: true },
   glint: { period: 4, amount: 1, every: true },
@@ -1003,7 +1005,7 @@ type Piece = import("../types.ts").Piece;
 export interface PartOptions {
   /** How it moves: a word, or several. */
   motion?: Motion | readonly Motion[];
-  /** Seconds a loop of its motion: spin 4, flip 4, bob 2, pulse 1.5, sway 4, ripple 2, rise 4. */
+  /** Seconds a loop of its motion: spin 4, flip 4, bob 2, pulse 1.6, sway 4, ripple 2, rise 4. */
   period?: number;
   /** Seconds between blinks or glints: 4. */
   every?: number;

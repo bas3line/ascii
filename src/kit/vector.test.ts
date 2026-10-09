@@ -315,7 +315,7 @@ test("strokes: hairlines still show, wide ones are solid, round caps reach past 
 const MOTIONS = ["spin", "flip", "bob", "pulse", "sway", "blink", "glint", "ripple", "rise"] as const;
 
 test("every motion word moves its part, the same frame for the same t, and repeats exactly at its period", () => {
-  const periods: Record<string, number> = { spin: 4, flip: 4, bob: 2, pulse: 1.5, sway: 4, blink: 4, glint: 4, ripple: 2, rise: 4 };
+  const periods: Record<string, number> = { spin: 4, flip: 4, bob: 2, pulse: 1.6, sway: 4, blink: 4, glint: 4, ripple: 2, rise: 4 };
   for (const m of MOTIONS) {
     const p = fromSvg(HEART, { width: 32, "#heart": m });
     assert.equal(p.meta.fps, 30, m);
