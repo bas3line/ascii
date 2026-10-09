@@ -8,6 +8,8 @@
     "added": "node scripts/added.mjs"
   },
   "dependencies": {
+    "@vercel/analytics": "2.0.1",
+    "@vercel/speed-insights": "2.0.0",
     "ascii.rest": "file:..",
     "gifenc": "^1.0.3"
   },

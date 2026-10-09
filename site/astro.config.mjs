@@ -20,8 +20,9 @@ const library = {
 export default defineConfig({
   site: "https://ascii.rest",
   // Vercel serves the site: every page is built ahead, but for the README banners (pages/banner/[file].ts), which a
-  // function draws on request. vercel.json holds the redirects and the headers.
-  adapter: vercel(),
+  // function draws on request. vercel.json holds the redirects and the headers. Skew protection: a page still open from
+  // an older deploy keeps getting that deploy's files and banners, for as long as the project's setting holds them.
+  adapter: vercel({ skewProtection: true }),
   integrations: [library],
   // The docs' code is plain, in the site's one face and ink, like the rest of its code.
   markdown: { syntaxHighlight: false },
