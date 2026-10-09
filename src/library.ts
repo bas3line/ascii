@@ -97,6 +97,7 @@ export const load = {
   "heartbeat": () => import("./pieces/heartbeat.ts"),
   "heatmap": () => import("./pieces/heatmap.ts"),
   "helium": () => import("./pieces/helium.ts"),
+  "helmcode": () => import("./pieces/helmcode.ts"),
   "hilbert-curve": () => import("./pieces/hilbert-curve.ts"),
   "hourglass": () => import("./pieces/hourglass.ts"),
   "html": () => import("./pieces/html.ts"),
@@ -228,7 +229,7 @@ export type PieceName = keyof typeof load;
 export const names = Object.keys(load) as PieceName[];
 
 /** The coloured pieces, which draw on a <canvas> rather than a <pre>. */
-export const canvas: ReadonlySet<PieceName> = new Set<PieceName>(["a0","agentmail","almalinux","alpine-dawn","alpine-linux","apple","arch-linux","aurora-fjord","autumn","c","centos","clojure","cloudflare","coderabbit","collabute","command-code","cpp","csharp","css","dart","databuddy","debian","deep-reef","deepin","desert-night","earthrise","elementary-os","elixir","elm","endeavouros","erlang","fedora","gentoo","go","greptile","haskell","helium","html","java","javascript","julia","kali-linux","keiki","kotlin","kyoto-dusk","lantern-lake","linux-mint","lua","manjaro","marine-drive","mintlify","misty-forest","night-coast","nixos","ocaml","ocean-sunset","omarchy","opensuse","orchid","perl","php","planetscale","playstation","polar","pop-os","python","r","red-hat","rocky-linux","ruby","rust","scala","storm-plains","supabase","supermemory","svelte","swift","taj-dawn","tokyo-rain","tux","typescript","ubuntu","varanasi-ghats","vercel","void-linux","zig","zorin-os"]);
+export const canvas: ReadonlySet<PieceName> = new Set<PieceName>(["a0","agentmail","almalinux","alpine-dawn","alpine-linux","apple","arch-linux","aurora-fjord","autumn","c","centos","clojure","cloudflare","coderabbit","collabute","command-code","cpp","csharp","css","dart","databuddy","debian","deep-reef","deepin","desert-night","earthrise","elementary-os","elixir","elm","endeavouros","erlang","fedora","gentoo","go","greptile","haskell","helium","helmcode","html","java","javascript","julia","kali-linux","keiki","kotlin","kyoto-dusk","lantern-lake","linux-mint","lua","manjaro","marine-drive","mintlify","misty-forest","night-coast","nixos","ocaml","ocean-sunset","omarchy","opensuse","orchid","perl","php","planetscale","playstation","polar","pop-os","python","r","red-hat","rocky-linux","ruby","rust","scala","storm-plains","supabase","supermemory","svelte","swift","taj-dawn","tokyo-rain","tux","typescript","ubuntu","varanasi-ghats","vercel","void-linux","zig","zorin-os"]);
 
 /** Whether a name is a piece in the library. */
 export const isPiece = (name: string): name is PieceName => Object.hasOwn(load, name);
