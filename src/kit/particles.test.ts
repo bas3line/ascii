@@ -1,6 +1,7 @@
 // node --test src/kit/particles.test.ts
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { banner } from "../banner.ts";
 import { svg } from "../svg.ts";
 import { play, still } from "../terminal.ts";
 import type { Piece } from "../types.ts";
@@ -54,6 +55,13 @@ const one = (o: Partial<System> = {}): System => ({
   bounds: "none",
   ...o,
 });
+
+// The particle a system draws at t, as its glyph function sees it (the particle itself, not its trail), or undefined.
+function follow(sys: System, t: number, cols = 40, rows = 20): Particle | undefined {
+  let seen: Particle | undefined;
+  drawn({ ...sys, glyph: (p) => (p.back === 0 && (seen = { ...p }), "o") }, t, cols, rows);
+  return seen;
+}
 
 test("every preset plays, looks like something at t = 0, and keeps the frame contract", () => {
   for (const name of NAMES) {
@@ -320,7 +328,15 @@ test("a glyph or colour function sees the particle", () => {
   const p = seen[0];
   assert.deepEqual([p.id, p.age, p.life, p.k, p.x, p.y, p.vx, p.vy, p.t, p.back], [0, 1, 4, 0.25, 14, 5, 4, 0, 1, 0]);
   assert.ok(p.rand >= 0 && p.rand < 1);
+  // Where and how it was born: its place, its throw, no hold, and no character from text.
+  assert.deepEqual([p.x0, p.y0, p.angle, p.speed, p.hold, p.char], [10, 5, 0, 4, 0, ""]);
   assert.equal(s.colorAt(14, 5), 2);
+});
+
+test("a glyph function may draw nothing: undefined, null or an empty string; an emoji throws, naming it", () => {
+  for (const g of [undefined, null, ""]) assert.equal(drawn(one({ glyph: () => g as unknown as string }), 1).toString().trim(), "", String(g));
+  assert.equal(drawn(one({ glyph: () => 7 as unknown as string }), 1).get(10, 5), "7");
+  assert.throws(() => drawn(one({ glyph: () => "😀" }), 1), /ascii\.rest: a glyph function returns one character from the Basic Multilingual Plane, not "😀"/);
 });
 
 test("twinkle hides a share of particles each tenth of a second", () => {
@@ -523,7 +539,7 @@ test("a frame is quick: under 4 ms at 64 by 24 for every preset", () => {
 test("every option is checked when the piece is made, saying what to change", () => {
   const ok: System = { emitter: { point: [1, 1] } };
   const bad = (o: Record<string, unknown>, re: RegExp) => assert.throws(() => particles({}, { ...ok, ...o } as System), re);
-  bad({ emitter: undefined }, /ascii\.rest: particles\(\)\.emitter takes "top", "bottom", "left", "right", "everywhere" and "center", or \{ point \}, \{ line \}, \{ area \} or \{ edge \}, not undefined/);
+  bad({ emitter: undefined }, /ascii\.rest: particles\(\)\.emitter takes "top", "bottom", "left", "right", "everywhere" and "center", or \{ point \}, \{ line \}, \{ area \}, \{ edge \} or \{ text \}, not undefined/);
   bad({ emitter: "sky" }, /emitter takes "top", .* not "sky"/);
   bad({ emitter: { point: "middle" } }, /emitter\.point takes a place, "center", "top", .* not "middle"/);
   bad({ direction: "north" }, /direction takes "right", "down-right", .* "out", not "north"/);
@@ -531,7 +547,7 @@ test("every option is checked when the piece is made, saying what to change", ()
   bad({ direction: "up", spread: 400 }, /spread takes degrees from 0 to 360, not 400/);
   bad({ spread: 30 }, /spread fans out round a direction: give one too/);
   bad({ angle: 1, spread: 30 }, /spread goes with a direction: with an angle, give \[low, high\] instead/);
-  bad({ emitter: { point: [1, 1], edge: "top" } }, /emitter takes one of point, line, area and edge, not point and edge/);
+  bad({ emitter: { point: [1, 1], edge: "top" } }, /emitter takes one of point, line, area, edge and text, not point and edge/);
   bad({ emitter: { point: [1] } }, /emitter\.point takes a place such as "center", \[column, row\], or a function of the time, not \[1\]/);
   bad({ emitter: { point: () => "x" } }, /emitter\.point as a function takes the time and returns \[column, row\]/);
   bad({ emitter: { line: [[1, 1]] } }, /emitter\.line takes two points/);
@@ -572,6 +588,16 @@ test("every option is checked when the piece is made, saying what to change", ()
   bad({ start: "now" }, /start takes a number of seconds/);
   bad({ seed: 1.5 }, /seed takes a whole number, not 1\.5/);
   bad({ rate: 10000, life: 5 }, /would keep 50000 particles alive at once, past the 20000 a frame can draw in time: lower its rate, count or life/);
+  bad({ bounciness: 2 }, /bounciness takes a share of its speed from 0 to 1, not 2/);
+  bad({ bounciness: 0.5, bounds: "bounce", wind: () => 1 }, /bounciness can't slow a bounce off the sides in a wind that is a function/);
+  bad({ hold: -1 }, /hold takes a number of 0 or more, or \[low, high\]/);
+  bad({ path: [1, 2] }, /path takes a function of the particle that returns \[column, row\]$/);
+  bad({ path: () => "here" }, /path takes a function of the particle that returns \[column, row\], not one that returns "here"/);
+  bad({ emitter: { text: "   \n  " } }, /emitter\.text takes text with at least one character that isn't a space/);
+  bad({ emitter: { text: 5 } }, /emitter\.text takes text, a piece such as banner\("hi"\), or a Surface, not 5/);
+  bad({ emitter: { text: "hi", at: "middle" } }, /emitter\.at takes a place, "center", .* not "middle"/);
+  bad({ emitter: { text: "hi" }, burst: { every: 2, rise: 1 } }, /rise launches a burst from one place, so it can't come from text/);
+  bad({ burst: { every: 2 } }, /burst\.count takes a whole number of particles of 1 or more, not undefined/);
   // In a list, the system is named by its place.
   assert.throws(() => particles({}, [ok, { ...ok, rate: -1 }]), /ascii\.rest: particles\(\) \(system 2\)\.rate takes/);
   assert.throws(() => particles({}, 7 as unknown as System), /particles\(\) takes a system, \{ emitter, \.\.\. \}, or a list of them, not 7/);
@@ -636,4 +662,168 @@ test("preset options change what they say", () => {
   // The matrix in your colours: the head, then the trail.
   const mx = presets.matrix(SIZE, { colors: ["#ffffff", "#00ff00", "#003300"] });
   assert.deepEqual(mx[0].colors, { light: ["#ffffff"], dark: ["#ffffff"] });
+});
+
+test("bounce under gravity: a dropped ball comes back up to where it fell from, again and again", () => {
+  // Dropped from row 1 (2 cells down) onto a floor at row 10 (20 cells) under gravity 20: it falls 18 cells in
+  // sqrt(1.8) seconds at 20 sqrt(1.8) cells a second, and its bounces repeat every twice that.
+  const ball = one({ emitter: { point: [5, 1] }, gravity: 20, floor: 10, bounds: "bounce" });
+  const fall = Math.sqrt(1.8), v = 20 * fall;
+  const expected = (t: number) => {
+    const s = t % (2 * fall);
+    return s < fall ? 2 + 10 * s * s : 20 - v * (s - fall) + 10 * (s - fall) ** 2;
+  };
+  for (const t of [0.3, 1.2, 1.5, 2.6, 3.1, 7.77, 41.3, 99.9]) {
+    const p = follow(ball, t, 12, 12)!;
+    assert.ok(Math.abs(p.y * 2 - expected(t)) < 1e-6, `t=${t}: ${p.y * 2} cells down, not ${expected(t)}`);
+  }
+  // Falling just before the floor, rising just after, at the speed it hit at.
+  assert.ok(Math.abs(follow(ball, fall - 1e-3, 12, 12)!.vy - v) < 0.1);
+  assert.ok(Math.abs(follow(ball, fall + 1e-3, 12, 12)!.vy + v) < 0.1);
+  // Never above the row it fell from, nor into the floor.
+  for (let t = 0; t < 12; t += 0.05) {
+    const { y } = follow(ball, t, 12, 12)!;
+    assert.ok(y >= 1 - 1e-9 && y < 10, `t=${t}: row ${y}`);
+  }
+});
+
+test("bounciness: each bounce lower than the last, then at rest on the floor", () => {
+  // Half the speed it hit at goes a quarter as high: 18 cells, then 4.5, then 1.125.
+  const ball = one({ emitter: { point: [5, 1] }, gravity: 20, floor: 10, bounds: "bounce", bounciness: 0.5 });
+  const tops: number[] = [];
+  let rising = false;
+  for (let t = 0; t < 4; t += 0.002) {
+    const { y, vy } = follow(ball, t, 12, 12)!;
+    if (rising && vy >= 0) tops.push(20 - y * 2);
+    rising = vy < 0;
+  }
+  assert.ok(tops.length >= 3, JSON.stringify(tops));
+  assert.ok(Math.abs(tops[0] - 4.5) < 0.01 && Math.abs(tops[1] - 1.125) < 0.01, JSON.stringify(tops));
+  // It settles in about 4 seconds, in the last row above the floor, still.
+  const rest = follow(ball, 5, 12, 12)!;
+  assert.deepEqual([Math.floor(rest.y), rest.vy], [9, 0]);
+  assert.deepEqual(cells(drawn(ball, 50, 12, 12), "o"), [[5, 9]]);
+});
+
+test("bounciness across, and resting on the bottom edge when there is no floor", () => {
+  // Thrown right at 10 cells a second from column 10 between the sides at 0 and 20: it meets the right at 1 s and comes
+  // back at half the speed, meets the left at 5 s and goes on at a quarter.
+  const at = (t: number) => follow(one({ speed: 10, bounds: "bounce", bounciness: 0.5 }), t, 20, 10)!;
+  assert.deepEqual([at(0.5).x, at(0.5).vx], [15, 10]);
+  assert.deepEqual([at(2).x, at(2).vx], [15, -5]);
+  assert.deepEqual([at(6).x, at(6).vx], [2.5, 2.5]);
+  // No floor: it rests in the last row, where it can be seen.
+  const ball = one({ gravity: 30, bounds: "bounce", bounciness: 0.3 });
+  const p = follow(ball, 20, 20, 10)!;
+  assert.deepEqual([Math.floor(p.y), p.vy], [9, 0]);
+  assert.deepEqual(cells(drawn(ball, 20, 20, 10), "o"), [[10, 9]]);
+});
+
+test("hold: a particle holds still where it was born, then sets off as if thrown then", () => {
+  const sys = one({ speed: 10, hold: 1 });
+  assert.equal(follow(sys, 0.5)!.x, 10);
+  assert.equal(follow(sys, 1.5)!.x, 15);
+  assert.equal(follow(sys, 1.5)!.hold, 1);
+  // A wind that grows carries it from when it sets off: 2t from 1 s to 3 s is 8 cells.
+  assert.ok(Math.abs(follow(one({ wind: (t) => 2 * t, hold: 1 }), 3, 60, 20)!.x - 18) < 1e-6);
+  // A range: each its own hold.
+  const holds = new Set<number>();
+  drawn({ emitter: { point: [10, 5] }, burst: { every: Infinity, count: 20 }, life: 9, speed: 10, hold: [0.5, 2], glyph: (p) => (holds.add(p.hold), "o") }, 1);
+  assert.equal(holds.size, 20);
+  assert.ok([...holds].every((h) => h >= 0.5 && h <= 2));
+});
+
+test("path: where a particle is, worked out your own way, its velocity from where it was a moment before", () => {
+  const ring = one({ path: (p) => [20 + 8 * Math.cos(p.age), 10 + 4 * Math.sin(p.age)] });
+  const p = follow(ring, 1)!;
+  assert.ok(Math.abs(p.x - (20 + 8 * Math.cos(1))) < 1e-9 && Math.abs(p.y - (10 + 4 * Math.sin(1))) < 1e-9);
+  // Velocity in cells a second, y down, a row being two cells.
+  assert.ok(Math.abs(p.vx + 8 * Math.sin(1)) < 0.05 && Math.abs(p.vy - 8 * Math.cos(1)) < 0.05, `${p.vx}, ${p.vy}`);
+  // It is told where the particle was born and how it was thrown.
+  const thrown = one({ speed: 4, angle: TAU / 4, path: (q) => [q.x0 + q.speed * q.age * Math.cos(q.angle), q.y0 + (q.speed * q.age * Math.sin(q.angle)) / 2] });
+  assert.deepEqual(cells(drawn(thrown, 2), "o"), [[10, 9]]);
+  // The edges still count: "die" drops it once it is out, "wrap" brings it round.
+  const run = (bounds: System["bounds"]) => one({ bounds, path: (q) => [q.x0 + 10 * q.age, q.y0] });
+  assert.deepEqual(cells(drawn(run("die"), 0.5, 20, 10), "o"), [[15, 5]]);
+  assert.deepEqual(cells(drawn(run("die"), 1.5, 20, 10), "o"), []);
+  assert.deepEqual(cells(drawn(run("wrap"), 1.5, 20, 10), "o"), [[5, 5]]);
+  // A trail follows the path back.
+  const tail = drawn(one({ trail: 0.4, path: (q) => [q.x0 + 10 * q.age, q.y0] }), 1, 40, 10);
+  assert.deepEqual([20, 19, 18, 17, 16].map((x) => tail.get(x, 5)), ["o", "-", "-", "-", "."]);
+});
+
+test("text: particles born on its characters, a burst one on each, drawn as the character itself", () => {
+  // Still, a burst of text is the text: in the middle of the grid, each character in its place.
+  const still = (o: Partial<System> = {}) => drawn({ emitter: { text: "AB\n C" }, burst: { every: Infinity }, speed: 0, life: 9, ...o } as System, 1, 10, 5);
+  assert.equal(still().toString(), "          \n    AB    \n     C    \n          \n          ");
+  assert.equal(still({ emitter: { text: "AB\n C", at: "top-left" } }).toString(), "AB        \n C        \n          \n          \n          ");
+  // glyphs say otherwise; a glyph function sees the character.
+  assert.equal(still({ glyphs: "o" }).toString().replace(/\s/g, ""), "ooo");
+  assert.equal(still({ glyph: (p) => p.char.toLowerCase() }).toString().replace(/\s/g, ""), "abc");
+  // A rate: every particle on a character, never on a space.
+  const rate = cells(drawn({ emitter: { text: "A B" }, rate: 300, life: 0.4, speed: 0, glyphs: "o" }, 2, 9, 3), "o");
+  assert.deepEqual(rate.sort(), [[3, 1], [5, 1]]);
+  // Thrown out, each flies away from the middle of the text.
+  const out = drawn({ emitter: { text: "A   B" }, burst: { every: Infinity }, speed: 10, life: 9 }, 0.5, 30, 5);
+  assert.ok(cells(out, "A")[0][0] < 12 && cells(out, "B")[0][0] > 18, out.toString());
+  // A piece's still frame, such as a banner's, or a grid, is text too.
+  const word = banner("hi", { effect: "still", shadow: "none" });
+  const blown = particles({ cols: word.meta.cols, rows: word.meta.rows }, { emitter: { text: word }, burst: { every: Infinity }, speed: 0, life: 99 });
+  assert.equal(snapshot(blown, 1, { mono: true }).text.replace(/\s/g, ""), snapshot(word, 0, { mono: true }).text.replace(/\s/g, ""));
+  assert.equal(still({ emitter: { text: Surface.from("xy\nz") } }).toString().replace(/\s/g, ""), "xyz");
+});
+
+test("a loop only when the piece can repeat: a start, or a point or a wind that doesn't, turn it off, or throw when asked for", () => {
+  const sys: System = { emitter: "center", rate: 5, life: 1, speed: 0 };
+  const wandering: System = { ...sys, emitter: { point: (t) => [t % 40, 2] } };
+  // Left to the default, a piece that can't repeat has no loop.
+  assert.equal(particles({}, { ...sys, start: 1 }).meta.loop, undefined);
+  assert.equal(particles({}, wandering).meta.loop, undefined);
+  assert.equal(particles({}, { ...sys, wind: (t) => t }).meta.loop, undefined);
+  // Asked for, it throws, saying what stops it.
+  assert.throws(() => particles({ period: 4 }, { ...sys, start: 1 }), /ascii\.rest: particles\(\) can't repeat every 4 seconds as period asks: it has a start, and nothing comes before it\. Change that, or give period: 0/);
+  assert.throws(() => particles({ period: 8 }, [sys, wandering]), /particles\(\) \(system 2\) can't repeat every 8 seconds as period asks: its emitter\.point is at \[0,2\] at 0 s but \[8,2\] at 8 s/);
+  assert.throws(() => particles({ period: 8 }, { ...sys, wind: (t) => t }), /its wind is 0 at 0 s but 8 at 8 s/);
+  // A point and a wind that repeat with it keep the loop, and the piece repeats exactly.
+  const round = particles({}, { ...sys, emitter: { point: (t) => [20 + 10 * Math.cos((TAU * t) / 8), 12] }, wind: (t) => Math.sin((TAU * t) / 4) });
+  assert.equal(round.meta.loop, 8);
+  for (const t of [0.4, 3.3]) assert.equal(snapshot(round, t + 8).text, snapshot(round, t).text);
+  // A wind added up over a period that isn't a whole number of thirtieths of a second still repeats exactly.
+  const snow = particles({ period: 4.33 }, "snow");
+  for (const t of [0.1, 1.7, 3.2]) {
+    const a = snapshot(snow, t), b = snapshot(snow, t + 3 * 4.33);
+    assert.equal(b.text, a.text);
+    assert.deepEqual(b.color, a.color);
+  }
+  // A period can make bursts come more often than `every` says, so what stays alive is checked with it.
+  assert.throws(() => particles({ period: 2 }, { emitter: "center", burst: { every: Infinity, count: 15000 }, life: 100 }), /would keep 765000 particles alive at once, repeating every 2 seconds, past the 20000/);
+});
+
+test("the new tools keep a frame to t alone, and quick: bounces with trails, holds, paths and text", () => {
+  const pieces = [
+    particles({ name: "balls" }, {
+      emitter: { area: { x: 2, y: 1, cols: 60, rows: 4 } }, rate: 20, life: 10, speed: [3, 12], direction: "down", spread: 120,
+      gravity: 30, drag: 0.3, bounds: "bounce", bounciness: 0.8, trail: 0.3, glyphs: "o",
+    }),
+    particles({ name: "crumble", period: 6 }, {
+      emitter: { text: banner("ascii", { effect: "still" }) }, burst: { every: 6 }, hold: [0.5, 2.5], speed: [0, 2], gravity: 14, life: 6,
+      floor: 23, bounds: { x: "die", y: "bounce" }, bounciness: 0.2,
+    }),
+    particles({ name: "spiral" }, {
+      emitter: "center", rate: 60, life: 4, speed: 4,
+      path: (p) => [p.x0 + p.speed * p.age * Math.cos(p.angle + p.age), p.y0 + (p.speed * p.age * Math.sin(p.angle + p.age)) / 2],
+    }),
+  ];
+  for (const p of pieces) {
+    contract(p);
+    const frame = p.default();
+    frame(5);
+    frame(3.3);
+    assert.equal(frame(1), snapshot(p, 1).text, p.meta.name);
+    for (let i = 0; i < 20; i++) frame(i / 30);
+    const start = performance.now();
+    for (let i = 0; i < 120; i++) frame(5 + i / 30);
+    const ms = (performance.now() - start) / 120;
+    assert.ok(ms < 4, `${p.meta.name}: ${ms.toFixed(2)} ms a frame`);
+  }
 });

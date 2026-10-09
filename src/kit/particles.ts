@@ -9,7 +9,10 @@
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
  * No maths needed: say where particles come from and which way they go in
- * words, and the rest has a default that looks right.
+ * words, and the rest has a default that looks right. When you do want the
+ * maths, every part opens up: born on the letters of any text or piece
+ * (`emitter: { text }`), moved along a path of your own (`path`), drawn and
+ * coloured by functions of the particle (`glyph`, `color`).
  *
  *   import { particles } from "ascii.rest/kit";
  *
@@ -20,6 +23,11 @@
  *     sway: 1, glyphs: "*+'.", colors: ["#fde047", "#f97316", "#7f1d1d"],
  *   });
  *
+ *   // A word that bursts apart every 3 seconds, each letter flying as itself.
+ *   export default particles({ name: "boom", period: 3 }, {
+ *     emitter: { text: "BOOM" }, burst: { every: 3 }, speed: [6, 14], gravity: 12, life: 3,
+ *   });
+ *
  * Units. Positions (an emitter's, a particle's x and y, `floor`) are columns
  * and rows of the grid. Speeds, gravity, wind and sway are in cells, a cell
  * being a column's width both ways: a row is s.aspect cells tall (2, the
@@ -28,6 +36,7 @@
  */
 import type { Options } from "../types.ts";
 import {
+  EMPTY,
   INK,
   NONE,
   type Color,
@@ -36,7 +45,8 @@ import {
   type Palette,
   type PaletteSpec,
   type Region,
-  type Surface,
+  type Source,
+  Surface,
   TAU,
   type Themed,
   and,
@@ -46,6 +56,7 @@ import {
   isHex,
   mix,
   piece,
+  snapshot,
   specOf,
   spread,
 } from "./core.ts";
@@ -70,6 +81,11 @@ export type Place = "center" | "top" | "bottom" | "left" | "right" | "top-left" 
  * row], or a function of the birth time for one that moves, repeating with the piece's period if it has one); `line`,
  * anywhere along a line from one point to another; `area`, anywhere in a region; `edge`, anywhere along a side. A
  * particle born on a side is thrown straight in unless the system says another direction.
+ *
+ * `text`: on the characters of a picture, never its spaces: text as you would type it, or a piece, such as a
+ * banner("hi"), whose still frame is taken, or a Surface. It sits at `at` ("center"), laid out as a Scenery is. Each
+ * particle knows the character it was born on (`char`) and is drawn as it unless `glyphs` or `glyph` say otherwise, and a
+ * burst puts one particle on each character, so the picture itself comes apart.
  */
 export type Emitter =
   | Edge
@@ -78,15 +94,17 @@ export type Emitter =
   | { point: Place | readonly [number, number] | ((t: number) => readonly [number, number]) }
   | { line: readonly [readonly [number, number], readonly [number, number]] }
   | { area: Region }
-  | { edge: Edge };
+  | { edge: Edge }
+  | { text: Source; at?: Place };
 
 /** The way particles are thrown, by name: "out" is every way at once, as a burst. */
 export type Direction = "up" | "down" | "left" | "right" | "up-left" | "up-right" | "down-left" | "down-right" | "out";
 
 /**
  * What happens at the edges of the grid. "die": a particle that leaves is gone, even if its path would bring it back.
- * "wrap": it comes back in on the far side. "bounce": it bounces back off the edge, losing nothing. "none": it carries
- * on out of sight, and shows again if its path brings it back.
+ * "wrap": it comes back in on the far side. "bounce": it bounces back off the edge, turned round with the speed it hit
+ * it at (times `bounciness`), so a ball thrown down bounces back up to where it fell from. "none": it carries on out of
+ * sight, and shows again if its path brings it back.
  */
 export type Bounds = "wrap" | "bounce" | "die" | "none";
 
@@ -115,6 +133,16 @@ export interface Particle {
   rand: number;
   /** 0 for the particle itself. For a cell of its trail, how far back along the trail it is, above 0 and up to 1; x, y, vx and vy are then the trail's there. */
   back: number;
+  /** Where it was born: the column and the row. */
+  x0: number;
+  y0: number;
+  /** The way it was thrown, in radians (0 right, TAU / 4 down), and how fast, in cells a second. */
+  angle: number;
+  speed: number;
+  /** Seconds it holds still after its birth before it is thrown, its own share of the system's `hold`: still while age < hold. */
+  hold: number;
+  /** The character it was born on, from an emitter of text; "" from any other. */
+  char: string;
 }
 
 /**
@@ -135,11 +163,17 @@ export interface System {
    * A burst comes from one place on its emitter, as a firework shell does, its particles spaced evenly round their
    * angles so it opens as a ring, unless `scatter` (false) gives each particle its own place. `rise`: seconds the burst
    * first climbs from the bottom edge to where it bursts, drawn as a rising spark with a trail, as a shell is launched:
-   * 0, none.
+   * 0, none. From text, a burst is spread evenly over its characters, and `count` is one a character unless you say.
    */
-  burst?: { every: number; count: number; first?: number; scatter?: boolean; rise?: number };
+  burst?: { every: number; count?: number; first?: number; scatter?: boolean; rise?: number };
   /** Seconds a particle lives: [1, 2]. */
   life?: Range;
+  /**
+   * Seconds a particle holds still where it was born before it is thrown: 0. [low, high] for each to go in its own time,
+   * so a word crumbles letter by letter. Its life counts from its birth, the hold included. A `path` is told the age
+   * from birth and holds as it likes.
+   */
+  hold?: Range;
   /** Cells a second it is thrown at: [2, 6]. */
   speed?: Range;
   /**
@@ -182,6 +216,11 @@ export interface System {
   /** At the edges, for both axes or for each: "die" (the default), "wrap", "bounce" or "none". */
   bounds?: Bounds | { x?: Bounds; y?: Bounds };
   /**
+   * The share of its speed a particle keeps each time it bounces, 0 to 1: 1, losing nothing. Below 1, a ball bounces
+   * lower each time and comes to rest on the floor, as confetti settles.
+   */
+  bounciness?: number;
+  /**
    * The row of the ground. Particles never go into it: they land on it and bounce back up if y bounds are "bounce",
    * or die there otherwise, showing their `splash`. None by default.
    */
@@ -197,7 +236,18 @@ export interface System {
   trailGlyphs?: string;
   /** The trail's colours from just behind the particle to the end: by default it takes the particle's colour. */
   trailColors?: PaletteSpec;
-  /** The moment it starts: by default it has always been going, so the first frame is already full. */
+  /**
+   * Or where a particle is, worked out your own way: (p) => [column, row] at p.age, for spirals, orbits, swarms and
+   * anything else. p.x0 and p.y0 are where it was born, p.angle and p.speed how it was thrown, p.k how far through its
+   * life, and p.rand and p.id its own. Speed, gravity, wind, drag and sway then move nothing, though the throw is still
+   * drawn for p.angle and p.speed; the edges still count ("die" looks only at where it is now). It should depend only on
+   * p, so that any frame can be drawn first.
+   */
+  path?: (p: Particle) => readonly [number, number];
+  /**
+   * The moment it starts: by default it has always been going, so the first frame is already full. A piece that starts
+   * empty can't repeat exactly, so particles() then sets no loop.
+   */
   start?: number;
   /** A whole number: the same seed, the same particles. 1, plus its place in a list of systems. */
   seed?: number;
@@ -208,7 +258,10 @@ export type Systems = System | readonly System[];
 
 /** What drawParticles() takes besides the systems. */
 export interface DrawOptions {
-  /** Seconds after which every system repeats exactly: rates and bursts are rounded to a whole number each period. None. */
+  /**
+   * Seconds after which every system repeats exactly: rates and bursts are rounded to a whole number each period. None.
+   * Moving points, wind functions and starts are not checked here as particles() checks them: keep them to the period.
+   */
   period?: number;
   /** The part of the surface the systems live in, for their edges, wrapping and bouncing: all of it. */
   region?: Region;
@@ -238,7 +291,8 @@ export interface Scenery {
 export interface ParticlesOptions {
   /**
    * Seconds after which it repeats exactly, so svg() plays a seamless loop: 8. Rates and bursts are rounded to a whole
-   * number each period. 0 for a piece that never repeats.
+   * number each period. 0 for a piece that never repeats. Left to its default, it is 0 when a system can't repeat: one
+   * with a start, or a moving point or a wind function that isn't the same 8 seconds on. Given, it throws for those.
    */
   period?: number;
   /** A picture drawn in front of the particles, so they pass behind it: text, or a Scenery. */
@@ -280,12 +334,26 @@ const mod = (a: number, n: number) => ((a % n) + n) % n;
 const num = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const quoted = (list: readonly string[]) => and(list.map((x) => `"${x}"`));
 
-// An emitter as drawing works with it: words turned into the objects they stand for, `area: null` being the whole box.
+// Text laid out for an emitter: its size, where it sits, and each character's cell from its top left, its code and the
+// one-character string a Particle's `char` takes, made once so a frame allocates nothing.
+interface Letters {
+  w: number;
+  h: number;
+  at: Place;
+  dx: Int32Array;
+  dy: Int32Array;
+  codes: Uint16Array;
+  chars: string[];
+}
+
+// An emitter as drawing works with it: words turned into the objects they stand for, `area: null` being the whole box,
+// and text laid out.
 type Emit =
   | { point: Place | readonly [number, number] | ((t: number) => readonly [number, number]) }
   | { line: readonly [readonly [number, number], readonly [number, number]] }
   | { area: Region | null }
-  | { edge: Edge };
+  | { edge: Edge }
+  | { letters: Letters };
 
 // Colours by age for both themes: a plain list is the same on both.
 interface Fade {
@@ -302,9 +370,11 @@ interface Box {
 }
 
 // What drawing one system's frame works with, kept on its plan so that a frame allocates nothing. The box in cells (x
-// in columns, y in cells down: rows times the aspect, its bottom the floor when there is one) and the cells it covers;
-// the wind's running totals; and the particle being drawn: when and where it was born (x in columns, y in cells), how
-// it was thrown, its sway's phase and the wind's total at its birth.
+// in columns, y in cells down: rows times the aspect, its bottom the floor when there is one), the cells it covers and
+// where text sits in it; the wind's running totals and the step they are added up on; and the particle being drawn (a
+// new `stamp` each, for its logs of bounces): when it set off and where it was born (x in columns, y in cells), how it
+// was thrown, its sway's phase, the wind's total when it set off, the character of text it was born on (-1 for none),
+// where a bounce or a path puts it (eu, ev) and a path's velocity (du, dv).
 interface Work {
   s: Surface | null;
   t: number;
@@ -317,11 +387,15 @@ interface Work {
   c1: number;
   r0: number;
   r1: number;
+  tx: number;
+  ty: number;
   slot: number;
   colored: boolean;
   landing: boolean;
+  gust: number;
   j0: number;
   n: number;
+  stamp: number;
   born: number;
   x0: number;
   y0: number;
@@ -329,17 +403,26 @@ interface Work {
   vy: number;
   ph: number;
   w0: number;
+  cell: number;
   lo: number;
   hi: number;
+  eu: number;
+  ev: number;
+  du: number;
+  dv: number;
   out: [number, number];
 }
 
-// A system checked, with its defaults filled in and what drawing it keeps between frames.
+// A system checked, with its defaults filled in and what drawing it keeps between frames. `logX` and `logY` are there
+// for an axis that bounces as a ball does, wall by wall, because something speeds or slows it along that axis: folding
+// its free path back in, as the other axes do, is exact only for a particle that keeps its speed.
 interface Plan {
+  what: string;
   seed: number;
   rate: number;
   burst: { every: number; count: number; first: number; scatter: boolean; rise: number } | null;
   life: readonly [number, number];
+  hold: readonly [number, number];
   speed: readonly [number, number];
   angle: readonly [number, number];
   gravity: number;
@@ -355,11 +438,17 @@ interface Plan {
   twinkle: number;
   bx: Bounds;
   by: Bounds;
+  bounciness: number;
+  logX: Log | null;
+  logY: Log | null;
   floor: number | null;
   splash: Uint16Array;
   trail: number;
   trailGlyphs: Uint16Array | null;
   trailFade: Fade | null;
+  path: ((p: Particle) => readonly [number, number]) | null;
+  // Drawn as the character of text it was born on: an emitter of text with no glyphs or glyph.
+  own: boolean;
   start: number;
   emitter: Emit;
   // The particle handed to glyph and colour functions, the heads drawn after the trails, the palette indices of the
@@ -405,6 +494,38 @@ function fadeOf(spec: PaletteSpec, steps: number, what: string): Fade {
 
 // The emitter words and what each stands for.
 const WORDS = [...EDGES, "everywhere", "center"] as const;
+const KINDS = ["point", "line", "area", "edge", "text"];
+
+// A picture's lines as written, without blank lines at either end or spaces at the ends of lines.
+function linesOf(art: string): string[] {
+  const lines = art.split("\n").map((l) => l.trimEnd());
+  while (lines.length && !lines[0]) lines.shift();
+  while (lines.length && !lines.at(-1)) lines.pop();
+  return lines;
+}
+
+// Text, a piece's still frame or a grid, laid out for an emitter: every character that isn't a space.
+function lettersOf(src: unknown, at: unknown, what: string): Letters {
+  const isPiece = !!src && typeof src === "object" && "meta" in src && typeof (src as { default?: unknown }).default === "function";
+  if (typeof src !== "string" && !(src instanceof Surface) && !isPiece)
+    fail(`${what}.emitter.text takes text, a piece such as banner("hi"), or a Surface, not ${JSON.stringify(src)}`);
+  if (at !== undefined && !PLACES.includes(at as Place)) fail(`${what}.emitter.at takes a place, ${quoted(PLACES)}, not ${JSON.stringify(at)}`);
+  const text = typeof src === "string" ? src : snapshot(src as Source, isPiece ? ((src as { meta: { still?: number } }).meta.still ?? 0) : 0, { mono: true }).text;
+  const lines = linesOf(text);
+  const dx: number[] = [], dy: number[] = [], codes: number[] = [], chars: string[] = [];
+  lines.forEach((line, r) => {
+    for (let c = 0; c < line.length; c++) {
+      if (line[c] === " ") continue;
+      codes.push(code(line[c]));
+      dx.push(c), dy.push(r), chars.push(line[c]);
+    }
+  });
+  if (!codes.length) fail(`${what}.emitter.text takes text with at least one character that isn't a space`);
+  return {
+    w: Math.max(...lines.map((l) => l.length)), h: lines.length, at: (at as Place | undefined) ?? "center",
+    dx: Int32Array.from(dx), dy: Int32Array.from(dy), codes: Uint16Array.from(codes), chars,
+  };
+}
 
 function checkEmitter(e: unknown, what: string): Emit {
   const pt = (p: unknown) => Array.isArray(p) && p.length === 2 && num(p[0]) && num(p[1]);
@@ -412,12 +533,13 @@ function checkEmitter(e: unknown, what: string): Emit {
     if (EDGES.includes(e as Edge)) return { edge: e as Edge };
     if (e === "everywhere") return { area: null };
     if (e === "center") return { point: "center" };
-    fail(`${what}.emitter takes ${quoted(WORDS)}, or { point }, { line }, { area } or { edge }, not ${JSON.stringify(e)}`);
+    fail(`${what}.emitter takes ${quoted(WORDS)}, or { point }, { line }, { area }, { edge } or { text }, not ${JSON.stringify(e)}`);
   }
-  if (!e || typeof e !== "object") fail(`${what}.emitter takes ${quoted(WORDS)}, or { point }, { line }, { area } or { edge }, not ${JSON.stringify(e)}`);
-  const keys = Object.keys(e).filter((k) => ["point", "line", "area", "edge"].includes(k));
-  if (keys.length !== 1) fail(`${what}.emitter takes one of point, line, area and edge, not ${keys.length ? and(keys) : JSON.stringify(e)}`);
+  if (!e || typeof e !== "object") fail(`${what}.emitter takes ${quoted(WORDS)}, or { point }, { line }, { area }, { edge } or { text }, not ${JSON.stringify(e)}`);
+  const keys = Object.keys(e).filter((k) => KINDS.includes(k));
+  if (keys.length !== 1) fail(`${what}.emitter takes one of point, line, area, edge and text, not ${keys.length ? and(keys) : JSON.stringify(e)}`);
   const em = e as Record<string, unknown>;
+  if (keys[0] === "text") return { letters: lettersOf(em.text, em.at, what) };
   if (keys[0] === "point") {
     const p = em.point;
     if (typeof p === "function") {
@@ -461,18 +583,22 @@ function plan(sys: System, n: number, what: string): Plan {
   if (sys.rate !== undefined && sys.burst !== undefined) fail(`${what} takes a rate or a burst, not both`);
   const rate = sys.rate ?? 20;
   if (!num(rate) || rate <= 0) fail(`${what}.rate takes a number of particles a second above 0, not ${String(sys.rate)}`);
+  const letters = "letters" in emitter ? emitter.letters : null;
   let burst: Plan["burst"] = null;
   if (sys.burst !== undefined) {
     const b = sys.burst;
     if (!b || typeof b !== "object") fail(`${what}.burst takes { every, count }, not ${JSON.stringify(b)}`);
     if (!(typeof b.every === "number" && b.every > 0)) fail(`${what}.burst.every takes a number of seconds above 0 (Infinity for once), not ${String(b.every)}`);
-    if (!Number.isInteger(b.count) || b.count < 1) fail(`${what}.burst.count takes a whole number of particles of 1 or more, not ${String(b.count)}`);
+    const count = b.count ?? (letters ? letters.codes.length : undefined);
+    if (!Number.isInteger(count) || count! < 1) fail(`${what}.burst.count takes a whole number of particles of 1 or more, not ${String(b.count)}`);
     if (b.first !== undefined && !num(b.first)) fail(`${what}.burst.first takes a number of seconds, not ${String(b.first)}`);
     if (b.rise !== undefined && !(num(b.rise) && b.rise >= 0)) fail(`${what}.burst.rise takes a number of seconds of 0 or more, not ${String(b.rise)}`);
     if (b.rise && b.scatter) fail(`${what}.burst.rise launches a burst from one place, so it can't scatter: drop one of them`);
-    burst = { every: b.every, count: b.count, first: b.first ?? 0, scatter: !!b.scatter, rise: b.rise ?? 0 };
+    if (b.rise && letters) fail(`${what}.burst.rise launches a burst from one place, so it can't come from text: drop rise, or use a point`);
+    burst = { every: b.every, count: count!, first: b.first ?? 0, scatter: !!b.scatter || !!letters, rise: b.rise ?? 0 };
   }
   const life = range(sys.life, [1, 2], `${what}.life`, 0, true);
+  const hold = range(sys.hold, [0, 0], `${what}.hold`, 0);
   const speed = range(sys.speed, [2, 6], `${what}.speed`, 0);
   const angle = headingOf(sys, "edge" in emitter ? emitter.edge : null, what);
   const gravity = sys.gravity ?? 0;
@@ -521,6 +647,12 @@ function plan(sys: System, n: number, what: string): Plan {
   const both = b === null || typeof b !== "object";
   const bx = both ? axis(b, "") : axis(b.x, ".x");
   const by = both ? axis(b, "") : axis(b.y, ".y");
+  const bounciness = sys.bounciness ?? 1;
+  if (!num(bounciness) || bounciness < 0 || bounciness > 1) fail(`${what}.bounciness takes a share of its speed from 0 to 1, not ${String(sys.bounciness)}`);
+  if (sys.path !== undefined && typeof sys.path !== "function") fail(`${what}.path takes a function of the particle that returns [column, row]`);
+  const path = sys.path ?? null;
+  if (bounciness < 1 && bx === "bounce" && gusts && !path)
+    fail(`${what}.bounciness can't slow a bounce off the sides in a wind that is a function: give the wind as a number, or bounds { x: "wrap" }`);
   if (sys.floor !== undefined && !num(sys.floor)) fail(`${what}.floor takes a row, not ${String(sys.floor)}`);
   const splash = sys.splash === undefined || sys.splash === "" ? new Uint16Array(0) : glyphCodes(sys.splash, `${what}.splash`);
   const trail = sys.trail ?? 0;
@@ -531,25 +663,51 @@ function plan(sys: System, n: number, what: string): Plan {
   if (!(num(start) || start === -Infinity)) fail(`${what}.start takes a number of seconds, not ${String(sys.start)}`);
   const seed = sys.seed ?? 1 + n;
   if (!Number.isInteger(seed)) fail(`${what}.seed takes a whole number, not ${String(sys.seed)}`);
-  // How many particles it keeps alive at once, at most: a frame visits each of them.
-  const reach = life[1] + splash.length * SPLASH;
-  const alive = burst ? burst.count * (Math.ceil(reach / burst.every) + 1) : rate * reach;
-  if (alive > ALIVE) fail(`${what} would keep ${Math.round(alive)} particles alive at once, past the ${ALIVE} a frame can draw in time: lower its rate, count or life`);
-  return {
-    seed, rate: burst ? 0 : rate, burst, life, speed, angle, gravity, wind, gusts, drag, sway, swing,
-    glyphs, glyph: sys.glyph ?? null, fades, color: sys.color ?? null, twinkle, bx, by,
-    floor: sys.floor ?? null, splash, trail, trailGlyphs, trailFade, start, emitter,
-    p: { id: 0, age: 0, life: 0, k: 0, x: 0, y: 0, vx: 0, vy: 0, t: 0, rand: 0, back: 0 },
+  const pl: Plan = {
+    what, seed, rate: burst ? 0 : rate, burst, life, hold, speed, angle, gravity, wind, gusts, drag, sway, swing,
+    glyphs, glyph: sys.glyph ?? null, fades, color: sys.color ?? null, twinkle, bx, by, bounciness,
+    // Across, a wind with drag pushes as gravity does down; a wind as a function is folded, as the sides are.
+    logX: bx === "bounce" && !path && !gusts && (bounciness < 1 || (drag > 0 && wind !== 0)) ? newLog() : null,
+    logY: by === "bounce" && !path && (bounciness < 1 || gravity !== 0) ? newLog() : null,
+    floor: sys.floor ?? null, splash, trail, trailGlyphs, trailFade, path,
+    own: !!letters && sys.glyphs === undefined && sys.glyph === undefined, start, emitter,
+    p: { id: 0, age: 0, life: 0, k: 0, x: 0, y: 0, vx: 0, vy: 0, t: 0, rand: 0, back: 0, x0: 0, y0: 0, angle: 0, speed: 0, hold: 0, char: "" },
     heads: { at: new Int32Array(64), ch: new Uint16Array(64), col: new Uint8Array(64), n: 0 },
     inks: null,
     now: null,
     trailNow: null,
     sum: new Float64Array(0),
     work: {
-      s: null, t: 0, A: 2, lx: 0, hx: 0, ly: 0, hy: 0, c0: 0, c1: 0, r0: 0, r1: 0, slot: 0, colored: false, landing: false,
-      j0: 0, n: 0, born: 0, x0: 0, y0: 0, vx: 0, vy: 0, ph: 0, w0: 0, lo: 0, hi: 0, out: [0, 0],
+      s: null, t: 0, A: 2, lx: 0, hx: 0, ly: 0, hy: 0, c0: 0, c1: 0, r0: 0, r1: 0, tx: 0, ty: 0, slot: 0, colored: false,
+      landing: false, gust: GUST, j0: 0, n: 0, stamp: 0, born: 0, x0: 0, y0: 0, vx: 0, vy: 0, ph: 0, w0: 0, cell: -1, lo: 0, hi: 0,
+      eu: 0, ev: 0, du: 0, dv: 0, out: [0, 0],
     },
   };
+  checkAlive(pl, 0);
+  // A path is called now, on a particle at its birth, so one that can't answer throws here and not on the first frame.
+  if (path) {
+    pl.p.life = life[0];
+    pl.p.rand = 0.5;
+    const at = path(pl.p);
+    if (!Array.isArray(at) || at.length !== 2 || !num(at[0]) || !num(at[1]))
+      fail(`${what}.path takes a function of the particle that returns [column, row], not one that returns ${JSON.stringify(at)}`);
+  }
+  return pl;
+}
+
+// How many particles a plan keeps alive at once, at most, repeating every `period` seconds (0 for none): a frame visits
+// each of them, so past ALIVE it throws. A period can make bursts come more often than `every` says, so this is checked
+// again with it.
+function checkAlive(pl: Plan, period: number) {
+  const reach = pl.life[1] + pl.splash.length * SPLASH;
+  let alive: number;
+  if (pl.burst) {
+    let every = pl.burst.every;
+    if (period) every = period / Math.max(1, Math.round(period / (every === Infinity ? period : every)));
+    alive = pl.burst.count * (every === Infinity ? 1 : Math.ceil(reach / every) + 1);
+  } else alive = (period ? Math.max(1, Math.round(pl.rate * period)) / period : pl.rate) * reach;
+  if (alive > ALIVE)
+    fail(`${pl.what} would keep ${Math.round(alive)} particles alive at once${period ? `, repeating every ${period} seconds` : ""}, past the ${ALIVE} a frame can draw in time: lower its rate, count or life`);
 }
 
 const listOf = (systems: Systems): readonly System[] => (Array.isArray(systems) ? systems : [systems as System]);
@@ -592,12 +750,13 @@ function apex(v0: number, g: number, w: number, k: number): number {
 }
 
 // A position kept between lo and hi: wrapped round, or bounced back off the ends (folded, so a bounce loses nothing).
+// hi itself is the first cell past the box, so one that reaches it is kept just inside.
 function fold(p: number, lo: number, hi: number, how: Bounds): number {
   const span = hi - lo;
   if (span <= 0 || how === "die" || how === "none") return p;
   if (how === "wrap") return lo + mod(p - lo, span);
   const m = mod(p - lo, 2 * span);
-  return lo + (m < span ? m : 2 * span - m);
+  return Math.min(hi - IN, lo + (m < span ? m : 2 * span - m));
 }
 
 // -1 where a bounce has turned a particle round, else 1: its velocity along the axis is flipped there.
@@ -619,26 +778,182 @@ export function streak(p: { vx: number; vy: number }): string {
 // The wind's running total at a time, from the totals added up for this frame.
 function windAt(pl: Plan, time: number): number {
   const wk = pl.work, sum = pl.sum;
-  const f = time / GUST - wk.j0;
+  const f = time / wk.gust - wk.j0;
   const j = Math.max(0, Math.min(wk.n - 2, Math.floor(f)));
   return sum[j] + (sum[j + 1] - sum[j]) * (f - j);
 }
 
 // Adds up the wind on a fixed grid of times from `from` to `to`, so that how far it has carried a particle between two
-// moments is a difference of two totals, and depends only on those moments, not on the frame.
+// moments is a difference of two totals, and depends only on those moments, not on the frame. With a period the grid
+// fits it a whole number of times, so the totals repeat with it.
 function addWind(pl: Plan, from: number, to: number) {
-  const gusts = pl.gusts!, wk = pl.work;
-  wk.j0 = Math.floor(from / GUST);
-  wk.n = Math.ceil(to / GUST) + 2 - wk.j0;
+  const gusts = pl.gusts!, wk = pl.work, step = wk.gust;
+  wk.j0 = Math.floor(from / step);
+  wk.n = Math.ceil(to / step) + 2 - wk.j0;
   if (pl.sum.length < wk.n) pl.sum = new Float64Array(wk.n * 2);
   const sum = pl.sum;
   sum[0] = 0;
-  let prev = +gusts(wk.j0 * GUST) || 0;
+  let prev = +gusts(wk.j0 * step) || 0;
   for (let j = 1; j < wk.n; j++) {
-    const w = +gusts((wk.j0 + j) * GUST) || 0;
-    sum[j] = sum[j - 1] + ((prev + w) / 2) * GUST;
+    const w = +gusts((wk.j0 + j) * step) || 0;
+    sum[j] = sum[j - 1] + ((prev + w) / 2) * step;
     prev = w;
   }
+}
+
+// The age, within lo to hi, at which a path along one axis (thrown at v0 through air moving at w, pulled by g, drag k,
+// from u0) crosses `wall`, its distance from the wall changing one way only between those ages. Exact for no drag, else
+// halved down to well under a millionth of a second.
+function crossing(u0: number, v0: number, g: number, w: number, k: number, wall: number, lo: number, hi: number): number {
+  if (k === 0) {
+    // u0 + (v0 + w) a + g a^2 / 2 = wall, by the quadratic formula in the form that keeps its precision.
+    const A = g / 2, B = v0 + w, C = u0 - wall;
+    let a = -1;
+    if (A === 0) a = B === 0 ? -1 : -C / B;
+    else {
+      const d = B * B - 4 * A * C;
+      if (d >= 0) {
+        const q = -0.5 * (B + (B < 0 ? -1 : 1) * Math.sqrt(d));
+        const r1 = q / A, r2 = q === 0 ? r1 : C / q;
+        const e = 1e-9 * (1 + hi);
+        const in1 = r1 >= lo - e && r1 <= hi + e, in2 = r2 >= lo - e && r2 <= hi + e;
+        a = in1 && in2 ? Math.min(r1, r2) : in1 ? r1 : in2 ? r2 : -1;
+      }
+    }
+    if (a >= lo - 1e-9 * (1 + hi)) return Math.min(hi, Math.max(lo, a));
+  }
+  // With drag: Newton's steps, kept inside the ages where it must be by halving them where a step would leave.
+  const f0 = u0 + travel(v0, g, w, k, lo) - wall;
+  let x = (lo + hi) / 2;
+  for (let i = 0; i < 64 && hi - lo > 1e-10; i++) {
+    const f = u0 + travel(v0, g, w, k, x) - wall;
+    if (Math.abs(f) < 1e-9) return x;
+    if (f < 0 === f0 < 0) lo = x;
+    else hi = x;
+    const d = pace(v0, g, w, k, x);
+    const next = d !== 0 ? x - f / d : lo;
+    x = next > lo && next < hi ? next : (lo + hi) / 2;
+  }
+  return hi;
+}
+
+// The most bounces kept for one particle: a ball that loses speed comes to rest well before.
+const BOUNCES = 256;
+
+/*
+ * A particle's bounces along one axis, worked out once for it each frame and kept, so its trail, asking where it was a
+ * moment ago, needs no more working out: each bounce's age, place and velocity through the air (the first entry is its
+ * throw), whether it rests after the last, how far on from the last it is known to fly free, and, for one that loses
+ * nothing, the round its bounces repeat on from `from`. `owner` says which particle it is for.
+ */
+interface Log {
+  owner: number;
+  n: number;
+  s: Float64Array;
+  u: Float64Array;
+  v: Float64Array;
+  rest: boolean;
+  done: number;
+  from: number;
+  round: number;
+}
+
+const newLog = (): Log => ({
+  owner: -1, n: 0, s: new Float64Array(BOUNCES + 1), u: new Float64Array(BOUNCES + 1), v: new Float64Array(BOUNCES + 1),
+  rest: false, done: 0, from: 0, round: 0,
+});
+
+// Works out a particle's bounces on from the last one in the log until age a: its free path (pulled by g, through air
+// moving at w, drag k) to each wall it meets, turned round there with `bounciness` of the speed it hit at. One too slow
+// to hop more than a quarter of a cell off the wall it is pushed against, which no grid would show, rests there. One that
+// loses nothing and has no drag meets the same wall again at the same speed, and from then on its bounces repeat.
+function extend(pl: Plan, log: Log, g: number, w: number, a: number, lo: number, hi: number) {
+  const k = pl.drag, keep = pl.bounciness;
+  // The push along the axis on a particle at rest: g, and the air's pull k w.
+  const push = g + k * w;
+  for (;;) {
+    const n = log.n, s = log.s[n - 1], u = log.u[n - 1], v = log.v[n - 1];
+    const left = a - s;
+    // Its free path from here goes one way to the top of its arc, if it gets there, then the other way.
+    const top = apex(v, g, w, k);
+    const ends = top > 0 && top < left ? 2 : 1;
+    let hit = -1, wall = 0;
+    for (let piece = 0, from = 0; piece < ends && hit < 0; piece++) {
+      const to = piece === 0 && ends === 2 ? top : left;
+      const at = u + travel(v, g, w, k, to);
+      if (at > hi) (wall = hi), (hit = crossing(u, v, g, w, k, hi, from, to));
+      else if (at < lo) (wall = lo), (hit = crossing(u, v, g, w, k, lo, from, to));
+      from = to;
+    }
+    if (hit < 0) {
+      log.done = a;
+      return;
+    }
+    // Out of room: what is left is too small to see, so it rests on the wall it last met.
+    if (n === log.s.length) {
+      log.rest = true;
+      return;
+    }
+    const speed = -pace(v, g, w, k, hit) * keep;
+    log.s[n] = s + hit;
+    log.u[n] = wall;
+    log.v[n] = speed - w;
+    log.n = n + 1;
+    if ((wall === hi ? push > 0 : push < 0) && speed * speed < 0.5 * Math.abs(push)) {
+      log.rest = true;
+      return;
+    }
+    if (keep === 1 && k === 0) {
+      let j = n - 1;
+      while (j > 0 && log.u[j] !== wall) j--;
+      const round = log.s[n] - log.s[j];
+      if (j > 0 && round > 1e-9) {
+        log.from = log.s[j];
+        log.round = round;
+        log.done = log.s[n];
+        return;
+      }
+    }
+  }
+}
+
+// Where a particle is along one axis at age a, and how fast it goes, into work.eu and work.ev, bouncing as a ball does
+// between lo and hi (see extend), from its log of bounces, worked out further as far as it needs. A position at hi is
+// kept just inside, hi being the first cell past the box.
+function bounced(pl: Plan, log: Log, u0: number, v0: number, g: number, w: number, a: number, lo: number, hi: number) {
+  const wk = pl.work, k = pl.drag;
+  // Started outside the walls, it is folded back in as a particle that keeps its speed would be.
+  if (u0 < lo || u0 > hi || hi <= lo) {
+    const u = u0 + travel(v0, g, w, k, a);
+    wk.eu = fold(u, lo, hi, "bounce");
+    wk.ev = pace(v0, g, w, k, a) * turned(u, lo, hi, "bounce");
+    return;
+  }
+  if (log.owner !== wk.stamp) {
+    log.owner = wk.stamp;
+    log.n = 1;
+    log.s[0] = 0;
+    log.u[0] = u0;
+    log.v[0] = v0;
+    log.rest = false;
+    log.done = 0;
+    log.round = 0;
+  }
+  if (log.round && a > log.from + log.round) a = log.from + mod(a - log.from, log.round);
+  if (a > log.done && !log.rest) {
+    extend(pl, log, g, w, a, lo, hi);
+    if (log.round && a > log.from + log.round) a = log.from + mod(a - log.from, log.round);
+  }
+  let i = log.n - 1;
+  while (i > 0 && log.s[i] > a) i--;
+  if (log.rest && i === log.n - 1) {
+    wk.eu = Math.min(hi - IN, log.u[i]);
+    wk.ev = 0;
+    return;
+  }
+  const d = a - log.s[i];
+  wk.eu = Math.min(hi - IN, Math.max(lo, log.u[i] + travel(log.v[i], g, w, k, d)));
+  wk.ev = pace(log.v[i], g, w, k, d);
 }
 
 // Where the particle being drawn is across at age a, in columns, before its sway and the edges.
@@ -672,17 +987,64 @@ function extent(pl: Plan, a: number, vertical: boolean) {
   }
 }
 
+// Where a path of your own puts the particle at age a, into work.eu (columns) and work.ev (cells down), and its velocity
+// from where it was a moment before, into work.du and work.dv. The particle's age and k are its own again after.
+const MOMENT = 1 / 120;
+function walk(pl: Plan, a: number) {
+  const wk = pl.work, p = pl.p, path = pl.path!, age = p.age, k = p.k;
+  p.age = a;
+  p.k = a / p.life;
+  let r = path(p);
+  const x = +r[0], y = +r[1] * wk.A;
+  // A moment before, or after for a particle just born.
+  const b = a >= MOMENT ? a - MOMENT : a + MOMENT;
+  p.age = b;
+  p.k = b / p.life;
+  r = path(p);
+  const toward = a >= MOMENT ? MOMENT : -MOMENT;
+  wk.du = (x - +r[0]) / toward;
+  wk.dv = (y - +r[1] * wk.A) / toward;
+  wk.eu = x;
+  wk.ev = y;
+  p.age = age;
+  p.k = k;
+}
+
 // Puts the particle being drawn at age a into pl.p: its column and row, kept inside the edges, and its velocity.
 function place(pl: Plan, a: number) {
   const wk = pl.work, p = pl.p;
+  if (pl.path) {
+    walk(pl, a);
+    const ux = wk.eu, uy = wk.ev, vx = wk.du, vy = wk.dv;
+    p.x = fold(ux, wk.lx, wk.hx, pl.bx);
+    p.vx = vx * turned(ux, wk.lx, wk.hx, pl.bx);
+    p.y = (pl.by === "bounce" || pl.by === "wrap" ? fold(uy, wk.ly, wk.hy, pl.by) : uy) / wk.A;
+    p.vy = vy * turned(uy, wk.ly, wk.hy, pl.by);
+    return;
+  }
   const turn = TAU * pl.swing * a + wk.ph;
-  const ux = across(pl, a) + pl.sway * Math.sin(turn);
-  const uy = down(pl, a);
-  const vx = pace(wk.vx, 0, pl.wind, pl.drag, a) + (pl.gusts ? +pl.gusts(wk.born + a) || 0 : 0) + pl.sway * TAU * pl.swing * Math.cos(turn);
-  p.x = fold(ux, wk.lx, wk.hx, pl.bx);
-  p.vx = vx * turned(ux, wk.lx, wk.hx, pl.bx);
-  p.y = (pl.by === "bounce" || pl.by === "wrap" ? fold(uy, wk.ly, wk.hy, pl.by) : uy) / wk.A;
-  p.vy = pace(wk.vy, pl.gravity, 0, pl.drag, a) * turned(uy, wk.ly, wk.hy, pl.by);
+  const sway = pl.sway * Math.sin(turn), swaying = pl.sway * TAU * pl.swing * Math.cos(turn);
+  if (pl.logX) {
+    // Bounced off the sides wall by wall; its sway is folded in after, as the sides fold any small swing.
+    bounced(pl, pl.logX, wk.x0, wk.vx, 0, pl.wind, a, wk.lx, wk.hx);
+    const ux = wk.eu + sway;
+    p.x = fold(ux, wk.lx, wk.hx, "bounce");
+    p.vx = (wk.ev + swaying) * turned(ux, wk.lx, wk.hx, "bounce");
+  } else {
+    const ux = across(pl, a) + sway;
+    const vx = pace(wk.vx, 0, pl.wind, pl.drag, a) + (pl.gusts ? +pl.gusts(wk.born + a) || 0 : 0) + swaying;
+    p.x = fold(ux, wk.lx, wk.hx, pl.bx);
+    p.vx = vx * turned(ux, wk.lx, wk.hx, pl.bx);
+  }
+  if (pl.logY) {
+    bounced(pl, pl.logY, wk.y0, wk.vy, pl.gravity, 0, a, wk.ly, wk.hy);
+    p.y = wk.eu / wk.A;
+    p.vy = wk.ev;
+  } else {
+    const uy = down(pl, a);
+    p.y = (pl.by === "bounce" || pl.by === "wrap" ? fold(uy, wk.ly, wk.hy, pl.by) : uy) / wk.A;
+    p.vy = pace(wk.vy, pl.gravity, 0, pl.drag, a) * turned(uy, wk.ly, wk.hy, pl.by);
+  }
 }
 
 // The cell of a column and row inside the box, as an index into the surface, or -1.
@@ -692,9 +1054,16 @@ function cellAt(pl: Plan, x: number, y: number): number {
   return c >= wk.c0 && c < wk.c1 && r >= wk.r0 && r < wk.r1 ? r * wk.s!.cols + c : -1;
 }
 
-// Where a particle is born, into work.out in columns and rows, from two of its random numbers and its birth time.
+// Where a particle is born, into work.out in columns and rows, from two of its random numbers and its birth time. From
+// text, `u` picks the character (into work.cell) and it is born in the middle of its cell.
 function birthplace(pl: Plan, u: number, v: number, born: number, box: Box) {
-  const e = pl.emitter, out = pl.work.out;
+  const e = pl.emitter, wk = pl.work, out = wk.out;
+  if ("letters" in e) {
+    const L = e.letters, i = Math.min(L.codes.length - 1, Math.floor(u * L.codes.length));
+    wk.cell = i;
+    (out[0] = wk.tx + L.dx[i] + 0.5), (out[1] = wk.ty + L.dy[i] + 0.5);
+    return;
+  }
   if ("point" in e) {
     if (typeof e.point === "string") {
       // A place by name, kept just inside the far side and the bottom.
@@ -745,6 +1114,14 @@ function tint(pl: Plan, fade: number, k: number): number {
   return f ? f[Math.min(f.length - 1, Math.floor(k * f.length))] : NONE;
 }
 
+// What a glyph function gave, as a cell's char code: its first character, or nothing for "", null or undefined.
+function glyphOf(v: unknown): number {
+  if (v === undefined || v === null || v === "") return EMPTY;
+  const str = String(v), c = str.charCodeAt(0);
+  if (c >= 0xd800 && c <= 0xdfff) fail(`a glyph function returns one character from the Basic Multilingual Plane, not ${JSON.stringify(str)}`);
+  return code(str[0]);
+}
+
 // One more head to draw after the trails, growing the store when it is full.
 function pushHead(pl: Plan, at: number, ch: number, col: number) {
   const h = pl.heads;
@@ -768,22 +1145,46 @@ function particle(pl: Plan, m: number, born: number, x0: number, y0: number, fad
   if (age < 0 || age >= life + splashFor) return;
   const sp = pl.speed[0] + (pl.speed[1] - pl.speed[0]) * hash(seed, m, 4);
   const th = pl.angle[0] + (pl.angle[1] - pl.angle[0]) * (even >= 0 ? even : hash(seed, m, 5));
-  wk.born = born;
+  // It holds still for `wait` seconds, then moves: `moved` is how long it has been moving, the age its motion is at, and
+  // `shown` the same at the end of its life. wk.born is when it set off, for the wind.
+  const wait = pl.hold[1] > 0 && !pl.path ? pl.hold[0] + (pl.hold[1] - pl.hold[0]) * hash(seed, m, 9) : 0;
+  const moved = Math.max(0, age - wait), shown = Math.max(0, Math.min(age, life) - wait);
+  wk.stamp++;
+  wk.born = born + wait;
   wk.x0 = x0;
   wk.y0 = y0 * wk.A;
   wk.vx = sp * Math.cos(th);
   wk.vy = sp * Math.sin(th);
   wk.ph = TAU * hash(seed, m, 6);
-  wk.w0 = pl.gusts ? windAt(pl, born) : 0;
-  const shown = Math.min(age, life);
+  wk.w0 = pl.gusts ? windAt(pl, wk.born) : 0;
+  const L = "letters" in pl.emitter ? pl.emitter.letters : null;
+  p.id = m;
+  p.life = life;
+  p.t = wk.t;
+  p.rand = hash(seed, m, 7);
+  p.back = 0;
+  p.x0 = x0;
+  p.y0 = y0;
+  p.angle = th;
+  p.speed = sp;
+  p.hold = wait;
+  p.char = L && wk.cell >= 0 ? L.chars[wk.cell] : "";
 
-  // Has it left the box? With "die", leaving at any age so far is the end of it; landing on the floor is too.
+  // Has it left the box? With "die", leaving at any age so far is the end of it; landing on the floor is too. A path of
+  // your own can only be asked where it is now.
   let gone = false, landed = -1;
-  if (pl.bx === "die") {
+  if (pl.path) {
+    if (age >= life) return;
+    p.age = age;
+    p.k = age / life;
+    place(pl, age);
+    const uy = p.y * wk.A;
+    gone = (pl.bx === "die" && (p.x < wk.lx || p.x >= wk.hx)) || (pl.by === "die" && uy < wk.ly) || (wk.landing && uy >= wk.hy);
+  } else if (pl.bx === "die") {
     extent(pl, shown, false);
     if (wk.lo < wk.lx || wk.hi >= wk.hx) gone = true;
   }
-  if (pl.by === "die" || wk.landing) {
+  if (!pl.path && (pl.by === "die" || wk.landing)) {
     extent(pl, shown, true);
     const above = pl.by === "die" && wk.lo < wk.ly;
     if (above) gone = true;
@@ -808,20 +1209,14 @@ function particle(pl: Plan, m: number, born: number, x0: number, y0: number, fad
     }
   }
 
-  p.id = m;
-  p.life = life;
-  p.t = wk.t;
-  p.rand = hash(seed, m, 7);
-  p.back = 0;
-
   // A splash where it landed, for a moment after.
-  if (landed >= 0 && landed < life && pl.splash.length) {
-    const since = age - landed;
+  if (landed >= 0 && landed + wait < life && pl.splash.length) {
+    const since = moved - landed;
     const row = Math.ceil(wk.hy / wk.A) - 1;
     if (since < splashFor) {
       place(pl, landed);
-      p.age = landed;
-      p.k = landed / life;
+      p.age = landed + wait;
+      p.k = p.age / life;
       p.y = row;
       p.vx = p.vy = 0;
       const c = cellAt(pl, p.x, row);
@@ -834,21 +1229,26 @@ function particle(pl: Plan, m: number, born: number, x0: number, y0: number, fad
 
   p.age = age;
   p.k = age / life;
-  place(pl, age);
+  if (!pl.path) place(pl, moved);
   const head = cellAt(pl, p.x, p.y);
-  const ch = pl.glyph ? code(String(pl.glyph(p)).charAt(0)) : pl.glyphs[Math.min(pl.glyphs.length - 1, Math.floor(p.k * pl.glyphs.length))];
+  const ch = pl.glyph
+    ? glyphOf(pl.glyph(p))
+    : pl.own && wk.cell >= 0
+      ? L!.codes[wk.cell]
+      : pl.glyphs[Math.min(pl.glyphs.length - 1, Math.floor(p.k * pl.glyphs.length))];
   const color = tint(pl, fade, p.k);
 
-  // Its trail: the path back over `trail` seconds (no further than its birth), sampled about a cell apart, each cell
-  // once, never over the particle itself.
+  // Its trail: the path back over `trail` seconds (no further than where it set off), sampled about a cell apart, each
+  // cell once, never over the particle itself. A path of your own is asked at the ages from birth, as it always is.
+  const now = pl.path ? age : moved;
   if (pl.trail > 0) {
-    const back = Math.min(pl.trail, age);
+    const back = Math.min(pl.trail, now);
     const hx = p.x, hy = p.y;
-    place(pl, age - back);
+    place(pl, now - back);
     const n = Math.min(64, Math.max(1, Math.ceil(Math.max(Math.abs(p.x - hx), Math.abs(p.y - hy)) * 1.5) + 1));
     let last = head;
     for (let j = 1; j <= n; j++) {
-      place(pl, age - (j / n) * back);
+      place(pl, now - (j / n) * back);
       const u = (j / n) * (back / pl.trail);
       p.back = u;
       const c = cellAt(pl, p.x, p.y);
@@ -857,14 +1257,14 @@ function particle(pl: Plan, m: number, born: number, x0: number, y0: number, fad
       const tc = pl.trailGlyphs
         ? pl.trailGlyphs[Math.min(pl.trailGlyphs.length - 1, Math.floor(u * pl.trailGlyphs.length))]
         : pl.glyph
-          ? code(String(pl.glyph(p)).charAt(0))
+          ? glyphOf(pl.glyph(p))
           : (u < 0.75 ? streak(p) : ".").charCodeAt(0);
       if (tc === 32 || tc === 0) continue;
       const tn = pl.trailNow;
       s.put(c, tc, !wk.colored ? NONE : tn ? tn[Math.min(tn.length - 1, Math.floor(u * tn.length))] : pl.color ? tint(pl, fade, p.k) : color);
     }
     p.back = 0;
-    place(pl, age);
+    place(pl, now);
   }
   if (head >= 0 && ch !== 32 && ch !== 0) pushHead(pl, head, ch, color);
 }
@@ -913,8 +1313,16 @@ function drawPlan(s: Surface, pl: Plan, t: number, period: number, box: Box) {
   const slots = period ? Math.max(1, Math.round(period * 10)) : 0;
   wk.slot = slots ? mod(Math.floor((t / period) * slots), slots) : Math.floor(t * 10);
   const reach = pl.life[1] + pl.splash.length * SPLASH;
+  if (period) checkAlive(pl, period);
+  wk.gust = period ? period / Math.max(1, Math.round(period / GUST)) : GUST;
   if (pl.gusts) addWind(pl, t - reach - 1 - (pl.rate ? 1 / pl.rate : 0), t);
   pl.heads.n = 0;
+  // Text sits at its place in the box, laid out as a Scenery is.
+  const L = "letters" in pl.emitter ? pl.emitter.letters : null;
+  if (L) {
+    wk.tx = Math.floor(box.x0 + SPOT[L.at][0] * (box.x1 - box.x0 - L.w));
+    wk.ty = Math.floor(box.y0 + SPOT[L.at][1] * (box.y1 - box.y0 - L.h));
+  }
 
   if (pl.burst) {
     const b = pl.burst;
@@ -935,13 +1343,21 @@ function drawPlan(s: Surface, pl: Plan, t: number, period: number, box: Box) {
         rising(pl, nm, tb, x0, y0, fade);
         continue;
       }
-      // Spaced evenly through the burst's angles, each nudged a little, so a shell opens as a ring and not a clump.
+      // Spaced evenly through the burst's angles, each nudged a little, so a shell opens as a ring and not a clump. From
+      // text, spread evenly over its characters, every one of them when there are as many particles, and thrown "out"
+      // each flies away from the text's middle, so it blows apart rather than through itself.
+      const letters = L ? L.codes.length : 0;
+      const away = !!L && pl.angle[0] === 0 && pl.angle[1] === TAU;
       for (let j = 0; j < b.count; j++) {
         const m = nm * b.count + j;
-        const even = (j + 0.5 + (hash(seed, m, 5) - 0.5) * 0.8) / b.count;
+        let even = (j + 0.5 + (hash(seed, m, 5) - 0.5) * 0.8) / b.count;
         if (!b.scatter) particle(pl, m, tb, x0, y0, fade, even);
         else {
-          birthplace(pl, hash(seed, m, 1), hash(seed, m, 2), tb, box);
+          birthplace(pl, L ? ((Math.floor(((j + 0.5) * letters) / b.count) % letters) + 0.5) / letters : hash(seed, m, 1), hash(seed, m, 2), tb, box);
+          if (L) {
+            const i = wk.cell;
+            even = away ? mod(Math.atan2((L.dy[i] + 0.5 - L.h / 2) * A, L.dx[i] + 0.5 - L.w / 2) / TAU + (hash(seed, m, 5) - 0.5) * 0.05, 1) : -1;
+          }
           particle(pl, m, tb, wk.out[0], wk.out[1], fade, even);
         }
       }
@@ -963,6 +1379,25 @@ function drawPlan(s: Surface, pl: Plan, t: number, period: number, box: Box) {
   const h = pl.heads;
   for (let i = 0; i < h.n; i++) s.put(h.at[i], h.ch[i], h.col[i]);
   wk.s = null;
+}
+
+// What stops a plan repeating every `period` seconds, said as a reason, or "" when nothing does: a start, or a moving
+// point or a wind function that isn't the same a period on (asked at two moments).
+function unlike(pl: Plan, period: number): string {
+  if (pl.start > -Infinity) return "it has a start, and nothing comes before it";
+  const e = pl.emitter;
+  for (const t of [0, 1.37]) {
+    if ("point" in e && typeof e.point === "function") {
+      const a = e.point(t), b = e.point(t + period);
+      if (Math.abs(+a[0] - +b[0]) > 0.01 || Math.abs(+a[1] - +b[1]) > 0.01)
+        return `its emitter.point is at ${JSON.stringify(a)} at ${t} s but ${JSON.stringify(b)} at ${t + period} s`;
+    }
+    if (pl.gusts) {
+      const a = +pl.gusts(t), b = +pl.gusts(t + period);
+      if (Math.abs(a - b) > 1e-6) return `its wind is ${a} at ${t} s but ${b} at ${t + period} s`;
+    }
+  }
+  return "";
 }
 
 // A period in seconds, 0 for none.
@@ -1069,10 +1504,7 @@ function artOf(v: string | Scenery | undefined, size: Size, what: string): Art |
   }
   if (sc.solid !== undefined && typeof sc.solid !== "boolean") fail(`${what}.solid takes true or false, not ${JSON.stringify(sc.solid)}`);
   const solid = sc.solid ?? true;
-  // The lines as written, without blank lines at either end or spaces at the ends of lines.
-  const lines = sc.art.split("\n").map((l) => l.trimEnd());
-  while (lines.length && !lines[0]) lines.shift();
-  while (lines.length && !lines.at(-1)) lines.pop();
+  const lines = linesOf(sc.art);
   const w = Math.max(0, ...lines.map((l) => l.length)), h = lines.length;
   const x0 = Math.floor(SPOT[at][0] * (size.cols - w)), y0 = Math.floor(SPOT[at][1] * (size.rows - h));
   const pairs: [string, string][] = [];
@@ -1168,7 +1600,7 @@ export function particles<O extends Options = Options>(
   options?: unknown,
 ): KitPiece<O> {
   const full = specOf(spec, "particles");
-  const period = spec?.period === undefined ? PERIOD : checkPeriod(spec.period, "particles()");
+  let period = spec?.period === undefined ? PERIOD : checkPeriod(spec.period, "particles()");
   const { cols, rows } = full;
   if (!Number.isInteger(cols) || cols < 1 || !Number.isInteger(rows) || rows < 1)
     fail(`particles() takes whole numbers of columns and rows of 1 or more, not ${String(cols)} by ${String(rows)}`);
@@ -1183,6 +1615,13 @@ export function particles<O extends Options = Options>(
     made = systems;
   }
   const plans = plansOf(made, "particles()");
+  if (period) {
+    // What would stop it repeating: left to the default, the piece then just doesn't loop; asked for, it throws.
+    const odd = plans.find((pl) => unlike(pl, period));
+    if (odd && spec?.period !== undefined) fail(`${odd.what} can't repeat every ${period} seconds as period asks: ${unlike(odd, period)}. Change that, or give period: 0`);
+    if (odd) period = 0;
+    for (const pl of plans) checkAlive(pl, period);
+  }
   const back = artOf(spec?.back, size, "particles()'s back");
   const front = artOf(spec?.front, size, "particles()'s front");
   const arts = [back, front].filter((a): a is Art => !!a);
