@@ -19,7 +19,7 @@
 
 <sub>Thanks to the sponsors who make running ascii.rest possible</sub>
 
-<a href="https://commandcode.ai"><picture><source media="(prefers-color-scheme: dark)" srcset="site/public/sponsors/command-code.dark.svg"><img alt="Command Code" src="site/public/sponsors/command-code.svg" height="28"></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://www.cloudflare.com"><picture><source media="(prefers-color-scheme: dark)" srcset="site/public/sponsors/cloudflare.dark.svg"><img alt="Cloudflare" src="site/public/sponsors/cloudflare.svg" height="52"></picture></a>
+<a href="https://commandcode.ai"><picture><source media="(prefers-color-scheme: dark)" srcset="site/public/sponsors/command-code.dark.svg"><img alt="Command Code" src="site/public/sponsors/command-code.svg" height="28"></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://vercel.com"><picture><source media="(prefers-color-scheme: dark)" srcset="site/public/sponsors/vercel.dark.svg"><img alt="Vercel" src="site/public/sponsors/vercel.svg" height="26"></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://www.cloudflare.com"><picture><source media="(prefers-color-scheme: dark)" srcset="site/public/sponsors/cloudflare.dark.svg"><img alt="Cloudflare" src="site/public/sponsors/cloudflare.svg" height="52"></picture></a>
 
 <br>
 
