@@ -31,7 +31,7 @@ Each import path is one part of the package. Import only the ones you use.
 | import | what it gives you | runs in | guide |
 | --- | --- | --- | --- |
 | `ascii.rest` | `mount()`, plus `load`, `names`, `isPiece` and `canvas` to find a piece by name | a browser, for `mount()`; the rest anywhere | [typescript](/docs/typescript/) |
-| `ascii.rest/pieces` | all 216 pieces, as named exports | anywhere | [your own pieces](/docs/pieces/) |
+| `ascii.rest/pieces` | every piece, as named exports | anywhere | [your own pieces](/docs/pieces/) |
 | `ascii.rest/pieces/<name>` | one piece, and the type of its options | anywhere | [typescript](/docs/typescript/) |
 | `ascii.rest/banner` | `banner()`: any text in block letters, as a piece | anywhere | [banners](/docs/banners/) |
 | `ascii.rest/react` | the `<Ascii>` and `<Banner>` components | React 18 or later | [react](/docs/react/) |
@@ -50,7 +50,7 @@ The main import: play a piece in an element, and find any piece by its name. Gui
 ```ts
 import { canvas, isPiece, load, mount, names } from "ascii.rest";
 
-console.log(names.length); // 216
+console.log(names.length); // 217
 
 const name = new URLSearchParams(location.search).get("piece") ?? "donut";
 if (isPiece(name)) {
@@ -78,7 +78,7 @@ One function for each piece, by name. `await load["night-coast"]()` imports that
 
 `const names: PieceName[]`
 
-The names of all 216 pieces, like `"night-coast"`, in alphabetical order.
+The names of every piece, like `"night-coast"`, in alphabetical order.
 
 ### isPiece()
 
@@ -90,7 +90,7 @@ Returns `true` when a string is a piece's name. In TypeScript it also narrows th
 
 `const canvas: ReadonlySet<PieceName>`
 
-The names of the 87 coloured pieces. Draw these on a `<canvas>` to see their colours.
+The names of the coloured pieces: the scenes, logos, companies and distros. Draw these on a `<canvas>` to see their colours.
 
 ### Types from ascii.rest
 
@@ -497,7 +497,7 @@ Some of the package is also served from ascii.rest itself, with nothing to insta
 | --- | --- | --- |
 | `/ascii.js` | The `ascii.rest/element` module, for a `<script type="module">` tag. | [html](/docs/html/) |
 | `/<module>.js` | Every compiled module, such as `/mount.js`, `/banner.js` or `/pieces/donut.js`, to import on a page with no build step. | [html](/docs/html/) |
-| `/svg/<name>.svg` | Each of the 72 logos, companies and distros as an animated SVG. Add `.dark` before `.svg` for dark pages. | [github readme](/docs/readme/) |
+| `/svg/<name>.svg` | Each logo, company and distro as an animated SVG. Add `.dark` before `.svg` for dark pages. | [github readme](/docs/readme/) |
 | `/banner/<text>.svg` | A banner as an animated SVG. Add `.dark` before `.svg` for dark pages. Its options go in the query: `color`, `bg`, `font`, `shadow`, `fill`, `effect`, `speed`, `tagline`, `art`, `place` and `size`. | [github readme](/docs/readme/), [banner maker](/banner/) |
 | `/r/<name>.json` | A shadcn registry item, for `npx shadcn add` or `npx ascii.rest add`. `/r/registry.json` lists them all. | [your own copy](/docs/copy/) |
 | `/og/<name>.png` | A piece's share image, 1200 by 630 pixels. | |

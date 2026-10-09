@@ -272,7 +272,7 @@ A fill must be exactly one character. The banner decides whether the page is dar
 
 ## Add colour
 
-With no colour, a banner is drawn like a [text piece](/docs/#browse-the-216-pieces): plain text in a `<pre>`, in your page's text colour, so your CSS styles it. Give it a colour and it is drawn like a coloured piece: on a `<canvas>`, in that colour.
+With no colour, a banner is drawn like a [text piece](/docs/#browse-the-pieces): plain text in a `<pre>`, in your page's text colour, so your CSS styles it. Give it a colour and it is drawn like a coloured piece: on a `<canvas>`, in that colour.
 
 `<Banner>` and `<ascii-banner>` pick the `<pre>` or the `<canvas>` for you. With `mount()`, you pass the element: on a `<canvas>` it shows its colours, and in a `<pre>` it draws everything in the pre's one colour.
 

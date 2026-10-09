@@ -195,7 +195,7 @@ Each item brings the items it needs. Adding `ascii-banner` also adds `ascii`, `b
 | `ascii-banner` | `ascii-banner.tsx`: the `<Banner>` component for React and Next.js | `ascii`, `banner`, `core` |
 | `svg` | `svg.ts`: `svg()` and `bannerSvg()`, which turn a piece or a banner into an animated SVG | `banner`, `core` |
 | a piece's name, like `donut` | `pieces/donut.ts`: that one piece | `core` |
-| `all` | every file above and all 216 pieces | everything |
+| `all` | every file above and every piece | everything |
 
 `ascii` and `ascii-banner` import `react`. The other files import nothing outside the folder.
 

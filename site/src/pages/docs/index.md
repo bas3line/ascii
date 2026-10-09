@@ -1,10 +1,10 @@
 ---
 layout: ../../layouts/Docs.astro
 title: introduction
-description: What ascii.rest is, five ways to use it, and what its 216 pieces are.
+description: What ascii.rest is, five ways to use it, and what its 217 pieces are.
 ---
 
-ascii.rest is a free, open-source library of animated ascii art: 216 small animations, called pieces, and block-letter banners for any text. You can play them on a web page, in a GitHub README or in a terminal.
+ascii.rest is a free, open-source library of animated ascii art: 217 small animations, called pieces, and block-letter banners for any text. You can play them on a web page, in a GitHub README or in a terminal.
 
 ascii.rest is MIT licensed. You can use and change it in any project, free or paid.
 
@@ -68,9 +68,9 @@ Pick the row that fits your project. Each page has a full example.
 | an SVG | a GitHub README, or anywhere scripts can't run | [github readme](/docs/readme/), [svg](/docs/svg/) |
 | the terminal | a splash screen or a banner for your CLI | [terminal](/docs/terminal/) |
 
-## Browse the 216 pieces
+## Browse the pieces
 
-There are 216 pieces in 15 categories. Each one has its own page at `ascii.rest/<name>/`, where it plays next to the code to use it. You can also [see them all on one page](/#pieces).
+There are 217 pieces in 15 categories. Each one has its own page at `ascii.rest/<name>/`, where it plays next to the code to use it. You can also [see them all on one page](/#pieces).
 
 | category | pieces | what it holds |
 | --- | --- | --- |
@@ -79,7 +79,7 @@ There are 216 pieces in 15 categories. Each one has its own page at `ascii.rest/
 | data | 10 | live charts and meters: a [bar chart](/bar-chart/), candlesticks, a gauge, sparklines, a heatmap |
 | type | 9 | moving text that takes your own words: a [typewriter](/typewriter/), a split-flap board, a marquee, a glitch |
 | logos | 29 | logos of programming languages and web tools: [rust](/rust/), [python](/python/), go, typescript and more |
-| companies | 20 | company and product logos, like [vercel](/vercel/) and [cloudflare](/cloudflare/) |
+| companies | 21 | company and product logos, like [vercel](/vercel/) and [cloudflare](/cloudflare/) |
 | distros | 23 | Linux distribution logos: [arch linux](/arch-linux/), debian, ubuntu, nixos, and [tux](/tux/) the penguin |
 | shapes | 12 | 3D shapes that turn: the [donut](/donut/), a cube, a tesseract, a DNA helix |
 | space | 11 | planets, a [black hole](/black-hole/), a galaxy, an eclipse, a rocket launch |
@@ -93,7 +93,7 @@ There are 216 pieces in 15 categories. Each one has its own page at `ascii.rest/
 The pieces come in two kinds, and each kind draws in its own way:
 
 - A **text piece** is plain text in your page's colour and font, drawn in a `<pre>`. 129 pieces are text pieces.
-- A **coloured piece** has colours of its own and is drawn on a `<canvas>`. The 87 scenes, logos, companies and distros are coloured pieces.
+- A **coloured piece** has colours of its own and is drawn on a `<canvas>`. The 88 scenes, logos, companies and distros are coloured pieces.
 
 A banner with no colour is drawn like a text piece. A banner with a colour is drawn like a coloured piece.
 

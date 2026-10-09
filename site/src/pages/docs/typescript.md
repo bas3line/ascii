@@ -58,7 +58,7 @@ The donut turns. To play another piece, import it from `ascii.rest/pieces` by it
 
 `mount()` draws into whichever element you give it. A `<pre>` shows text. A `<canvas>` shows colour.
 
-A piece has colours of its own when `piece.meta.palette` is set. Every logo, company, distro and scene does: these 87 are the **coloured pieces**. The other 129 are **text pieces**: plain text in your page's colour.
+A piece has colours of its own when `piece.meta.palette` is set. Every logo, company, distro and scene does: these 88 are the **coloured pieces**. The other 129 are **text pieces**: plain text in your page's colour.
 
 | element | what you get |
 | --- | --- |
@@ -243,7 +243,7 @@ Use these when the piece is chosen while the page runs, for example from a menu 
 | export | what it is |
 | --- | --- |
 | `load` | One function for each piece, by name. `await load["night-coast"]()` imports that piece. |
-| `names` | The names of all 216 pieces, in alphabetical order. |
+| `names` | The names of every piece, in alphabetical order. |
 | `isPiece(name)` | `true` if a string is a piece's name. In TypeScript, it also narrows the string to the `PieceName` type. |
 | `canvas` | A `Set` of the names of the coloured pieces: the ones to draw on a `<canvas>`. |
 

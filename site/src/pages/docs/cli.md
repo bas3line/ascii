@@ -151,7 +151,7 @@ ui          boot-log  box-frames  calendar  digital-clock  dividers  file-tree
 And it ends with the count:
 
 ```text
-216 pieces. npx ascii.rest <piece> plays one.
+217 pieces. npx ascii.rest <piece> plays one.
 ```
 
 The lines wrap to your window, up to 100 columns wide. When the output is piped, they wrap at 80. Every name it prints works with `npx ascii.rest <piece>` and with `npx ascii.rest add`. You can also see every piece playing on [the home page](/#pieces).
