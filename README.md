@@ -1,6 +1,14 @@
 <div align="center">
 
-# ascii.rest
+<a href="https://ascii.rest">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://ascii.rest/banner/ascii.rest.dark.svg?color=f97316,f778ba&tagline=animated%20ascii%20art%20for%20web%20pages">
+    <img alt="ascii.rest: animated ascii art for web pages" src="https://ascii.rest/banner/ascii.rest.svg?color=f97316,f778ba&tagline=animated%20ascii%20art%20for%20web%20pages">
+  </picture>
+</a>
+
+<br>
+<br>
 
 <a href="https://ascii.rest/donut/">
   <picture>
@@ -15,8 +23,8 @@
 
 <br>
 
-Animated ascii art for web pages.<br>
-217 pieces for React, Next.js, Astro or plain HTML.
+217 pieces for React, Next.js, Astro or plain HTML.<br>
+The banner above is drawn by ascii.rest: [make your own](https://ascii.rest/banner/).
 
 [ascii.rest](https://ascii.rest) · [docs](https://ascii.rest/docs/) · [install](#install) · [pieces](#pieces) · [contributing](CONTRIBUTING.md)
 

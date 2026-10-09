@@ -373,6 +373,58 @@ a[aria-current="page"] {
 
 /* --- page header -------------------------------------------------------- */
 
+/* The home page's word on what is new: a glint, the banners' own orange to pink, crosses it every few seconds. */
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1.5ch;
+  margin-bottom: 2rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.notice .tag {
+  padding: 0 0.75ch;
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.notice .shine {
+  background: linear-gradient(105deg, var(--ink) 0 42%, #f97316 47%, #f778ba 53%, var(--ink) 58% 100%) 100% 0 / 250% 100% no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: notice-glint 4s ease-in-out infinite;
+}
+
+.notice .go {
+  color: var(--muted);
+}
+
+.notice:hover .go {
+  color: var(--ink);
+}
+
+@keyframes notice-glint {
+  0%,
+  15% {
+    background-position: 100% 0;
+  }
+  75%,
+  100% {
+    background-position: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice .shine {
+    animation: none;
+    background: none;
+    color: var(--ink);
+  }
+}
+
 .top {
   display: flex;
   align-items: baseline;
@@ -869,10 +921,38 @@ pre.code {
   color: var(--muted);
 }
 
+/*
+ * The docs are read at length, so their prose is set for reading: IBM Plex Sans, the sans of the site's own mono, at
+ * 16px with room between lines, and paragraphs no wider than about 70 characters. Headings, code, tables' first
+ * column and the sidebar stay in the mono, so code reads as code.
+ */
 .docs {
-  max-width: 84ch;
+  --read: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  max-width: 46rem;
   margin-top: 2rem;
   color: var(--text);
+  font-family: var(--read);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+/* Dark letters on a light ground keep their full weight; the thinned rendering is for light on dark. */
+:root:not([data-theme="dark"]) .docs {
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .docs {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+.docs p,
+.docs li,
+.docs figcaption {
+  max-width: 40rem;
 }
 
 .docs > :first-child {
@@ -886,13 +966,21 @@ pre.code {
   text-transform: lowercase;
 }
 
+.docs h2,
+.docs h3 {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.4;
+}
+
 .docs h2 {
-  margin: 2.75rem 0 0.75rem;
+  margin: 3rem 0 0.75rem;
+  font-size: 1.0625rem;
   scroll-margin-top: 1.5rem;
 }
 
 .docs h3 {
-  margin: 2rem 0 0.5rem;
+  margin: 2.25rem 0 0.5rem;
+  font-size: 1rem;
   scroll-margin-top: 1.5rem;
 }
 
@@ -913,20 +1001,25 @@ pre.code {
 .docs .snippet,
 .docs ascii-banner,
 .docs ascii-art {
-  margin: 0.85rem 0;
+  margin: 1.1rem 0;
 }
 
 .docs ul {
-  padding-left: 2ch;
+  padding-left: 1.25rem;
   list-style: "- ";
 }
 
 .docs ol {
-  padding-left: 3ch;
+  padding-left: 1.5rem;
 }
 
 .docs li + li {
-  margin-top: 0.25rem;
+  margin-top: 0.4rem;
+}
+
+.docs li::marker {
+  color: var(--muted);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
 }
 
 .docs a {
@@ -937,8 +1030,14 @@ pre.code {
   text-underline-offset: 0.25em;
 }
 
+/* Code in a sentence: the mono, a touch smaller, on the well's ground, so it stands apart from the words around it. */
 .docs :not(pre) > code {
+  padding: 0.1em 0.35em;
+  background: var(--well);
   color: var(--ink);
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875em;
+  overflow-wrap: anywhere;
 }
 
 .docs strong {
@@ -951,12 +1050,12 @@ pre.code {
 }
 
 .docs pre {
-  margin: 0.85rem 0;
+  margin: 1.1rem 0;
   padding: 1rem 2ch;
   overflow-x: auto;
   background: var(--well);
   color: var(--text);
-  font: inherit;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.8125rem;
   line-height: 1.6;
   tab-size: 2;
@@ -971,6 +1070,9 @@ pre.code {
   position: absolute;
   top: 1rem;
   right: 2ch;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
 }
 
 .docs table {
@@ -981,14 +1083,18 @@ pre.code {
 
 .docs th,
 .docs td {
-  padding: 0.35rem 3ch 0.35rem 0;
+  padding: 0.5rem 1.5rem 0.5rem 0;
   border-bottom: 1px dotted var(--muted);
+  font-size: 0.9375rem;
+  line-height: 1.6;
   text-align: left;
   vertical-align: top;
 }
 
 .docs th {
   color: var(--ink);
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 

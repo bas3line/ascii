@@ -22,6 +22,8 @@ const sections = headings.filter((h) => h.depth === 2);
 ---
 
 <Layout title={`${frontmatter.title} · ascii.rest docs`} description={frontmatter.description} path={path}>
+  <!-- The docs' prose is in the sans of the site's own mono, for reading at length. -->
+  <link slot="head" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" />
   <h1 slot="heading">{frontmatter.title}</h1>
 
   <nav slot="side" class="docs-nav" aria-label="Docs">
