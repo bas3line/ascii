@@ -1,0 +1,64 @@
+---
+/*
+ * Under a piece's preview, beside its downloads: ways to post it. The link
+ * unfurls as the piece's own card (pages/og). A logo, company or distro also
+ * gets a line for whoever it belongs to: one click copies its README snippet,
+ * and its video or GIF from the downloads makes a post that moves.
+ */
+import { LINKS, SITE, readmeUsage, type Piece } from "../lib/library";
+import { looping } from "../lib/svg";
+
+interface Props {
+  piece: Piece;
+}
+
+const { piece } = Astro.props;
+const url = `${SITE}/${piece.slug}/`;
+const logo = ["logos", "companies", "distros"].includes(piece.category);
+const readme = looping(piece.category, piece.options);
+const via = LINKS.find((link) => link.icon === "x")!.label.slice(1);
+const text = logo ? `${piece.name}, in animated ascii, for any page or README` : `${piece.name}: ${piece.note}, in animated ascii`;
+const x = `https://x.com/intent/tweet?${new URLSearchParams({ text, url, via })}`;
+const linkedin = `https://www.linkedin.com/sharing/share-offsite/?${new URLSearchParams({ url })}`;
+const id = `share-${piece.slug}`;
+---
+
+<p class="share">
+  <span>share</span>
+  <a href={x}>[post on x]</a>
+  <a href={linkedin}>[post on linkedin]</a>
+  <button class="button" type="button" data-copy={`${id}-link`} hidden><span>[copy link]</span></button>
+  {readme && <button class="button" type="button" data-copy={`${id}-readme`} hidden><span>[copy readme snippet]</span></button>}
+</p>
+<span id={`${id}-link`} hidden>{url}</span>
+{readme && <pre id={`${id}-readme`} hidden>{readmeUsage(piece)}</pre>}
+{logo && (
+  <p class="yours muted">
+    Yours? {readme ? "The readme snippet puts it in your README, moving, in GitHub's light and dark themes. " : ""}A post
+    with the video or GIF from the downloads moves too; a link alone shows its card, which holds still.
+  </p>
+)}
+
+<style>
+  .share {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 2ch;
+    margin-top: 0.75rem;
+    color: var(--muted);
+  }
+
+  /* The next line under the downloads once the script shows them; their script sits between the two. */
+  :global(.saves:not([hidden])) ~ .share {
+    margin-top: 0.25rem;
+  }
+
+  .share a {
+    color: var(--muted);
+  }
+
+  .yours {
+    max-width: 72ch;
+    margin-top: 0.5rem;
+  }
+</style>
