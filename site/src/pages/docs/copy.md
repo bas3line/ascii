@@ -24,6 +24,8 @@ npx ascii.rest add ascii donut
 It copies the `<Ascii>` component and the `donut` piece into `components/ascii/`, or `src/components/ascii/` if your project has a `src` folder. Use them like any of your own files:
 
 ```tsx
+"use client";
+
 import { Ascii } from "@/components/ascii/ascii";
 import * as donut from "@/components/ascii/pieces/donut";
 
@@ -31,6 +33,8 @@ export default function Page() {
   return <Ascii piece={donut} />;
 }
 ```
+
+The `"use client"` line is for the Next.js app router: it is explained [below](#in-react-and-nextjs).
 
 <div class="demo"><ascii-art piece="donut"></ascii-art></div>
 
@@ -236,6 +240,8 @@ The copied files work like the npm package, imported from your own folder. The e
 Import a piece with `import * as` and pass the whole module to `<Ascii>`:
 
 ```tsx
+"use client";
+
 import { Ascii } from "@/components/ascii/ascii";
 import { Banner } from "@/components/ascii/ascii-banner";
 import * as donut from "@/components/ascii/pieces/donut";
@@ -255,7 +261,8 @@ export default function Page() {
 <div class="demo" style="gap: 1.5rem"><ascii-banner text="hello" color="#f97316,#f778ba" shadow="rounded"></ascii-banner><ascii-art piece="donut"></ascii-art></div>
 
 - The copied `<Ascii>` takes a module, not a name. Write `piece={donut}`, not `piece="donut"`. Playing a piece by name needs the npm package's list of every piece, and your copy does not have it.
-- Both components start with `"use client"`, so a Next.js server component can render them.
+- A piece module holds a function, and a Next.js server component can't pass a function to a client component. So the file that imports the pieces needs `"use client"` at its top, as above. Put the art in a component of its own if the rest of the page should stay on the server.
+- `<Banner>` takes only plain values, so a server component can render it on its own.
 - Every other prop is the same as in the npm package. They are all on [react](/docs/react/).
 
 ### Without React

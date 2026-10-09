@@ -253,12 +253,19 @@ function pieceLoop(piece: Piece, o: SvgOptions): Loop {
   };
 }
 
+// A piece's frames, on its own ground where it has one, as a scene does: drawn over the page, its picture would change.
+const pieceArt = (piece: Piece, o: SvgOptions, prefix = ""): Part => {
+  const p = part({ ...pieceLoop(piece, o), cell: piece.meta.cell ?? 2 }, prefix);
+  const ground = piece.meta.ground;
+  return ground ? { ...p, body: `<rect width="${p.width}" height="${p.height}" fill="${attr(ground)}"/>${p.body}` } : p;
+};
+
 /**
- * A piece as an animated SVG. Its classes are bare, so to inline two in one HTML page, give one a prefix with
- * namespaced(). It throws for an `ink` that isn't #rrggbb or an `fps` that isn't 1 to 60.
+ * A piece as an animated SVG, on its own ground if it has one. Its classes are bare, so to inline two in one HTML page,
+ * give one a prefix with namespaced(). It throws for an `ink` that isn't #rrggbb or an `fps` that isn't 1 to 60.
  */
 export function svg(piece: Piece, options: SvgOptions = {}): string {
-  return wrap(part({ ...pieceLoop(piece, options), cell: piece.meta.cell ?? 2 }), options.label ?? `${piece.meta.name}, in ascii, from ascii.rest`, num(options.scale, "scale"));
+  return wrap(pieceArt(piece, options), options.label ?? `${piece.meta.name}, in ascii, from ascii.rest`, num(options.scale, "scale"));
 }
 
 export interface BannerSvgOptions {
@@ -328,9 +335,10 @@ export function bannerSvg(text: string, options: Omit<BannerOptions, "color"> & 
   if (options.art && "svg" in options.art) {
     art = namespaced(options.art.svg, "a");
     if (!art) throw new Error("ascii.rest: art takes a piece, or { svg } of an SVG that ascii.rest/svg wrote");
-  } else if (options.art) art = part({ ...pieceLoop(options.art, { dark }), cell: options.art.meta.cell ?? 2 }, "a");
-  // A still banner holds its art still too, on its first frame.
-  if (art && options.effect === "still") art.css += `.af{animation:none}.ak0{opacity:1}`;
+  } else if (options.art) art = pieceArt(options.art, { dark }, "a");
+  // A still banner holds its art still too, on its first frame and only that: these rules come after the art's own,
+  // so they also hide the last frame an art played once would show for reduced motion.
+  if (art && options.effect === "still") art.css += `.af{animation:none;opacity:0}.af.ak0{opacity:1}`;
 
   // The letters' colours: the art's own, a fade, one colour, or GitHub's text colour.
   const asked = options.color === "art" ? ((art && inkOf(art)) ?? INK[theme]) : (themed(options.color, dark) ?? INK[theme]);

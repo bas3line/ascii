@@ -372,7 +372,7 @@ writeFileSync("banner.svg", bannerSvg("my-project", { art: rust, color: "art", t
 
 `svg(piece: Piece, options?: SvgOptions): string`
 
-Returns one loop of a piece as an animated SVG. It throws for an `ink` that isn't `#rrggbb`, a `scale` that isn't a number of 0 or more, or an `fps` outside 1 to 60. Guide: [svg](/docs/svg/).
+Returns one loop of a piece as an animated SVG, on the piece's `meta.ground` when it has one, as a scene does. It throws for an `ink` that isn't `#rrggbb`, a `scale` that isn't a number of 0 or more, or an `fps` outside 1 to 60. Guide: [svg](/docs/svg/).
 
 ### bannerSvg()
 

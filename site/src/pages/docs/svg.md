@@ -85,6 +85,8 @@ This is `svg(rust)`. ascii.rest serves the same file at `https://ascii.rest/svg/
 | `label` | What screen readers say. | `"<name>, in ascii, from ascii.rest"` |
 | `options` | Options for the piece itself, like `{ scan: 3 }` for a distro that scans every 3 seconds. | the piece's own |
 
+A scene has a background colour of its own, its `meta.ground`. Its SVG draws that colour behind it, so it looks the same on a light page and a dark one. The same goes for a scene beside a banner in `bannerSvg()`.
+
 `svg()` throws an error when:
 
 - `ink` isn't `#rrggbb`.
