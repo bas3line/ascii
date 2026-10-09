@@ -6,4 +6,4 @@
 import { banner } from "../../src/banner.ts";
 import { chain, rainbow, wave } from "../../src/kit/fx.ts";
 
-export default chain(banner("hello", { effect: "still" }), (p) => rainbow(p), (p) => wave(p));
+export default chain(banner("hello", { effect: "still" }), rainbow, wave);

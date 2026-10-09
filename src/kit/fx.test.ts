@@ -8,7 +8,7 @@ import { loopOf, svg } from "../svg.ts";
 import { still } from "../terminal.ts";
 import type { Piece } from "../types.ts";
 import { INK, Palette, Surface, asPiece, mix, piece, ramps } from "./core.ts";
-import { chain, dissolve, fade, glint, glitch, hueCycle, hues, outline, outlines, rainbow, scan, shadow, shake, typeIn, wave } from "./fx.ts";
+import { chain, dissolve, effect, fade, glint, glitch, hueCycle, hues, outline, outlines, rainbow, scan, shadow, shake, typeIn, wave } from "./fx.ts";
 
 // A frame as text, and each cell's colour as #rrggbb (null for a space, or in one ink), as a player draws it.
 function look(p: Piece, t: number, { paper = false, mono = false }: { paper?: boolean; mono?: boolean } = {}) {
@@ -81,11 +81,14 @@ test("every effect makes a piece that keeps the frame contract, in colour and mo
 
 test("glint: quiet between passes, a slanted band of light across the ink during one", () => {
   const p = glint(rust, quietRust());
-  // Before the first pass and after one, it is the source.
-  for (const t of [0, 0.2, 2, 3.9]) same(look(p, t), look(rust0, t), `t=${t}`);
-  for (const t of [0, 2]) same(look(p, t, { paper: true }), look(rust0, t, { paper: true }), `paper t=${t}`);
-  // Mid pass: some cells are the band's characters, only where the source has ink.
-  const src = look(rust0, 1.1), mid = look(p, 1.1), lit = look(p, 1.1, { paper: true });
+  // Before the first pass and after one, it is the source. Across rust, 64 by 32 leaning 1 a row, the band travels 99
+  // cells, which at 40 a second takes about 2.5 s, from 0.5 s.
+  for (const t of [0, 0.2, 3.1, 3.9]) same(look(p, t), look(rust0, t), `t=${t}`);
+  for (const t of [0, 3.1]) same(look(p, t, { paper: true }), look(rust0, t, { paper: true }), `paper t=${t}`);
+  assert.notEqual(look(p, 2.5).text, look(rust0, 2.5).text, "still crossing at 2.5 s");
+  // Mid pass: rust's solid characters in the band's core turn to slashes, as the logos' own glint, only where the
+  // source has ink, on paper too.
+  const src = look(rust0, 1.5), mid = look(p, 1.5), lit = look(p, 1.5, { paper: true });
   const flat = (s: string) => [...s.replace(/\n/g, "")];
   const a = flat(src.text), b = flat(mid.text), c = flat(lit.text);
   let changed = 0;
@@ -93,8 +96,8 @@ test("glint: quiet between passes, a slanted band of light across the ink during
     if (a[i] === " ") assert.equal(b[i], " ", "the band lights only ink");
     else if (a[i] !== b[i]) {
       changed++;
-      assert.ok("█▓".includes(b[i]), `dark page band: ${b[i]}`);
-      assert.ok("▒▓".includes(c[i]), `paper band: ${c[i]}`);
+      assert.equal(b[i], "/", `dark page band: ${b[i]}`);
+      assert.equal(c[i], "/", `paper band: ${c[i]}`);
     }
   }
   assert.ok(changed > 20, `the band crosses ink: ${changed} cells`);
@@ -103,9 +106,36 @@ test("glint: quiet between passes, a slanted band of light across the ink during
   const added = mid.hexes.filter((h, i) => h && h !== src.hexes[i]);
   assert.ok(added.length > 20 && added.every((h) => tints.has(h!)), "lit in the tints");
   // The band leans like a slash: a row further down is lit further left.
-  const col = (row: number) => b.slice(row * 64, row * 64 + 64).indexOf("█");
+  const col = (row: number) => b.slice(row * 64, row * 64 + 64).findIndex((ch, x) => ch !== a[row * 64 + x]);
   const top = col(9), low = col(20);
   assert.ok(top >= 0 && low >= 0 && low < top, `leans: row 9 at ${top}, row 20 at ${low}`);
+});
+
+test("glint: each character as suits it, blocks to blocks, solid to a slash, thin ones kept", () => {
+  // A band wide enough to cover all of it: 8 is solid, l and the box line are thin, ▓ is a block.
+  const p = glint("8l─▓.", { first: 0, sweep: 1, width: 40 });
+  assert.equal(look(p, 0.5).text, "/l─█.");
+  assert.equal(look(p, 0.5, { paper: true }).text, "/l─▒.");
+  // Characters of your own light every cell of ink.
+  assert.equal(look(glint("8l─▓.", { first: 0, sweep: 1, width: 40, chars: "*" }), 0.5).text, "*****");
+  // A banner's shadow lines keep their shape under the band, and its letters' blocks turn bright.
+  const b = glint(still3, { first: 0, sweep: 1, width: 400 });
+  const src = [...look(still3, 0).text], lit = [...look(b, 0.5).text];
+  src.forEach((ch, i) => {
+    if (ch >= "─" && ch <= "╿") assert.equal(lit[i], ch, "box drawing is kept");
+    if (ch === "▓") assert.equal(lit[i], "█");
+  });
+});
+
+test("glint: the sweep takes longer across a wide piece, so the band moves at most 40 cells a second", () => {
+  const lit = (p: Piece, t: number) => look(p, t).text.includes("/");
+  // 10 columns: 1.2 s, over by 2 s. 100 columns: 104 cells of travel, 2.6 s, still crossing at 2 s and over by 3.2.
+  assert.ok(lit(glint("8".repeat(10)), 1) && !lit(glint("8".repeat(10)), 2));
+  assert.ok(lit(glint("8".repeat(100)), 2) && lit(glint("8".repeat(100)), 3) && !lit(glint("8".repeat(100)), 3.2));
+  // Never past 3 s, nor three quarters of `every`; a sweep given is kept.
+  assert.ok(!lit(glint("8".repeat(300)), 3.6));
+  assert.ok(lit(glint("8".repeat(100), { every: 2 }), 1.9) && !lit(glint("8".repeat(100), { every: 2 }), 2.1));
+  assert.ok(!lit(glint("8".repeat(100), { sweep: 1 }), 1.6));
 });
 
 test("glint: options, colours on a piece in one ink, its loop and its still", () => {
@@ -218,7 +248,22 @@ test("dissolve: in, held whole, out and gone; only the source's cells, determini
   const half = look(d, 0.9), whole = look(rust0, 0.9);
   half.hexes.forEach((h, i) => h && assert.equal(h, whole.hexes[i]));
   assert.throws(() => dissolve("x", { mode: "sideways" as never }), /dissolve\.mode takes "in", "out" or "inout", not "sideways"/);
-  assert.throws(() => dissolve("x", { scale: 2 }), /dissolve\.scale takes a number above 0, up to 1, not 2/);
+  assert.throws(() => dissolve("x", { blob: 0.5 }), /dissolve\.blob takes a number of cells, 1 or more, not 0\.5/);
+});
+
+test("dissolve: blob is the size of the patches that come and go together, in cells", () => {
+  const wide = Array.from({ length: 16 }, () => "#".repeat(64)).join("\n");
+  // Cells shown part way that have a shown neighbour to the right: patches hold together, speckle doesn't.
+  const together = (blob: number) => {
+    const rows = look(dissolve(wide, { blob, edge: "" }), 1).text.split("\n");
+    let shown = 0, pairs = 0;
+    rows.forEach((l) => {
+      for (let x = 0; x < l.length - 1; x++) if (l[x] === "#") (shown++, l[x + 1] === "#" && pairs++);
+    });
+    return pairs / shown;
+  };
+  const big = together(12), fine = together(1);
+  assert.ok(big > fine + 0.15, `patches of 12 hold together more than 1: ${big.toFixed(2)} against ${fine.toFixed(2)}`);
 });
 
 test("dissolve: an SVG's loop starts on the held moment, so its reduced-motion frame is whole", () => {
@@ -227,22 +272,42 @@ test("dissolve: an SVG's loop starts on the held moment, so its reduced-motion f
   assert.match(svg(p, { dark: true }), /^<svg /);
 });
 
-test("fade: each character steps down the ramp to a space, colours kept", () => {
+test("fade: each character steps down its ramp to a space, blocks in blocks, lines whole, colours kept", () => {
   const p = fade(still3);
   same(look(p, 2.7), look(still3, 0), "held");
   same(look(p, 2.7, { paper: true }), look(still3, 0, { paper: true }), "held, on paper");
   assert.equal(look(p, 0).text.trim(), "", "gone");
-  const std = ramps.standard;
-  // Part way, every character is on the ramp: ▓ starts from #, box lines from -; low early, higher later.
-  const src = look(still3, 0);
-  for (const [t, want] of [[0.7, ":-"], [1.2, "+*"]] as const) {
+  // Part way, a block steps down the blocks, low early and higher later; a box line is itself or gone, thinning out
+  // rather than turning to dots.
+  const src = look(still3, 0), cells = [...src.text];
+  const isBlock = (ch: string) => ch >= "▀" && ch <= "▟";
+  for (const [t, want] of [[0.7, "░"], [1.2, "▒"]] as const) {
     const mid = look(p, t);
     const b = [...mid.text];
-    for (const ch of b) if (ch !== " " && ch !== "\n") assert.ok(std.includes(ch), `${ch} is on the ramp`);
-    assert.ok([...want].some((ch) => b.includes(ch)), `t=${t}: ${want} part way down`);
-    assert.ok(!b.includes("#") && !b.includes("@"), `t=${t}: below its start`);
+    let lines = 0, shown = 0;
+    b.forEach((ch, i) => {
+      if (!isBlock(cells[i]) && cells[i] !== " " && cells[i] !== "\n") (lines++, ch === cells[i] && shown++);
+      if (ch === " " || ch === "\n" || ch === cells[i]) return;
+      assert.ok(isBlock(cells[i]) && ramps.blocks.includes(ch), `${cells[i]} steps down to ${ch}`);
+    });
+    assert.ok(shown > 0 && shown < lines, `t=${t}: ${shown} of ${lines} box lines shown part way`);
+    for (const ch of want) assert.ok(b.includes(ch), `t=${t}: ${ch} part way down`);
+    if (t < 1) assert.ok(!b.includes("▓"), `t=${t}: below its start`);
     mid.hexes.forEach((h, i) => h && assert.equal(h, src.hexes[i]));
   }
+  // Plain ascii steps down the standard ramp.
+  const word = fade("hello@world", { mode: "out", period: 10 });
+  const part = look(word, 8).text;
+  assert.match(part, /^[ .:\-=+*#hellowrd@]+$/);
+  assert.ok([...part].some((ch) => ".:-=+*#".includes(ch)), part);
+  // On its top step a character is itself, so the fade meets the whole piece without a jump.
+  const ink = cells.filter((ch) => ch !== " " && ch !== "\n").length;
+  const near = [...look(p, 1.7).text].filter((ch, i) => ch !== " " && ch !== "\n" && ch === cells[i]).length;
+  assert.ok(near > 0.8 * ink, `${near} of ${ink} cells already themselves just before it holds`);
+  // A ramp named for every character: the blocks step down the standard ramp.
+  const std = [...look(fade(still3, { ramp: "standard" }), 1.2).text];
+  std.forEach((ch, i) => ch !== " " && ch !== "\n" && ch !== cells[i] && assert.ok(ramps.standard.includes(ch), `${ch} on the standard ramp`));
+  assert.ok(std.some((ch) => "+*=".includes(ch)));
   // A character on the ramp starts from its own place.
   const dots = fade(":::::", { mode: "out", period: 10 });
   assert.equal(look(dots, 0).text, ":::::");
@@ -338,11 +403,19 @@ test("rainbow and hueCycle: the ink in a cycle of colours, the source's characte
   // hueCycle: one colour at a time.
   const h = hueCycle("hello world");
   for (const t of [0, 0.7, 1.9]) assert.equal(new Set(look(h, t).hexes.filter(Boolean)).size, 1);
-  // Your own colours, faded round to `steps`.
-  const two = rainbow("abcdefgh", { colors: ["#ff0000", "#0000ff"], steps: 4, spread: 0.25 });
-  assert.deepEqual(new Set(look(two, 0).hexes), new Set(["#ff0000", "#800080", "#0000ff"]));
+  // Your own colours, faded round to `steps`, twice across.
+  const two = rainbow("abcdefgh", { colors: ["#ff0000", "#0000ff"], steps: 4, cycles: 2 });
+  assert.deepEqual(look(two, 0).hexes, ["#ff0000", "#800080", "#0000ff", "#800080", "#ff0000", "#800080", "#0000ff", "#800080"]);
+  // By default every colour fits once across the piece, whatever its size; down it with direction "y".
+  for (const w of [12, 60]) {
+    const seen = new Set(look(rainbow("#".repeat(w)), 0).hexes);
+    assert.equal(seen.size, 12, `all 12 hues across ${w} columns`);
+  }
+  const tall = rainbow(Array(12).fill("#").join("\n"), { direction: "y" });
+  assert.equal(new Set(look(tall, 0).hexes).size, 12, "all 12 down 12 rows");
   assert.throws(() => rainbow("x", { colors: ["red"] }), /rainbow\.colors takes a list of colours as #rrggbb/);
   assert.throws(() => rainbow("x", { steps: 40 }), /rainbow\.steps takes a whole number from 1 to 32, not 40/);
+  assert.throws(() => rainbow("x", { cycles: -1 }), /rainbow\.cycles takes a number, 0 or more, not -1/);
   assert.throws(() => hueCycle("x", { direction: "z" as never }), /hueCycle\.direction takes "x", "y" or "diagonal"/);
 });
 
@@ -405,6 +478,9 @@ test("chain: effects one after another, the same as calling them in turn", () =>
   const a = chain("hi\nyo", (p) => glint(p, { first: 0 }), (p) => wave(p));
   const b = wave(glint("hi\nyo", { first: 0 }));
   for (const t of [0, 0.3, 1]) assert.equal(look(a, t).text, look(b, t).text);
+  // An effect with no options goes in by its name.
+  const bare = chain(still3, rainbow, wave), wrapped = chain(still3, (p) => rainbow(p), (p) => wave(p));
+  for (const t of [0, 0.7]) same(look(bare, t), look(wrapped, t), `t=${t}`);
   assert.equal(chain(donut), donut);
   assert.throws(() => chain("x", 5 as never), /chain\(\) takes effects as functions/);
   assert.throws(() => chain("x", () => 5 as never), /chain\(\)'s effect 1 returns a piece/);
@@ -449,6 +525,46 @@ test("effects play through svg() and the terminal", async () => {
   assert.equal(await still(dissolve(block)), look(dissolve(block), 2.7, { mono: true }).text);
 });
 
+test("a misspelt option throws, naming the options there are, rather than being left out", () => {
+  assert.throws(() => glint("x", { evry: 2 } as never), /^Error: ascii\.rest: glint\(\) has no option "evry": it takes every, sweep, first, width, slant, chars, color, name, note or options$/);
+  assert.throws(() => dissolve("x", { scale: 0.15 } as never), /dissolve\(\) has no option "scale": it takes period, mode, blob, edge, seed/);
+  assert.throws(() => rainbow("x", { spread: 0.03 } as never), /rainbow\(\) has no option "spread": it takes colors, steps, period, cycles, direction/);
+  assert.throws(() => hueCycle("x", { speed: 2 } as never), /hueCycle\(\) has no option "speed"/);
+  for (const [fx, make] of [
+    ["typeIn", typeIn],
+    ["fade", fade],
+    ["scan", scan],
+    ["glitch", glitch],
+    ["wave", wave],
+    ["shake", shake],
+    ["outline", outline],
+    ["shadow", shadow],
+  ] as const)
+    assert.throws(() => (make as (s: string, o: object) => Piece)("x", { colour: "#ff0000" }), new RegExp(`^Error: ascii\\.rest: ${fx}\\(\\) has no option "colour"`));
+  // An option left undefined is no option at all.
+  assert.equal(look(glint("x", { every: undefined, evry: undefined } as never), 0).text, "x");
+});
+
+test("text with Windows line ends and tabs is taken as a terminal shows it", () => {
+  assert.equal(look(outline("ab\r\ncd"), 0).text, "┌──┐\n│ab│\n│cd│\n└──┘");
+  assert.equal(look(shadow("a\tb", { dx: 0, dy: 1 }), 0).text, "a       b\n░       ░");
+  assert.equal(glint("12345678\tx").meta.cols, 17);
+  assert.equal(look(typeIn("ab\r\ncd", { speed: 100 }), 1).text, "ab \ncd ");
+  assert.throws(() => glint("a\u0007b"), /text takes printable characters/);
+  // An emoji is two cells' worth of a frame, which an effect would part.
+  assert.throws(() => glint("a😀b"), /glint\(\) takes text of characters from the Basic Multilingual Plane, one a cell, not emoji: "a😀b"/);
+  // list.map(glint) passes an index as the options: the error says what to write.
+  assert.throws(() => ["a", "b"].map(glint as never), /glint\(\) takes its options as an object, not 0: over a list, write list\.map\(\(p\) => glint\(p\)\)/);
+});
+
+test("typeIn: on a still source an SVG plays it once and holds, as a page does; looping with hold", () => {
+  assert.deepEqual(loopOf(typeIn("hello")), { every: 0.625, from: 0, once: true });
+  assert.match(svg(typeIn("hello")), /1 forwards/);
+  // With hold it loops; on a moving source it plays as the source does.
+  assert.equal(loopOf(typeIn("hello", { hold: 1 })).once, false);
+  assert.equal(loopOf(typeIn(donut)).once, undefined);
+});
+
 test("an effect of a piece made with piece() keeps its colours by theme", () => {
   const duo = piece({ name: "duo", cols: 4, rows: 1, fps: 0, palette: { light: ["#111111", "#aa0000"], dark: ["#eeeeee", "#ff5555"] } }, (t, s) => {
     s.write(0, 0, "ab");
@@ -456,4 +572,110 @@ test("an effect of a piece made with piece() keeps its colours by theme", () => 
   });
   for (const paper of [false, true]) same(look(scan(duo), 0, { paper }), look(duo, 0, { paper }), `paper ${paper}`);
   assert.deepEqual(look(shadow(duo), 0).hexes.slice(0, 3), ["#eeeeee", "#eeeeee", "#ff5555"]);
+});
+
+test("a cell an effect draws with no colour takes the source's main colour for the page's theme", () => {
+  // A scan line across empty cells of a piece coloured by theme: light ink on a dark page, dark ink on paper. It was
+  // drawn in the palette's first colour, the light page's, and so all but vanished on a dark page.
+  const duo = piece({ name: "duo", cols: 8, rows: 3, fps: 0, palette: { light: ["#111111", "#aa0000"], dark: ["#eeeeee", "#ff5555"] } }, (t, s) => {
+    s.write(2, 1, "ab");
+    s.set(4, 1, "c", 1);
+  });
+  const line = (paper: boolean) => new Set(look(scan(duo, { period: 3 }), 1.2, { paper }).hexes.slice(8, 16));
+  assert.deepEqual(line(false), new Set(["#eeeeee", "#ff5555"]));
+  assert.deepEqual(line(true), new Set(["#111111", "#aa0000"]));
+  // A logo's own main colour, by theme.
+  const r = look(scan(rust, quietRust({ period: 3 })), 1.5);
+  const row = r.text.split("\n").findIndex((l) => /─{64}/.test(l));
+  const counts = new Map<string, number>();
+  for (const h of r.hexes.slice(row * 64, row * 64 + 64)) counts.set(h!, (counts.get(h!) ?? 0) + 1);
+  assert.ok(row >= 0 && [...counts.keys()].every((h) => rust.meta.palette.slice(rust.meta.palette.length / 2).includes(h)), `${[...counts.keys()]}`);
+});
+
+test("dissolve: blocks cross the edge as lighter blocks, other characters as dots, or as you say", () => {
+  const edgeOf = (src: string, o = {}) => new Set(look(dissolve(src, { edge: undefined, ...o }), 0.9).text.replace(/[\s#▓]/g, ""));
+  const wall = (ch: string) => Array.from({ length: 8 }, () => ch.repeat(40)).join("\n");
+  assert.deepEqual(edgeOf(wall("▓")), new Set(["░", "▒"]));
+  assert.deepEqual(edgeOf(wall("#")), new Set([".", ":"]));
+  assert.deepEqual(edgeOf(wall("▓"), { edge: "*" }), new Set(["*"]));
+});
+
+test("typeIn: typing that runs past a minute is left to svg()'s 4 seconds, as a loop is, rather than sampled whole", () => {
+  assert.deepEqual(loopOf(typeIn("hello", { speed: 0.05 })), { every: 4, from: 0 });
+  assert.match(svg(typeIn("hello", { speed: 1e-6 })), /^<svg /);
+  assert.equal(loopOf(typeIn("x".repeat(59), { speed: 1 })).once, true, "59.5 s plays once");
+  assert.equal(loopOf(typeIn("x".repeat(60), { speed: 1 })).once, undefined, "60.5 s is past a minute");
+});
+
+test("effect(): an effect of your own, sized, coloured, timed and checked as the kit's are", () => {
+  // The simplest: a drawing alone. It moves as its source does, and copying the source is the source.
+  const copy = effect(donut, (t, s, src) => s.paste(src, 0, 0));
+  assert.equal(copy.meta.fps, 30);
+  assert.equal(copy.meta.loop, undefined);
+  for (const t of [0, 0.7]) same(look(copy, t), look(donut, t), `t=${t}`);
+  // A period makes it move by itself: 24 frames a second on a still, the loop by the time rule.
+  const blink = effect("hi", { period: 1 }, (t, s, src) => {
+    if (t % 1 < 0.5) s.paste(src, 0, 0);
+  });
+  assert.equal(blink.meta.fps, 24);
+  assert.equal(blink.meta.loop, 1);
+  assert.equal(look(blink, 0.2).text, "hi");
+  assert.equal(look(blink, 0.7).text, "  ");
+  assert.equal(effect(rust, { period: 2 }, () => {}).meta.loop, 10, "with rust's glint, every 5 s");
+  assert.equal(effect("hi", { moves: true }, () => {}).meta.loop, undefined, "moves, never repeats");
+  // pad: room round the source, which sits at ctx.x, ctx.y.
+  const framed = effect("ab", { pad: { left: 2, bottom: 1 } }, (t, s, src, ctx) => {
+    s.fill(".");
+    s.paste(src, ctx.x, ctx.y);
+  });
+  assert.equal(framed.meta.cols, 4);
+  assert.equal(look(framed, 0).text, "..ab\n....");
+  assert.equal(effect("ab", { pad: [1, 2] }, () => {}).meta.rows, 5);
+  assert.equal(effect("ab", { pad: 3 }, () => {}).meta.cols, 8);
+  // colors: drawn by #rrggbb; on a piece in one ink the rest is in the kit's ink.
+  const red = effect("ab", { colors: ["#ff0000"] }, (t, s, src) => {
+    s.paste(src, 0, 0);
+    s.set(1, 0, "!", "#ff0000");
+  });
+  assert.deepEqual(look(red, 0).hexes, [INK.dark, "#ff0000"]);
+  assert.deepEqual(look(red, 0, { paper: true }).hexes, [INK.light, "#ff0000"]);
+  assert.equal(look(red, 0, { mono: true }).text, "a!");
+  // ctx.at reads the source at another moment: an echo of donut half a second back.
+  const echo = effect(donut, (t, s, src, ctx) => s.paste(ctx.at(t - 0.5), 0, 0));
+  for (const t of [0.5, 1.3]) same(look(echo, t), look(donut, t - 0.5), `echo t=${t}`);
+  // { setup } runs once a play, for buffers.
+  let setups = 0;
+  const kept = effect("ab", {
+    setup: () => {
+      setups++;
+      return (t, s, src) => s.paste(src, 0, 0);
+    },
+  });
+  const play = kept.default();
+  play(0);
+  play(1);
+  assert.equal(setups, 1);
+  // Name, note, the source's options, still; and it keeps the contract and chains.
+  const named = effect(rust, { name: "mine", still: 1.5, options: { shine: 0 } }, (t, s, src) => s.paste(src, 0, 0));
+  assert.equal(named.meta.name, "mine");
+  assert.equal(named.meta.note, "mine, with an effect");
+  assert.equal(named.meta.still, 1.5);
+  assert.deepEqual(named.meta.options, { shine: 0 });
+  contract(effect(rust, { period: 1, pad: 1, colors: ["#00ff00"] }, (t, s, src, ctx) => {
+    s.paste(src, ctx.x, ctx.y);
+    s.set(0, 0, "*", "#00ff00");
+  }));
+  const twice = chain("hi", (p) => effect(p, { pad: 1 }, (t, s, src) => s.paste(src, 1, 1)), outline);
+  assert.equal(twice.meta.cols, 6);
+  // What it checks.
+  assert.throws(() => effect("x", 5 as never), /^Error: ascii\.rest: effect\(\) takes a drawing, \(t, s, src, ctx\) => \{ \.\.\. \}, or \{ setup: \(\) => drawing \}/);
+  assert.throws(() => effect("x", { period: 1 }, null as never), /effect\(\) takes a drawing/);
+  assert.throws(() => effect("x", { perod: 1 } as never, () => {}), /effect\(\) has no option "perod": it takes period, moves, still, pad, colors, name, note or options/);
+  assert.throws(() => effect("x", { period: 0 }, () => {}), /effect\.period takes a number of seconds above 0, not 0/);
+  assert.throws(() => effect("x", { pad: -1 }, () => {}), /effect\.pad takes a whole number of cells, 0 or more, not -1/);
+  assert.throws(() => effect("x", { pad: { up: 1 } as never }, () => {}), /effect\.pad takes a whole number of cells, 0 or more, \[columns, rows\], or \{ top, right, bottom, left \}/);
+  assert.throws(() => effect("x", { colors: ["red"] }, () => {}), /effect\.colors takes a list of colours as #rrggbb/);
+  assert.throws(() => effect("x", { moves: 1 as never }, () => {}), /effect\.moves takes true or false/);
+  assert.throws(() => effect("x".repeat(300), { pad: 20 }, () => {}), /effect\(\) makes a piece 340 by 41/);
+  assert.throws(() => effect("x", { setup: () => 5 as never }).default()(0), /effect\(\)'s setup returns the drawing/);
 });
