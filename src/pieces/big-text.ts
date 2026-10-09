@@ -1,6 +1,7 @@
 /*
  * big-text: a banner in a hand-made five-row block font with a drop shadow
- * drawn in double lines, and a glint that sweeps across now and then.
+ * drawn in double lines, and a glint that sweeps across now and then. fit()
+ * sizes it to its text, for the README banners and banner() in a terminal.
  */
 import type { Frame, Meta } from "../types.ts";
 
@@ -42,15 +43,40 @@ const FONT: Record<string, string> = {
 const JOIN = " ║║║═╝╗╣═╚╔╠═╩╦╬";
 const U = 1, D = 2, L = 4, R = 8;
 
+// The glint starts across at 0.5 s, takes 2.4 s to cross, and comes round every 3.2 s.
+const FIRST = 0.5, SWEEP = 2.4, PERIOD = 3.2;
+
+/** The characters of a text that the font draws, in the case they came in; fit() leaves out the rest. */
+export const drawable = (text: string) => [...String(text)].filter((ch) => Object.hasOwn(FONT, ch.toUpperCase())).join("");
+
+// The letters of a text that the font has, each as its five rows.
+const shapes = (text: string) => [...String(text).toUpperCase()].map((ch) => FONT[ch]).filter(Boolean).map((g) => g.split("|"));
+// The columns they take at s columns a pixel, two between letters and one for the shadow.
+const span = (glyphs: string[][], s: number) => glyphs.reduce((w, g) => w + g[0].length * s + 2, -1);
+
 export default function bigText({ text = meta.options.text }: Partial<BigTextOptions> = {}): Frame {
   const { cols, rows } = meta;
-  const glyphs = [...String(text).toUpperCase()].map((ch) => FONT[ch]).filter(Boolean).map((g) => g.split("|"));
+  const glyphs = shapes(text);
   // Each pixel is two columns by one row, so it is square; one column narrower if it would not fit.
-  const span = (s: number) => glyphs.reduce((w, g) => w + g[0].length * s + 2, -1);
-  const s = span(2) <= cols - 2 ? 2 : 1;
-  const x0 = Math.max(0, Math.floor((cols - span(s)) / 2));
-  const y0 = Math.floor((rows - 6) / 2);
+  const s = span(glyphs, 2) <= cols - 2 ? 2 : 1;
+  return draw(glyphs, s, cols, rows, Math.max(0, Math.floor((cols - span(glyphs, s)) / 2)), Math.floor((rows - 6) / 2));
+}
 
+/**
+ * The same banner sized to its text instead of to the piece's 66 by 8, for a README or a terminal: the letters and
+ * their shadow with nothing around them, in square pixels while that is at most `max` columns wide and one column a
+ * pixel when it is not. `cols` is 0 when the font has none of the text's characters. The glint first crosses from
+ * `glint.from` to `glint.to` seconds, and again every `glint.every`.
+ */
+export function fit(text: string, max = Infinity) {
+  const glyphs = shapes(drawable(text));
+  const s = span(glyphs, 2) <= max ? 2 : 1;
+  const cols = Math.max(0, span(glyphs, s)), rows = 6;
+  return { cols, rows, frame: draw(glyphs, s, cols, rows, 0, 0), glint: { from: FIRST, to: FIRST + SWEEP, every: PERIOD } };
+}
+
+// The letters at s columns a pixel from column x0 and row y0, on a frame of cols by rows.
+function draw(glyphs: string[][], s: number, cols: number, rows: number, x0: number, y0: number): Frame {
   const ink = new Uint8Array(cols * rows);
   let x = x0;
   for (const g of glyphs) {
@@ -78,11 +104,10 @@ export default function bigText({ text = meta.options.text }: Partial<BigTextOpt
     }
   }
 
-  const SWEEP = 2.4, PERIOD = 3.2;
-  const left = x0 - 2, right = x0 + span(s) + 9;
+  const left = x0 - 2, right = x0 + span(glyphs, s) + 9;
   return (t, { paper = false } = {}) => {
     // The glint crosses at an even pace, then rests out of sight. Frame 0 is at rest.
-    const u = (((t - 0.5) % PERIOD) + PERIOD) % PERIOD / SWEEP;
+    const u = (((t - FIRST) % PERIOD) + PERIOD) % PERIOD / SWEEP;
     const p = u < 1 ? left + (right - left) * u : -99;
     const lines: string[] = [];
     for (let r = 0; r < rows; r++) {

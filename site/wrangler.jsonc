@@ -1,17 +1,22 @@
 {
-  // ascii.rest: the built site, served as static assets with no Worker code.
+  // ascii.rest: the built site, served as static assets. Only what is under
+  // /banner/ goes to the Worker first (src/worker.ts), which draws the README
+  // banners and hands the rest back to the assets.
   // public/_headers opens the library files to other origins.
   // Workers Builds deploys main and gives every other branch a Preview URL,
   // which it posts on the pull request; workers.dev stays off for production.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ascii-rest",
+  "main": "./src/worker.ts",
   "compatibility_date": "2026-10-01",
   "workers_dev": false,
   "preview_urls": true,
   "previews": {},
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "404-page"
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/banner/*"]
   },
   "routes": [{ "pattern": "ascii.rest", "custom_domain": true }]
 }

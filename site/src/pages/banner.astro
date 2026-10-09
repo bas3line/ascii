@@ -1,0 +1,290 @@
+---
+/*
+ * /banner/: a text in big text's block letters, with a glint that passes now
+ * and then, as an animated SVG for a GitHub README, and the same in a
+ * terminal. The Worker (src/worker.ts) serves each banner at
+ * /banner/<text>.svg; this page draws the same SVG in the browser as you type
+ * (lib/banner.ts), so what it shows is what a README gets. The text and the
+ * colour ride in the page's URL, ?text=&color=, so a banner can be linked to.
+ * Without script the form stays hidden and the page shows its own banner.
+ */
+import Layout from "../layouts/Layout.astro";
+import { MARKS, MAX, bannerPath, cliBanner, readmeBanner, terminalBanner } from "../lib/banner";
+
+const text = "ascii.rest";
+// The letters' colours to pick from, after GitHub's own text colour; a colour input gives any other.
+const COLOURS = [
+  { name: "orange", value: "#f97316" },
+  { name: "green", value: "#3fb950" },
+  { name: "blue", value: "#4493f8" },
+  { name: "purple", value: "#ab7df8" },
+  { name: "pink", value: "#f778ba" },
+];
+const grounds = [
+  { theme: "light", dark: false },
+  { theme: "dark", dark: true },
+];
+---
+
+<Layout
+  title="readme banners · ascii.rest"
+  description="Your name or your project's in animated ascii block letters, for a GitHub README or a terminal. Type it and copy the snippet."
+  path="/banner/"
+  card={{ path: "/og/big-text.png", alt: "HELLO in ascii block letters with a line shadow, on ascii.rest, by @bas3line" }}
+>
+  <h1 slot="heading">readme banners</h1>
+
+  <p class="lede">
+    Your name, or your project's, in block letters with a glint that passes now and then: an animated SVG for a GitHub
+    README, which runs no script, or the same in a terminal. Type it, pick a colour and copy the snippet.
+  </p>
+
+  <form class="maker" data-maker hidden>
+    <p class="field">
+      <label for="banner-text">text</label>
+      <input id="banner-text" name="text" value={text} maxlength={MAX} autocomplete="off" autocapitalize="none" spellcheck="false" />
+      <span class="left muted" role="status"></span>
+    </p>
+    <p class="field" role="group" aria-label="colour of the letters">
+      <span class="label">colour</span>
+      <button class="button swatch" type="button" data-colour="" aria-pressed="true"><span>github</span></button>
+      {COLOURS.map((c) => (
+        <button class="button swatch" type="button" data-colour={c.value} aria-pressed="false">
+          <span><i style={`background: ${c.value}`}></i>{c.name}</span>
+        </button>
+      ))}
+      <label class="button swatch custom">
+        <span><input type="color" value="#e5534b" aria-label="any colour" />any</span>
+      </label>
+    </p>
+  </form>
+
+  <div class="previews">
+    {grounds.map((g) => (
+      <figure class:list={["preview", g.theme]}>
+        <div class="sheet">
+          <img data-ground={g.theme} src={bannerPath(text, g.dark)} alt={`${text}, as a ${g.theme} README shows it`} />
+        </div>
+        <figcaption>{g.theme}</figcaption>
+      </figure>
+    ))}
+  </div>
+
+  <section class="block">
+    <div class="head">
+      <h2>readme</h2>
+      <span class="tools"><button class="button" type="button" data-copy="banner-readme" hidden><span>[copy]</span></button></span>
+    </div>
+    <pre class="code" id="banner-readme">{readmeBanner(text)}</pre>
+    <p class="muted note">
+      The URL is the banner: <code>https://ascii.rest/banner/&lt;text&gt;.svg</code>, and <code>.dark.svg</code> for
+      GitHub's dark theme, with <code>?color=rrggbb</code> for the letters. Up to {MAX} characters: letters, digits, spaces
+      and <code>{MARKS}</code>; the letters come out in capitals. It holds still for anyone who prefers reduced motion.
+    </p>
+  </section>
+
+  <section class="block">
+    <div class="head">
+      <h2>terminal</h2>
+      <span class="tools"><button class="button" type="button" data-copy="banner-terminal" hidden><span>[copy]</span></button></span>
+    </div>
+    <pre class="code" id="banner-terminal">{terminalBanner(text)}</pre>
+  </section>
+
+  <section class="block">
+    <div class="head">
+      <h2>in your cli</h2>
+      <span class="tools"><button class="button" type="button" data-copy="banner-cli" hidden><span>[copy]</span></button></span>
+    </div>
+    <pre class="code" id="banner-cli">{cliBanner(text)}</pre>
+    <p class="muted note">
+      Prints it where the cursor is, lets the glint pass once in a second, and leaves it in the scrollback with the rest
+      of your output. Piped, or with NO_COLOR set, it prints plain text and returns at once.
+    </p>
+  </section>
+</Layout>
+
+<script>
+  import { banner, cliBanner, clean, hex, readmeBanner, terminalBanner } from "../lib/banner";
+
+  const form = document.querySelector<HTMLFormElement>("[data-maker]")!;
+  const input = form.querySelector<HTMLInputElement>("#banner-text")!;
+  const left = form.querySelector<HTMLElement>(".left")!;
+  const swatches = [...form.querySelectorAll<HTMLButtonElement>("[data-colour]")];
+  const custom = form.querySelector<HTMLInputElement>("input[type=color]")!;
+  const images = [...document.querySelectorAll<HTMLImageElement>("img[data-ground]")];
+  const code = (id: string) => document.getElementById(id)!;
+
+  let colour: string | null = null;
+  const urls: string[] = [];
+
+  const show = () => {
+    const text = clean(input.value);
+    // what the font has no letter for, said once each
+    const out = [...new Set([...input.value].filter((ch) => !/\s/.test(ch) && !clean(ch)))].join(" ");
+    left.textContent = out ? `left out: ${out}` : "";
+    if (!text) return;
+    urls.splice(0).forEach((url) => URL.revokeObjectURL(url));
+    for (const img of images) {
+      const drawn = banner(text, { dark: img.dataset.ground === "dark", color: colour })!;
+      const url = URL.createObjectURL(new Blob([drawn.svg], { type: "image/svg+xml" }));
+      urls.push(url);
+      img.src = url;
+      img.alt = `${text}, as a ${img.dataset.ground} README shows it`;
+    }
+    code("banner-readme").textContent = readmeBanner(text, colour);
+    code("banner-terminal").textContent = terminalBanner(text, colour);
+    code("banner-cli").textContent = cliBanner(text, colour);
+    const query = new URLSearchParams({ text });
+    if (colour) query.set("color", colour.slice(1));
+    history.replaceState(null, "", `?${query}`);
+  };
+
+  const pick = (value: string | null) => {
+    colour = value;
+    for (const s of swatches) s.setAttribute("aria-pressed", String((s.dataset.colour || null) === value));
+    custom.closest(".custom")!.classList.toggle("on", Boolean(value) && !swatches.some((s) => s.dataset.colour === value));
+    show();
+  };
+
+  // a banner linked to: its text and colour from the page's URL
+  const asked = new URLSearchParams(location.search);
+  if (asked.get("text")) input.value = asked.get("text")!.slice(0, input.maxLength);
+  const linked = hex(asked.get("color"));
+  if (linked) custom.value = linked;
+
+  input.addEventListener("input", show);
+  form.addEventListener("submit", (e) => e.preventDefault());
+  swatches.forEach((s) => s.addEventListener("click", () => pick(s.dataset.colour || null)));
+  custom.addEventListener("input", () => pick(custom.value));
+  form.hidden = false;
+  pick(linked);
+</script>
+
+<style>
+  .maker {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 2rem;
+  }
+
+  .field {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 2ch;
+  }
+
+  .field label,
+  .field .label {
+    min-width: 7ch;
+    color: var(--muted);
+  }
+
+  .field input:not([type="color"]) {
+    width: min(100%, 32ch);
+    padding: 0.15rem 0;
+    border: 0;
+    border-bottom: 1px dotted var(--muted);
+    border-radius: 0;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .field input:not([type="color"]):focus {
+    outline: none;
+    border-bottom-style: solid;
+    border-bottom-color: var(--ink);
+  }
+
+  /* iOS zooms into a field set under 16px. */
+  @media (hover: none) and (pointer: coarse) {
+    .field input:not([type="color"]) {
+      font-size: 16px;
+    }
+  }
+
+  /* The colour picked reads in ink and in brackets, as a selected tab does. */
+  .swatch > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6ch;
+  }
+
+  .swatch > span::before {
+    content: "[";
+    margin-right: -0.6ch;
+    visibility: hidden;
+  }
+
+  .swatch > span::after {
+    content: "]";
+    margin-left: -0.6ch;
+    visibility: hidden;
+  }
+
+  .swatch[aria-pressed="true"],
+  .swatch.on {
+    color: var(--ink);
+  }
+
+  .swatch[aria-pressed="true"] > span::before,
+  .swatch[aria-pressed="true"] > span::after,
+  .swatch.on > span::before,
+  .swatch.on > span::after {
+    visibility: visible;
+  }
+
+  .swatch i,
+  .swatch input {
+    display: inline-block;
+    width: 0.8em;
+    height: 0.8em;
+  }
+
+  .swatch input {
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .swatch input::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+
+  .swatch input::-webkit-color-swatch {
+    border: 0;
+  }
+
+  .swatch input::-moz-color-swatch {
+    border: 0;
+  }
+
+  .previews {
+    margin-top: 2rem;
+  }
+
+  .preview .sheet {
+    min-height: 7rem;
+  }
+
+  .note {
+    max-width: 72ch;
+    margin-top: 0.75rem;
+  }
+
+  /* A URL or the marks stay on one line. */
+  .note code {
+    white-space: nowrap;
+  }
+
+  section.block {
+    margin-top: 2.5rem;
+  }
+</style>

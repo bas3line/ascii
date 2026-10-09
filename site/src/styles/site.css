@@ -197,9 +197,14 @@ a[aria-current="page"] {
 }
 
 .side .by {
-  margin: 0.25rem 0 2rem;
+  margin: 0.25rem 0 0;
   color: var(--muted);
   font-size: 0.875em;
+}
+
+/* The banner maker, under the credit. */
+.side .make {
+  margin: 0.75rem 0 2rem;
 }
 
 /* The author's credit: the GitHub mark and the handle, one link. */
@@ -844,8 +849,8 @@ pre.code {
     margin: 0;
   }
 
-  .side .by {
-    margin-bottom: 1rem;
+  .side .make {
+    margin: 0.5rem 0 1rem;
   }
 
   .side nav {

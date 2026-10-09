@@ -74,6 +74,7 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
       <aside class="side">
         <a class="home" href="/">{NAME}</a>
         <p class="by">by <a href="/author/" rel="author">@{AUTHOR.name}</a></p>
+        <p class="make"><a href="/banner/" aria-current={path === "/banner/" ? "page" : undefined}>[make a banner]</a></p>
         <form class="find" role="search" hidden>
           <label class="sr" for="find">Search the pieces</label>
           <input
