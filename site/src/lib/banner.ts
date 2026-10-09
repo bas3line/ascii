@@ -1,20 +1,21 @@
 /*
  * README banners by URL: the choices a banner's query carries, read and
  * written here, and the banner drawn by bannerSvg() from ascii.rest/svg, the
- * same function anyone can call with every option. The Worker
- * (src/worker.ts) serves it at /banner/<text>.svg and /banner/<text>.dark.svg;
- * the page at /banner/ draws the same SVG in the browser as you choose. Both
- * read and write the URL with read() and bannerPath(), so a banner has one URL.
+ * same function anyone can call with every option. A Vercel function
+ * (pages/banner/[file].ts) serves it at /banner/<text>.svg and
+ * /banner/<text>.dark.svg; the page at /banner/ draws the same SVG in the
+ * browser as you choose. Both read and write the URL with read() and
+ * bannerPath(), so a banner has one URL.
  */
 import { drawable, fonts, shadows, type FontName, type ShadowName } from "ascii.rest/banner";
 import { bannerSvg, darkColor } from "ascii.rest/svg";
 
-// Not from lib/library.ts, which loads every piece: the Worker bundles this file.
+// Not from lib/library.ts, which loads every piece: the banner function and the page's script bundle this file.
 const SITE = "https://ascii.rest";
 
 /**
- * The most characters a banner holds: 20 of the widest, M, are 239 columns, about 1,200 pixels. Its CPU time, measured
- * in Node, not on Workers, is under the 10 ms a request has on Workers Free; FPS keeps a slow one to the same work.
+ * The most characters a banner holds: 20 of the widest, M, are 239 columns, about 1,200 pixels, and some 5 ms of CPU
+ * to draw, measured in Node; FPS keeps a slow one to the same work.
  */
 export const MAX = 20;
 /** The longest tagline, in characters. */

@@ -5,8 +5,8 @@
  * bannerSvg() offers that a URL can carry is a control here: the colour or a
  * fade, the font, the shadow's lines, the letters' character, how it moves and
  * how fast, a tagline typed out under it, any of the library's logos,
- * companies or distros on any side of it, a background and a size. The Worker
- * (src/worker.ts) serves each banner at /banner/<text>.svg; this page draws
+ * companies or distros on any side of it, a background and a size. A Vercel
+ * function (banner/[file].ts) serves each banner at /banner/<text>.svg; this page draws
  * the same SVG in the browser as you choose (lib/banner.ts), the art from its
  * own README SVG, so what it shows is what a README gets. The choices ride in
  * the page's URL, as they do in the banner's, so a banner can be linked to.

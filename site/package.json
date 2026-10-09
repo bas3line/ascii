@@ -14,10 +14,10 @@
     "gifenc": "^1.0.3"
   },
   "devDependencies": {
+    "@astrojs/vercel": "^9.0.5",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "astro": "^5.16.5",
     "opentype.js": "^2.0.0",
-    "sharp": "^0.34.5",
-    "wrangler": "^4.112.0"
+    "sharp": "^0.34.5"
   }
 }
