@@ -32,7 +32,7 @@ const glyphs = await glyphShapes();
         <p>drop an image here</p>
         <p class="muted">svg, png, jpg, webp or gif</p>
         <p class="muted">
-          or <button class="button" type="button" id="pick"><span>[pick a file]</span></button> or paste one
+          or <span class="button pick"><span>[pick a file]</span></span> or paste one
         </p>
       </div>
     </div>
@@ -491,8 +491,8 @@ const glyphs = await glyphShapes();
 
   // --- in ---------------------------------------------------------------------
 
-  // The empty well opens the picker on a click anywhere in it, [pick a file]'s too, which reaches it, so that button
-  // needs no listener of its own and opens it once; and on Enter or Space while the well itself has focus.
+  // The empty well is the one control that opens the picker: on a click anywhere in it, [pick a file] included, which
+  // is only its words styled as a button, not a second control; and on Enter or Space while the well has focus.
   drop.addEventListener("click", () => {
     if (drop.classList.contains("empty")) picker.click();
   });

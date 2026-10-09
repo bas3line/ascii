@@ -3,7 +3,8 @@
  * build time from the piece itself. A text piece is its frame in IBM Plex
  * Mono, light on the night ground, as large as fits, and a logo the same in
  * its own colours; a scene is its coloured dots, edge to edge. Along the
- * bottom, the piece's name and the credit.
+ * bottom, the piece's name and the credit. Every word on a card, as on the
+ * site, is in Paper Mono; only the art keeps the face it was drawn in.
  *
  * The card is built as SVG shapes, glyph outlines included, and rasterized by
  * sharp, so no system font is involved. Every character sits on its own cell,
@@ -13,6 +14,7 @@
  */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { join } from "node:path";
 import opentype from "opentype.js";
 import sharp from "sharp";
 import { load, type Meta, type PieceName } from "ascii.rest";
@@ -52,15 +54,20 @@ interface Font {
   charToGlyph(ch: string): Glyph;
 }
 
-const resolve = createRequire(import.meta.url).resolve;
-const face = (weight: 400 | 500 | 600): Font => {
-  const file = readFileSync(resolve(`@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-${weight}-normal.woff`));
-  return opentype.parse(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength)) as Font;
-};
-const REGULAR = face(400);
-const MEDIUM = face(500);
+const parse = (file: Buffer) => opentype.parse(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength)) as Font;
+/** The art of a text piece: IBM Plex Mono, the face its frames have always been drawn in on these cards. */
+const REGULAR = parse(readFileSync(createRequire(import.meta.url).resolve("@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff")));
+/**
+ * Every word on a card: Paper Mono, the site's face, from its static instances (github.com/paper-design/paper-mono,
+ * SIL OFL), kept in src/assets/fonts. The build runs from the site's folder.
+ */
+const paper = (weight: "Regular" | "Medium" | "SemiBold") => parse(readFileSync(join(process.cwd(), "src/assets/fonts", `PaperMono-${weight}.ttf`)));
+const TEXT = paper("Regular");
+const MEDIUM = paper("Medium");
 /** The site card's name only. */
-const SEMIBOLD = face(600);
+const SEMIBOLD = paper("SemiBold");
+/** How wide every character of Paper Mono is, in ems. */
+const ADVANCE = TEXT.charToGlyph("0").advanceWidth / TEXT.unitsPerEm;
 
 const n = (v: number) => +v.toFixed(2);
 
@@ -399,11 +406,11 @@ const GITHUB =
 function footer(name: string, scene: boolean, after = "ascii.rest", gap = 2) {
   const size = 26, y = HEIGHT - 52;
   const title = words(MEDIUM, name, SIDE, y, size);
-  const siteX = SIDE + title.width + size * 0.6 * gap;
-  const site = words(REGULAR, after, siteX, y, size);
+  const siteX = SIDE + title.width + size * ADVANCE * gap;
+  const site = words(TEXT, after, siteX, y, size);
   const handle = "@bas3line";
-  const hw = handle.length * size * 0.6;
-  const by = words(REGULAR, handle, WIDTH - SIDE - hw, y, size);
+  const hw = handle.length * size * ADVANCE;
+  const by = words(TEXT, handle, WIDTH - SIDE - hw, y, size);
   const mark = 26, mx = WIDTH - SIDE - hw - 12 - mark, my = y - mark * 0.82;
   const svg =
     `<path fill="${INK}" d="${title.d}"/>` +
@@ -462,9 +469,9 @@ function wrap(text: string, max: number): string[] {
 export async function pageCard(title: string, description: string, path: string): Promise<Uint8Array> {
   const foot = footer("ascii.rest", false, path, 0);
   const box = { x: SIDE, y: 52, w: WIDTH - 2 * SIDE, h: HEIGHT - 52 - 122 };
-  const size = Math.min(96, box.w / ([...title].length * 0.6));
+  const size = Math.min(96, box.w / ([...title].length * ADVANCE));
   const small = 30, leading = small * 1.45, gap = 30;
-  const lines = wrap(description, Math.floor(box.w / (small * 0.6)));
+  const lines = wrap(description, Math.floor(box.w / (small * ADVANCE)));
   const told = lines.length <= 3 ? lines : [];
   // The block's height from the title's cap height to the last line's baseline, centred in the box.
   const cap = size * 0.7;
@@ -472,7 +479,7 @@ export async function pageCard(title: string, description: string, path: string)
   const top = box.y + (box.h - tall) / 2;
   let body = `<path fill="${INK}" d="${words(MEDIUM, title, SIDE, top + cap, size).d}"/>`;
   told.forEach((line, i) => {
-    body += `<path fill="${MUTED}" d="${words(REGULAR, line, SIDE, top + cap + gap + small * 0.7 + i * leading, small).d}"/>`;
+    body += `<path fill="${MUTED}" d="${words(TEXT, line, SIDE, top + cap + gap + small * 0.7 + i * leading, small).d}"/>`;
   });
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">` +
@@ -556,7 +563,7 @@ export async function siteCard(count: number): Promise<Uint8Array> {
   // The text block sits 52px off the bottom. From the bottom up: the row of
   // frameworks and the credit (22px), 26px, the count (28px), 18px, the name
   // (84px, set solid, -1px apart). Each line box is the font's own line height.
-  const em = REGULAR.unitsPerEm, A = REGULAR.ascender / em, D = -REGULAR.descender / em;
+  const em = TEXT.unitsPerEm, A = TEXT.ascender / em, D = -TEXT.descender / em;
   const rowTop = HEIGHT - 52 - 22 * (A + D);
   const countTop = rowTop - 26 - 28 * (A + D);
   const nameTop = countTop - 18 - 84;
@@ -565,10 +572,10 @@ export async function siteCard(count: number): Promise<Uint8Array> {
   const countBase = Math.floor(countTop + 28 * A);
   const rowBase = Math.round(rowTop + 22 * A);
   const name = words(SEMIBOLD, "ascii.rest", SIDE, nameBase, 84, -1);
-  const line = words(REGULAR, `${count} animated ascii pieces for the web`, SIDE, countBase, 28);
-  const row = words(REGULAR, "React · Next.js · Astro · HTML", SIDE, rowBase, 22);
+  const line = words(TEXT, `${count} animated ascii pieces for the web`, SIDE, countBase, 28);
+  const row = words(TEXT, "React · Next.js · Astro · HTML", SIDE, rowBase, 22);
   const handle = "@bas3line";
-  const hw = handle.length * 22 * 0.6;
+  const hw = handle.length * 22 * ADVANCE;
   const by = words(MEDIUM, handle, WIDTH - SIDE - hw, rowBase, 22);
   const mark = 24, mx = WIDTH - SIDE - hw - 10 - mark, my = rowTop + (22 * (A + D) - mark) / 2;
   const open = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">`;

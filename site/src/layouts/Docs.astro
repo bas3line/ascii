@@ -27,10 +27,6 @@ const sections = headings.filter((h) => h.depth === 2);
   path={path}
   card={{ path: `/og/docs/${file}.png`, alt: `${frontmatter.title}, ascii.rest docs: ${frontmatter.description}` }}
 >
-  <!-- The docs' prose is in a sans, IBM Plex Sans, for reading at length; the rest of the page is in Paper Mono. -->
-  <link slot="head" rel="preconnect" href="https://fonts.googleapis.com" />
-  <link slot="head" rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link slot="head" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" />
   <h1 slot="heading">{frontmatter.title}</h1>
 
   <nav slot="side" class="docs-nav" aria-label="Docs">

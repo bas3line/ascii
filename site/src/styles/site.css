@@ -947,12 +947,12 @@ pre.code {
 }
 
 /*
- * The docs are read at length, so their prose is set for reading: IBM Plex Sans at 16px with room between lines, and
- * paragraphs no wider than about 70 characters. Headings, code, tables' first column and the sidebar stay in the
- * site's mono, Paper Mono, so code reads as code.
+ * The docs are read at length, so their prose is set for reading: the site's own Paper Mono, at 16px with room
+ * between lines, and paragraphs no wider than about 70 characters. Inline code sits on a well, so it still stands
+ * apart from the words around it.
  */
 .docs {
-  --read: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --read: var(--mono);
   max-width: 46rem;
   margin-top: 2rem;
   color: var(--text);
