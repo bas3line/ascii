@@ -15,8 +15,11 @@ const stars = Array.from({ length: 2000 }, (): Vec3 => {
 
 export default piece({ name: "galaxy", note: "a spiral galaxy of seeded stars turning in perspective", cols: 64, rows: 24, loop: 16,
   palette: { light: ["#8250df", "#0969da", "#1f2328"], dark: ["#8957e5", "#79c0ff", "#ffffff"] } }, (t, s) => {
-  for (const star of stars) { const v = view(star, t), i = v ? s.index(v.x, v.y) : -1; if (i >= 0) light[i] += 0.11; }
-  // light adds up but the eye sees it level off: one star is a dot, a crowd is bright, the core is not one blob
-  light.forEach((n, i) => n && s.put(i, shadeChar(ramps.standard, 1 - Math.exp(-n)).charCodeAt(0), s.resolve(n > 1.9 ? 2 : n > 0.6 ? 1 : 0)));
-  light.fill(0);
+  for (const star of stars) {
+    const v = view(star, t), i = v ? s.index(v.x, v.y) : -1;
+    if (i >= 0) light[i] += 0.11;
+  }
+  // light adds up but the eye sees it level off: one star is a dot, a crowd is bright, the core is not one blob. Each
+  // cell is emptied as it is drawn, ready for the next frame.
+  light.forEach((n, i) => n && (s.set(i % 64, i / 64, shadeChar(ramps.standard, 1 - Math.exp(-n)), n > 1.9 ? 2 : n > 0.6 ? 1 : 0), (light[i] = 0)));
 });

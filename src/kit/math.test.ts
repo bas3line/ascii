@@ -110,6 +110,9 @@ test("random: seeded, the same numbers for the same seed, and checked", () => {
   assert.equal(d(), m());
   assert.throws(() => random(1.5), /ascii\.rest: random\(\) takes a whole number seed, such as 7, not 1\.5/);
   assert.throws(() => random(NaN), /whole number seed/);
+  assert.throws(() => random("7" as never), /whole number seed, such as 7, not "7"/, "a string shows quoted");
+  assert.throws(() => random(1).shuffle(null as never), /ascii\.rest: shuffle\(\) takes a list to shuffle in place, not null/);
+  assert.throws(() => random(1).chance("0.5" as never), /chance\(\) takes a probability from 0 to 1, not "0\.5"/);
 });
 
 test("random's helpers: range, int, pick, chance, normal, sign, angle", () => {
@@ -285,6 +288,38 @@ test("fractal noise: octaves, gain and lacunarity, checked", () => {
   assert.throws(() => fbm3(0, 0, 0, { gain: -1 }), /gain takes a number of 0 or more/);
   assert.throws(() => fbm(0, 0, { seed: 1.5 }), /seed takes a whole number/);
   assert.throws(() => worley(0, 0, { seed: 0.5 }), /seed takes a whole number/);
+  // a string that looks like a number is not one, and the error shows it quoted
+  assert.throws(() => fbm(0, 0, { octaves: "3" as never }), /octaves takes a whole number from 1 to 16, not "3"/);
+  assert.throws(() => fbm(0, 0, { lacunarity: "2" as never }), /lacunarity takes a number above 0, such as 2, not "2"/);
+});
+
+test("ridged: the finer layers sit on the crests, so the valleys between stay soft", () => {
+  // Where the first layer is in a valley (under 0.05), each finer layer counts at most twice the one before, so the
+  // four layers together stay under 0.11; counted everywhere, as plain fbm does, they averaged 0.22 there.
+  const r = random(31);
+  let n = 0, sum = 0;
+  for (let i = 0; i < 200000 && n < 2000; i++) {
+    const x = r.range(-100, 100), y = r.range(-100, 100);
+    if (ridged(x, y, { octaves: 1 }) >= 0.05) continue;
+    n++;
+    const v = ridged(x, y);
+    assert.ok(v < 0.11, `ridged at ${x}, ${y} is ${v} in a valley`);
+    sum += v;
+  }
+  assert.equal(n, 2000);
+  assert.ok(sum / n < 0.05, `valleys average ${sum / n}`);
+  // and so do loopNoise's and noise()'s ridged kinds
+  for (let i = 0; i < 2000; i++) {
+    const x = r.range(-50, 50), y = r.range(-50, 50), t = r.range(0, 4);
+    if (loopNoise(x, y, t, 4, { ridged: true, octaves: 1 }) < 0.05) assert.ok(loopNoise(x, y, t, 4, { ridged: true, octaves: 4 }) < 0.11);
+  }
+  const one = noise({ kind: "ridged", detail: 1, morph: 0 }), four = noise({ kind: "ridged", detail: 4, morph: 0 });
+  for (let i = 0; i < 2000; i++) {
+    const x = r.range(0, 640), y = r.range(0, 240);
+    if (one(x, y) < 0.05) assert.ok(four(x, y) < 0.11, `noise ridged at ${x}, ${y}`);
+  }
+  // pinned in a valley, where the weighting shows: it was 0.4739 counting every layer everywhere
+  assert.equal(ridged(-6.1, 2.4).toFixed(12), "0.249591677449");
 });
 
 test("loopNoise comes round exactly at its period, and changes in between", () => {
@@ -476,8 +511,19 @@ test("lcm: when periods come round together, as meta.loop takes it", () => {
   assert.equal(lcm([7]), 7);
   assert.equal(lcm([7, 11]), undefined, "77 seconds is past 60");
   assert.equal(lcm([7, 11], 100), 77);
+  // periods that aren't round hundredths: each is still a whole number of turns of the answer
+  assert.equal(lcm([0.333]), 0.333, "not rounded to 0.33, which 0.333 doesn't divide");
+  assert.equal(lcm([1 / 3, 1]), 1);
+  assert.equal(lcm([1 / 3, 0.25]), 1);
+  assert.equal(lcm([0.7, 0.3]), 2.1);
+  assert.equal(lcm([0.333, 1]), undefined, "333 seconds is past 60");
+  for (const periods of [[0.7, 0.3], [1 / 3, 0.25, 2], [1.6, 2.4, 0.8], [0.15, 0.4]]) {
+    const l = lcm(periods)!;
+    for (const p of periods) near(l / p, Math.round(l / p), 1e-6);
+  }
   assert.throws(() => lcm([]), /lcm\(\) takes a list of one or more periods/);
   assert.throws(() => lcm([2, 0]), /period in seconds above 0/);
+  assert.throws(() => lcm([2, "3" as never]), /period in seconds above 0, such as 2, not "3"/);
 });
 
 test("random's points: on and in circles and spheres, spread evenly", () => {
@@ -615,6 +661,20 @@ test("noise() checks its options when it is made", () => {
   assert.throws(() => noise({ range: [1] as never }), /noise's range takes \[low, high\]/);
   assert.throws(() => noise({ seed: 1.5 }), /noise's seed takes a whole number/);
   assert.throws(() => noise(null as never), /noise\(\) takes options/);
+  // strings that look like numbers are refused, not coerced
+  assert.throws(() => noise({ period: "4" as never }), /noise's period takes seconds above 0, such as 8, not "4"/);
+  assert.throws(() => noise({ morph: "1" as never }), /noise's morph takes features a second, 0 or more, such as 0\.25, not "1"/);
+  assert.throws(() => noise({ size: ["4", "2"] as never }), /noise's size takes cells above 0/);
+  // a drifting loop repeats every drift * period cells: under one feature it would be flat along the drift, so it throws
+  assert.throws(
+    () => noise({ drift: 0.5, period: 2 }),
+    /ascii\.rest: noise\(\) drifting 0\.5 cells a second with a period of 2 s repeats every 1 cell, under one feature \(12 cells\), and flattens out: make period 24 s or more, or drift faster/,
+  );
+  assert.throws(() => noise({ drift: [0, 1], period: 4, kind: "cells" }), /repeats every 4 cells, under one feature \(6 cells\).*make period 6 s or more/);
+  // one feature or more is fine, and loops
+  const band = noise({ drift: 2, period: 6 });
+  near(band(3, 4, 1.5), band(3, 4, 7.5), 1e-9);
+  near(band(3, 4, 0), band(15, 4, 0), 1e-9);
   // and nothing when it is called: a cell anywhere gives a value
   const n = noise();
   for (const x of [-1e6, -1, 0, 0.5, 1e6]) assert.ok(Number.isFinite(n(x, x, x)));

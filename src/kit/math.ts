@@ -9,7 +9,11 @@
  * want them: seeded random numbers, simplex noise in 2, 3 and 4 dimensions,
  * fractal noise, remap and wrap, vectors, rotation and projection, and time
  * helpers that come round exactly. All of it is deterministic: the same seed
- * and the same t give the same numbers in every browser and in Node.
+ * and the same t give the same frame every time. The random numbers and the
+ * noise of noise2, noise3, noise4, fbm and ridged are plain arithmetic, the
+ * same to the last bit in every browser and in Node; what goes through sin,
+ * cos, log or powers (loops, turns, easings, normal()) may differ in its last
+ * digit between engines, which almost never changes a character.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
  *   import { piece, noise } from "ascii.rest/kit";
@@ -25,6 +29,11 @@ import { TAU, and, clamp, fail, hash, mulberry32 } from "./core.ts";
 
 // The maths core already has, so one import brings all of it.
 export { TAU, bayer, clamp, fract, hash, lerp, mulberry32, smoothstep, valueNoise } from "./core.ts";
+
+// A value as an error shows it: strings quoted, so the string "7" doesn't read as the number 7.
+const said = (v: unknown) => (typeof v === "string" ? JSON.stringify(v) : String(v));
+// A number that is finite, and not a string that looks like one.
+const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 // --- numbers ------------------------------------------------------------------------
 
@@ -114,7 +123,7 @@ export interface Random {
  *   const dots = Array.from({ length: 500 }, () => rnd.onSphere());
  */
 export function random(seed = 1): Random {
-  if (!Number.isInteger(seed)) fail(`random() takes a whole number seed, such as 7, not ${String(seed)}`);
+  if (!Number.isInteger(seed)) fail(`random() takes a whole number seed, such as 7, not ${said(seed)}`);
   const next = mulberry32(seed);
   const r = (() => next()) as Random;
   Object.defineProperty(r, "seed", { value: seed, enumerable: true });
@@ -128,7 +137,7 @@ export function random(seed = 1): Random {
     return list[Math.floor(next() * list.length)];
   };
   r.chance = (p) => {
-    if (!(p >= 0 && p <= 1)) fail(`chance() takes a probability from 0 to 1, not ${String(p)}`);
+    if (!(finite(p) && p >= 0 && p <= 1)) fail(`chance() takes a probability from 0 to 1, not ${said(p)}`);
     return next() < p;
   };
   // Box and Muller's way: two even draws make one from the bell curve.
@@ -136,6 +145,7 @@ export function random(seed = 1): Random {
   r.sign = () => (next() < 0.5 ? -1 : 1);
   r.angle = () => next() * TAU;
   r.shuffle = <T>(list: T[]): T[] => {
+    if (!Array.isArray(list)) fail(`shuffle() takes a list to shuffle in place, not ${said(list)}`);
     for (let i = list.length - 1; i > 0; i--) {
       const j = Math.floor(next() * (i + 1));
       const v = list[i];
@@ -163,7 +173,7 @@ export function random(seed = 1): Random {
     return [p[0] * k, p[1] * k, p[2] * k];
   };
   r.fork = (n) => {
-    if (!Number.isInteger(n)) fail(`fork() takes a whole number for the stream, such as 1, not ${String(n)}`);
+    if (!Number.isInteger(n)) fail(`fork() takes a whole number for the stream, such as 1, not ${said(n)}`);
     return random(Math.floor(hash(seed, n, 0x2545f491) * 4294967296) | 0);
   };
   return r;
@@ -226,6 +236,9 @@ const F4 = (Math.sqrt(5) - 1) / 4, H4 = (5 - Math.sqrt(5)) / 20;
 const S2 = 70, S3 = 32, S4 = 27;
 
 const unit = (n: number) => (n <= -1 ? 0 : n >= 1 ? 1 : 0.5 + 0.5 * n);
+
+// A 4D gradient (by its index into G4) dotted with an offset.
+const dot4 = (g: number, a: number, b: number, c: number, d: number) => G4[g] * a + G4[g + 1] * b + G4[g + 2] * c + G4[g + 3] * d;
 
 // Simplex noise in 2D, -1..1: Stefan Gustavson's, from "Simplex noise demystified" (2005, 2012).
 function simplex2(x: number, y: number, seed: number): number {
@@ -306,17 +319,16 @@ function simplex4(x: number, y: number, z: number, w: number, seed: number): num
   const x3 = x0 - i3 + 3 * H4, y3 = y0 - j3 + 3 * H4, z3 = z0 - l3 + 3 * H4, w3 = w0 - m3 + 3 * H4;
   const x4 = x0 - 1 + 4 * H4, y4 = y0 - 1 + 4 * H4, z4 = z0 - 1 + 4 * H4, w4 = w0 - 1 + 4 * H4;
   const ii = i & 255, jj = j & 255, ll = l & 255, mm = m & 255;
-  const dot = (g: number, a: number, b: number, c: number, d: number) => G4[g] * a + G4[g + 1] * b + G4[g + 2] * c + G4[g + 3] * d;
   let n = 0, k: number;
-  if ((k = 0.6 - x0 * x0 - y0 * y0 - z0 * z0 - w0 * w0) > 0) (k *= k), (n += k * k * dot((perm[ii + perm[jj + perm[ll + perm[mm]]]] & 31) * 4, x0, y0, z0, w0));
+  if ((k = 0.6 - x0 * x0 - y0 * y0 - z0 * z0 - w0 * w0) > 0) (k *= k), (n += k * k * dot4((perm[ii + perm[jj + perm[ll + perm[mm]]]] & 31) * 4, x0, y0, z0, w0));
   if ((k = 0.6 - x1 * x1 - y1 * y1 - z1 * z1 - w1 * w1) > 0)
-    (k *= k), (n += k * k * dot((perm[ii + i1 + perm[jj + j1 + perm[ll + l1 + perm[mm + m1]]]] & 31) * 4, x1, y1, z1, w1));
+    (k *= k), (n += k * k * dot4((perm[ii + i1 + perm[jj + j1 + perm[ll + l1 + perm[mm + m1]]]] & 31) * 4, x1, y1, z1, w1));
   if ((k = 0.6 - x2 * x2 - y2 * y2 - z2 * z2 - w2 * w2) > 0)
-    (k *= k), (n += k * k * dot((perm[ii + i2 + perm[jj + j2 + perm[ll + l2 + perm[mm + m2]]]] & 31) * 4, x2, y2, z2, w2));
+    (k *= k), (n += k * k * dot4((perm[ii + i2 + perm[jj + j2 + perm[ll + l2 + perm[mm + m2]]]] & 31) * 4, x2, y2, z2, w2));
   if ((k = 0.6 - x3 * x3 - y3 * y3 - z3 * z3 - w3 * w3) > 0)
-    (k *= k), (n += k * k * dot((perm[ii + i3 + perm[jj + j3 + perm[ll + l3 + perm[mm + m3]]]] & 31) * 4, x3, y3, z3, w3));
+    (k *= k), (n += k * k * dot4((perm[ii + i3 + perm[jj + j3 + perm[ll + l3 + perm[mm + m3]]]] & 31) * 4, x3, y3, z3, w3));
   if ((k = 0.6 - x4 * x4 - y4 * y4 - z4 * z4 - w4 * w4) > 0)
-    (k *= k), (n += k * k * dot((perm[ii + 1 + perm[jj + 1 + perm[ll + 1 + perm[mm + 1]]]] & 31) * 4, x4, y4, z4, w4));
+    (k *= k), (n += k * k * dot4((perm[ii + 1 + perm[jj + 1 + perm[ll + 1 + perm[mm + 1]]]] & 31) * 4, x4, y4, z4, w4));
   return S4 * n;
 }
 
@@ -368,10 +380,10 @@ function octaves(o: FbmOptions | undefined, n = 4): void {
   octLac = o?.lacunarity ?? 2;
   octGain = o?.gain ?? 0.5;
   octSeed = o?.seed ?? 0;
-  if (!(Number.isInteger(octN) && octN >= 1 && octN <= 16)) fail(`octaves takes a whole number from 1 to 16, not ${String(octN)}`);
-  if (!(octLac > 0 && octLac < Infinity)) fail(`lacunarity takes a number above 0, such as 2, not ${String(octLac)}`);
-  if (!(octGain >= 0 && octGain < Infinity)) fail(`gain takes a number of 0 or more, such as 0.5, not ${String(octGain)}`);
-  if (!Number.isInteger(octSeed)) fail(`seed takes a whole number, such as 7, not ${String(octSeed)}`);
+  if (!(Number.isInteger(octN) && octN >= 1 && octN <= 16)) fail(`octaves takes a whole number from 1 to 16, not ${said(octN)}`);
+  if (!(finite(octLac) && octLac > 0)) fail(`lacunarity takes a number above 0, such as 2, not ${said(octLac)}`);
+  if (!(finite(octGain) && octGain >= 0)) fail(`gain takes a number of 0 or more, such as 0.5, not ${said(octGain)}`);
+  if (!Number.isInteger(octSeed)) fail(`seed takes a whole number, such as 7, not ${said(octSeed)}`);
 }
 
 // Layers add up to a narrower spread than one; this widens fractal noise back out to use most of 0..1.
@@ -409,17 +421,27 @@ export function fbm3(x: number, y: number, z: number, o?: FbmOptions): number {
   return unit((sum / norm) * SPREAD);
 }
 
+// A layer of ridged noise from simplex noise -1..1: 1 on the line where it crosses 0, falling away squared.
+const crest = (n: number) => {
+  const r = 1 - (n < 0 ? -n : n);
+  return r < 0 ? 0 : r * r;
+};
+// Musgrave's ridged multifractal: each layer after the first counts as much as the one before is high (twice it, up to
+// all of it), so the finer detail sits on the crests and the valleys between stay soft.
+const weigh = (r: number) => (r > 0.5 ? 1 : 2 * r);
+
 /**
- * Ridged fractal noise at x, y, 0 to 1: sharp crests along the lines where noise crosses its middle, with soft valleys
- * between, for mountain ranges, veins and lightning. The same options as fbm().
+ * Ridged fractal noise at x, y, 0 to 1: sharp crests along the lines where noise crosses its middle, with finer crests
+ * branching off them and soft valleys between, for mountain ranges, veins and lightning. The same options as fbm().
  */
 export function ridged(x: number, y: number, o?: FbmOptions): number {
   octaves(o);
-  let sum = 0, amp = 1, norm = 0, f = 1;
+  let sum = 0, amp = 1, norm = 0, f = 1, w = 1;
   for (let i = 0; i < octN; i++) {
-    const r = 1 - Math.abs(simplex2(x * f + OFF[i][0], y * f + OFF[i][1], octSeed));
-    sum += amp * r * r;
+    const r = crest(simplex2(x * f + OFF[i][0], y * f + OFF[i][1], octSeed)) * w;
+    sum += amp * r;
     norm += amp;
+    w = weigh(r);
     amp *= octGain;
     f *= octLac;
   }
@@ -446,15 +468,15 @@ export function loopNoise(x: number, y: number, t: number, period: number, o?: L
   octaves(o, 1);
   checkPeriod("loopNoise()", period);
   const radius = o?.radius ?? 1;
-  if (!(radius > 0 && radius < Infinity)) fail(`loopNoise's radius takes a number above 0, such as 1, not ${String(radius)}`);
+  if (!(finite(radius) && radius > 0)) fail(`loopNoise's radius takes a number above 0, such as 1, not ${said(radius)}`);
   const ridge = !!o?.ridged;
   const a = TAU * place(t, period);
   const z = radius * Math.cos(a), w = radius * Math.sin(a);
-  let sum = 0, amp = 1, norm = 0, f = 1;
+  let sum = 0, amp = 1, norm = 0, f = 1, weight = 1;
   for (let i = 0; i < octN; i++) {
-    const n = simplex4(x * f + OFF[i][0], y * f + OFF[i][1], z * f, w * f, octSeed) * WIDEN4;
-    const r = ridge ? 1 - Math.min(1, Math.abs(n)) : 0;
-    sum += amp * (ridge ? r * r : n);
+    let n = simplex4(x * f + OFF[i][0], y * f + OFF[i][1], z * f, w * f, octSeed) * WIDEN4;
+    if (ridge) (n = crest(n) * weight), (weight = weigh(n));
+    sum += amp * n;
     norm += amp;
     amp *= octGain;
     f *= octLac;
@@ -476,7 +498,7 @@ export interface WorleyOptions {
  */
 export function worley(x: number, y: number, o?: WorleyOptions): number {
   const seed = o?.seed ?? 0;
-  if (!Number.isInteger(seed)) fail(`seed takes a whole number, such as 7, not ${String(seed)}`);
+  if (!Number.isInteger(seed)) fail(`seed takes a whole number, such as 7, not ${said(seed)}`);
   const xi = Math.floor(x), yi = Math.floor(y);
   let d1 = Infinity, d2 = Infinity;
   for (let dy = -1; dy <= 1; dy++)
@@ -521,8 +543,10 @@ export interface NoiseOptions {
   morph?: number;
   /**
    * Seconds after which it comes back exactly, so the piece loops seamlessly: set meta.loop to the same. None by
-   * default. A drifting pattern becomes a band that slides round once a period; a morphing one changes in a loop. It
-   * can't drift and morph and loop at once: with drift and period, leave morph at 0.
+   * default. A morphing pattern changes in a loop. A drifting one becomes a band that slides round once a period, so it
+   * repeats every drift * period cells along the way it goes: make that the grid's width or more and the repeat never
+   * shows; under one feature (size) it would flatten out, and throws. It can't drift and morph and loop at once: with
+   * drift and period, leave morph at 0.
    */
   period?: number;
   /** The numbers it gives, from low to high: [0, 1]. [4, 12] gives a row from 4 to 12 directly, for a skyline. */
@@ -575,26 +599,26 @@ export function noise(o: NoiseOptions = {}): Noise {
   if (!KINDS.includes(kind)) fail(`noise's kind takes ${and(KINDS.map((k) => `"${k}"`))}, not ${JSON.stringify(kind)}`);
   const size = o.size ?? 12;
   const [sx, sy] = typeof size === "number" ? [size, size / 2] : Array.isArray(size) && size.length === 2 ? size : [NaN, NaN];
-  if (!(sx > 0 && sy > 0 && sx < Infinity && sy < Infinity))
+  if (!(finite(sx) && finite(sy) && sx > 0 && sy > 0))
     fail(`noise's size takes cells above 0, a number such as 12 or [columns, rows], not ${JSON.stringify(size)}`);
   const cells = kind === "cells", ridge = kind === "ridged";
   const detail = o.detail ?? (cells ? 1 : 3);
-  if (!(Number.isInteger(detail) && detail >= 1 && detail <= 8)) fail(`noise's detail takes a whole number from 1 to 8, not ${String(detail)}`);
+  if (!(Number.isInteger(detail) && detail >= 1 && detail <= 8)) fail(`noise's detail takes a whole number from 1 to 8, not ${said(detail)}`);
   const drift = o.drift ?? 0;
   const [dx, dy] = typeof drift === "number" ? [drift, 0] : Array.isArray(drift) && drift.length === 2 ? drift : [NaN, NaN];
   if (!(Number.isFinite(dx) && Number.isFinite(dy))) fail(`noise's drift takes cells a second, a number (across) or [x, y], not ${JSON.stringify(drift)}`);
   const drifts = dx !== 0 || dy !== 0;
   const morph = o.morph ?? (drifts ? 0 : 0.25);
-  if (!(morph >= 0 && morph < Infinity)) fail(`noise's morph takes features a second, 0 or more, such as 0.25, not ${String(morph)}`);
+  if (!(finite(morph) && morph >= 0)) fail(`noise's morph takes features a second, 0 or more, such as 0.25, not ${said(morph)}`);
   const period = o.period;
-  if (period !== undefined && !(period > 0 && period < Infinity)) fail(`noise's period takes seconds above 0, such as 8, not ${String(period)}`);
+  if (period !== undefined && !(finite(period) && period > 0)) fail(`noise's period takes seconds above 0, such as 8, not ${said(period)}`);
   if (period !== undefined && drifts && morph > 0)
     fail("noise() can loop a pattern that drifts or one that morphs, not both at once: with drift and period, leave morph at 0");
   const range = o.range ?? [0, 1];
   if (!Array.isArray(range) || range.length !== 2 || !range.every(Number.isFinite))
     fail(`noise's range takes [low, high], two numbers such as [4, 12], not ${JSON.stringify(range)}`);
   const seed = o.seed ?? 0;
-  if (!Number.isInteger(seed)) fail(`noise's seed takes a whole number, such as 7, not ${String(seed)}`);
+  if (!Number.isInteger(seed)) fail(`noise's seed takes a whole number, such as 7, not ${said(seed)}`);
 
   const lo = range[0], span = range[1] - range[0];
   // A unit of noise is about one feature, so a cell is 1 / size of one.
@@ -606,6 +630,12 @@ export function noise(o: NoiseOptions = {}): Noise {
   // on a circle that long, cells make it a whole number of cells and wrap.
   const tiled = period !== undefined && drifts;
   const around = tiled ? speed * period : 1, bend = around / TAU, n = Math.max(1, Math.round(around));
+  // A band shorter than one feature flattens out along the drift (a fifth of its contrast at a quarter of a feature, all
+  // of it lost at a cell), so it is refused, saying what would do.
+  if (tiled && around < 1) {
+    const fmt = (v: number) => (v = +v.toFixed(2)) + (v === 1 ? " cell" : " cells"), along = Math.hypot(dx, dy);
+    fail(`noise() drifting ${fmt(along)} a second with a period of ${period} s repeats every ${fmt(along * period!)}, under one feature (${fmt(along / speed)}), and flattens out: make period ${+(1 / speed).toFixed(2)} s or more, or drift faster`);
+  }
   // A morph that loops goes round a circle through two more axes, morph * period units long. Cells turn a whole
   // number of times a period.
   const looped = period !== undefined && !drifts && morph > 0;
@@ -637,14 +667,14 @@ export function noise(o: NoiseOptions = {}): Noise {
         }
       }
     }
-    let sum = 0, amp = 1, norm = 0, f = 1;
+    let sum = 0, amp = 1, norm = 0, f = 1, w = 1;
     for (let i = 0; i < detail; i++) {
       const oa = OFF[i][0], ob = OFF[i][1];
       let v: number;
       if (cells) v = cellular(a * f + oa, b * f + ob, turn, tiled ? n * f : 0, seed);
       else {
         v = dims === 2 ? simplex2(a * f + oa, b * f + ob, seed) : dims === 3 ? simplex3(a * f + oa, b * f + ob, c * f + oa, seed) : simplex4(a * f + oa, b * f + ob, c * f, d * f, seed) * WIDEN4;
-        if (ridge) (v = 1 - (v < 0 ? -v : v)), (v = v < 0 ? 0 : v * v);
+        if (ridge) (v = crest(v) * w), (w = weigh(v));
       }
       sum += amp * v;
       norm += amp;
@@ -740,10 +770,10 @@ export interface TweenOptions {
 function moved(t: number, o: TweenOptions | undefined, name: string): number {
   if (o !== undefined && (o === null || typeof o !== "object")) fail(`${name} takes options, such as { duration: 2, ease: "outCubic" }`);
   const start = o?.start ?? 0, duration = o?.duration ?? 1, period = o?.period, how = o?.ease ?? "inOutSine";
-  if (!Number.isFinite(start)) fail(`${name}'s start takes seconds, such as 0.5, not ${String(start)}`);
-  if (!(duration > 0 && duration < Infinity)) fail(`${name}'s duration takes seconds above 0, such as 1, not ${String(duration)}`);
+  if (!Number.isFinite(start)) fail(`${name}'s start takes seconds, such as 0.5, not ${said(start)}`);
+  if (!(finite(duration) && duration > 0)) fail(`${name}'s duration takes seconds above 0, such as 1, not ${said(duration)}`);
   if (period !== undefined) {
-    if (!(period > 0 && period < Infinity)) fail(`${name}'s period takes seconds above 0, such as 4, not ${String(period)}`);
+    if (!(finite(period) && period > 0)) fail(`${name}'s period takes seconds above 0, such as 4, not ${said(period)}`);
     if (start < 0 || start + duration > period + 1e-9)
       fail(`${name} plays from start to start + duration inside each period: ${start} + ${duration} doesn't fit in ${period} seconds`);
   }
@@ -917,7 +947,7 @@ export interface Projected {
 export function project(p: V3, o: Projection, out?: Projected): Projected | null {
   if (!o || typeof o !== "object") fail("project() takes the grid's size, { cols, rows }, and optionally distance, scale and aspect");
   const distance = o.distance ?? 5;
-  if (!(distance > 0 && distance < Infinity)) fail(`project()'s distance takes a number above 0, such as 5, not ${String(distance)}`);
+  if (!(finite(distance) && distance > 0)) fail(`project()'s distance takes a number above 0, such as 5, not ${said(distance)}`);
   const depth = p[2] + distance;
   if (!(depth > 1e-9)) return null;
   const k = ((o.scale ?? o.rows / 3) * distance) / depth;
@@ -974,15 +1004,15 @@ export function camera(area: { cols: number; rows: number }, o: CameraOptions = 
     fail(`camera() takes the grid's size first, { cols, rows } in whole numbers, not ${JSON.stringify(area)}`);
   if (o === null || typeof o !== "object") fail("camera() takes options second, such as { turn: 8 }");
   const size = o.size ?? 1;
-  if (!(size > 0 && size < Infinity)) fail(`camera's size takes units above 0, such as 1, not ${String(size)}`);
+  if (!(finite(size) && size > 0)) fail(`camera's size takes units above 0, such as 1, not ${said(size)}`);
   const distance = o.distance ?? 4 * size;
-  if (!(distance > size && distance < Infinity)) fail(`camera's distance takes units more than its size (${size}), such as ${4 * size}, not ${String(distance)}`);
+  if (!(finite(distance) && distance > size)) fail(`camera's distance takes units more than its size (${size}), such as ${4 * size}, not ${said(distance)}`);
   const turn = o.turn ?? 0;
   const turns = typeof turn === "number" ? [0, turn, 0] : Array.isArray(turn) && turn.length === 3 ? turn : [NaN];
   if (!turns.every(Number.isFinite)) fail(`camera's turn takes seconds a turn, a number or [x, y, z], 0 for none, not ${JSON.stringify(turn)}`);
   const tilt = o.tilt ?? 0.3, aspect = o.aspect ?? 2;
-  if (!Number.isFinite(tilt)) fail(`camera's tilt takes radians, such as 0.3, not ${String(tilt)}`);
-  if (!(aspect > 0 && aspect < Infinity)) fail(`camera's aspect takes a cell's height in widths, 2 or 1, not ${String(aspect)}`);
+  if (!Number.isFinite(tilt)) fail(`camera's tilt takes radians, such as 0.3, not ${said(tilt)}`);
+  if (!(finite(aspect) && aspect > 0)) fail(`camera's aspect takes a cell's height in widths, 2 or 1, not ${said(aspect)}`);
   // Fitted: the eye sees a ball of radius size inside a cone, which must land within the grid, with a little margin.
   const scale = (0.95 * Math.min(rows / 2, cols / (2 * aspect)) * Math.sqrt(distance * distance - size * size)) / (distance * size);
   const lens = { cols, rows, distance, scale, aspect };
@@ -1007,7 +1037,7 @@ export function camera(area: { cols: number; rows: number }, o: CameraOptions = 
 // --- time -----------------------------------------------------------------------------
 
 function checkPeriod(name: string, p: number) {
-  if (!(p > 0 && p < Infinity)) fail(`${name} takes a period in seconds above 0, such as 2, not ${String(p)}`);
+  if (!(finite(p) && p > 0)) fail(`${name} takes a period in seconds above 0, such as 2, not ${said(p)}`);
 }
 
 // phase() without the check, for the functions that have made it already.
@@ -1060,21 +1090,21 @@ export function cycle(t: number, period: number): number {
 }
 
 /**
- * The time after which every one of `periods` comes round together, in seconds: lcm([2, 3, 4]) is 12. Worked out on
- * hundredths of a second, as meta.loop is; undefined when it would be longer than `max` seconds (60), where svg() would
- * rather play a few seconds than the whole of it.
+ * The time after which every one of `periods` comes round together, in seconds: lcm([2, 3, 4]) is 12, lcm([0.7, 0.3])
+ * is 2.1, lcm([1 / 3, 1]) is 1. Undefined when that is longer than `max` seconds (60), where svg() would rather play
+ * a few seconds than the whole of it. It is the shortest whole number of the longest period that each of the others
+ * divides, to a millionth of a turn, so a period that isn't a round number of hundredths still loops exactly.
  */
 export function lcm(periods: readonly number[], max = 60): number | undefined {
   if (!Array.isArray(periods) || !periods.length) fail("lcm() takes a list of one or more periods in seconds, such as [2, 3]");
-  const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
-  let l = 1;
-  for (const p of periods) {
-    checkPeriod("lcm()", p);
-    const h = Math.max(1, Math.round(p * 100));
-    l = (l / gcd(l, h)) * h;
-    if (l > max * 100) return undefined;
+  for (const p of periods) checkPeriod("lcm()", p);
+  const top = Math.max(...periods);
+  // A million turns of the longest period is past any loop worth playing: stop there rather than search for ever.
+  for (let k = 1; k <= 1e6 && k * top <= max * (1 + 1e-9); k++) {
+    const l = k * top;
+    if (periods.every((p) => Math.abs(l / p - Math.round(l / p)) < 1e-6)) return +l.toPrecision(12);
   }
-  return l / 100;
+  return undefined;
 }
 
 /** What twinkle() takes. */
@@ -1095,8 +1125,8 @@ export function twinkle(t: number, id: number, o: TwinkleOptions = {}): number {
   if (o === null || typeof o !== "object") fail("twinkle() takes options third, such as { period: 4 }");
   const period = o.period ?? 4, min = o.min ?? 0.2;
   checkPeriod("twinkle()", period);
-  if (!(min >= 0 && min <= 1)) fail(`twinkle's min takes a brightness from 0 to 1, such as 0.2, not ${String(min)}`);
-  if (!Number.isFinite(id)) fail(`twinkle() takes a number for each thing that twinkles, such as its index, not ${String(id)}`);
+  if (!(finite(min) && min >= 0 && min <= 1)) fail(`twinkle's min takes a brightness from 0 to 1, such as 0.2, not ${said(min)}`);
+  if (!Number.isFinite(id)) fail(`twinkle() takes a number for each thing that twinkles, such as its index, not ${said(id)}`);
   const n = Math.round(id * 1000003) | 0;
   const beats = 1 + Math.floor(hash(n, 0x51) * 3), at = hash(n, 0x52);
   const k = 0.5 + 0.5 * Math.sin(TAU * (beats * place(t, period) + at));
@@ -1142,10 +1172,10 @@ export function scatter(count: number, area: { cols: number; rows: number; x?: n
   if (!(Number.isInteger(cols) && cols >= 1 && Number.isInteger(rows) && rows >= 1 && Number.isInteger(x) && Number.isInteger(y)))
     fail(`scatter() takes an area, { cols, rows } and optionally x and y, in whole numbers, not ${JSON.stringify(area)}`);
   if (!(Number.isInteger(count) && count >= 0 && count <= cols * rows))
-    fail(`scatter() takes a whole number of spots from 0 to ${cols * rows}, one a cell of ${cols} by ${rows}, not ${String(count)}`);
+    fail(`scatter() takes a whole number of spots from 0 to ${cols * rows}, one a cell of ${cols} by ${rows}, not ${said(count)}`);
   if (o === null || typeof o !== "object") fail("scatter() takes options third, such as { seed: 7 }");
   const seed = o.seed ?? 1, even = o.even ?? true;
-  if (!Number.isInteger(seed)) fail(`scatter's seed takes a whole number, such as 7, not ${String(seed)}`);
+  if (!Number.isInteger(seed)) fail(`scatter's seed takes a whole number, such as 7, not ${said(seed)}`);
   const rnd = random(seed), spots: Spot[] = [];
   const add = (c: number, r: number) => spots.push({ x: x + c, y: y + r, i: spots.length, k: rnd() });
   if (!even || count * 2 > cols * rows) {
