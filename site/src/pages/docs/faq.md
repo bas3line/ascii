@@ -324,6 +324,10 @@ Yes, as an animated SVG image. A README can't run scripts, but it can show an SV
 
 Every logo, company and distro has an SVG at `https://ascii.rest/svg/<name>.svg`. Any text becomes a banner at `https://ascii.rest/banner/<text>.svg`, or you can make one by clicking at the [banner maker](/banner/). For other pieces, make the SVG yourself with `svg()` and commit it. See [github readme](/docs/readme/).
 
+## Can I turn my own logo or a photo into ascii?
+
+Yes. Open [image to ascii](/make/) and drop in an SVG, PNG, JPG, WebP or GIF. It draws the image as animated ascii in your browser, without uploading it, and gives you a snippet for any web page, SVGs for a README, and a piece file for the library. The [image to ascii docs](/docs/images/) have every setting.
+
 ## How do I ask for a logo?
 
 Open a [logo request](https://github.com/bas3line/ascii/issues/new?template=logo.yml) on GitHub. You need a GitHub account. The form asks for:

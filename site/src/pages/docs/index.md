@@ -67,6 +67,7 @@ Pick the row that fits your project. Each page has a full example.
 | your own copy | the source files in your project, to change as you like | [your own copy](/docs/copy/) |
 | an SVG | a GitHub README, or anywhere scripts can't run | [github readme](/docs/readme/), [svg](/docs/svg/) |
 | the terminal | a splash screen or a banner for your CLI | [terminal](/docs/terminal/) |
+| your own image | your logo or a photo as animated ascii, made in your browser, for a page or a README | [image to ascii](/docs/images/) |
 
 ## Browse the pieces
 
@@ -129,6 +130,7 @@ If your agent can't read web pages, paste these rules into its prompt.
 - Size a text piece with `font-size`. Size a coloured piece with `width` (in React, in `style`, not a class), and never set its height.
 - Colours are six-digit hex, like `#f97316`. `#fff` and `orange` don't work.
 - `banner()` throws on an option it can't take. `<Banner>` and `<ascii-banner>` then draw nothing and `console.warn` why.
+- The package has no function that turns an image into ascii. That is the page https://ascii.rest/make/, which runs in a browser.
 
 ## Next
 

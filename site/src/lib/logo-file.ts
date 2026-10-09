@@ -115,7 +115,7 @@ const START = 0.5; // seconds before the first glint
 const PASS = 2; // seconds a glint takes to cross
 const HALF = 5; // half its width, in cells
 const LEAN = 0.9; // cells it shifts left a row down, so it leans like a slash
-const SOLID = "${shaded ? "8dbqpPYOo0#%@" : "8dbqpPYOo0"}"; // what the glint turns to slashes; thin edges keep their shape
+const SOLID = "${shaded ? "-=+*#%@" : "8dbqpPYOo0"}"; // what the glint turns to slashes; ${shaded ? "the lightest shades keep theirs" : "thin edges keep their shape"}
 
 const lines = (art${T(": string")}) => art.slice(1, -1).split("\\n").map((line) => line.padEnd(meta.cols));
 
@@ -226,7 +226,7 @@ ${ex}${T("default ")}function ${p.fn}({ scan = meta.options.scan }${T(`: Partial
   return `/*
 ${wrap(`${p.name}: the ${clean(s.proper) || p.name} logo, ${motion}.`)}
  *
-${wrap(`Drawn from ${clean(s.file) || "its image"} on ascii.rest/make: ${shaded ? "each cell holds a character as dense as the image is bright there, from RAMP" : "each cell holds the character whose shape best matches the logo's edge through it, and 8 where the logo is solid"}. ${inColour}; in a <pre> it is one ink, from the same drawing${d.knocked ? " with its white left out" : ""}${shaded ? ", its shades turned round on a light page" : ""}. The logo is a trademark of its owner, shown here to name the ${what}.`)}
+${wrap(`Drawn from ${clean(s.file) || "its image"} on ascii.rest/make: ${shaded ? "each cell holds a character as dense as the image is bright there, from RAMP" : "each cell holds the character whose shape best matches the logo's edge through it, and 8 where the logo is solid"}. ${inColour}; in a <pre> it is one ink, from the same drawing${d.knocked ? " with its white left out" : ""}${shaded ? ", its shades turned round on a light page" : ""}.${shaded ? "" : ` The logo is a trademark of its owner, shown here to name the ${what}.`}`)}
  */
 import type { Frame, Meta } from "../types.ts";
 

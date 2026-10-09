@@ -28,6 +28,7 @@ export const DOCS = [
     label: "make",
     pages: [
       { href: "/docs/banners/", title: "banners" },
+      { href: "/docs/images/", title: "image to ascii" },
       { href: "/docs/svg/", title: "svg" },
       { href: "/docs/readme/", title: "github readme" },
       { href: "/docs/terminal/", title: "terminal" },

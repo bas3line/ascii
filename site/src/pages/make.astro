@@ -385,7 +385,6 @@ const glyphs = await glyphShapes();
     // A background was found: say so, and offer it back; or it was kept, and can be taken out again.
     groundButton.hidden = !src.ground && !keepGround;
     groundButton.firstElementChild!.textContent = keepGround ? "[remove the background]" : "[keep the background]";
-    if (src.ground) say(`left out its background, ${src.ground}`);
   }
 
   function redraw() {
@@ -422,8 +421,9 @@ const glyphs = await glyphShapes();
     prompt.hidden = true;
     $("facts").hidden = false;
     $("out").hidden = false;
+    // A taken name matters most, since the piece can't be added under it; then the background left out, if any.
     if ((names as string[]).includes(slug)) say(`the library already has a piece called ${slug}: give this one another name to add it`);
-    else if (!src?.ground) say("");
+    else say(src?.ground ? `left out its background, ${src.ground}` : "");
   }
 
   // Plays the piece in the well with the library's own mount, as a canvas in colour or a <pre> in one ink.

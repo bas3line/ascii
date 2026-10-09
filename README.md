@@ -169,6 +169,10 @@ bannerSvg("ferris", { art: rust, color: "art", tagline: "fast, safe, fun", place
 
 Every option of [banner()](https://ascii.rest/docs/banners/) and [svg()](https://ascii.rest/docs/svg/) is in the docs.
 
+### Image to ascii
+
+[ascii.rest/make](https://ascii.rest/make/) turns your own logo or a photo into animated ascii. It takes an SVG, PNG, JPG, WebP or GIF, and works in your browser, so nothing is uploaded. You get an embed for any page, two SVGs for a README, and a piece file to add to the library. [Image to ascii](https://ascii.rest/docs/images/) in the docs.
+
 ## In a terminal
 
 ```sh
