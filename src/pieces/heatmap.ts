@@ -46,7 +46,7 @@ function monthOf(z: number) {
 }
 
 export default function heatmap({ unit = meta.options.unit, seed = meta.options.seed }: Partial<HeatmapOptions> = {}): Frame {
-  const { cols, rows } = meta;
+  const { cols } = meta;
   const left = 6; // weekday labels
   const hash = (d: number, k: number) => mulberry32(seed * 7919 + d * 104729 + k * 15485863)();
   // Busy and quiet stretches: value noise over weeks, eased between knots.

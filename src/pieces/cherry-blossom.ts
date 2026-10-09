@@ -113,7 +113,7 @@ export default function cherryBlossom(): Frame {
     });
 
     for (const p of petals) {
-      const [art, r0, c0, , slot] = FLOWERS[p.flower];
+      const [, r0, c0, , slot] = FLOWERS[p.flower];
       for (let k = 0; k < 2; k++) {
         const age = ((u - p.t0 + LOOP) % LOOP) + k * LOOP;
         const x = c0 + slot![1] + 1 + shake(p.flower, t - age) + p.drag * (0.16 * age + 2.2 * (blown(t) - blown(t - age))) + 1.1 * Math.sin(age * 0.9 + p.ph);
