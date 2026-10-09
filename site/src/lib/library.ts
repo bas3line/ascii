@@ -114,6 +114,15 @@ export const SPONSORS = [
   { name: "Vercel", href: "https://vercel.com", logo: "vercel", height: 1.5 },
   { name: "Cloudflare", href: "https://www.cloudflare.com", logo: "cloudflare", height: 3.1 },
 ] as const;
+/**
+ * Who else ascii.rest thanks, under the sponsors on the home page and in the README's acknowledgements, each by its own
+ * logo in `/thanks/` and what it gives: Greptile's wordmark from greptile.com/wordmark-logo.svg (white on a dark page, as
+ * Greptile publishes it only in #2A2A2A), Paper's logo from paper.design's own header, in that header's two colours.
+ */
+export const THANKS = [
+  { name: "Greptile", href: "https://www.greptile.com", logo: "greptile", height: 1.5, for: "reviews our pull requests" },
+  { name: "Paper", href: "https://paper.design/mono", logo: "paper", height: 1.5, for: "Paper Mono, our typeface" },
+] as const;
 export const INSTALL = "npm install ascii.rest";
 
 const optionsOf = (piece: Piece) => (piece.options && Object.keys(piece.options).length ? piece.options : null);

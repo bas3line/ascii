@@ -5,10 +5,11 @@
  * for the page's theme; logos only, its name the link's label for a screen
  * reader. On the author page, whose own line leads into it, open slots and
  * then the ways to sponsor; on the home page, under its first scene, a line of
- * thanks above and one open slot, asking for the next sponsor.
+ * thanks above and one open slot, asking for the next sponsor, and under them
+ * the acknowledgements: the same wells, each logo with what it gives.
  */
 import Icon from "./Icon.astro";
-import { AUTHOR, SPONSORS, SUPPORT } from "../lib/library";
+import { AUTHOR, SPONSORS, SUPPORT, THANKS } from "../lib/library";
 
 interface Props {
   /** For the home page: the line of thanks, one open slot, and no ways to pay. */
@@ -56,6 +57,25 @@ const open = home ? 1 : Math.max(1, 4 - SPONSORS.length);
   )}
 </section>
 
+{home && (
+  <section class="sponsors home acknowledgements" aria-label="acknowledgements">
+    <p class="thanks">And thanks to</p>
+    <ul class="slots" role="list">
+      {THANKS.map((t) => (
+        <li>
+          <a class="slot logo" href={t.href} aria-label={`${t.name}: ${t.for}`}>
+            <span class="mark" style={`--h: ${t.height}rem`}>
+              <img class="for-paper" src={`/thanks/${t.logo}.svg`} alt="" />
+              <img class="for-ink" src={`/thanks/${t.logo}.dark.svg`} alt="" />
+            </span>
+            <span class="what">{t.for}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  </section>
+)}
+
 <style>
   .sponsors {
     margin-top: 2rem;
@@ -92,6 +112,12 @@ const open = home ? 1 : Math.max(1, 4 - SPONSORS.length);
 
   .slot.open {
     color: var(--muted);
+  }
+
+  /* An acknowledgement's line under its logo: what it gives. */
+  .what {
+    color: var(--muted);
+    font-size: 0.8125rem;
   }
 
   /* The logo, centred in its well at its own height, never wider than most of it. */
