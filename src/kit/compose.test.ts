@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { banner } from "../banner.ts";
 import * as barChart from "../pieces/bar-chart.ts";
+import * as donut from "../pieces/donut.ts";
+import * as galaxy from "../pieces/galaxy.ts";
 import * as gauge from "../pieces/gauge.ts";
 import * as oceanSunset from "../pieces/ocean-sunset.ts";
 import * as rust from "../pieces/rust.ts";
@@ -28,7 +30,7 @@ import {
   speed,
   type Anchor,
 } from "./compose.ts";
-import { INK, gradient, piece, rgb, snapshot } from "./core.ts";
+import { INK, Surface, gradient, piece, rgb, snapshot } from "./core.ts";
 
 // The checks scripts/check.ts makes of a frame, on paper and a dark page, in colour and as text: rows lines of cols
 // characters, colours inside the palette, and the same frame for the same t from a fresh player.
@@ -301,6 +303,11 @@ test("the loop: the least common multiple of the parts', within 60 seconds, stil
   // a logo repeats on its glint, `shine` seconds
   assert.equal(row([rust, looper(2)]).meta.loop, 10);
   assert.equal(row([{ src: rust, options: { shine: 3 } }, looper(2)]).meta.loop, 6);
+  // a whole of one part repeats as the part does, a logo's glint included, at the clip's speed
+  assert.equal(crop(rust, { x: 0, y: 0, cols: 4, rows: 4 }).meta.loop, 5);
+  assert.equal(pad({ src: rust, speed: 2 }, 1).meta.loop, 2.5);
+  assert.equal(named(rust, "r").meta.loop, undefined, "renamed as it was, its meta is its own");
+  assert.equal(named({ src: rust, speed: 2 }, "r").meta.loop, 2.5);
   // stills only: a still
   const s = row(["a", "b"]);
   assert.equal(s.meta.fps, 0);
@@ -308,12 +315,84 @@ test("the loop: the least common multiple of the parts', within 60 seconds, stil
   assert.equal(row([looper(2), clock]).meta.fps, 10, "the largest of the parts' frame rates");
 });
 
-test("a part's own clock: options, offset and speed", () => {
+test("a clip's own clock: options, offset and speed", () => {
   const p = row([{ src: clock, offset: 1 }, { src: clock, speed: 2 }, { src: clock, offset: -1 }], { gap: 1 });
   assert.equal(frame(p, 0.5), "1.5  1.0  0.0 ");
   assert.equal(frame(p, 2), "3.0  4.0  1.0 ");
   const chart = row([{ src: barChart, options: { title: "hello there" } }]);
   assert.match(frame(chart, 1), /hello there/);
+});
+
+test("a negative offset holds the first frame, so the clip no longer repeats and gives no loop", () => {
+  const held = { src: looper(2), offset: -1 };
+  for (const p of [row([held, "x"]), crop(held, { x: 0, y: 0, cols: 2, rows: 1 }), speed(held, 2), named(held, "held"), grid([held, looper(2)])])
+    assert.equal(p.meta.loop, undefined, p.meta.name);
+  // a positive offset starts further in and still repeats
+  assert.equal(row([{ src: looper(2), offset: 1 }, "x"]).meta.loop, 2);
+  // what the loop promises, frames keep: the same frame a loop later
+  const kept = row([{ src: looper(2), offset: 0.5 }, looper(3)]);
+  assert.equal(kept.meta.loop, 6);
+  for (const t of [0.2, 1.7, 4.1]) assert.equal(frame(kept, t), frame(kept, t + 6), `t=${t}`);
+});
+
+test("a clip's color paints it: text and pieces in one ink, coloured pieces too, per theme", () => {
+  // words in a colour over a piece in one ink, which is drawn in INK
+  const words = over({ src: "ab", color: "#ff8800" }, dots);
+  assert.deepEqual(words.meta.palette, ["#ff8800", INK.light, INK.dark]);
+  const dark = colours(words), light = colours(words, 0, true);
+  assert.equal(dark.text, "......\n..ab..\n......");
+  assert.deepEqual([dark.hex[8], dark.hex[9], dark.hex[0]], ["#ff8800", "#ff8800", INK.dark]);
+  assert.deepEqual([light.hex[8], light.hex[0]], ["#ff8800", INK.light]);
+  // one colour for each theme
+  const themedWords = row([{ src: "x", color: { light: "#111111", dark: "#eeeeee" } }]);
+  assert.equal(colours(themedWords, 0, true).hex[0], "#111111");
+  assert.equal(colours(themedWords, 0, false).hex[0], "#eeeeee");
+  // a coloured piece is played in one ink and drawn all in the clip's colour, its own colours left out
+  const blue = row([{ src: duo, color: "#0000ff" }]);
+  assert.deepEqual(blue.meta.palette, ["#0000ff", "#0000ff"]);
+  assert.deepEqual(colours(blue).hex, ["#0000ff", "#0000ff"]);
+  const white = row([{ src: rust, color: "#ffffff" }]);
+  assert.equal(colours(white, 1.2).text, snapshot(rust, 1.2, { mono: true }).text);
+  assert.ok(colours(white, 1.2).hex.every((c) => c === "#ffffff"));
+  // without env.color, nothing changes: the same text
+  assert.equal(frame(words, 0), frame(over("ab", dots), 0));
+  // everything that takes a clip takes its colour, time and shape alike
+  const gold = { src: "ab", color: "#fbbf24" };
+  for (const p of [crop(gold, { x: 1, y: 0, cols: 1, rows: 1 }), pad(gold, 1), scale(gold, 2), flip(gold, "x"), border(gold), speed(gold, 2), delay(gold, 1), repeat(gold, 1), freeze(gold, 1), named(gold, "gold"), sequence([gold, "cd"], { seconds: 1, transition: "cut" })]) {
+    assert.ok(p.meta.palette?.includes("#fbbf24"), `${p.meta.name}: its palette has the colour`);
+    const c = colours(p, 0.25);
+    const at = c.text.replace(/\n/g, "").search(/[ab]/);
+    assert.equal(c.hex[at], "#fbbf24", `${p.meta.name}: drawn in it`);
+    contract(p);
+  }
+  // a moving gold ship over a starfield on a stage of its own size, colours in the palette, the same frame for the same t
+  const stage = layer(new Surface(40, 10), { src: galaxy, anchor: "center" }, { src: "<o>", color: "#fbbf24", anchor: "bottom", move: "right" });
+  assert.deepEqual([stage.meta.cols, stage.meta.rows], [40, 10]);
+  contract(stage, [0, 0.5, 1, 2.5, 7], { colourOrder: true });
+});
+
+test("a piece file imported whole is its default export, and grid's columns default to a square", () => {
+  assert.equal(frame(row([{ default: dots } as never, "x"])), frame(row([dots, "x"])));
+  assert.equal(frame(layer({ src: { default: dots } as never })), frame(dots));
+  assert.equal(frame(grid(["a", "b", "c", "d"], { gap: 0 })), "ab\ncd");
+  assert.equal(frame(grid(["a", "b", "c", "d", "e"], { gap: 0 })), "abc\nde ");
+  assert.equal(frame(grid(["a"])), "a");
+  assert.equal(grid(Array(9).fill("x"), { gap: 0 }).meta.cols, 3);
+});
+
+test("a frame at about 80 by 24 takes well under 4 ms, transitions and moves included", () => {
+  const title = banner("kit", { color: ["#67e8f9", "#c084fc"] });
+  const scene = layer(new Surface(80, 24), { src: donut, anchor: "left", margin: 2 }, { src: title, anchor: "top-right", margin: 1 }, { src: "<o>", color: "#fbbf24", anchor: "bottom", move: "right" });
+  const shows = sequence([scene, galaxy, grid([rust, "ascii.rest"])], { seconds: 1, overlap: 0.5 });
+  for (const p of [scene, shows]) {
+    const color = new Uint8Array(p.meta.cols * p.meta.rows);
+    const f = p.default({ ...p.meta.options });
+    for (let i = 0; i < 30; i++) f(i / 30, { color });
+    const start = performance.now();
+    for (let i = 0; i < 300; i++) f(i / 30, { color });
+    const ms = (performance.now() - start) / 300;
+    assert.ok(ms < 4, `${p.meta.name}: ${ms.toFixed(3)} ms a frame`);
+  }
 });
 
 test("sequence: steps in turn, each in its own time, looping or holding the last", () => {
@@ -443,12 +522,12 @@ test("library pieces compose and play through svg() and the terminal", async () 
 test("every option is checked when the piece is made, with an error that says what to change", () => {
   const bad: [() => unknown, RegExp][] = [
     [() => row([]), /row\(\) takes a list of one or more parts/],
-    [() => row([5 as never]), /row\(\) takes pieces, text, Surfaces or \{ src \} parts, not 5/],
+    [() => row([5 as never]), /row\(\) takes pieces, text, Surfaces or \{ src \} clips, not 5/],
+    [() => row([{ default: 5 } as never]), /row\(\) takes pieces, text, Surfaces or \{ src \} clips, not an object/],
     [() => row(["a"], { gap: -1 }), /row's gap takes a whole number of 0 or more, not -1/],
     [() => row(["a"], { align: "up" as never }), /row's align takes "top", "middle" or "bottom", not "up"/],
     [() => column(["a"], { gap: 0.5 }), /column's gap takes a whole number/],
-    [() => grid(["a"], undefined as never), /grid\(\) takes its options with columns/],
-    [() => grid(["a"], {} as never), /grid\(\) takes columns/],
+    [() => grid(["a"], 2 as never), /grid\(\) takes an object of options, not 2/],
     [() => grid(["a"], { columns: 0 }), /grid's columns takes a whole number of 1 or more, not 0/],
     [() => grid(["a"], { columns: 1, gap: [1] as never }), /grid's gap takes a number, or \[columns, rows\]/],
     [() => grid(["a"], { columns: 1, border: { style: "abc" } }), /a border's style takes "single", "double", "rounded", "heavy" or "ascii", or 6 characters/],
@@ -456,12 +535,17 @@ test("every option is checked when the piece is made, with an error that says wh
     [() => layer("a", { src: "b", mask: "ab" }), /a layer's mask takes one character, or null/],
     [() => layer("a", { src: "b", x: () => NaN }), /returns a number, not NaN at t = 0/],
     [() => layer("a", { src: "b", y: "2" as never }), /a layer's y takes a number of cells/],
-    [() => layer("a", { src: "b", speed: 0 }), /a part's speed takes a number above 0, not 0/],
+    [() => layer("a", { src: "b", speed: 0 }), /a clip's speed takes a number above 0, not 0/],
+    [() => layer("a", { src: "b", offset: NaN }), /a clip's offset takes a number of seconds, not NaN/],
+    [() => layer("a", { src: "b", color: "gold" }), /a clip's color takes #rrggbb, or \{ light, dark \}, not "gold"/],
+    [() => row(["a", { src: "b", color: { light: "#000000" } as never }]), /a clip's color takes #rrggbb, or \{ light, dark \}, not an object/],
+    [() => over("🚀", "....."), /text takes characters from the Basic Multilingual Plane, one a cell, so not emoji/],
+    [() => flip("a🚀", "x"), /so not emoji/],
     [() => layer("a", { src: "b", margin: -1 }), /a layer's margin takes a whole number of 0 or more, not -1/],
     [() => layer("a", { src: "b", move: "sideways" as never }), /a layer's move takes "left", "right", "up" or "down", or \{ to, period \}, not "sideways"/],
     [() => layer("a", { src: "b", move: { period: 2 } as never }), /a layer's move.to takes "left", "right", "up" or "down", not undefined/],
     [() => layer("a", { src: "b", move: { to: "up", period: 0 } }), /a layer's move period takes a number of seconds above 0, not 0/],
-    [() => layer("a", { src: "b", options: 3 as never }), /a part's options take an object/],
+    [() => layer("a", { src: "b", options: 3 as never }), /a clip's options take an object/],
     [() => row([crop(oceanSunset, { x: 0, y: 0, cols: 200, rows: 2 }), crop(oceanSunset, { x: 0, y: 0, cols: 200, rows: 2 })], { gap: 0 }), /row\(\) makes a piece 400 by 2, past the 320 by 120/],
     [() => sequence([]), /sequence\(\) takes a list of one or more parts/],
     [() => sequence(["a"], { transition: "spin" as never }), /sequence's transition takes "cut", "dissolve", "fade" or "wipe", not "spin"/],

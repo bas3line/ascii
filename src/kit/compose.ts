@@ -10,12 +10,13 @@
  *
  *   import { grid, layer, over, sequence } from "ascii.rest/kit";
  *   import { banner } from "ascii.rest/banner";
- *   import { barChart, gauge, go, nightCoast, rust, starfield } from "ascii.rest/pieces";
+ *   import { barChart, donut, gauge, go, nightCoast, rust, starfield } from "ascii.rest/pieces";
  *
- *   over(banner("hello"), nightCoast, { anchor: "top", margin: 12 });  // a banner in a scene's sky
- *   layer(starfield, { src: "|__>", anchor: "bottom", move: "right" }); // a ship flying across the stars
- *   grid([barChart, gauge], { columns: 2, border: { title: true } });  // a dashboard
- *   sequence([rust, go], { seconds: 3 });                              // logos that dissolve into each other
+ *   over(banner("hello"), nightCoast, { anchor: "top", margin: 12 });   // a banner in a scene's sky
+ *   layer(starfield, { src: "|__>", color: "#fbbf24", anchor: "bottom", move: "right" });  // a gold ship in the stars
+ *   over({ src: "GAME OVER", color: "#f85149" }, donut);                // red words on a donut
+ *   grid([barChart, gauge], { border: { title: true } });               // a dashboard
+ *   sequence([rust, go], { seconds: 3 });                               // logos that dissolve into each other
  */
 import type { Category, Frame, Meta, Options, Piece } from "../types.ts";
 import {
@@ -53,18 +54,27 @@ export type Anchor = "top-left" | "top" | "top-right" | "left" | "center" | "rig
 const ANCHORS: readonly Anchor[] = ["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"];
 
 /**
- * A source with its own options and its own clock. Every function here that takes a source, or a list of them, takes
- * one of these in its place: `row([barChart, { src: gauge, options: { label: "cpu" } }])`.
+ * A source with its own options, its own clock and, if you like, its own colour. Every function here that takes a
+ * source, or a list of them, takes one of these in its place: `row([barChart, { src: gauge, color: "#3fb950" }])`.
  */
-export interface Part {
+export interface Clip {
   /** A piece, a block of text or a Surface. */
   src: Source;
   /** Its option overrides, as its own default function takes them: none. */
   options?: Options;
-  /** Seconds added to its time, so it starts further in: 0. Negative holds its first frame until its time reaches 0. */
+  /**
+   * Seconds added to its time, so it starts further in: 0. Negative holds its first frame until its time reaches 0, so
+   * it no longer repeats exactly and gives the whole no loop.
+   */
   offset?: number;
   /** How fast its time runs: 1; 2 plays it twice as fast. */
   speed?: number;
+  /**
+   * One colour for all of it, as #rrggbb, or one for each theme as { light, dark }: none, so it keeps its own. Text or a
+   * piece in one ink is drawn in it; a coloured piece is played in one ink and drawn in it too. Like every colour, it
+   * shows only when the piece is drawn in colour (env.color).
+   */
+  color?: Themed<string>;
 }
 
 /** A side a layer travels toward with `move`. */
@@ -73,7 +83,7 @@ export type Side = "left" | "right" | "up" | "down";
 const SIDES: readonly Side[] = ["left", "right", "up", "down"];
 
 /** A part of layer(): where it sits on the first part, how it moves, and what of it lets the parts under it show. */
-export interface Layer extends Part {
+export interface Layer extends Clip {
   /** The point of the first part it sits on, its own same point laid there: "top-left" (over() centres). */
   anchor?: Anchor;
   /**
@@ -138,14 +148,24 @@ function object<T extends object>(v: T | undefined, name: string): Partial<T> {
   if (v === null || typeof v !== "object" || Array.isArray(v)) fail(`${name} takes an object of options, not ${shown(v)}`);
   return v;
 }
+// A colour for both themes or one for each, as a list of one or two: null when it is left out.
+function colorOf(v: unknown, name: string): string[] | null {
+  if (v === undefined) return null;
+  if (isHex(v)) return [v];
+  if (v !== null && typeof v === "object" && isHex((v as { light: unknown }).light) && isHex((v as { dark: unknown }).dark))
+    return [(v as { light: string }).light, (v as { dark: string }).dark];
+  return fail(`${name} takes #rrggbb, or { light, dark }, not ${shown(v)}`);
+}
 
-// A source or a part, checked, and what compose needs to know of it.
+// A source or a clip, checked, and what compose needs to know of it.
 interface Prepared {
   piece: Piece;
   meta: Meta;
   options: Options;
   offset: number;
   speed: number;
+  // The clip's own colour, one for both themes or light then dark; null to keep the source's.
+  tint: string[] | null;
   // How its rows fit the whole's cells: 1 doubles them (a piece of character cells on a square grid), -1 halves them
   // (a square grid on character cells), 0 keeps them.
   stretch: number;
@@ -154,7 +174,12 @@ interface Prepared {
   rows: number;
 }
 
-const isPart = (v: unknown): v is Part => v !== null && typeof v === "object" && !(v instanceof Surface) && "src" in v && !("meta" in v);
+const isPiece = (v: unknown): v is Piece => v !== null && typeof v === "object" && "meta" in v && typeof (v as Piece).default === "function";
+const isClip = (v: unknown): v is Clip => v !== null && typeof v === "object" && !(v instanceof Surface) && "src" in v && !("meta" in v);
+
+// A piece file imported whole, `import * as scene from "./scene.ts"`, is its default export.
+const unwrap = (v: unknown): unknown =>
+  v !== null && typeof v === "object" && !("meta" in v) && !("src" in v) && isPiece((v as { default?: unknown }).default) ? (v as { default: Piece }).default : v;
 
 // A short name for a block of text: its first line, in quotes.
 const textName = (text: string) => {
@@ -163,19 +188,21 @@ const textName = (text: string) => {
 };
 
 function prepare(fn: string, v: unknown): Prepared {
-  const part: Part = isPart(v) ? v : { src: v as Source };
-  const { src } = part;
-  const ok =
-    typeof src === "string" ||
-    src instanceof Surface ||
-    (src !== null && typeof src === "object" && "meta" in src && typeof (src as Piece).default === "function");
-  if (!ok) fail(`${fn}() takes pieces, text, Surfaces or { src } parts, not ${shown(src)}`);
+  v = unwrap(v);
+  const clip: Clip = isClip(v) ? v : { src: v as Source };
+  const src = unwrap(clip.src) as Source;
+  if (!(typeof src === "string" || src instanceof Surface || isPiece(src)))
+    fail(`${fn}() takes pieces, text, Surfaces or { src } clips, not ${shown(src)}`);
+  // A cell holds one UTF-16 unit, so an emoji would be cut in two by a crop, a flip or a layer's edge.
+  if (typeof src === "string" && /[\ud800-\udfff]/.test(src))
+    fail(`text takes characters from the Basic Multilingual Plane, one a cell, so not emoji: ${JSON.stringify(src.slice(0, 24))}`);
   const p = asPiece(src, typeof src === "string" ? textName(src) : "drawing");
-  if (part.options !== undefined && (part.options === null || typeof part.options !== "object" || Array.isArray(part.options)))
-    fail(`a part's options take an object of the piece's options, not ${shown(part.options)}`);
-  const offset = part.offset === undefined ? 0 : finite(part.offset) ? part.offset : fail(`a part's offset takes a number of seconds, not ${shown(part.offset)}`);
-  const speed = part.speed === undefined ? 1 : finite(part.speed) && part.speed > 0 ? part.speed : fail(`a part's speed takes a number above 0, not ${shown(part.speed)}`);
-  return { piece: p, meta: p.meta, options: { ...part.options }, offset, speed, stretch: 0, cols: p.meta.cols, rows: p.meta.rows };
+  if (clip.options !== undefined && (clip.options === null || typeof clip.options !== "object" || Array.isArray(clip.options)))
+    fail(`a clip's options take an object of the piece's options, not ${shown(clip.options)}`);
+  const offset = clip.offset === undefined ? 0 : finite(clip.offset) ? clip.offset : fail(`a clip's offset takes a number of seconds, not ${shown(clip.offset)}`);
+  const speed = clip.speed === undefined ? 1 : finite(clip.speed) && clip.speed > 0 ? clip.speed : fail(`a clip's speed takes a number above 0, not ${shown(clip.speed)}`);
+  const tint = colorOf(clip.color, "a clip's color");
+  return { piece: p, meta: p.meta, options: { ...clip.options }, offset, speed, tint, stretch: 0, cols: p.meta.cols, rows: p.meta.rows };
 }
 
 // Fits a part to the whole's cells, 2 widths tall or 1, by doubling or halving its rows, so it keeps its shape.
@@ -188,7 +215,7 @@ function fit(p: Prepared, cell: number): Prepared {
 
 // A list of parts, fitted to the first one's cells.
 function list(fn: string, parts: unknown): Prepared[] {
-  if (!Array.isArray(parts) || !parts.length) fail(`${fn}() takes a list of one or more parts: pieces, text, Surfaces or { src } parts`);
+  if (!Array.isArray(parts) || !parts.length) fail(`${fn}() takes a list of one or more parts: pieces, text, Surfaces or { src } clips`);
   const all = parts.map((v) => prepare(fn, v));
   for (const p of all) fit(p, all[0].meta.cell ?? 2);
   return all;
@@ -206,15 +233,16 @@ interface Merged {
 const apart = (a: readonly number[], b: readonly number[]) => 0.3 * (a[0] - b[0]) ** 2 + 0.59 * (a[1] - b[1]) ** 2 + 0.11 * (a[2] - b[2]) ** 2;
 
 /**
- * The parts' colours as one palette, then `extra` colours the whole draws with (a border's). `plain` when the whole
- * also draws something with no colour, which a coloured whole then draws in INK rather than its first colour.
+ * The parts' colours as one palette (a clip's own colour in place of its source's), then `extra` colours the whole
+ * draws with (a border's). `plain` when the whole also draws something with no colour, which a coloured whole then
+ * draws in INK rather than its first colour.
  *
  * Up to 64 colours this is mergePalettes(). Past 64, which a gradient banner over a scene comes to, the two colours
  * that look most alike are folded into one, the earlier part's kept, until 64 are left: a gradient loses a few of its
  * steps rather than the whole failing.
  */
 function merge(parts: readonly Prepared[], extra: readonly string[] = [], plain = false): Merged {
-  const lists: (readonly string[] | undefined)[] = parts.map((p) => p.meta.palette);
+  const lists: (readonly string[] | undefined)[] = parts.map((p) => p.tint ?? p.meta.palette);
   if (extra.length) lists.push(extra);
   if (plain) lists.push(undefined);
   try {
@@ -259,10 +287,12 @@ function merge(parts: readonly Prepared[], extra: readonly string[] = [], plain 
 // The categories whose pieces repeat on a period an option sets, as svg() finds their loop.
 const LOOPS: Record<string, string> = { logos: "shine", companies: "shine", distros: "scan" };
 
-// A part's period in the whole's seconds: 0 for a still, undefined for one that never repeats exactly.
+// A part's period in the whole's seconds: 0 for a still, undefined for one that never repeats exactly, as one held on
+// its first frame by a negative offset does not.
 function period(p: Prepared): number | undefined {
   const { meta } = p;
   if (!meta.fps) return 0;
+  if (p.offset < 0) return undefined;
   let loop = meta.loop;
   if (loop === undefined && LOOPS[meta.category]) {
     const every = ({ ...meta.options, ...p.options } as Options)[LOOPS[meta.category]];
@@ -316,7 +346,8 @@ function groundOf(parts: readonly Prepared[]): string | undefined {
 
 const fpsOf = (parts: readonly Prepared[]) => Math.max(0, ...parts.map((p) => p.meta.fps));
 const categoryOf = (parts: readonly Prepared[]): Category => (parts.every((p) => p.meta.category === parts[0].meta.category) ? parts[0].meta.category : "generative");
-const clip = (s: string) => (s.length > 72 ? s.slice(0, 71) + "…" : s);
+// A note of one line, cut to the 72 characters a note may have.
+const short = (s: string) => (s.length > 72 ? s.slice(0, 71) + "…" : s);
 // A part's own options with the caller's on top, for a whole made of one part that takes them in its place.
 const optionsOf = (p: Prepared) => (p.meta.options !== undefined || Object.keys(p.options).length ? { ...p.meta.options, ...p.options } : undefined);
 
@@ -344,7 +375,7 @@ function build(fn: string, w: Whole, m: Merged, setup: (options: Options) => Dra
   return piece(
     {
       name: w.name,
-      note: w.note ?? clip(w.name),
+      note: w.note ?? short(w.name),
       category: w.category,
       cols: w.cols,
       rows: w.rows,
@@ -382,14 +413,20 @@ function restretch(g: Surface, out: Surface, k: number) {
 
 /**
  * One play of a part: its grid at the whole's time t, its rows fitted to the whole's cells, its colours turned into the
- * whole's. The grid is the same one each call.
+ * whole's, or all its clip's colour. The grid is the same one each call.
  */
 function player(p: Prepared, map: Uint8Array | undefined, options: Options = p.options) {
   const sampler = sample(p.piece, options);
   const fitted = p.stretch ? new Surface(p.cols, p.rows) : null;
+  // The clip's colour in the whole's palette, on paper and on a dark page.
+  const tint = p.tint && map ? [map[0], map[p.tint.length - 1]] : null;
   return (t: number, paper: boolean, mono: boolean): Surface => {
-    const g = sampler.at(Math.max(0, t * p.speed + p.offset), { paper, mono });
-    if (map && !mono) {
+    // A clip with a colour of its own is played in one ink, then drawn in that colour.
+    const g = sampler.at(Math.max(0, t * p.speed + p.offset), { paper, mono: mono || !!tint });
+    if (tint && !mono) {
+      const k = tint[paper ? 0 : 1], { chars, colors } = g;
+      for (let i = 0; i < chars.length; i++) if (chars[i] !== EMPTY) colors[i] = k;
+    } else if (map && !mono) {
       const c = g.colors;
       for (let i = 0; i < c.length; i++) if (c[i] !== NONE) c[i] = map[c[i]] ?? NONE;
     }
@@ -444,7 +481,7 @@ function position(v: unknown, name: string): number | ((t: number) => number) {
 
 function layerOf(fn: string, v: unknown, anchor: Anchor): Placed {
   const p = prepare(fn, v);
-  const l: Partial<Layer> = isPart(v) ? v : {};
+  const l: Partial<Layer> = isClip(v) ? v : {};
   let mask: string | null = " ";
   if (l.mask === null) mask = null;
   else if (l.mask !== undefined) {
@@ -544,9 +581,11 @@ function stack(fn: string, all: Placed[]): KitPiece {
  * scene's, cell 1) has its rows doubled so it keeps its shape, and the other way round halved. The whole takes the first
  * part's ground and the highest frame rate of the parts (24 at least when a layer moves). Its loop is the least common
  * multiple of the parts' and the moves' periods, within 60 seconds, a part that never repeats counting as repeating with
- * the moves; none when a layer moves by a function of t (wrap it in repeat()).
+ * the moves; none when a layer moves by a function of t (wrap it in repeat()). For an empty stage of your own size, the
+ * first part can be a blank grid: `new Surface(80, 24)`.
  *
  *   layer(starfield, { src: banner("hi"), anchor: "center" }, { src: "v1.0", anchor: "bottom-right", margin: 1 })
+ *   layer(new Surface(80, 24), { src: donut, anchor: "left" }, { src: "<o>", color: "#fbbf24", move: "right" })
  */
 export function layer(base: Source | Layer, ...over: (Source | Layer)[]): KitPiece {
   return stack("layer", [base, ...over].map((v) => layerOf("layer", v, "top-left")));
@@ -561,7 +600,7 @@ export function layer(base: Source | Layer, ...over: (Source | Layer)[]): KitPie
  */
 export function over(top: Source | Layer, bottom: Source | Layer, o: Omit<Layer, "src"> = {}): KitPiece {
   const opts = object(o, "over()");
-  const upper = isPart(top) ? { ...opts, ...top } : { ...opts, src: top };
+  const upper = isClip(top) ? { ...opts, ...top } : { ...opts, src: top };
   return stack("over", [layerOf("over", bottom, "top-left"), layerOf("over", upper, "center")]);
 }
 
@@ -606,12 +645,7 @@ function borderOf(name: string, v: unknown): Border | null {
   const title = o.title ?? false;
   if (typeof title !== "boolean" && typeof title !== "string") fail(`a border's title takes words, or true for the piece's name, not ${shown(title)}`);
   if (typeof title === "string") for (const ch of title) code(ch);
-  let color: string[] | null = null;
-  const c: unknown = o.color;
-  if (isHex(c)) color = [c];
-  else if (c !== null && typeof c === "object" && isHex((c as { light: unknown }).light) && isHex((c as { dark: unknown }).dark))
-    color = [(c as { light: string }).light, (c as { dark: string }).dark];
-  else if (c !== undefined) fail(`a border's color takes #rrggbb, or { light, dark }, not ${shown(c)}`);
+  const color = colorOf(o.color, "a border's color");
   const p: unknown = o.pad;
   const pad: [number, number] =
     p === undefined
@@ -650,7 +684,7 @@ const borderInk = (m: Merged, at: number, b: Border | null): [number, number] | 
  *
  *   border(gauge, { title: "load", color: "#8b949e" })
  */
-export function border(src: Source | Part, o: BorderOptions = {}): KitPiece {
+export function border(src: Source | Clip, o: BorderOptions = {}): KitPiece {
   const fn = "border";
   const p = prepare(fn, src);
   const b = borderOf("border()", object(o, "border()"))!;
@@ -710,7 +744,7 @@ export interface RowOptions {
  *
  *   row([rust, go, python], { gap: 4 })
  */
-export function row(parts: readonly (Source | Part)[], o: RowOptions = {}): KitPiece {
+export function row(parts: readonly (Source | Clip)[], o: RowOptions = {}): KitPiece {
   const fn = "row";
   const opts = object(o, "row()");
   const gap = whole(opts.gap, "row's gap", 0, 2);
@@ -741,7 +775,7 @@ export interface ColumnOptions {
  *
  *   column([banner("status"), uptimeBar])
  */
-export function column(parts: readonly (Source | Part)[], o: ColumnOptions = {}): KitPiece {
+export function column(parts: readonly (Source | Clip)[], o: ColumnOptions = {}): KitPiece {
   const fn = "column";
   const opts = object(o, "column()");
   const gap = whole(opts.gap, "column's gap", 0, 1);
@@ -760,8 +794,11 @@ export function column(parts: readonly (Source | Part)[], o: ColumnOptions = {})
 
 /** How grid() lays out its parts. */
 export interface GridOptions {
-  /** Parts a row, filled left to right and then down: required. More than there are parts gives one row. */
-  columns: number;
+  /**
+   * Parts a row, filled left to right and then down: as square as the parts allow, 2 for 3 or 4 of them, 3 for 5 to 9.
+   * More than there are parts gives one row.
+   */
+  columns?: number;
   /** Room between cells: a number for columns and rows alike, or [columns, rows]: [2, 1]. */
   gap?: number | readonly [number, number];
   /** Where a part sits in its cell, which is as wide as its column's widest part and as tall as its row's tallest: "center". */
@@ -777,14 +814,14 @@ export interface GridOptions {
  * Pieces in a grid of `columns` a row: a dashboard. Cells line up, each column as wide as its widest part and each row
  * as tall as its tallest, `gap` apart, with a border round each if you like.
  *
- *   grid([barChart, gauge, sparkline, heartbeat], { columns: 2, border: { title: true } })
+ *   grid([barChart, gauge, sparkline, heartbeat], { border: { title: true } })   // two a row
  */
-export function grid(parts: readonly (Source | Part)[], o: GridOptions): KitPiece {
+export function grid(parts: readonly (Source | Clip)[], o: GridOptions = {}): KitPiece {
   const fn = "grid";
-  if (o === undefined || o === null || typeof o !== "object" || Array.isArray(o)) fail("grid() takes its options with columns, the parts a row: grid(parts, { columns: 2 })");
-  if (o.columns === undefined) fail("grid() takes columns, the parts a row: grid(parts, { columns: 2 })");
-  const columns = whole(o.columns, "grid's columns", 1, 1);
-  const g: unknown = o.gap;
+  const opts = object(o, "grid()");
+  const all = list(fn, parts);
+  const columns = whole(opts.columns, "grid's columns", 1, Math.ceil(Math.sqrt(all.length)));
+  const g: unknown = opts.gap;
   const [gx, gy] =
     g === undefined
       ? [2, 1]
@@ -793,9 +830,8 @@ export function grid(parts: readonly (Source | Part)[], o: GridOptions): KitPiec
         : Array.isArray(g) && g.length === 2
           ? [whole(g[0], "grid's gap columns", 0, 0), whole(g[1], "grid's gap rows", 0, 0)]
           : fail(`grid's gap takes a number, or [columns, rows], not ${shown(g)}`);
-  const align = oneOf(o.align, "grid's align", ANCHORS, "center");
-  const b = borderOf("grid's border", o.border);
-  const all = list(fn, parts);
+  const align = oneOf(opts.align, "grid's align", ANCHORS, "center");
+  const b = borderOf("grid's border", opts.border);
   const n = Math.min(columns, all.length), lines = Math.ceil(all.length / n);
   const widths = Array.from({ length: n }, (_, j) => Math.max(...all.filter((_, i) => i % n === j).map((p) => p.cols)));
   const heights = Array.from({ length: lines }, (_, r) => Math.max(...all.slice(r * n, r * n + n).map((p) => p.rows)));
@@ -832,7 +868,7 @@ const single = (p: Prepared): Whole => ({
   cell: p.meta.cell ?? 2,
   fps: p.meta.fps,
   ground: p.meta.ground,
-  loop: p.meta.loop !== undefined ? p.meta.loop / p.speed : undefined,
+  loop: period(p) || undefined,
   still: p.meta.still !== undefined ? Math.max(0, (p.meta.still - p.offset) / p.speed) : undefined,
   clock: p.meta.clock,
   options: optionsOf(p),
@@ -853,7 +889,7 @@ function reshape(fn: string, p: Prepared, cols: number, rows: number, draw: (g: 
  *
  *   crop(rust, { x: 16, y: 0, cols: 32, rows: 16 })   // the top of the cog
  */
-export function crop(src: Source | Part, region: Region): KitPiece {
+export function crop(src: Source | Clip, region: Region): KitPiece {
   const p = prepare("crop", src);
   if (region === null || typeof region !== "object") fail(`crop() takes a region, { x, y, cols, rows }, not ${shown(region)}`);
   const { x, y, cols, rows } = region;
@@ -871,7 +907,7 @@ export function crop(src: Source | Part, region: Region): KitPiece {
  *
  *   pad(donut, [1, 4])
  */
-export function pad(src: Source | Part, n: number | readonly [number, number] | { top?: number; right?: number; bottom?: number; left?: number }): KitPiece {
+export function pad(src: Source | Clip, n: number | readonly [number, number] | { top?: number; right?: number; bottom?: number; left?: number }): KitPiece {
   const p = prepare("pad", src);
   let sides: number[];
   if (typeof n === "number") sides = Array(4).fill(whole(n, "pad", 0, 0));
@@ -892,7 +928,7 @@ export function pad(src: Source | Part, n: number | readonly [number, number] | 
  *
  *   scale(banner("hi", { pixel: 1 }), 3)
  */
-export function scale(src: Source | Part, factor: number | readonly [number, number]): KitPiece {
+export function scale(src: Source | Clip, factor: number | readonly [number, number]): KitPiece {
   const p = prepare("scale", src);
   const [fx, fy] =
     typeof factor === "number"
@@ -947,7 +983,7 @@ function mirror() {
  *
  *   row([rust, flip(rust, "x")])
  */
-export function flip(src: Source | Part, axis: "x" | "y" | "both"): KitPiece {
+export function flip(src: Source | Clip, axis: "x" | "y" | "both"): KitPiece {
   const p = prepare("flip", src);
   if (axis === undefined) fail(`flip() takes an axis: "x" mirrors it left to right, "y" turns it upside down, "both" does both`);
   const ax = oneOf(axis, "flip's axis", ["x", "y", "both"], "x");
@@ -969,7 +1005,7 @@ export function flip(src: Source | Part, axis: "x" | "y" | "both"): KitPiece {
 // --- sequences -----------------------------------------------------------------------------
 
 /** A step of a sequence: a part, and how long it lasts. */
-export interface Step extends Part {
+export interface Step extends Clip {
   /** Seconds it lasts, its transition out included: the sequence's `seconds`. */
   seconds?: number;
 }
@@ -1045,7 +1081,7 @@ export function sequence(steps: readonly (Source | Step)[], o: SequenceOptions =
   const n = all.length;
   const span = all.map((_, i) => {
     const v = steps[i];
-    return duration(isPart(v) ? (v as Step).seconds : undefined, `step ${i + 1}'s seconds`, each);
+    return duration(isClip(v) ? (v as Step).seconds : undefined, `step ${i + 1}'s seconds`, each);
   });
   const ov = transition === "cut" ? 0 : overlap;
   span.forEach((d, i) => {
@@ -1145,18 +1181,23 @@ export function sequence(steps: readonly (Source | Step)[], o: SequenceOptions =
 type Timing = Partial<Pick<Meta, "fps" | "loop" | "still" | "name" | "note" | "category">>;
 
 /**
- * A source with its time changed: `time` takes the whole's t to the source's, before its part's own speed and offset,
+ * A source with its time changed: `time` takes the whole's t to the source's, before its clip's own speed and offset,
  * and `timing` gives the meta's frame rate, loop and still (left out, there are none). Frames pass straight through,
- * so its colours and everything else are the source's own, and it takes the source's options.
+ * so its colours and everything else are the source's own, and it takes the source's options; a clip with a colour of
+ * its own is drawn through a player instead, which paints it.
  */
-function retime(p: Prepared, time: (t: number) => number, timing: Timing): KitPiece {
+function retime(fn: string, p: Prepared, time: (t: number) => number, timing: Timing): KitPiece {
+  const given = Object.fromEntries(Object.entries(timing).filter(([, v]) => v !== undefined));
+  if (p.tint) {
+    const m = merge([p]);
+    return build(fn, { ...single(p), loop: undefined, still: undefined, ...given }, m, (options) => {
+      const play = player(p, m.maps[0], options);
+      return (t, s, ctx) => s.paste(play(time(t), ctx.paper, ctx.mono), 0, 0);
+    });
+  }
   const { loop: _loop, still: _still, ...rest } = p.meta;
   const options = optionsOf(p);
-  const meta: Meta = checkMeta({
-    ...rest,
-    ...(options ? { options } : {}),
-    ...Object.fromEntries(Object.entries(timing).filter(([, v]) => v !== undefined)),
-  } as Meta);
+  const meta: Meta = checkMeta({ ...rest, ...(options ? { options } : {}), ...given } as Meta);
   return {
     meta,
     default(o?: Partial<Options>): Frame {
@@ -1175,11 +1216,11 @@ const stillAt = (p: Prepared) => (p.meta.still !== undefined ? Math.max(0, (p.me
  *
  *   speed(donut, 0.5)
  */
-export function speed(src: Source | Part, factor: number): KitPiece {
+export function speed(src: Source | Clip, factor: number): KitPiece {
   if (!finite(factor) || factor <= 0) fail(`speed takes a number above 0, 2 for twice as fast, not ${shown(factor)}`);
   const p = prepare("speed", src);
   const loop = period(p), still = stillAt(p);
-  return retime(p, (t) => t * factor, { loop: loop ? loop / factor : undefined, still: still && still / factor });
+  return retime("speed", p, (t) => t * factor, { loop: loop ? loop / factor : undefined, still: still && still / factor });
 }
 
 /**
@@ -1187,11 +1228,11 @@ export function speed(src: Source | Part, factor: number): KitPiece {
  *
  *   delay(banner("hi", { effect: "type" }), 1)
  */
-export function delay(src: Source | Part, seconds: number): KitPiece {
+export function delay(src: Source | Clip, seconds: number): KitPiece {
   const wait = duration(seconds, "delay", 0, true);
   const p = prepare("delay", src);
   const still = stillAt(p);
-  return retime(p, (t) => t - wait, { still: still !== undefined ? still + wait : undefined });
+  return retime("delay", p, (t) => t - wait, { still: still !== undefined ? still + wait : undefined });
 }
 
 /**
@@ -1200,11 +1241,11 @@ export function delay(src: Source | Part, seconds: number): KitPiece {
  *
  *   repeat(starfield, 6)
  */
-export function repeat(src: Source | Part, seconds: number): KitPiece {
+export function repeat(src: Source | Clip, seconds: number): KitPiece {
   const every = duration(seconds, "repeat", 1);
   const p = prepare("repeat", src);
   const still = stillAt(p);
-  return retime(p, (t) => t - every * Math.floor(t / every), { loop: p.meta.fps ? every : undefined, still: still !== undefined && still < every ? still : undefined });
+  return retime("repeat", p, (t) => t - every * Math.floor(t / every), { loop: p.meta.fps ? every : undefined, still: still !== undefined && still < every ? still : undefined });
 }
 
 /**
@@ -1212,9 +1253,9 @@ export function repeat(src: Source | Part, seconds: number): KitPiece {
  *
  *   freeze(oceanSunset, 12)
  */
-export function freeze(src: Source | Part, at: number): KitPiece {
+export function freeze(src: Source | Clip, at: number): KitPiece {
   const moment = duration(at, "freeze", 0, true);
-  return retime(prepare("freeze", src), () => moment, { fps: 0 });
+  return retime("freeze", prepare("freeze", src), () => moment, { fps: 0 });
 }
 
 /**
@@ -1224,19 +1265,19 @@ export function freeze(src: Source | Part, at: number): KitPiece {
  *
  *   named(over(banner("hello"), starfield), "hello", { note: "hello among the stars" })
  */
-export function named(src: Source | Part, name: string, o: { note?: string; category?: Category } = {}): KitPiece {
+export function named(src: Source | Clip, name: string, o: { note?: string; category?: Category } = {}): KitPiece {
   const opts = object(o, "named()");
   if (typeof name !== "string" || !name.trim()) fail(`named() takes a name, one line such as "hello", not ${shown(name)}`);
   const p = prepare("named", src);
-  const loop = p.meta.loop;
-  const renamed = retime(p, (t) => t, {
+  // Played as it was, it keeps what else it carries, such as a banner's motion, which svg() reads, and its own loop.
+  const asItWas = p.speed === 1 && !p.offset && !p.tint && !Object.keys(p.options).length;
+  const renamed = retime("named", p, (t) => t, {
     fps: p.meta.fps,
-    loop: loop && loop / p.speed,
+    loop: asItWas ? p.meta.loop : period(p) || undefined,
     still: stillAt(p),
     name: name.trim(),
-    note: opts.note ?? clip(name.trim()),
+    note: opts.note ?? short(name.trim()),
     category: opts.category ?? p.meta.category,
   });
-  // Played as it was, it keeps what else it carries, such as a banner's motion, which svg() reads.
-  return p.speed === 1 && !p.offset && !Object.keys(p.options).length ? { ...p.piece, ...renamed } : renamed;
+  return asItWas ? { ...p.piece, ...renamed } : renamed;
 }
