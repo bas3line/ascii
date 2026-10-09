@@ -224,6 +224,12 @@ The logos and distros are drawn from [devicon](https://github.com/devicons/devic
 
 New pieces, fixes and ideas are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the piece contract, the checks and how to open a pull request, and the [code of conduct](CODE_OF_CONDUCT.md) applies everywhere. Found a security problem? See [SECURITY.md](SECURITY.md).
 
+## Acknowledgements
+
+Special thanks to:
+
+- [Greptile](https://www.greptile.com), for reviewing ascii.rest's pull requests for free, as it does for open-source projects.
+
 ## Author
 
 Made by [@bas3line](https://github.com/bas3line). If you use it, a link back is appreciated, and so is a star.
