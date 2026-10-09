@@ -6,6 +6,8 @@
  * scrolls into view.
  */
 import "../styles/site.css";
+import Analytics from "@vercel/analytics/astro";
+import SpeedInsights from "@vercel/speed-insights/astro";
 import Credit from "../components/Credit.astro";
 import Icon from "../components/Icon.astro";
 import { AUTHOR, NAME, REPO, SITE, groups, issue, pieces } from "../lib/library";
@@ -66,6 +68,10 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
     <meta name="twitter:image:alt" content={imageAlt} />
     <!-- The site's face, Paper Mono, served from here: every page uses it, so it is fetched at once. -->
     <link rel="preload" href="/fonts/paper-mono.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- Vercel's Web Analytics (page views, no cookies) and Speed Insights (each visit's real Core Web Vitals), both
+    loaded from the site's own /_vercel/ paths after the page. -->
+    <Analytics />
+    <SpeedInsights />
     <slot name="head" />
   </head>
 
