@@ -6,10 +6,14 @@ import { still } from "../terminal.ts";
 import type { Piece } from "../types.ts";
 import { EMPTY, NONE, Palette, Surface, gradient, ramps, sample, snapshot } from "./core.ts";
 import { drawField, field, type FieldCell, type FieldFn, type FieldOptions } from "./field.ts";
+import moonlit from "../../examples/kit/field-moonlit.ts";
 import plasma from "../../examples/kit/field-plasma.ts";
 import pulse from "../../examples/kit/field-pulse.ts";
 import sea from "../../examples/kit/field-sea.ts";
+import storm from "../../examples/kit/field-storm.ts";
 import framed from "../../examples/kit/field-window.ts";
+
+const examples = [plasma, pulse, sea, framed, moonlit, storm];
 
 // The checks scripts/check.ts makes of a frame: rows lines of cols characters, colours inside the palette.
 function contract(p: Piece, times = [0, 0.5, 1, 2.5]) {
@@ -27,11 +31,11 @@ function contract(p: Piece, times = [0, 0.5, 1, 2.5]) {
     }
 }
 
-type Seen = { x: number; y: number } & Omit<FieldCell, "options">;
+type Seen = { x: number; y: number } & Omit<FieldCell, "options" | "char" | "color">;
 // Every cell's x, y and cell, as drawField hands them to the function.
 function seen(s: Surface, o?: FieldOptions): Seen[] {
   const out: Seen[] = [];
-  drawField(s, (x, y, _t, at) => (out.push({ x, y, col: at.col, row: at.row, u: at.u, v: at.v, r: at.r, a: at.a, cols: at.cols, rows: at.rows }), 1), 0, o);
+  drawField(s, (x, y, _t, at) => (out.push({ x, y, col: at.col, row: at.row, u: at.u, v: at.v, r: at.r, a: at.a, cols: at.cols, rows: at.rows, width: at.width, height: at.height }), 1), 0, o);
   return out;
 }
 const near = (a: number, b: number, msg?: string) => assert.ok(Math.abs(a - b) < 1e-9, msg ?? `${a} is not ${b}`);
@@ -288,7 +292,7 @@ test("many regions on one surface each draw right, the first ones again after th
 });
 
 test("the same t gives the same frame, in any order, on any player", () => {
-  for (const p of [plasma, pulse, sea, framed, field({ dither: true, colors: ["#000000", "#ffffff"] }, (x, y, t) => 0.5 + 0.5 * Math.sin(x * 6 + y * 2 + Math.PI * t))]) {
+  for (const p of [...examples, field({ dither: true, colors: ["#000000", "#ffffff"] }, (x, y, t) => 0.5 + 0.5 * Math.sin(x * 6 + y * 2 + Math.PI * t))]) {
     const a = p.default(), b = p.default();
     const color = p.meta.palette ? new Uint8Array(p.meta.cols * p.meta.rows) : undefined;
     const fresh = (t: number, paper: boolean) => {
@@ -311,10 +315,15 @@ test("period sets meta.loop, and the examples loop exactly", () => {
   assert.equal(field({ period: 2 }, () => 1).meta.loop, 2);
   assert.equal(field({ loop: 3 }, () => 1).meta.loop, 3);
   assert.equal(field({}, () => 1).meta.loop, undefined);
-  for (const p of [plasma, pulse, sea, framed]) {
+  for (const p of examples) {
     const L = p.meta.loop!;
     assert.ok(L > 0, `${p.meta.name} has a loop`);
-    for (const t of [0, 0.4, 1.3]) assert.equal(snapshot(p, t).text, snapshot(p, t + L).text, `${p.meta.name} at ${t} and ${t + L}`);
+    for (const t of [0, 0.4, 1.3])
+      for (const paper of [false, true]) {
+        const a = snapshot(p, t, { paper }), b = snapshot(p, t + L, { paper });
+        assert.equal(a.text, b.text, `${p.meta.name} at ${t} and ${t + L}`);
+        assert.deepEqual(a.color, b.color, `${p.meta.name}'s colours at ${t} and ${t + L}`);
+      }
   }
 });
 
@@ -354,6 +363,134 @@ test("one cell object serves every cell of a frame", () => {
   assert.equal(objects.size, 1);
 });
 
+test("true is solid ink on every page and false is nothing: a shape needs no invert", () => {
+  const disc = field({ cols: 24, rows: 8, ramp: "binary" }, (x, y, t, at) => at.r < 0.8);
+  const dark = snapshot(disc).text, paper = snapshot(disc, 0, { paper: true }).text;
+  assert.equal(paper, dark, "the same disc on both pages");
+  assert.ok(dark.includes("#") && dark.includes(" "));
+  // invert true still draws ink, and dither never thins it.
+  const inverted = field({ cols: 24, rows: 8, ramp: "binary", invert: true, dither: true }, (x, y, t, at) => at.r < 0.8);
+  assert.equal(snapshot(inverted).text, dark);
+  // Its colour is the top step, on each page.
+  const coloured = field({ cols: 4, rows: 1, colors: { light: ["#000000", "#111111"], dark: ["#eeeeee", "#ffffff"] }, steps: 2 }, (x) => x < 0);
+  assert.deepEqual([...snapshot(coloured).color!].slice(0, 2), [3, 3]);
+  assert.deepEqual([...snapshot(coloured, 0, { paper: true }).color!].slice(0, 2), [1, 1]);
+  assert.equal(snapshot(coloured).text, "@@  ");
+  // false leaves what is under it, as null does.
+  const s = new Surface(3, 1);
+  s.write(0, 0, "abc");
+  drawField(s, (x, y, t, at) => [true, false, null][at.col], 0);
+  assert.equal(s.toString(), "@bc");
+});
+
+test("at.char draws a cell's own character, the value still picking its colour", () => {
+  const p = field({ cols: 6, rows: 1, ramp: "ab", colors: ["#000000", "#ffffff"], steps: 2 }, (x, y, t, at) => {
+    if (at.col === 1) at.char = "<";
+    if (at.col === 2) at.char = "";
+    if (at.col === 3) at.char = "x"; // but null: nothing
+    if (at.col === 4) at.char = "^";
+    return at.col === 3 ? null : at.col === 4 ? 0 : 1;
+  });
+  for (const paper of [false, true]) {
+    const { text, color } = snapshot(p, 0, { paper });
+    // Col 0 and 5 from the ramp, turned round on paper; col 1 and 4 their own character on any page; col 2 and 3 nothing.
+    assert.equal(text, paper ? "a<  ^a" : "b<  ^b");
+    assert.deepEqual([color![1], color![4]], [1, 0], "colour by the value");
+  }
+  // A space covers what is under it; "" leaves it.
+  const s = new Surface(3, 1);
+  s.write(0, 0, "abc");
+  drawField(s, (x, y, t, at) => ((at.char = [" ", "", "*"][at.col]), 1), 0);
+  assert.deepEqual([...s.chars], [32, "b".charCodeAt(0), "*".charCodeAt(0)]);
+  // A flow of slashes by angle: a drawing no ramp could make.
+  const swirl = field({ cols: 9, rows: 5, aspect: false }, (x, y, t, at) => ((at.char = "-\\|/"[Math.round((at.a / Math.PI) * 4 + 8) % 4]), 1));
+  const lines = snapshot(swirl).text.split("\n");
+  assert.equal(lines[2], "---------");
+  assert.deepEqual([lines[0][4], lines[4][4], lines[0][0], lines[0][8], lines[4][0], lines[4][8]], ["|", "|", "\\", "/", "/", "\\"]);
+});
+
+test("at.color colours a cell itself, over colours by value", () => {
+  // invert: false, so the bright cells are ink on paper too.
+  const p = field({ cols: 4, rows: 1, invert: false, colors: ["#000000", "#ffffff"], steps: 2, palette: { light: ["#aa0000"], dark: ["#ff0000"] } }, (x, y, t, at) => {
+    if (at.col === 0) at.color = 2;
+    if (at.col === 1) at.color = "#fe0000";
+    return 1;
+  });
+  // The spread colours, then the palette's: 3 a page.
+  assert.deepEqual(p.meta.palette, ["#000000", "#ffffff", "#aa0000", "#000000", "#ffffff", "#ff0000"]);
+  assert.deepEqual([...snapshot(p).color!], [5, 5, 4, 4]);
+  assert.deepEqual([...snapshot(p, 0, { paper: true }).color!], [2, 2, 1, 1]);
+  // In one ink, none.
+  assert.equal(snapshot(p, 0, { mono: true }).color, null);
+  // It wins over a color function too, which is not called for that cell.
+  let called = 0;
+  const q = field({ cols: 2, rows: 1, palette: ["#000000", "#ff0000", "#0000ff"], color: () => (called++, 2) }, (x, y, t, at) => {
+    if (at.col === 0) at.color = 1;
+    return 1;
+  });
+  assert.deepEqual([...snapshot(q).color!], [1, 2]);
+  assert.equal(called, 1);
+  // drawField finds it in the surface's palette, the nearest; on a surface in one ink it writes none.
+  const s = new Surface(2, 1, { palette: new Palette(["#000000", "#00ff00"]) });
+  s.mono = false;
+  drawField(s, (x, y, t, at) => ((at.color = at.col ? "#10e010" : 0), 1), 0);
+  assert.deepEqual([...s.colors], [0, 1]);
+  s.mono = true;
+  drawField(s, (x, y, t, at) => ((at.color = 1), 1), 0);
+  assert.deepEqual([...s.colors], [NONE, NONE]);
+});
+
+test("colors and palette together: the palette's colours come after the spread ones", () => {
+  const plain = field({ ramp: "#@", colors: ["#000000", "#ffffff"], steps: 3, palette: ["#ff0000"] }, () => 1);
+  assert.deepEqual(plain.meta.palette, ["#000000", "#808080", "#ffffff", "#ff0000"]);
+  const themed = field({ ramp: "#@", colors: { light: ["#000000"], dark: ["#ffffff"] }, steps: 2, palette: ["#ff0000"] }, () => 1);
+  assert.deepEqual(themed.meta.palette, ["#000000", "#000000", "#ff0000", "#ffffff", "#ffffff", "#ff0000"]);
+  // A color function's index counts the spread colours first.
+  const q = field({ cols: 2, rows: 1, ramp: "#@", colors: ["#000000", "#ffffff"], steps: 2, palette: ["#ff0000"], color: (v, x) => (x < 0 ? 2 : 0) }, () => 1);
+  assert.deepEqual([...snapshot(q).color!], [2, 0]);
+});
+
+test("width and height say where the region's edges are in x and y", () => {
+  const wide = seen(new Surface(64, 24));
+  near(wide[0].width, 64 / 24);
+  near(wide[0].height, 2);
+  // A cell is 1 / 24 across, so its centre is half that in from the edge.
+  near(wide[0].x - 1 / 48, -wide[0].width / 2, "left edge");
+  near(wide[63].x + 1 / 48, wide[0].width / 2, "right edge");
+  near(wide[0].y - 1 / 24, -wide[0].height / 2, "top edge");
+  // 10 by 20 cells are 10 wide by 40 tall: a unit is 5 cell widths, a row 0.4 of one.
+  const tall = seen(new Surface(10, 20));
+  near(tall[0].width, 2);
+  near(tall[0].height, 8);
+  near(tall[0].y - 0.2, -4, "top edge");
+  near(tall[tall.length - 1].y + 0.2, 4, "bottom edge");
+  const flat = seen(new Surface(64, 24), { aspect: false });
+  assert.deepEqual([flat[0].width, flat[0].height], [2, 2]);
+  // A region's own: 30 by 10 cells are 30 by 20, a unit 10.
+  const inner = seen(new Surface(40, 20), { region: { x: 0, y: 0, cols: 30, rows: 10 } });
+  assert.deepEqual([inner[0].width, inner[0].height], [3, 2]);
+  // On a square grid (cell: 1) a row is one cell width: 30 by 10 cells are 30 by 10, a unit 5.
+  const square = seen(new Surface(30, 10, { aspect: 1 }));
+  assert.deepEqual([square[0].width, square[0].height], [6, 2]);
+  near(square[1].x - square[0].x, square[30].y - square[0].y, "a row as tall as a column is wide");
+});
+
+test("a square grid (cell: 1) keeps a circle round with as many rows as columns", () => {
+  const p = field({ cols: 30, rows: 30, cell: 1, ramp: "binary" }, (x, y, t, at) => at.r < 0.8);
+  const lines = snapshot(p).text.split("\n");
+  const across = Math.max(...lines.map((l) => l.split("#").length - 1));
+  const down = lines.filter((l) => l.includes("#")).length;
+  assert.equal(across, down);
+  assert.equal(across, 24);
+});
+
+test("field(fn) alone takes every default", () => {
+  const p = field((x, y, t, at) => at.r < 0.5);
+  assert.deepEqual([p.meta.name, p.meta.cols, p.meta.rows, p.meta.fps, p.meta.palette, p.meta.loop], ["field", 64, 24, 30, undefined, undefined]);
+  assert.ok(snapshot(p).text.includes("@"));
+  contract(p);
+});
+
 test("drawField takes t as given, and 0 for anything not a number", () => {
   const ts: number[] = [];
   const s = new Surface(1, 1);
@@ -377,7 +514,9 @@ test("every option is checked when the piece is made, with what to change", () =
     [{ colors: [] }, /a gradient takes one or more colours/],
     [{ color: 5 }, /color takes a function of the value/],
     [{ color: () => 0 }, /color function picks from the piece's colours: give the spec a palette/],
-    [{ colors: ["#000000"], palette: ["#000000"] }, /colors .* or palette .*, not both/],
+    [{ colors: ["#000000"], palette: "red" }, /palette takes a list of #rrggbb, or \{ light, dark \}, not "red"/],
+    [{ colors: ["#000000"], palette: ["red"] }, /a palette takes colours as #rrggbb, not "red"/],
+    [{ colors: ["#000000", "#ffffff"], steps: 64, palette: ["#ff0000"] }, /a palette takes up to 64 colours, light and dark together, not 65/],
     [{ dither: "yes" }, /dither takes true or false, not "yes"/],
     [{ invert: "always" }, /invert takes true, false or "auto", not "always"/],
     [{ aspect: 1 }, /aspect takes true \(circles round\) or false/],
@@ -396,18 +535,41 @@ test("every option is checked when the piece is made, with what to change", () =
     [null, /field\(\) takes a spec object/],
   ];
   for (const [spec, message] of bad) assert.throws(() => field(spec as never, fn), message, JSON.stringify(spec));
-  assert.throws(() => field({}, 5 as never), /field\(\) takes a spec and then a function of x, y and t/);
-  assert.throws(() => field({}, (() => undefined) as never), /not undefined: does it return its value\?/);
-  assert.throws(() => field({}, (() => "1") as never), /a field's function returns a brightness, a number 0 to 1, or null where there is nothing, not "1"/);
-  // null at the centre is fine: nothing there.
+  assert.throws(() => field({}, 5 as never), /field\(\) takes a function of x, y and t that returns a brightness 0 to 1, after a spec/);
+  assert.throws(() => field({} as never), /field\(\) takes a function of x, y and t/);
+  assert.throws(() => field(5 as never), /field\(\) takes a function of x, y and t/);
+  assert.throws(() => field({}, (() => undefined) as never), /not undefined: does every path through it return a value\?/);
+  assert.throws(() => field({}, (() => "1") as never), /a field's function returns a brightness, a number 0 to 1, true for solid ink, or null where there is nothing, not "1"/);
+  // What the function sets for the cell is checked at the centre too.
+  assert.throws(() => field({}, (x, y, t, at) => ((at.char = 5 as never), 1)), /at\.char takes one character as a string, such as "\*", or "" for nothing, not 5/);
+  assert.throws(() => field({}, (x, y, t, at) => ((at.char = "\n"), 1)), /a cell takes one printable character/);
+  assert.throws(() => field({}, (x, y, t, at) => ((at.color = "#ff0000"), 1)), /at\.color picks from the piece's colours: give the spec a palette/);
+  assert.throws(() => field({ palette: ["#ff0000"] }, (x, y, t, at) => ((at.color = "red"), 1)), /a colour takes #rrggbb or an index into the palette, not "red"/);
+  assert.throws(() => field({ palette: ["#ff0000"] }, (x, y, t, at) => ((at.color = 3), 1)), /colour 3 is not one of the palette's 1/);
+  // null, false and true at the centre are fine.
   assert.doesNotThrow(() => field({}, () => null));
+  assert.doesNotThrow(() => field({}, () => false));
+  assert.doesNotThrow(() => field(() => true));
+});
+
+test("a wrong return anywhere in the frame throws, not only at the centre", () => {
+  // These are right at the centre, where field() tries the function, and wrong to the right of it.
+  for (const [v, message] of [
+    [undefined, /not undefined: does every path through it return a value\?/],
+    ["1", /not "1"/],
+    [{}, /not \{\}/],
+  ] as const) {
+    const p = field({ cols: 6, rows: 1 }, (x) => (x <= 0 ? 1 : (v as never)));
+    assert.throws(() => snapshot(p), message);
+  }
 });
 
 test("drawField checks what it is given", () => {
   const s = new Surface(2, 2);
   assert.throws(() => drawField({} as never, () => 1, 0), /drawField\(\) takes the Surface to draw into first/);
   assert.throws(() => drawField(s, 5 as never, 0), /drawField\(\) takes a function of x, y and t/);
-  assert.throws(() => drawField(s, (() => undefined) as never, 0), /not undefined: does it return its value\?/);
+  assert.throws(() => drawField(s, (() => undefined) as never, 0), /not undefined: does every path through it return a value\?/);
+  assert.throws(() => drawField(s, (x, y, t, at) => ((at.char = [] as never), 1), 0), /at\.char takes one character as a string/);
   assert.throws(() => drawField(s, () => 1, 0, "blocks" as never), /drawField\(\) takes its options as an object/);
   assert.throws(() => drawField(s, () => 1, 0, { ramp: "" }), /a ramp takes/);
   assert.throws(() => drawField(s, () => 1, 0, { invert: 1 as never }), /invert takes/);

@@ -1,13 +1,16 @@
 /*
- * field: ascii art from a formula. Give it a function of x, y and t that
- * returns a brightness and it does the rest: the character for each cell from
- * a ramp, colours by value from a few stops (or by a function of your own),
- * ordered dithering between characters, coordinates that keep a circle round
- * on the tall 1:2 cells, and the ramp turned round on a light page so bright
- * still reads as bright. A field is a whole piece in one call, field(), or is
- * drawn into a grid you are drawing already, all of it or a region, with
- * drawField(). Part of ascii.rest by @bas3line (https://github.com/bas3line),
- * MIT licensed.
+ * field: ascii art from a formula, the way a shader draws a picture. Give it
+ * a function of x, y and t that says what each cell is, and it does the rest:
+ * the character from a ramp, colours by value from a few stops (or by a
+ * function of your own), ordered dithering between characters, coordinates
+ * that keep a circle round on the tall 1:2 cells, and the ramp turned round
+ * on a light page so bright still reads as bright. The function returns a
+ * brightness, true for solid ink (a shape), or null for nothing there; it can
+ * also set at.char and at.color to pick a cell's character and colour itself,
+ * so one function draws a whole scene, sky, sun and sea, each in its own
+ * colour. A field is a piece in one call, field(), or is drawn into a grid
+ * you are drawing already, all of it or a region, with drawField().
+ * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
  *   import { field } from "ascii.rest/kit";
  *
@@ -16,8 +19,11 @@
  */
 import type { Options } from "../types.ts";
 import {
+  EMPTY,
   NONE,
+  Palette,
   bayer,
+  code,
   fail,
   piece,
   ramp as rampOf,
@@ -26,7 +32,6 @@ import {
   type Color,
   type KitPiece,
   type MakerSpec,
-  type Palette,
   type PaletteSpec,
   type RampName,
   type Region,
@@ -34,8 +39,8 @@ import {
 } from "./core.ts";
 
 /**
- * Where a cell is, besides x and y, for a field's function. One object is reused for every cell of a frame, so read
- * what you need from it and keep nothing of it.
+ * Where a cell is, besides x and y, for a field's function, and two things the function may set for the cell. One
+ * object is reused for every cell of a frame, so read what you need from it and keep nothing of it.
  */
 export interface FieldCell<O extends Options = Options> {
   /** The cell's column in the field's region, from 0 at its left. */
@@ -54,21 +59,40 @@ export interface FieldCell<O extends Options = Options> {
   cols: number;
   /** The region's height in cells. */
   rows: number;
+  /** The region's width in the units of x: x runs from -width / 2 at its left edge to width / 2 at its right. */
+  width: number;
+  /** The region's height in the units of y: y runs from -height / 2 at its top edge to height / 2 at its bottom. */
+  height: number;
   /** The piece's options, for field(): its defaults with the caller's on top. drawField() gives {}: your drawing has ctx.options. */
   options: O;
+  /**
+   * Set it inside your function to draw this cell's character yourself instead of the ramp's: one character, " " for
+   * a blank that covers what is under it, "" for nothing. The value you return still picks the colour, and null still
+   * draws nothing. Read back as undefined at the next cell.
+   */
+  char?: string;
+  /**
+   * Set it inside your function to colour this cell yourself: an index into the piece's colours or #rrggbb, found in
+   * them, the nearest when it is not one of them. It needs colours to pick from, `palette` or `colors` in field()'s spec
+   * or the surface's palette for drawField(), and is not shown in one ink. Read back as undefined at the next cell.
+   */
+  color?: Color;
 }
 
 /**
- * A field: the brightness at x, y at t seconds, from 0 (no ink) to 1 (the ramp's densest character), or from `range`.
- * x and y are centred on the region, 0, 0 in its middle, y down. With `aspect` (the default) they share one unit, the
- * shorter side running -1 to 1, so a circle comes out round on the tall cells; without it each axis runs -1 to 1. A
- * value past either end counts as that end.
+ * A field: what the cell at x, y is at t seconds. x and y are centred on the region, 0, 0 in its middle, y down. With
+ * `aspect` (the default) they share one unit, the shorter side running -1 to 1, so a circle comes out round on the tall
+ * cells; without it each axis runs -1 to 1. It returns one of:
  *
- * Return null, or NaN, where there is nothing, such as the sky over a sea or the corners round a ball: the cell is
- * not drawn, on any page. 0 is different: it is the darkest shade, and a light page, which turns the ramp round, draws
- * it in the densest ink. So `Math.sqrt(1 - at.r * at.r)` is a lit ball on an empty ground on both pages.
+ * - a number, the brightness: 0 (no light) to 1 (the most), or from `range`, a value past either end counting as that
+ *   end. Light shows as dense characters on a dark page; a light page turns the ramp round (`invert`), so there bright
+ *   is little ink and 0 is the densest.
+ * - true for solid ink, the ramp's densest character on any page, and false for nothing: a shape, such as
+ *   `(x, y, t, at) => at.r < 0.8`, a disc on both pages.
+ * - null, or NaN, where there is nothing, such as the sky over a sea or the corners round a ball: the cell is not drawn,
+ *   on any page, and what is under it shows.
  */
-export type FieldFn<O extends Options = Options> = (x: number, y: number, t: number, at: FieldCell<O>) => number | null;
+export type FieldFn<O extends Options = Options> = (x: number, y: number, t: number, at: FieldCell<O>) => number | boolean | null;
 
 /** How a field is shaded: every option has a default that looks right with no tuning. */
 export interface FieldOptions<O extends Options = Options> {
@@ -80,18 +104,20 @@ export interface FieldOptions<O extends Options = Options> {
   ramp?: RampName | (string & {});
   /**
    * Colour by value: colours as #rrggbb from the lowest value to the highest, spread along their fade to `steps`
-   * colours; or { light, dark }, a list for each page, the same length. Without it (and without `color`) the field is
-   * one ink. Colours follow the value, not the ramp turned round on paper: give { light, dark } to pick colours that
-   * read on a light page. drawField() finds each colour in the surface's palette, the nearest when it is not one of
-   * them, and draws none on a surface with no palette.
+   * colours; or { light, dark }, stops for each page, each spread to `steps`. Without it (and without `color` or at.color)
+   * the field is one ink. Colours follow the value, not the ramp turned round on paper: give { light, dark } to pick
+   * colours that read on a light page. field() may take a `palette` too, colours of its own for at.color and `color`
+   * to pick, which come after the spread ones. drawField() finds each colour in the surface's palette, the nearest when
+   * it is not one of them, and draws none on a surface with no palette.
    */
   colors?: PaletteSpec;
   /** How many colours `colors` is spread to: 16. A whole number from 1 to 64, or up to 32 when `colors` is { light, dark }. */
   steps?: number;
   /**
-   * Colour by a function of your own instead: it gets the value (0 to 1, after `range` and `gamma`), x, y, t and the
-   * cell, and returns a colour: an index into the piece's colours or #rrggbb, found in them. field() needs `palette`
-   * (or `colors`) in its spec to pick from. It is not called for cells left empty, nor when colours are not shown.
+   * Colour by a function of your own instead: it gets the value (0 to 1, after `range` and `gamma`; 1 for true), x, y,
+   * t and the cell, and returns a colour: an index into the piece's colours or #rrggbb, found in them. field() needs
+   * `palette` (or `colors`) in its spec to pick from. It is not called for cells left empty, for cells whose function
+   * set at.color, nor when colours are not shown.
    */
   color?: (value: number, x: number, y: number, t: number, at: FieldCell<O>) => Color;
   /**
@@ -103,9 +129,9 @@ export interface FieldOptions<O extends Options = Options> {
   /**
    * Turns the ramp round, the densest character for 0. "auto" (the default) does it on a light page (env.paper): dense
    * characters are bright light on a dark page but dark ink on paper, so bright parts stay bright. true always, false
-   * never. Cells where the function returns null are empty whichever way the ramp runs. "auto" suits a texture that
-   * fills the frame, such as a plasma; a shape on an empty ground, such as a sea or a glow, usually reads best with
-   * false and { light, dark } colours, drawn in dark ink on paper.
+   * never. Cells where the function returns null are empty, and true is solid ink, whichever way the ramp runs. "auto"
+   * suits light, such as a plasma or a lit ball; when your number means how much ink, such as a sea or a glow on an
+   * empty ground, false with { light, dark } colours draws it in dark ink on paper.
    */
   invert?: boolean | "auto";
   /**
@@ -124,7 +150,10 @@ export interface FieldOptions<O extends Options = Options> {
   region?: Region;
 }
 
-/** What field() takes: a piece's spec (all optional, 64 by 24 by default), the field's options, and its period. */
+/**
+ * What field() takes: a piece's spec (all optional, 64 by 24 by default), the field's options, and its period. Its
+ * `palette` is colours for at.color and `color` to pick from; with `colors` as well, they come after the spread ones.
+ */
 export type FieldSpec<O extends Options = Options> = MakerSpec<O> &
   FieldOptions<O> & {
     /** Its loop in seconds, when the function repeats exactly: it sets meta.loop, the loop svg() plays. None by default. */
@@ -216,6 +245,8 @@ interface Geometry {
   c1: number;
   r0: number;
   r1: number;
+  width: number; // the region's size in the units of x and y
+  height: number;
   x: Float64Array; // by visible column
   u: Float64Array;
   y: Float64Array; // by visible row
@@ -228,6 +259,12 @@ interface Geometry {
 const geometries = new WeakMap<Surface, Geometry[]>();
 const KEEP = 8;
 
+// Half the region's shorter side in cell widths, the unit of x and y: its true shape is cols wide by rows * k tall.
+const unitOf = (cols: number, rows: number, k: number) => Math.min(cols, rows * k) / 2;
+// The region's width and height in the units of x and y.
+const extent = (cols: number, rows: number, k: number, aspect: boolean): [number, number] =>
+  aspect ? [cols / unitOf(cols, rows, k), (rows * k) / unitOf(cols, rows, k)] : [2, 2];
+
 function geometry(s: Surface, x0: number, y0: number, cols: number, rows: number, aspect: boolean): Geometry | null {
   const c0 = Math.max(0, -x0), c1 = Math.min(cols, s.cols - x0);
   const r0 = Math.max(0, -y0), r1 = Math.min(rows, s.rows - y0);
@@ -238,11 +275,11 @@ function geometry(s: Surface, x0: number, y0: number, cols: number, rows: number
   for (const g of list) if (g.key === key) return g;
 
   const w = c1 - c0, h = r1 - r0;
-  // The region's true shape is cols wide by rows * aspect tall, in cell widths; half its shorter side is one unit.
   const k = s.aspect;
-  const half = Math.min(cols, rows * k) / 2;
+  const half = unitOf(cols, rows, k);
+  const [width, height] = extent(cols, rows, k, aspect);
   const g: Geometry = {
-    key, c0, c1, r0, r1,
+    key, c0, c1, r0, r1, width, height,
     x: new Float64Array(w), u: new Float64Array(w),
     y: new Float64Array(h), v: new Float64Array(h),
     r: new Float64Array(w * h), a: new Float64Array(w * h),
@@ -300,8 +337,10 @@ function paint<O extends Options>(s: Surface, fn: FieldFn<O>, t: number, p: Plan
   const w = g.c1 - g.c0;
   at.cols = cols;
   at.rows = rows;
+  at.width = g.width;
+  at.height = g.height;
+  at.char = at.color = undefined;
 
-  let checked = false;
   for (let r = g.r0; r < g.r1; r++) {
     const j = r - g.r0, y = g.y[j], sy = y0 + r;
     at.row = r;
@@ -312,25 +351,34 @@ function paint<O extends Options>(s: Surface, fn: FieldFn<O>, t: number, p: Plan
       at.u = g.u[c - g.c0];
       at.r = g.r[i];
       at.a = g.a[i];
-      let v = fn(x, y, t, at);
-      if (!checked) {
-        if (v === undefined) fail(NOTHING);
-        checked = true;
-      }
-      // null and NaN are nothing: the cell stays as it was, on any page.
-      if (typeof v !== "number" || v !== v) continue;
-      v = (v - lo) * scale;
-      v = v > 0 ? (v < 1 ? v : 1) : 0;
-      if (gamma !== 1) v = v ** gamma;
-      const jitter = dither ? bayer(sx, sy) : 0;
-      let k = Math.floor(v * n + jitter);
-      k = k < 0 ? 0 : k >= n ? n - 1 : k;
-      const ch = codes[flip ? n - 1 - k : k];
-      // A space is not drawn: the cell stays as it was, EMPTY on a fresh frame.
-      if (ch === 32) continue;
+      const got = fn(x, y, t, at);
+      // What the function chose for this cell itself, cleared for the next.
+      const own = at.char, tint = at.color;
+      if (own !== undefined) at.char = undefined;
+      if (tint !== undefined) at.color = undefined;
+      let v: number, ink = false;
+      if (typeof got === "number") {
+        // NaN is nothing, as null: the cell stays as it was, on any page.
+        if (got !== got) continue;
+        v = (got - lo) * scale;
+        v = v > 0 ? (v < 1 ? v : 1) : 0;
+        if (gamma !== 1) v = v ** gamma;
+      } else if (got === true) (v = 1), (ink = true);
+      else if (got === null || got === false) continue;
+      else fail(wrong(got));
+      const jitter = dither && !ink ? bayer(sx, sy) : 0;
+      let ch: number;
+      if (own === undefined) {
+        let k = Math.floor(v * n + jitter);
+        k = k < 0 ? 0 : k >= n ? n - 1 : k;
+        ch = codes[flip && !ink ? n - 1 - k : k];
+        // A space is not drawn: the cell stays as it was, EMPTY on a fresh frame.
+        if (ch === 32) continue;
+      } else if ((ch = charOf(own)) === EMPTY) continue;
       const cell = sy * s.cols + sx;
       chars[cell] = ch;
-      if (lut) {
+      if (tint !== undefined && shown) colors[cell] = s.resolve(tint);
+      else if (lut) {
         let q = Math.floor(v * steps + jitter);
         q = q < 0 ? 0 : q >= steps ? steps - 1 : q;
         colors[cell] = lut[q];
@@ -340,9 +388,17 @@ function paint<O extends Options>(s: Surface, fn: FieldFn<O>, t: number, p: Plan
 }
 
 const NO_OPTIONS: Options = Object.freeze({});
-const NOTHING = "a field's function returns a brightness, a number 0 to 1, or null where there is nothing, not undefined: does it return its value?";
+const NOTHING = "a field's function returns a brightness, a number 0 to 1, true for solid ink, or null where there is nothing, not undefined: does every path through it return a value?";
+// What to say when the function returns something it can't.
+const wrong = (v: unknown) =>
+  v === undefined ? NOTHING : `a field's function returns a brightness, a number 0 to 1, true for solid ink, or null where there is nothing, not ${show(v)}`;
 
-const cell = <O extends Options>(options: O): FieldCell<O> => ({ col: 0, row: 0, u: 0, v: 0, r: 0, a: 0, cols: 0, rows: 0, options });
+// The char code for at.char, checked: "" is EMPTY, nothing drawn.
+const charOf = (ch: unknown) =>
+  typeof ch === "string" ? code(ch) : fail(`at.char takes one character as a string, such as "*", or "" for nothing, not ${show(ch)}`);
+
+const cell = <O extends Options>(options: O): FieldCell<O> =>
+  ({ col: 0, row: 0, u: 0, v: 0, r: 0, a: 0, cols: 0, rows: 0, width: 2, height: 2, options, char: undefined, color: undefined });
 
 // A surface is anything shaped like one: duck-typed, so a Surface from another copy of the kit still works.
 const isSurface = (s: unknown): s is Surface =>
@@ -350,9 +406,10 @@ const isSurface = (s: unknown): s is Surface =>
 
 /**
  * Draws a field into a surface you are drawing already, all of it or `region`: for a field behind text, inside a
- * frame, or beside other drawing in one piece(). Cells whose character is a space are left as they were, so a field
- * drawn over something lets it show where the field is dark. Colours, by `colors` or `color`, are found in the
- * surface's palette; on a surface with no palette, or drawn in one ink, none are written.
+ * frame, or beside other drawing in one piece(), or several fields in one grid. Cells whose character is a space are
+ * left as they were, so a field drawn over something lets it show where the field is dark. Colours, by `colors`,
+ * `color` or at.color, are found in the surface's palette; on a surface with no palette, or drawn in one ink, none are
+ * written.
  *
  *   piece({ name: "window", cols: 40, rows: 12 }, (t, s) => {
  *     drawField(s, (x, y, t) => 0.5 + 0.5 * Math.sin(x * 4 + t), t, { region: { x: 2, y: 1, cols: 36, rows: 9 } });
@@ -365,29 +422,47 @@ export function drawField(s: Surface, fn: FieldFn, t: number, o?: FieldOptions):
   paint(s, fn, finite(t) ? t : 0, plan(o, "drawField()"), cell(NO_OPTIONS));
 }
 
+// The spread `colors` with the spec's own `palette` after them: one list, or { light, dark } when either is.
+function join(spread: PaletteSpec, own: PaletteSpec): PaletteSpec {
+  const sides = (p: PaletteSpec): [readonly string[], readonly string[]] => {
+    if (Array.isArray(p)) return [p, p];
+    const { light, dark } = (p ?? {}) as { light?: unknown; dark?: unknown };
+    if (!Array.isArray(light) || !Array.isArray(dark)) fail(`palette takes a list of #rrggbb, or { light, dark }, not ${show(p)}`);
+    return [light, dark];
+  };
+  if (Array.isArray(spread) && Array.isArray(own)) return [...spread, ...own];
+  const [a, b] = sides(spread), [c, d] = sides(own);
+  return { light: [...a, ...c], dark: [...b, ...d] };
+}
+
 /**
- * A piece from a field in one call: a spec (a name, its size, 64 by 24 by default, and the field's options) and a
- * function of x, y and t that returns a brightness 0 to 1. With `colors` the piece is coloured by value; with `palette`
- * and a `color` function, by your own rule; with neither it is text in the page's own colour. `period` sets meta.loop
- * when the function repeats exactly, so svg() plays one seamless loop. Throws, saying what to change, for anything it
- * can't take, when it is called rather than on the first frame.
+ * A piece from a field in one call: a spec (a name, its size, 64 by 24 by default, and the field's options), which may
+ * be left out, and a function of x, y and t that says what each cell is. With `colors` the piece is coloured by value;
+ * with `palette` and a `color` function or at.color, by your own rule; with both, the palette's colours come after the
+ * spread ones; with none it is text in the page's own colour. `period` sets meta.loop when the function repeats
+ * exactly, so svg() plays one seamless loop. Throws, saying what to change, for anything it can't take, when it is
+ * called rather than on the first frame.
  *
- *   export default field({ name: "pulse", ramp: "dots", period: 2 }, (x, y, t, at) => Math.cos(at.r * 9 - Math.PI * t));
+ *   export default field((x, y, t, at) => at.r < 0.5 + 0.1 * Math.sin(t * 3));
+ *   export const pulse = field({ name: "pulse", ramp: "dots", period: 2 }, (x, y, t, at) => Math.cos(at.r * 9 - Math.PI * t));
  */
-export function field<O extends Options = Options>(spec: FieldSpec<O>, fn: FieldFn<O>): KitPiece<O> {
+export function field<O extends Options = Options>(fn: FieldFn<O>): KitPiece<O>;
+export function field<O extends Options = Options>(spec: FieldSpec<O>, fn: FieldFn<O>): KitPiece<O>;
+export function field<O extends Options = Options>(first: FieldSpec<O> | FieldFn<O>, second?: FieldFn<O>): KitPiece<O> {
+  // field(fn): every option its default.
+  const [spec, fn] = typeof first === "function" && second === undefined ? [{} as FieldSpec<O>, first] : [first as FieldSpec<O>, second];
   if (typeof fn !== "function")
-    fail(`field() takes a spec and then a function of x, y and t that returns a brightness 0 to 1, such as field({ name: "sea" }, (x, y, t) => 0.5 + 0.5 * Math.sin(x * 6 + t)), not ${show(fn)}`);
+    fail(`field() takes a function of x, y and t that returns a brightness 0 to 1, after a spec if you give one, such as field({ name: "sea" }, (x, y, t) => 0.5 + 0.5 * Math.sin(x * 6 + t)), not ${show(fn)}`);
   const base = specOf<O>(spec, "field");
   const p = plan<O>(spec, "field()");
   const { period } = spec;
   if (period !== undefined && !(finite(period) && period > 0)) fail(`period takes the field's loop in seconds, a number above 0, not ${show(period)}`);
-  if (spec.colors !== undefined && spec.palette !== undefined)
-    fail("field() takes colors (stops it spreads into the piece's colours) or palette (colours for a color function to pick from), not both");
-  if (p.color && spec.colors === undefined && spec.palette === undefined)
+  if (p.color && !p.palette && spec.palette === undefined)
     fail('field()\'s color function picks from the piece\'s colours: give the spec a palette, such as palette: ["#f97316", "#38bdf8"], or colors');
+  const palette = p.palette && spec.palette !== undefined ? join(p.palette, spec.palette) : (p.palette ?? spec.palette);
 
   const made = piece<O>(
-    { ...base, palette: p.palette ?? spec.palette, loop: period ?? spec.loop },
+    { ...base, palette, loop: period ?? spec.loop },
     {
       setup: (options) => {
         const at = cell(options);
@@ -395,11 +470,18 @@ export function field<O extends Options = Options>(spec: FieldSpec<O>, fn: Field
       },
     },
   );
-  // Called once now, at the centre at t = 0, so a function that returns nothing fails here and not on a page.
+  // Called once now, at the centre at t = 0, so a function that returns the wrong thing fails here and not on a page.
   const probe = cell<O>({ ...made.meta.options } as O);
-  Object.assign(probe, { col: base.cols >> 1, row: base.rows >> 1, u: 0.5, v: 0.5, cols: base.cols, rows: base.rows });
+  const [width, height] = extent(base.cols, base.rows, base.cell ?? 2, p.aspect);
+  Object.assign(probe, { col: base.cols >> 1, row: base.rows >> 1, u: 0.5, v: 0.5, cols: base.cols, rows: base.rows, width, height });
   const v = fn(0, 0, 0, probe);
-  if (v === undefined) fail(NOTHING);
-  if (v !== null && typeof v !== "number") fail(`a field's function returns a brightness, a number 0 to 1, or null where there is nothing, not ${show(v)}`);
+  if (v !== null && typeof v !== "number" && typeof v !== "boolean") fail(wrong(v));
+  if (probe.char !== undefined) charOf(probe.char);
+  if (probe.color !== undefined) {
+    if (palette === undefined)
+      fail('at.color picks from the piece\'s colours: give the spec a palette, such as palette: ["#f97316", "#38bdf8"], or colors');
+    // A colour that isn't a whole index into the colours or #rrggbb throws now, saying so.
+    new Palette(palette).index(probe.color);
+  }
   return made;
 }
