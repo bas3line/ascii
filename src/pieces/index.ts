@@ -95,6 +95,7 @@ export * as heart from "./heart.ts";
 export * as heartbeat from "./heartbeat.ts";
 export * as heatmap from "./heatmap.ts";
 export * as helium from "./helium.ts";
+export * as helmcode from "./helmcode.ts";
 export * as hilbertCurve from "./hilbert-curve.ts";
 export * as hourglass from "./hourglass.ts";
 export * as html from "./html.ts";
