@@ -18,7 +18,7 @@
 Animated ascii art for web pages.<br>
 217 pieces for React, Next.js, Astro or plain HTML.
 
-[ascii.rest](https://ascii.rest) · [install](#install) · [pieces](#pieces) · [contributing](CONTRIBUTING.md)
+[ascii.rest](https://ascii.rest) · [docs](https://ascii.rest/docs/) · [install](#install) · [pieces](#pieces) · [contributing](CONTRIBUTING.md)
 
 [![by @bas3line](https://img.shields.io/badge/by-%40bas3line-181717?logo=github&logoColor=white)](https://github.com/bas3line)
 [![CI](https://github.com/bas3line/ascii/actions/workflows/ci.yml/badge.svg)](https://github.com/bas3line/ascii/actions/workflows/ci.yml)
@@ -51,21 +51,29 @@ I've always been a fan of Markdown files and terminal-style websites: plain text
 npm install ascii.rest
 ```
 
-Or skip installing: the [HTML tag](#html-no-build-step) loads everything from ascii.rest.
+Or skip installing: the [HTML tag](#html-no-build-step) loads everything from ascii.rest. Or copy the source into your project, to keep and change, through shadcn or the CLI:
+
+```sh
+npx shadcn@latest add https://ascii.rest/r/ascii.json https://ascii.rest/r/donut.json
+npx ascii.rest add ascii donut
+```
+
+Every way, with every option, is in [the docs](https://ascii.rest/docs/).
 
 ## React and Next.js
 
 ```tsx
-import { Ascii } from "ascii.rest/react";
+import { Ascii, Banner } from "ascii.rest/react";
 import { donut } from "ascii.rest/pieces";
 
 <Ascii piece={donut} />
 <Ascii piece="night-coast" />                          // fetched by name when it mounts
 <Ascii piece={donut} options={{ fps: 12 }} className="art" />
 <Ascii piece="rust" mono />                            // a logo in one ink
+<Banner text="hello" color={["#f97316", "#f778ba"]} shadow="rounded" />
 ```
 
-`Ascii` is a client component (`"use client"`), so it goes straight into the Next.js app router. Text pieces draw into a `<pre>` in its colour and font size; the coloured ones, scenes, logos, companies and distros, draw onto a `<canvas>` as wide as its container, or into a `<pre>` in one ink with `mono`.
+`Ascii` and `Banner` are client components (`"use client"`), so they go straight into the Next.js app router. Text pieces draw into a `<pre>` in its colour and font size; the coloured ones, scenes, logos, companies and distros, draw onto a `<canvas>` as wide as its container, or into a `<pre>` in one ink with `mono`. [React](https://ascii.rest/docs/react/) and [Next.js](https://ascii.rest/docs/nextjs/) in the docs.
 
 ## Astro
 
@@ -120,17 +128,38 @@ The URL is the banner: `https://ascii.rest/banner/<text>.svg`, and `.dark.svg` f
 
 | query | |
 | --- | --- |
-| `color` | the letters' colour, `ff6a00`; two for a fade, `ff6a00,f778ba`; or `art`, the art's own colour |
+| `color` | the letters' colour, `ff6a00`; more for a fade, `ff6a00,f778ba`; or `art`, the art's own colour |
 | `effect` | `glint` by default, a glint every few seconds; `type`, the letters type in once and stay; `still` |
+| `speed` | `slow`, `normal` or `fast` |
+| `font` | `block` by default, or `slim` |
+| `shadow` | `double` by default, `single`, `heavy`, `rounded`, `ascii` or `none` |
+| `fill` | the letters' character: `shade` by default, `block`, `light`, `hash` or `at` |
 | `tagline` | a line under the letters, typed out, up to 60 characters |
-| `art` | any logo, company or distro of the library, `rust`, beside the letters, or above them with `place=above` |
+| `art` | any logo, company or distro of the library, `rust`, beside the letters, or with `place=right`, `above` or `below` |
 | `size` | `s`, `m` by default, or `l`: how big a README shows it |
+| `bg` | a colour behind it all, as a card: `0d1117` |
 
 ```html
 <img alt="ferris" src="https://ascii.rest/banner/ferris.svg?art=rust&color=art&tagline=fast%2C%20safe%2C%20fun">
 ```
 
-[ascii.rest/banner](https://ascii.rest/banner/) makes one as you choose and gives the snippet, in HTML, Markdown or as a URL. Every logo's page has a link that starts one with it. Anyone who prefers reduced motion gets it still.
+[ascii.rest/banner](https://ascii.rest/banner/) makes one as you choose and gives the snippet, in HTML, Markdown, as a URL, in React or in code. Every logo's page has a link that starts one with it. Anyone who prefers reduced motion gets it still. [GitHub README](https://ascii.rest/docs/readme/) in the docs.
+
+### Banners and SVGs in your own code
+
+Everything a URL can choose, and much more, is an option in code. `banner()` makes any text a piece, so it plays wherever a piece does, and `svg()` turns any piece into an animated SVG:
+
+```ts
+import { banner } from "ascii.rest/banner";
+import { bannerSvg, svg } from "ascii.rest/svg";
+import { rust } from "ascii.rest/pieces";
+
+const hello = banner("hello", { font: "slim", shadow: "rounded", fill: "#", color: ["#f97316", "#f778ba"], glint: { every: 5 } });
+svg(hello);                                                     // a string: write it to a file, or serve it
+bannerSvg("ferris", { art: rust, color: "art", tagline: "fast, safe, fun", place: "above" });
+```
+
+Every option of [banner()](https://ascii.rest/docs/banners/) and [svg()](https://ascii.rest/docs/svg/) is in the docs.
 
 ## In a terminal
 
@@ -173,17 +202,18 @@ import { banner } from "ascii.rest/terminal";
 await banner("my-cli", { color: ["#ff6a00", "#f778ba"], tagline: "v1.0, fast" });
 ```
 
-`banner(text, options?)` prints the text in [big text](https://ascii.rest/big-text/)'s block letters where the cursor is, lets the glint pass once and resolves, leaving the banner in the scrollback with the rest of your output, unlike `play()`, which takes over the screen. It is sized to the text, with narrower letters if the terminal is too narrow for square ones and the plain text if it is too narrow for those. Piped, it prints the banner with no colour and resolves at once; `NO_COLOR` leaves out the colours too. `npx ascii.rest banner <text>` takes the same options as `--seconds`, `--color`, `--tagline` and `--light`.
+`banner(text, options?)` prints the text in block letters where the cursor is, lets the glint pass once, or the letters type in, and resolves, leaving the banner in the scrollback with the rest of your output, unlike `play()`, which takes over the screen. It takes every option of [banner()](https://ascii.rest/docs/banners/), the font, shadow, fill, effect and colours, and is sized to the text, with narrower letters if the terminal is too narrow for square ones and the plain text if it is too narrow for those. Piped, it prints the banner with no colour and resolves at once; `NO_COLOR` leaves out the colours too. `npx ascii.rest banner <text>` takes `--seconds`, `--color`, `--tagline`, `--font`, `--shadow`, `--effect` and `--light`.
 
 | option | |
 | --- | --- |
-| `seconds` | how long the glint takes to pass; 1 by default, 0 prints it still |
-| `color` | the letters' colour as `#rrggbb`, or two for a fade along them; the terminal's own by default, and the shadow is dimmed |
-| `tagline` | a line under the banner, dimmed, once the glint has passed |
+| `seconds` | how long the glint takes to pass, or the letters to type in; 1 by default, 0 prints it still |
+| `color` | the letters' colour as `#rrggbb`, or more for a fade along them; the terminal's own by default, and the shadow is dimmed |
+| `tagline` | a line under the banner, dimmed, once it has moved |
 | `light` | for a light terminal: solid letters that the glint lightens |
 | `out` | where it prints: `process.stdout` by default |
+| `font`, `shadow`, `fill`, `effect`, … | as [banner()](https://ascii.rest/docs/banners/#options) takes them |
 
-It resolves with `{ cols, rows, interrupted }`: the banner's size, 0 by 0 if it printed the plain text, and `interrupted` if Ctrl+C stopped the glint.
+It resolves with `{ cols, rows, interrupted }`: the banner's size, 0 by 0 if it printed the plain text, and `interrupted` if Ctrl+C stopped it moving.
 
 ## TypeScript, anywhere
 
@@ -195,6 +225,8 @@ const stop = mount(document.querySelector("pre")!, donut, { fps: 12 });
 ```
 
 ## API
+
+The short of it is below; [the docs](https://ascii.rest/docs/api/) have everything each module exports, `ascii.rest/banner` and `ascii.rest/svg` among them.
 
 ### `mount(element, piece, options?)`
 

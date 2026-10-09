@@ -1,2 +1,61 @@
 # Older iPhones ask for the touch icon under this name.
 /apple-touch-icon-precomposed.png /apple-touch-icon.png 301
+
+# The words people try for the docs, each to the page it means. Paths that are a piece's own page, /html/,
+# /typescript/, /terminal/, /svelte/ and /r/, stay that piece's; the registry's files are /r/<name>.json beside
+# R's page. Each with and without its trailing slash.
+/doc /docs/ 301
+/doc/ /docs/ 301
+/documentation /docs/ 301
+/documentation/ /docs/ 301
+/guide /docs/ 301
+/guide/ /docs/ 301
+/start /docs/ 301
+/start/ /docs/ 301
+/getting-started /docs/ 301
+/getting-started/ /docs/ 301
+/install /docs/install/ 301
+/install/ /docs/install/ 301
+/api /docs/api/ 301
+/api/ /docs/api/ 301
+/reference /docs/api/ 301
+/reference/ /docs/api/ 301
+/react /docs/react/ 301
+/react/ /docs/react/ 301
+/next /docs/nextjs/ 301
+/next/ /docs/nextjs/ 301
+/nextjs /docs/nextjs/ 301
+/nextjs/ /docs/nextjs/ 301
+/docs/next /docs/nextjs/ 301
+/docs/next/ /docs/nextjs/ 301
+/astro /docs/astro/ 301
+/astro/ /docs/astro/ 301
+/cli /docs/cli/ 301
+/cli/ /docs/cli/ 301
+/readme /docs/readme/ 301
+/readme/ /docs/readme/ 301
+/docs/github /docs/readme/ 301
+/docs/github/ /docs/readme/ 301
+/shadcn /docs/copy/ 301
+/shadcn/ /docs/copy/ 301
+/registry /docs/copy/ 301
+/registry/ /docs/copy/ 301
+/docs/shadcn /docs/copy/ 301
+/docs/shadcn/ /docs/copy/ 301
+/docs/registry /docs/copy/ 301
+/docs/registry/ /docs/copy/ 301
+/docs/banner /docs/banners/ 301
+/docs/banner/ /docs/banners/ 301
+/docs/html-tag /docs/html/ 301
+/docs/web-components /docs/html/ 301
+/docs/vanilla /docs/typescript/ 301
+/docs/javascript /docs/typescript/ 301
+/docs/contract /docs/pieces/ 301
+/docs/custom /docs/pieces/ 301
+/banners /banner/ 301
+/banners/ /banner/ 301
+
+# Elsewhere.
+/npm https://www.npmjs.com/package/ascii.rest 302
+/github https://github.com/bas3line/ascii 302
+/source https://github.com/bas3line/ascii 302

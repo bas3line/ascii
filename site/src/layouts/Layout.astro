@@ -74,7 +74,14 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
       <aside class="side">
         <a class="home" href="/">{NAME}</a>
         <p class="by">by <a href="/author/" rel="author">@{AUTHOR.name}</a></p>
-        <p class="make"><a href="/banner/" aria-current={path === "/banner/" ? "page" : undefined}>[make a banner]</a></p>
+        <p class="make">
+          <a href="/docs/" aria-current={path.startsWith("/docs/") ? "page" : undefined}>[docs]</a>
+          <a href="/banner/" aria-current={path === "/banner/" ? "page" : undefined}>[make a banner]</a>
+        </p>
+        {Astro.slots.has("side") ? (
+          <slot name="side" />
+        ) : (
+        <>
         <form class="find" role="search" hidden>
           <label class="sr" for="find">Search the pieces</label>
           <input
@@ -118,6 +125,8 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
             </>
           ))}
         </nav>
+        </>
+        )}
       </aside>
 
       <script is:inline>
@@ -127,6 +136,8 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
         // script below puts the sidebar's scroll back, so that lands where it was.
         (function () {
           var form = document.querySelector(".find");
+          // The docs have their own index in the sidebar, and no search.
+          if (!form) return;
           var input = form.querySelector("input");
           var found = form.querySelector(".found");
           var nav = document.querySelector(".side nav");
@@ -241,6 +252,7 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
           <slot name="heading" />
           <span class="tools">
             <button id="motion" class="button" type="button" hidden><span>[play anyway]</span></button>
+            <a href="/docs/">[docs]</a>
             <a href={REPO}>[github]</a>
             <button id="theme" class="button" type="button" aria-label="Switch to dark theme" hidden><span>[dark]</span></button>
           </span>
@@ -248,6 +260,7 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
         <slot />
         <footer class="foot muted">
           <p class="asks">
+            <a href="/docs/">[docs]</a>
             <a href={issue("logo")}>[request a logo]</a>
             <a href={issue("piece")}>[suggest a piece]</a>
             <a href={bug}>[report a bug]</a>

@@ -202,8 +202,11 @@ a[aria-current="page"] {
   font-size: 0.875em;
 }
 
-/* The banner maker, under the credit. */
+/* The docs and the banner maker, under the credit. */
 .side .make {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 2ch;
   margin: 0.75rem 0 2rem;
 }
 
@@ -834,6 +837,189 @@ pre.code {
   margin-top: 3.5rem;
 }
 
+/* --- docs: the index in the sidebar, the page in prose and plain code ----- */
+
+.docs-nav h2 {
+  margin: 1.75rem 0 0.25rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.docs-nav h2:first-child {
+  margin-top: 0;
+}
+
+.docs-nav ul a {
+  color: var(--text);
+}
+
+.docs-nav ul a[aria-current="page"] {
+  color: var(--bg);
+}
+
+.toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 2ch;
+  max-width: 96ch;
+  margin-top: 1.25rem;
+}
+
+.toc a {
+  color: var(--muted);
+}
+
+.docs {
+  max-width: 84ch;
+  margin-top: 2rem;
+  color: var(--text);
+}
+
+.docs > :first-child {
+  margin-top: 0;
+}
+
+/* Lower case, as every heading on the site is. */
+.docs h2,
+.docs h3,
+.toc a {
+  text-transform: lowercase;
+}
+
+.docs h2 {
+  margin: 2.75rem 0 0.75rem;
+  scroll-margin-top: 1.5rem;
+}
+
+.docs h3 {
+  margin: 2rem 0 0.5rem;
+  scroll-margin-top: 1.5rem;
+}
+
+.docs h2::before {
+  content: "## ";
+  color: var(--muted);
+}
+
+.docs h3::before {
+  content: "### ";
+  color: var(--muted);
+}
+
+.docs p,
+.docs ul,
+.docs ol,
+.docs table,
+.docs .snippet,
+.docs ascii-banner,
+.docs ascii-art {
+  margin: 0.85rem 0;
+}
+
+.docs ul {
+  padding-left: 2ch;
+  list-style: "- ";
+}
+
+.docs ol {
+  padding-left: 3ch;
+}
+
+.docs li + li {
+  margin-top: 0.25rem;
+}
+
+.docs a {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--muted);
+  text-underline-offset: 0.25em;
+}
+
+.docs :not(pre) > code {
+  color: var(--ink);
+}
+
+.docs strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.docs .snippet {
+  position: relative;
+}
+
+.docs pre {
+  margin: 0.85rem 0;
+  padding: 1rem 2ch;
+  overflow-x: auto;
+  background: var(--well);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.docs .snippet pre {
+  margin: 0;
+  padding-right: 10ch;
+}
+
+.docs .snippet .copy {
+  position: absolute;
+  top: 1rem;
+  right: 2ch;
+}
+
+.docs table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.docs th,
+.docs td {
+  padding: 0.35rem 3ch 0.35rem 0;
+  border-bottom: 1px dotted var(--muted);
+  text-align: left;
+  vertical-align: top;
+}
+
+.docs th {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.docs td:first-child {
+  white-space: nowrap;
+}
+
+/* A live example: a well, as the pieces have. */
+.docs .demo {
+  display: grid;
+  place-items: center;
+  margin: 1rem 0;
+  padding: 1.5rem 1rem;
+  overflow: hidden;
+  background: var(--well);
+}
+
+.docs .demo > * {
+  max-width: 100%;
+  margin: 0;
+  font-size: 11px;
+}
+
+.edit {
+  margin-top: 1rem;
+}
+
+.edit a {
+  color: var(--muted);
+}
+
 /* --- narrow screens: the sidebar becomes a line of categories ------------ */
 
 @media (max-width: 860px) {
@@ -895,6 +1081,43 @@ pre.code {
 
   .side nav.searching h3 .count {
     display: inline;
+  }
+
+  /* The docs' index stays, its pages in a line under each part's name. */
+  .side .docs-nav {
+    display: block;
+  }
+
+  .side .docs-nav h2 {
+    display: block;
+    margin: 0.75rem 0 0.15rem;
+  }
+
+  .side .docs-nav h2:first-child {
+    margin-top: 0;
+  }
+
+  .side .docs-nav ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.15rem 2.5ch;
+  }
+
+  /* No room beside the code: the [copy] goes above it. */
+  .docs .snippet {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .docs .snippet .copy {
+    position: static;
+    order: -1;
+    align-self: flex-end;
+    margin-bottom: 0.25rem;
+  }
+
+  .docs .snippet pre {
+    padding-right: 2ch;
   }
 
   .page {
