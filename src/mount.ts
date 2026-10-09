@@ -41,7 +41,8 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
     return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] < 128;
   };
   const env = (): Env => ({ paper: canvas && ground ? !dark(ground) : dark(getComputedStyle(el).color), color });
-  let t = 0;
+  // Held still for reduced motion, it shows the moment the piece names for that: every letter of a typed banner.
+  let t = !motion && matchMedia("(prefers-reduced-motion: reduce)").matches ? (meta.still ?? 0) : 0;
   let draw = () => {
     el.textContent = frame(t, env());
   };

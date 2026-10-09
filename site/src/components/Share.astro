@@ -32,8 +32,9 @@ const id = `share-${piece.slug}`;
   {readme && <button class="button" type="button" data-copy={`${id}-readme`} hidden><span>[copy readme snippet]</span></button>}
   {readme && <a href={`/banner/?${new URLSearchParams({ text: piece.name, art: piece.slug, color: "art" })}`}>[make a banner with it]</a>}
 </p>
-<span id={`${id}-link`} hidden>{url}</span>
-{readme && <pre id={`${id}-readme`} hidden>{readmeUsage(piece)}</pre>}
+<!-- What the buttons copy; shown, and selected, only when the browser won't copy it. -->
+<p id={`${id}-link`} class="fallback" hidden>{url}</p>
+{readme && <pre id={`${id}-readme`} class="code fallback" hidden>{readmeUsage(piece)}</pre>}
 {logo && (
   <p class="yours muted">
     Yours? {readme ? "The readme snippet puts it in your README, moving, in GitHub's light and dark themes. " : ""}A post
@@ -62,5 +63,10 @@ const id = `share-${piece.slug}`;
   .yours {
     max-width: 72ch;
     margin-top: 0.5rem;
+  }
+
+  .fallback {
+    margin-top: 0.5rem;
+    overflow-wrap: anywhere;
   }
 </style>

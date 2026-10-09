@@ -36,10 +36,14 @@ const HIDE = "\x1b[?25l", SHOW = "\x1b[?25h";
 const sgr = (hex: string) => `\x1b[38;2;${parseInt(hex.slice(1, 3), 16)};${parseInt(hex.slice(3, 5), 16)};${parseInt(hex.slice(5, 7), 16)}m`;
 
 /**
- * Prints a banner, and its tagline under it, and resolves once it has moved. Piped, or with NO_COLOR set, it has no
- * colour; piped, it prints at once. It throws when the font draws none of the text.
+ * Prints a banner, and its tagline under it, and resolves once it has moved. It prints from the cursor, which should be
+ * at the start of a line: end any output before it with a newline, or its first row starts mid-line and moving it
+ * writes over that line. Piped, it prints at once with no colour. With NO_COLOR set it has no colour but still moves.
+ * A terminal too short to show it whole gets it still. It throws when the font draws none of the text, and when
+ * `seconds` is not 0 or more.
  */
 export async function banner(text: string, { seconds = 1, tagline = "", light = false, out = process.stdout, ...options }: PrintOptions = {}): Promise<Bannered> {
+  if (!Number.isFinite(seconds) || seconds < 0) throw new Error(`ascii.rest: seconds takes a number of 0 or more, not ${seconds}`);
   const words = drawable(text, options.font).trim().replace(/\s+/g, " ");
   if (!words) throw new Error(`ascii.rest: the font draws none of "${text}"`);
   const tty = out.isTTY === true;
@@ -87,50 +91,76 @@ export async function banner(text: string, { seconds = 1, tagline = "", light = 
   };
   // Where it rests: the glint out of sight, every letter typed, or the still.
   const rest = lines(motion.once ? motion.seconds : 0);
-  if (!tty || !(seconds > 0) || !(motion.seconds > 0)) {
+  // It moves in place by going back up over its own rows, so a terminal too short to show them all gets the still.
+  const room = !out.rows || out.rows > meta.rows + 1;
+  if (!tty || seconds === 0 || !(motion.seconds > 0) || !room) {
     out.write(rest.join("\n") + "\n" + under);
     return done;
   }
   // The stretch of the piece's time it plays: the glint's first pass, or the typing.
   const [from, to] = motion.pass ?? [0, motion.seconds];
 
-  return new Promise<Bannered>((resolve) => {
+  return new Promise<Bannered>((resolve, reject) => {
     let shown = lines(from);
+    let timer: ReturnType<typeof setInterval> | undefined;
+    let over = false;
     const draw = (next: string[]) => {
       if (next.every((line, i) => line === shown[i])) return;
       // back to the banner's first row, then each row over the last, cleared to its end
       out.write(`\x1b[${meta.rows}F` + next.map((line) => `${line}\x1b[K\n`).join(""));
       shown = next;
     };
-    const start = performance.now();
-    const timer = setInterval(() => {
-      const k = (performance.now() - start) / (seconds * 1000);
-      if (k >= 1) return finish();
-      draw(lines(from + (to - from) * k));
-    }, 1000 / 30);
     const show = () => out.write(SHOW);
+    const stop = (error?: { error: unknown }) => {
+      if (over) return;
+      over = true;
+      clearInterval(timer);
+      process.off("SIGINT", interrupt);
+      process.off("exit", restore);
+      out.off?.("resize", resize);
+      try {
+        // the tagline once it is done, so the redraws above have only the banner's rows to go back over
+        if (!error) out.write(under);
+        show();
+      } catch (late) {
+        error ??= { error: late };
+      }
+      if (error) reject(error.error);
+      else resolve(done);
+    };
+    // A write that throws, to a closed stream say, ends it: the timer and the listeners go, and the call rejects.
+    const safely = (fn: () => void) => {
+      try {
+        fn();
+      } catch (error) {
+        stop({ error });
+      }
+    };
+    const finish = () => safely(() => (draw(rest), stop()));
     // Ctrl+C ends the motion, not the program: the caller decides, as with play().
     const interrupt = () => ((done.interrupted = true), finish());
     // A new width can wrap the rows, and then no redraw lands where it should, so it stops where it is.
     const resize = () => stop();
-    const stop = () => {
-      clearInterval(timer);
-      process.off("SIGINT", interrupt);
-      process.off("exit", show);
-      out.off?.("resize", resize);
-      // the tagline once it is done, so the redraws above have only the banner's rows to go back over
-      out.write(under);
-      show();
-      resolve(done);
-    };
-    const finish = () => {
-      draw(rest);
-      stop();
+    // If the program exits while it moves, the cursor comes back on the way out.
+    const restore = () => {
+      try {
+        show();
+      } catch {}
     };
     process.on("SIGINT", interrupt);
-    // If the program exits while it moves, the cursor comes back on the way out.
-    process.on("exit", show);
+    process.on("exit", restore);
     out.on?.("resize", resize);
-    out.write(HIDE + shown.map((line) => `${line}\n`).join(""));
+    safely(() => out.write(HIDE + shown.map((line) => `${line}\n`).join("")));
+    if (over) return;
+    const start = performance.now();
+    timer = setInterval(
+      () =>
+        safely(() => {
+          const k = (performance.now() - start) / (seconds * 1000);
+          if (k >= 1) return finish();
+          draw(lines(from + (to - from) * k));
+        }),
+      1000 / 30,
+    );
   });
 }

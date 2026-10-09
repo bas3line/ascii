@@ -70,10 +70,10 @@ export const PLAIN: Look = {
 /** A banner's text as it is drawn: the characters the font has, one space between words. */
 export const clean = (text: string, font: FontName = "block") => drawable(text, font).trim().replace(/\s+/g, " ");
 
-/** A tagline as it is set: no control characters or broken surrogates, one space between words. */
+/** A tagline as it is set: no control characters, U+FFFE or U+FFFF, which XML can't hold, or broken surrogates; one space between words. */
 export const cleanTagline = (text: string) =>
   text
-    .replace(/[\u0000-\u001f\u007f-\u009f]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, "")
+    .replace(/[\u0000-\u001f\u007f-\u009f￾￿]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, "")
     .trim()
     .replace(/\s+/g, " ");
 
@@ -147,9 +147,13 @@ export function query(look: Look): string {
 /** Whether a banner's art is drawn for a dark ground: on a card, the card's lightness decides, not the page's theme. */
 export const artDark = (look: Look, dark: boolean) => (look.bg ? darkColor(look.bg) : dark);
 
-/** The URL of a banner: its text in the path, ".dark" for GitHub's dark theme, and its choices in the query. */
+/**
+ * The URL of a banner: its text in the path, ".dark" for GitHub's dark theme, and its choices in the query. A text that
+ * itself ends in ".dark" has that dot written %2E, so the Worker, which reads the theme off the path as it came, never
+ * takes the text's own ending for the theme.
+ */
 export const bannerPath = (text: string, dark: boolean, look: Look = PLAIN) =>
-  `/banner/${encodeURIComponent(clean(text, look.font))}${dark ? ".dark" : ""}.svg${query(look)}`;
+  `/banner/${encodeURIComponent(clean(text, look.font)).replace(/\.dark$/i, "%2Edark")}${dark ? ".dark" : ""}.svg${query(look)}`;
 
 // What the banner says, for a README's alt text.
 const alt = (words: string, look: Look) => `${words}${look.tagline ? `: ${look.tagline}` : ""}`;
@@ -168,17 +172,21 @@ export function readmeBanner(text: string, look: Look = PLAIN, center = false) {
   return center ? [`<p align="center">`, ...lines.map((l) => `  ${l}`), `</p>`].join("\n") : lines.join("\n");
 }
 
-/** The same in Markdown, one image for both themes. */
+/** The same in Markdown, one image for both themes: backslashes and brackets in its words escaped, so none ends the label. */
 export const markdownBanner = (text: string, look: Look = PLAIN) =>
-  `[![${alt(clean(text, look.font), look).replace(/[[\]]/g, "")}](${SITE}${bannerPath(text, false, look)})](${SITE}/banner/)`;
+  `[![${alt(clean(text, look.font), look).replace(/[\\[\]]/g, "\\$&")}](${SITE}${bannerPath(text, false, look)})](${SITE}/banner/)`;
 
 // In single quotes, which keep a shell's hands off ! and $; a quote in it ends them, is escaped and opens them again.
 const quoted = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
-const colorsOf = (look: Look) => (look.color && look.color !== "art" ? look.color : null);
+// The letters' colours as code can take them: the art's own colour is resolved first, by whoever has the art's SVG.
+const colorsOf = (look: Look, ink?: string | null) => (look.color === "art" ? (ink ? [ink] : null) : look.color);
 
-/** The command that shows a banner in a terminal: everything a terminal can show of it. */
-export function terminalBanner(text: string, look: Look = PLAIN) {
-  const colors = colorsOf(look);
+/**
+ * The command that shows a banner in a terminal: everything a terminal can show of it. `ink` is the art's own colour,
+ * for a look that takes its colour from the art, since a terminal draws no art to take it from.
+ */
+export function terminalBanner(text: string, look: Look = PLAIN, ink?: string | null) {
+  const colors = colorsOf(look, ink);
   return (
     `npx ascii.rest banner ${quoted(clean(text, look.font))}` +
     (colors ? ` --color ${colors.map((c) => c.slice(1)).join(",")}` : "") +
@@ -189,53 +197,46 @@ export function terminalBanner(text: string, look: Look = PLAIN) {
   );
 }
 
-// A banner's options as code: only what differs from banner()'s own defaults.
-function code(look: Look, extra: string[] = []) {
-  const colors = colorsOf(look);
-  const parts = [
-    colors ? `color: ${colors.length === 1 ? JSON.stringify(colors[0]) : `[${colors.map((c) => JSON.stringify(c)).join(", ")}]`}` : "",
-    look.font !== PLAIN.font ? `font: "${look.font}"` : "",
-    look.shadow !== PLAIN.shadow ? `shadow: "${look.shadow}"` : "",
-    look.fill !== PLAIN.fill ? `fill: "${FILLS[look.fill]}"` : "",
-    look.effect !== PLAIN.effect ? `effect: "${look.effect}"` : "",
-    look.speed !== PLAIN.speed ? `speed: ${SPEEDS[look.speed]}` : "",
-    ...extra,
-  ].filter(Boolean);
-  return parts.length ? `{ ${parts.join(", ")} }` : "";
+// A banner's options, each a name and its value as code: only what differs from banner()'s own defaults.
+function options(look: Look, ink?: string | null): [string, string][] {
+  const colors = colorsOf(look, ink);
+  const list: [string, string | false][] = [
+    ["color", colors ? (colors.length === 1 ? JSON.stringify(colors[0]) : `[${colors.map((c) => JSON.stringify(c)).join(", ")}]`) : false],
+    ["font", look.font !== PLAIN.font && JSON.stringify(look.font)],
+    ["shadow", look.shadow !== PLAIN.shadow && JSON.stringify(look.shadow)],
+    ["fill", look.fill !== PLAIN.fill && JSON.stringify(FILLS[look.fill])],
+    ["effect", look.effect !== PLAIN.effect && JSON.stringify(look.effect)],
+    ["speed", look.speed !== PLAIN.speed && String(SPEEDS[look.speed])],
+  ];
+  return list.filter((o): o is [string, string] => o[1] !== false);
 }
+const object = (list: [string, string][]) => (list.length ? `{ ${list.map(([k, v]) => `${k}: ${v}`).join(", ")} }` : "");
 
 /** The same in a CLI of your own, as it starts. */
-export function cliBanner(text: string, look: Look = PLAIN) {
-  const options = code(look, look.tagline ? [`tagline: ${JSON.stringify(look.tagline)}`] : []);
-  return [`import { banner } from "ascii.rest/terminal";`, ``, `await banner(${JSON.stringify(clean(text, look.font))}${options ? `, ${options}` : ""});`].join("\n");
+export function cliBanner(text: string, look: Look = PLAIN, ink?: string | null) {
+  const o = object([...options(look, ink), ...(look.tagline ? [["tagline", JSON.stringify(look.tagline)] as [string, string]] : [])]);
+  return [`import { banner } from "ascii.rest/terminal";`, ``, `await banner(${JSON.stringify(clean(text, look.font))}${o ? `, ${o}` : ""});`].join("\n");
 }
 
-/** The same on a page, in React or Next.js. */
-export function reactBanner(text: string, look: Look = PLAIN) {
-  const props = code(look)
-    .replace(/^\{ | \}$/g, "")
-    .split(", ")
-    .filter(Boolean)
-    .map((p) => {
-      const [k, ...v] = p.split(": ");
-      const value = v.join(": ");
-      return value.startsWith('"') ? `${k}=${value}` : `${k}={${value}}`;
-    });
+/** The same on a page, in React or Next.js: each option a prop, a string as a string and anything else in braces. */
+export function reactBanner(text: string, look: Look = PLAIN, ink?: string | null) {
+  const props = options(look, ink).map(([k, v]) => (v.startsWith('"') ? `${k}=${v}` : `${k}={${v}}`));
   return [`import { Banner } from "ascii.rest/react";`, ``, `<Banner text=${JSON.stringify(clean(text, look.font))}${props.length ? ` ${props.join(" ")}` : ""} />`].join("\n");
 }
 
 /** The same SVG from your own code, with every option bannerSvg() takes. */
 export function svgBanner(text: string, look: Look = PLAIN) {
-  const extra = [
-    look.color === "art" ? `color: "art"` : "",
-    look.tagline ? `tagline: ${JSON.stringify(look.tagline)}` : "",
-    look.art ? `art: ${look.art.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase())}` : "",
-    look.art && look.place !== PLAIN.place ? `place: "${look.place}"` : "",
-    look.bg ? `background: "${look.bg}"` : "",
+  const camel = (slug: string) => slug.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+  const extra: [string, string | false][] = [
+    ["color", look.color === "art" && `"art"`],
+    ["tagline", Boolean(look.tagline) && JSON.stringify(look.tagline)],
+    ["art", Boolean(look.art) && camel(look.art)],
+    ["place", Boolean(look.art) && look.place !== PLAIN.place && JSON.stringify(look.place)],
+    ["background", Boolean(look.bg) && JSON.stringify(look.bg)],
   ];
-  const options = code(look, extra);
-  const art = look.art ? `import { ${look.art.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase())} } from "ascii.rest/pieces";\n` : "";
-  return [`import { bannerSvg } from "ascii.rest/svg";`, art.trimEnd(), ``, `const light = bannerSvg(${JSON.stringify(clean(text, look.font))}${options ? `, ${options}` : ""});`, `const dark = bannerSvg(${JSON.stringify(clean(text, look.font))}, { ${options ? `${options.slice(2, -2)}, ` : ""}dark: true });`]
+  const o = object([...options(look), ...extra.filter((e): e is [string, string] => e[1] !== false)]);
+  const art = look.art ? `import { ${camel(look.art)} } from "ascii.rest/pieces";\n` : "";
+  return [`import { bannerSvg } from "ascii.rest/svg";`, art.trimEnd(), ``, `const light = bannerSvg(${JSON.stringify(clean(text, look.font))}${o ? `, ${o}` : ""});`, `const dark = bannerSvg(${JSON.stringify(clean(text, look.font))}, { ${o ? `${o.slice(2, -2)}, ` : ""}dark: true });`]
     .filter((l, i) => i !== 1 || l)
     .join("\n");
 }

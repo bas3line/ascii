@@ -202,7 +202,7 @@ import { banner } from "ascii.rest/terminal";
 await banner("my-cli", { color: ["#ff6a00", "#f778ba"], tagline: "v1.0, fast" });
 ```
 
-`banner(text, options?)` prints the text in block letters where the cursor is, lets the glint pass once, or the letters type in, and resolves, leaving the banner in the scrollback with the rest of your output, unlike `play()`, which takes over the screen. It takes every option of [banner()](https://ascii.rest/docs/banners/), the font, shadow, fill, effect and colours, and is sized to the text, with narrower letters if the terminal is too narrow for square ones and the plain text if it is too narrow for those. Piped, it prints the banner with no colour and resolves at once; `NO_COLOR` leaves out the colours too. `npx ascii.rest banner <text>` takes `--seconds`, `--color`, `--tagline`, `--font`, `--shadow`, `--effect` and `--light`.
+`banner(text, options?)` prints the text in block letters where the cursor is, lets the glint pass once, or the letters type in, and resolves, leaving the banner in the scrollback with the rest of your output, unlike `play()`, which takes over the screen. It takes every option of [banner()](https://ascii.rest/docs/banners/), the font, shadow, fill, effect and colours, and is sized to the text, with narrower letters if the terminal is too narrow for square ones and the plain text if it is too narrow for those. Piped, it prints the banner at once with no colour. With `NO_COLOR` set it leaves out the colours but still moves. Call it at the start of a line, and a terminal too short to show the whole banner gets it still. `npx ascii.rest banner <text>` takes `--seconds`, `--color`, `--tagline`, `--font`, `--shadow`, `--effect` and `--light`.
 
 | option | |
 | --- | --- |

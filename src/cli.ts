@@ -63,10 +63,13 @@ interface RegistryItem {
 // Each name's registry item, and every item it depends on, once each, dependencies first.
 async function items(wanted: string[], registry: string): Promise<RegistryItem[]> {
   const seen = new Map<string, RegistryItem>();
+  // Fetched already, or being fetched: an item that needs itself, A to B to A, is fetched once and the loop ends there.
+  const visited = new Set<string>();
   const visit = async (ref: string) => {
     // A name, or an item's URL; ascii.rest's own follow --registry, so another copy of the registry serves them all.
     const url = /^https?:\/\//.test(ref) ? ref.replace(/^https:\/\/ascii\.rest\/r(?=\/)/, registry) : `${registry}/${ref}.json`;
-    if (seen.has(url)) return;
+    if (visited.has(url)) return;
+    visited.add(url);
     const res = await fetch(url);
     if (!res.ok) throw new Usage(`there is no "${ref}" to add (${url} answered ${res.status}). npx ascii.rest list shows every piece.`);
     const item = (await res.json()) as RegistryItem;
@@ -206,11 +209,13 @@ async function main() {
   if (values.version) return void process.stdout.write(`${version()}\n`);
   if (values.help || !positionals.length) return void process.stdout.write(HELP);
   const fps = number("fps", values.fps, 60);
-  const seconds = number("seconds", values.seconds);
   if (positionals[0] === "add") return add(positionals.slice(1), { dir: values.dir, overwrite: values.overwrite === true, registry: (values.registry ?? REGISTRY).replace(/\/$/, "") });
   if (positionals[0] === "banner") {
     // the words after it, as the shell split them
     const text = positionals.slice(1).join(" ");
+    // How long it moves: 0 prints it still, and it has to end.
+    const seconds = values.seconds === undefined ? undefined : Number(values.seconds);
+    if (seconds !== undefined && !(Number.isFinite(seconds) && seconds >= 0)) throw new Usage(`--seconds for a banner takes a number of 0 or more, not "${values.seconds}"`);
     const font = values.font ?? "block";
     if (!Object.hasOwn(fonts, font)) throw new Usage(`--font takes ${or(Object.keys(fonts))}, not "${font}"`);
     if (!drawable(text, font as FontName).trim()) throw new Usage(`a banner takes letters, digits, spaces and . , ! ? ' : - + = / _: npx ascii.rest banner 'my cli'`);
@@ -235,6 +240,7 @@ async function main() {
   }
   if ([values.color, values.tagline, values.font, values.shadow, values.effect].some((v) => v !== undefined))
     throw new Usage(`--color, --tagline, --font, --shadow and --effect are for a banner: npx ascii.rest banner <text> --color ff6a00`);
+  const seconds = number("seconds", values.seconds);
   if (positionals.length > 1) throw new Usage(`one piece at a time: npx ascii.rest <piece>`);
   if (positionals[0] === "list") return list();
 

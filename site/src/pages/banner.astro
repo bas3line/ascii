@@ -290,14 +290,33 @@ const ways = [
   if (select.value !== look.art) look.art = "";
   if (look.color === "art" && !look.art) look.color = null;
 
-  // Each logo's README SVG, light and dark, fetched once.
+  // Each logo's README SVG, light and dark, fetched once; a fetch that fails is forgotten, so the next draw tries again.
   const arts = new Map<string, Promise<string | null>>();
   const artOf = (slug: string, dark: boolean) => {
     const key = `${slug}${dark ? ".dark" : ""}`;
-    if (!arts.has(key)) arts.set(key, fetch(`/svg/${key}.svg`).then((r) => (r.ok ? r.text() : null), () => null));
+    if (!arts.has(key))
+      arts.set(
+        key,
+        fetch(`/svg/${key}.svg`)
+          .then((r) => (r.ok ? r.text() : null), () => null)
+          .then((svg) => (svg === null && arts.delete(key), svg)),
+      );
     return arts.get(key)!;
   };
+  // The art's own colour, as a terminal shows it: from its dark README SVG.
+  const artInk = async (slug: string) => {
+    const svg = await artOf(slug, true);
+    const part = svg && namespaced(svg, "");
+    return (part && inkOf(part)) || null;
+  };
 
+  const ways = ["banner-html", "banner-markdown", "banner-url", "banner-react", "banner-svg", "banner-terminal", "banner-cli"];
+  const copies = [...document.querySelectorAll<HTMLButtonElement>(".usage button[data-copy]")];
+  // Nothing to draw, or a draw still to come: no copying the last banner's snippets, no saving its SVGs.
+  const ready = (yes: boolean) => {
+    for (const b of [...copies, ...saves]) b.setAttribute("aria-disabled", String(!yes));
+    for (const b of saves) b.disabled = !yes;
+  };
   const urls: string[] = [];
   const drawn: Record<string, string> = {};
   let turn = 0;
@@ -309,33 +328,44 @@ const ways = [
     const out = [...new Set([...input.value].filter((ch) => !/\s/.test(ch) && !clean(ch, look.font)))].join(" ");
     left.textContent = out ? `left out: ${out}` : "";
     mark();
-    if (!text) return;
-    const svgs = await Promise.all(
-      images.map(async (img) => {
-        const dark = img.dataset.groundImg === "dark";
-        return banner(text, { dark, look, art: look.art ? await artOf(look.art, artDark(look, dark)) : null })!.svg;
-      }),
-    );
+    ready(false);
+    if (!text) {
+      // An empty banner: the previews and snippets go, rather than keep the last name.
+      for (const img of images) img.hidden = true;
+      for (const id of ways) code(id).textContent = "Type some letters or digits above.";
+      for (const k of Object.keys(drawn)) delete drawn[k];
+      return;
+    }
+    const want = look.art;
+    const pieces = await Promise.all(images.map((img) => (want ? artOf(want, artDark(look, img.dataset.groundImg === "dark")) : null)));
+    const ink = look.color === "art" && want ? await artInk(want) : null;
     if (mine !== turn) return;
+    if (want && pieces.some((p) => p === null)) {
+      left.textContent = `couldn't load the ${select.selectedOptions[0]?.textContent ?? want} logo: try again, or pick another`;
+      return;
+    }
+    const svgs = images.map((img, i) => banner(text, { dark: img.dataset.groundImg === "dark", look, art: pieces[i] })!.svg);
     urls.splice(0).forEach((url) => URL.revokeObjectURL(url));
     images.forEach((img, i) => {
       const url = URL.createObjectURL(new Blob([svgs[i]], { type: "image/svg+xml" }));
       urls.push(url);
       drawn[img.dataset.groundImg!] = svgs[i];
       img.src = url;
+      img.hidden = false;
       img.alt = `${text}, as a ${img.dataset.groundImg} README shows it`;
     });
     code("banner-html").textContent = readmeBanner(text, look, centred);
     code("banner-markdown").textContent = markdownBanner(text, look);
     code("banner-url").textContent = `https://ascii.rest${bannerPath(text, false, look)}`;
-    code("banner-react").textContent = reactBanner(text, look);
+    code("banner-react").textContent = reactBanner(text, look, ink);
     code("banner-svg").textContent = svgBanner(text, look);
-    code("banner-terminal").textContent = terminalBanner(text, look);
-    code("banner-cli").textContent = cliBanner(text, look);
+    code("banner-terminal").textContent = terminalBanner(text, look, ink);
+    code("banner-cli").textContent = cliBanner(text, look, ink);
     const query = new URLSearchParams(bannerPath(text, false, look).split("?")[1] ?? "");
     query.set("text", text);
     if (centred) query.set("center", "1");
     history.replaceState(null, "", `?${query.toString().replace(/%2C/g, ",")}`);
+    ready(true);
   };
 
   // The buttons pressed for the look, the art's own colour and the art's place offered only with art.
@@ -361,8 +391,11 @@ const ways = [
   };
   const setArtChip = async () => {
     artChip.style.background = "";
-    if (!look.art) return;
-    const svg = await artOf(look.art, document.documentElement.dataset.theme === "dark");
+    const want = look.art;
+    if (!want) return;
+    const svg = await artOf(want, document.documentElement.dataset.theme === "dark");
+    // Another logo, or none, picked while this one loaded: its colour is not the chip's any more.
+    if (look.art !== want) return;
     const art = svg && namespaced(svg, "");
     const fill = art && inkOf(art);
     if (fill) artChip.style.background = fill;
@@ -404,7 +437,7 @@ const ways = [
     b.hidden = false;
     b.addEventListener("click", () => {
       const svg = drawn[b.dataset.save!];
-      if (!svg) return;
+      if (!svg || b.disabled) return;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
       a.download = `${clean(input.value, look.font).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "banner"}${b.dataset.save === "dark" ? ".dark" : ""}.svg`;

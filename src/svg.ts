@@ -14,7 +14,7 @@
  *   svg(rust, { dark: true });                       // the README SVG of a logo
  *   bannerSvg("my-project", { art: rust, color: "art", tagline: "fast, safe, fun" });
  */
-import { banner, type BannerOptions, type Themed } from "./banner.ts";
+import { banner, type BannerOptions, type BannerPiece, type Themed } from "./banner.ts";
 import type { Options, Piece } from "./types.ts";
 
 /** A frame: its text, and each cell's index into the palette. */
@@ -48,7 +48,7 @@ export interface Part {
   body: string;
 }
 
-const CW = 10, CH = 20; // a cell, in SVG units: the canvas's 1:2
+const CW = 10; // a cell's width, in SVG units; its height is `cell` widths, 2 by default, the canvas's 1:2
 const FONT = `${(CW / 0.6).toFixed(2)}px ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace`;
 /** The rule every part's rows share. */
 export const MONO = `text{font:${FONT};white-space:pre;dominant-baseline:central}`;
@@ -57,9 +57,13 @@ export const FACES = FONT.slice(FONT.indexOf(" ") + 1);
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const attr = (s: string) => esc(s).replace(/"/g, "&quot;");
+// Text from outside, a tagline or a title, without what XML 1.0 can't hold: controls, U+FFFE and U+FFFF, lone surrogates.
+const xml = (s: string) =>
+  s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f￾￿]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, "");
 
-/** Frames as a part, its classes and keyframes under `prefix`. */
-export function part({ cols, rows, palette, every, from: t0, at, once = false, fps = 15 }: Loop, prefix = ""): Part {
+/** Frames as a part, its classes and keyframes under `prefix`. A cell is `cell` widths tall: 2, or 1 for a square grid. */
+export function part({ cols, rows, palette, every, from: t0, at, once = false, fps = 15, cell = 2 }: Loop & { cell?: number }, prefix = ""): Part {
+  const CH = CW * cell;
   const n = Math.max(1, Math.round(every * fps));
   const shots = Array.from({ length: n }, (_, i) => at(t0 + i / fps));
   const same = (a: Shot, b: Shot) => a.text === b.text && a.color.every((v, i) => v === b.color[i]);
@@ -131,8 +135,8 @@ export function part({ cols, rows, palette, every, from: t0, at, once = false, f
 export function wrap({ width: w, height: h, css, body }: Part, label: string, scale = CW): string {
   const px = (u: number) => +((u * scale) / CW).toFixed(2);
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${px(w)}" height="${px(h)}" role="img" aria-label="${attr(label)}" xml:space="preserve">` +
-    `<title>${esc(label)}</title><style>${MONO}${css}</style>${body}</svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${px(w)}" height="${px(h)}" role="img" aria-label="${attr(xml(label))}" xml:space="preserve">` +
+    `<title>${esc(xml(label))}</title><style>${MONO}${css}</style>${body}</svg>`
   );
 }
 
@@ -168,9 +172,14 @@ export function inkOf({ css, body }: Part): string | null {
 // The categories whose pieces loop with a fixed period, and the option that sets it.
 const LOOPS: Record<string, string> = { logos: "shine", companies: "shine", distros: "scan" };
 
-/** The loop a piece's SVG plays: its `loop`, a logo's glint or a distro's scan, or 4 seconds; 0 for a still. */
-export function loopOf(piece: Piece, options: Options = {}): { every: number; from: number } {
+/**
+ * The loop a piece's SVG plays: a banner's own motion, its `loop`, a logo's glint or a distro's scan, or 4 seconds; 0 for
+ * a still. `once` when it plays once and stays, as a typed banner does.
+ */
+export function loopOf(piece: Piece, options: Options = {}): { every: number; from: number; once?: boolean } {
   const { meta } = piece;
+  const motion = (piece as Partial<BannerPiece>).motion;
+  if (motion) return { every: motion.seconds, from: motion.from, once: motion.once };
   if (!meta.fps) return { every: 0, from: 0 };
   if (meta.loop) return { every: meta.loop, from: 0 };
   const key = LOOPS[meta.category];
@@ -219,14 +228,14 @@ function pieceLoop(piece: Piece, o: SvgOptions): Loop {
     every: every > 0 ? every : 1,
     from: o.from ?? loop.from,
     at: every > 0 ? at : () => at(o.from ?? 0),
-    once: o.once,
+    once: o.once ?? loop.once,
     fps: o.fps,
   };
 }
 
 /** A piece as an animated SVG. */
 export function svg(piece: Piece, options: SvgOptions = {}): string {
-  return wrap(part(pieceLoop(piece, options)), options.label ?? `${piece.meta.name}, in ascii, from ascii.rest`, options.scale);
+  return wrap(part({ ...pieceLoop(piece, options), cell: piece.meta.cell ?? 2 }), options.label ?? `${piece.meta.name}, in ascii, from ascii.rest`, options.scale);
 }
 
 export interface BannerSvgOptions {
@@ -285,7 +294,13 @@ export function bannerSvg(text: string, options: Omit<BannerOptions, "color"> & 
   const ground = themed(options.background, options.dark ?? false);
   const dark = ground && HEX.test(ground) ? darkColor(ground) : (options.dark ?? false);
   const theme = dark ? "dark" : "light";
-  const art = !options.art ? null : "svg" in options.art ? namespaced(options.art.svg, "a") : part(pieceLoop(options.art, { dark }), "a");
+  const art = !options.art
+    ? null
+    : "svg" in options.art
+      ? namespaced(options.art.svg, "a")
+      : part({ ...pieceLoop(options.art, { dark }), cell: options.art.meta.cell ?? 2 }, "a");
+  // A still banner holds its art still too, on its first frame.
+  if (art && options.effect === "still") art.css += `.af{animation:none}.ak0{opacity:1}`;
 
   // The letters' colours: the art's own, a fade, one colour, or GitHub's text colour.
   const asked = options.color === "art" ? ((art && inkOf(art)) ?? INK[theme]) : (themed(options.color, dark) ?? INK[theme]);
@@ -316,7 +331,7 @@ export function bannerSvg(text: string, options: Omit<BannerOptions, "color"> & 
 
   // The tagline, a character at a time once the letters are in, then a cursor that blinks; all at once if nothing moves.
   let line: Part | null = null;
-  const tagline = (options.tagline ?? "").trim();
+  const tagline = xml(options.tagline ?? "").trim();
   if (tagline) {
     const size = options.taglineSize ?? 28;
     const chars = [...tagline];

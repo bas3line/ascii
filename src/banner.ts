@@ -324,6 +324,8 @@ export function banner(text: string, options: BannerOptions = {}): BannerPiece {
     fps: effect === "still" ? 0 : 24,
     ...(palette ? { palette } : {}),
     ...(effect === "glint" ? { loop: every } : {}),
+    // Held still, a typed banner shows every letter, not the first.
+    ...(effect === "type" ? { still: motion.seconds } : {}),
   };
   return { meta, default: (): Frame => frame, text: drawable(text, font), motion };
 }

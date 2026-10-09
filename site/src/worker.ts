@@ -36,14 +36,14 @@ const refuse = (status: number, message: string) =>
 
 async function draw(request: Request, url: URL, name: string, env: Env, ctx: Context): Promise<Response> {
   if (request.method !== "GET" && request.method !== "HEAD") return refuse(405, "a banner is only for GET");
+  // The theme is read off the path as it came, before decoding: a text ending in ".dark" has that dot as %2E there.
+  const dark = name.endsWith(".dark");
   let text: string;
   try {
-    text = decodeURIComponent(name);
+    text = decodeURIComponent(dark ? name.slice(0, -".dark".length) : name);
   } catch {
     return refuse(400, "the banner's text is not a valid URL path");
   }
-  const dark = text.endsWith(".dark");
-  if (dark) text = text.slice(0, -".dark".length);
   const look = read(url.searchParams);
   if (typeof look === "string") return refuse(400, look);
   const words = clean(text, look.font);

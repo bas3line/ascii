@@ -46,6 +46,8 @@ export interface Meta<O extends Options = Options> {
   cell?: 1 | 2;
   /** For a piece that repeats exactly: its period in seconds, the loop an SVG of it plays (svg() in ascii.rest/svg). */
   loop?: number;
+  /** The moment to show when it can't move, for a reader who prefers reduced motion: 0 by default. */
+  still?: number;
 }
 
 export interface Env {
