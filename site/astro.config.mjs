@@ -26,6 +26,8 @@ export default defineConfig({
   integrations: [library],
   // The docs' code is plain, in the site's one face and ink, like the rest of its code.
   markdown: { syntaxHighlight: false },
+  // Astro 7 strips the whitespace between tags the way JSX does; the pages are written for HTML's, which keeps a space.
+  compressHTML: true,
   vite: {
     // The library lives one folder up, beside the site.
     server: { fs: { allow: [".."] } },
