@@ -1,9 +1,11 @@
 ---
 /*
- * /banner/: a text in big text's block letters as an animated SVG for a
- * GitHub README, and the same in a terminal. It can glint, type in or hold
- * still, take a colour or a fade, a tagline typed out under it, and any of the
- * library's logos, companies or distros beside or above it. The Worker
+ * /banner/: a text in block letters as an animated SVG for a GitHub README,
+ * and the same in a terminal, in React or from your own code. Every choice
+ * bannerSvg() offers that a URL can carry is a control here: the colour or a
+ * fade, the font, the shadow's lines, the letters' character, how it moves and
+ * how fast, a tagline typed out under it, any of the library's logos,
+ * companies or distros on any side of it, a background and a size. The Worker
  * (src/worker.ts) serves each banner at /banner/<text>.svg; this page draws
  * the same SVG in the browser as you choose (lib/banner.ts), the art from its
  * own README SVG, so what it shows is what a README gets. The choices ride in
@@ -12,7 +14,27 @@
  */
 import Layout from "../layouts/Layout.astro";
 import { groups } from "../lib/library";
-import { MARKS, MAX, PLAIN, TAGLINE, bannerPath, cliBanner, markdownBanner, readmeBanner, terminalBanner, type Look } from "../lib/banner";
+import {
+  EFFECTS,
+  FILLS,
+  FONTS,
+  MARKS,
+  MAX,
+  PLACES,
+  PLAIN,
+  SHADOWS,
+  SIZES,
+  SPEEDS,
+  TAGLINE,
+  bannerPath,
+  cliBanner,
+  markdownBanner,
+  reactBanner,
+  readmeBanner,
+  svgBanner,
+  terminalBanner,
+  type Look,
+} from "../lib/banner";
 import { looping } from "../lib/svg";
 
 const text = "ascii.rest";
@@ -26,12 +48,25 @@ const COLOURS = [
   { name: "pink", value: "#f778ba" },
   { name: "sunset", value: "#f97316,#f778ba" },
   { name: "ocean", value: "#22d3ee,#4493f8" },
-  { name: "aurora", value: "#3fb950,#ab7df8" },
+  { name: "aurora", value: "#3fb950,#22d3ee,#ab7df8" },
+];
+const GROUNDS = [
+  { name: "ink", value: "#0d1117" },
+  { name: "paper", value: "#f6f8fa" },
 ];
 const chip = (value: string) => {
-  const [a, b] = value.split(",");
-  return b ? `background: linear-gradient(90deg, ${a}, ${b})` : `background: ${a}`;
+  const stops = value.split(",");
+  return stops.length > 1 ? `background: linear-gradient(90deg, ${stops.join(", ")})` : `background: ${value}`;
 };
+// The rows of choices that are one word each: the look's key, its label, and each value with its name.
+const ROWS: { key: keyof Look; label: string; values: { value: string; name: string }[] }[] = [
+  { key: "font", label: "font", values: FONTS.map((f) => ({ value: f, name: f })) },
+  { key: "shadow", label: "shadow", values: SHADOWS.map((s) => ({ value: s, name: s })) },
+  { key: "fill", label: "letters", values: Object.entries(FILLS).map(([k, v]) => ({ value: k, name: `${v} ${k}` })) },
+  { key: "effect", label: "motion", values: EFFECTS.map((e) => ({ value: e, name: e === "type" ? "type in" : e })) },
+  { key: "speed", label: "speed", values: Object.keys(SPEEDS).map((s) => ({ value: s, name: s })) },
+  { key: "size", label: "size", values: SIZES.map((s) => ({ value: s, name: { s: "small", m: "medium", l: "large" }[s] })) },
+];
 // The art: every piece with a README SVG, by category, as the sidebar orders them.
 const arts = groups
   .flatMap((g) => g.categories)
@@ -43,7 +78,8 @@ const EXAMPLES = [
   { name: "ferris, beside rust, in its orange", query: "?text=ferris&art=rust&color=art" },
   { name: "a fade and a tagline", query: "?text=bas3line&color=f97316,f778ba&tagline=making%20ascii.rest" },
   { name: "i use arch, typed in under its logo", query: "?text=i%20use%20arch&art=arch-linux&place=above&effect=type&color=art" },
-  { name: "ocean, held still", query: "?text=hello%20world&color=22d3ee,4493f8&effect=still" },
+  { name: "slim, rounded, on a card", query: "?text=hello%20world&font=slim&shadow=rounded&color=22d3ee,4493f8&bg=0d1117&tagline=a%20card%20of%20its%20own" },
+  { name: "plain ascii, held still", query: "?text=old%20school&shadow=ascii&fill=hash&effect=still" },
 ];
 const grounds = [
   { theme: "light", dark: false },
@@ -53,6 +89,8 @@ const ways = [
   { name: "html", id: "banner-html", code: readmeBanner(text, look) },
   { name: "markdown", id: "banner-markdown", code: markdownBanner(text, look) },
   { name: "url", id: "banner-url", code: `https://ascii.rest${bannerPath(text, false, look)}` },
+  { name: "react", id: "banner-react", code: reactBanner(text, look) },
+  { name: "svg", id: "banner-svg", code: svgBanner(text, look) },
   { name: "terminal", id: "banner-terminal", code: terminalBanner(text, look) },
   { name: "cli", id: "banner-cli", code: cliBanner(text, look) },
 ];
@@ -60,16 +98,17 @@ const ways = [
 
 <Layout
   title="readme banners · ascii.rest"
-  description="Your name or your project's in animated ascii block letters, with a tagline and any of the library's logos, for a GitHub README or a terminal."
+  description="Your name or your project's in animated ascii block letters, with any font, shadow, colour, tagline and logo, for a GitHub README, a web page or a terminal."
   path="/banner/"
   card={{ path: "/og/big-text.png", alt: "HELLO in ascii block letters with a line shadow, on ascii.rest, by @bas3line" }}
 >
   <h1 slot="heading">readme banners</h1>
 
   <p class="lede">
-    Your name, or your project's, in block letters that glint, type in or hold still: an animated SVG for a GitHub
-    README, which runs no script, or the same in a terminal. Give it a colour or a fade, a tagline typed out under it,
-    and any of the library's {count} logos, companies and distros beside it.
+    Your name, or your project's, in block letters that glint, type in or hold still: an animated SVG for a GitHub README,
+    which runs no script, or the same on a page and in a terminal. Pick a font, a shadow, a colour or a fade, a tagline
+    typed out under it, and any of the library's {count} logos, companies and distros beside it. Everything here is an
+    option in code too: <a href="/docs/banners/">the docs</a> have every one.
   </p>
 
   <p class="examples muted" data-maker-only hidden>
@@ -107,12 +146,16 @@ const ways = [
         </span>
       </span>
     </p>
-    <p class="field" role="group" aria-label="how it moves">
-      <span class="label">motion</span>
-      <button class="button pick" type="button" data-effect="glint" aria-pressed="true"><span>glint</span></button>
-      <button class="button pick" type="button" data-effect="type" aria-pressed="false"><span>type in</span></button>
-      <button class="button pick" type="button" data-effect="still" aria-pressed="false"><span>still</span></button>
-    </p>
+    {ROWS.map((row) => (
+      <p class="field" role="group" aria-label={row.label}>
+        <span class="label">{row.label}</span>
+        {row.values.map((v) => (
+          <button class="button pick" type="button" data-set={row.key} data-value={v.value} aria-pressed={String(look[row.key] === v.value)}>
+            <span>{v.name}</span>
+          </button>
+        ))}
+      </p>
+    ))}
     <p class="field">
       <label for="banner-art">art</label>
       <select id="banner-art" name="art">
@@ -124,15 +167,24 @@ const ways = [
         ))}
       </select>
       <span class="places" role="group" aria-label="where the art goes">
-        <button class="button pick" type="button" data-place="left" aria-pressed="true" disabled><span>beside</span></button>
-        <button class="button pick" type="button" data-place="above" aria-pressed="false" disabled><span>above</span></button>
+        {PLACES.map((p) => (
+          <button class="button pick" type="button" data-set="place" data-value={p} aria-pressed={String(p === look.place)} disabled>
+            <span>{p}</span>
+          </button>
+        ))}
       </span>
     </p>
-    <p class="field" role="group" aria-label="size in a README">
-      <span class="label">size</span>
-      <button class="button pick" type="button" data-size="s" aria-pressed="false"><span>small</span></button>
-      <button class="button pick" type="button" data-size="m" aria-pressed="true"><span>medium</span></button>
-      <button class="button pick" type="button" data-size="l" aria-pressed="false"><span>large</span></button>
+    <p class="field" role="group" aria-label="background">
+      <span class="label">card</span>
+      <button class="button pick" type="button" data-ground="" aria-pressed="true"><span>none</span></button>
+      {GROUNDS.map((g) => (
+        <button class="button pick" type="button" data-ground={g.value} aria-pressed="false">
+          <span><i style={chip(g.value)}></i>{g.name}</span>
+        </button>
+      ))}
+      <label class="button pick custom" data-custom="ground">
+        <span><input type="color" value="#1a1d21" aria-label="any background" />any</span>
+      </label>
     </p>
   </form>
 
@@ -140,7 +192,7 @@ const ways = [
     {grounds.map((g) => (
       <figure class:list={["preview", g.theme]}>
         <div class="sheet">
-          <img data-ground={g.theme} src={bannerPath(text, g.dark, look)} alt={`${text}, as a ${g.theme} README shows it`} />
+          <img data-ground-img={g.theme} src={bannerPath(text, g.dark, look)} alt={`${text}, as a ${g.theme} README shows it`} />
         </div>
         <figcaption>
           {g.theme}
@@ -152,7 +204,7 @@ const ways = [
 
   <section class="block">
     <div class="head">
-      <h2>put it in your readme</h2>
+      <h2>use it</h2>
       <span class="tools" data-maker-only hidden>
         <button class="button pick" type="button" data-align aria-pressed="false"><span>centred</span></button>
       </span>
@@ -179,19 +231,33 @@ const ways = [
     </div>
     <p class="muted note">
       The URL is the banner: <code>https://ascii.rest/banner/&lt;text&gt;.svg</code>, and <code>.dark.svg</code> for
-      GitHub's dark theme. Up to {MAX} characters: letters, digits, spaces and <code>{MARKS}</code>, in capitals. The
-      query carries the rest: <code>color=ff6a00</code>, <code>color=ff6a00,f778ba</code> for a fade or
-      <code>color=art</code>; <code>effect=type</code> or <code>still</code>; <code>tagline=</code>;
-      <code>art=rust</code> with <code>place=above</code>; <code>size=s</code> or <code>l</code>. Anyone who prefers reduced
-      motion gets it still. In a terminal the letters take the colour or the fade and the tagline; the art, the motion
-      and the size are the README's.
+      GitHub's dark theme. Up to {MAX} characters: letters, digits, spaces and <code>{MARKS}</code>, in capitals. The query
+      carries the rest, and <a href="/docs/readme/#banners">the docs</a> list every key. React, the SVG from your own code and
+      the terminal take each choice as an option, and many more: see <a href="/docs/banners/">banner()</a> and
+      <a href="/docs/svg/">bannerSvg()</a>. Anyone who prefers reduced motion gets it still.
     </p>
   </section>
 </Layout>
 
 <script>
-  import { inkOf, namespaced } from "../lib/animated";
-  import { PLAIN, banner, bannerPath, cliBanner, clean, cleanTagline, hex, markdownBanner, read, readmeBanner, terminalBanner, type Look } from "../lib/banner";
+  import { inkOf, namespaced } from "ascii.rest/svg";
+  import {
+    PLAIN,
+    artDark,
+    banner,
+    bannerPath,
+    clean,
+    cleanTagline,
+    cliBanner,
+    hex,
+    markdownBanner,
+    reactBanner,
+    read,
+    readmeBanner,
+    svgBanner,
+    terminalBanner,
+    type Look,
+  } from "../lib/banner";
 
   const form = document.querySelector<HTMLFormElement>("[data-maker]")!;
   const input = form.querySelector<HTMLInputElement>("#banner-text")!;
@@ -199,16 +265,17 @@ const ways = [
   const left = form.querySelector<HTMLElement>(".left")!;
   const select = form.querySelector<HTMLSelectElement>("#banner-art")!;
   const colours = [...form.querySelectorAll<HTMLButtonElement>("[data-colour]")];
-  const effects = [...form.querySelectorAll<HTMLButtonElement>("[data-effect]")];
-  const places = [...form.querySelectorAll<HTMLButtonElement>("[data-place]")];
-  const sizes = [...form.querySelectorAll<HTMLButtonElement>("[data-size]")];
+  const grounds = [...form.querySelectorAll<HTMLButtonElement>("[data-ground]")];
+  const sets = [...form.querySelectorAll<HTMLButtonElement>("[data-set]")];
   const one = form.querySelector<HTMLElement>('[data-custom="one"]')!;
   const two = form.querySelector<HTMLElement>('[data-custom="two"]')!;
+  const groundCustom = form.querySelector<HTMLElement>('[data-custom="ground"]')!;
   const [anyInput] = one.querySelectorAll<HTMLInputElement>("input");
   const [fromInput, toInput] = two.querySelectorAll<HTMLInputElement>("input");
+  const [groundInput] = groundCustom.querySelectorAll<HTMLInputElement>("input");
   const artChip = form.querySelector<HTMLElement>(".art-chip")!;
   const align = document.querySelector<HTMLButtonElement>("[data-align]")!;
-  const images = [...document.querySelectorAll<HTMLImageElement>("img[data-ground]")];
+  const images = [...document.querySelectorAll<HTMLImageElement>("img[data-ground-img]")];
   const saves = [...document.querySelectorAll<HTMLButtonElement>("[data-save]")];
   const code = (id: string) => document.getElementById(id)!;
 
@@ -236,17 +303,17 @@ const ways = [
   let turn = 0;
   const show = async () => {
     const mine = ++turn;
-    const text = clean(input.value);
+    const text = clean(input.value, look.font);
     look.tagline = cleanTagline(tagline.value);
     // what the font has no letter for, said once each
-    const out = [...new Set([...input.value].filter((ch) => !/\s/.test(ch) && !clean(ch)))].join(" ");
+    const out = [...new Set([...input.value].filter((ch) => !/\s/.test(ch) && !clean(ch, look.font)))].join(" ");
     left.textContent = out ? `left out: ${out}` : "";
     mark();
     if (!text) return;
     const svgs = await Promise.all(
       images.map(async (img) => {
-        const dark = img.dataset.ground === "dark";
-        return banner(text, { dark, look, art: look.art ? await artOf(look.art, dark) : null })!.svg;
+        const dark = img.dataset.groundImg === "dark";
+        return banner(text, { dark, look, art: look.art ? await artOf(look.art, artDark(look, dark)) : null })!.svg;
       }),
     );
     if (mine !== turn) return;
@@ -254,13 +321,15 @@ const ways = [
     images.forEach((img, i) => {
       const url = URL.createObjectURL(new Blob([svgs[i]], { type: "image/svg+xml" }));
       urls.push(url);
-      drawn[img.dataset.ground!] = svgs[i];
+      drawn[img.dataset.groundImg!] = svgs[i];
       img.src = url;
-      img.alt = `${text}, as a ${img.dataset.ground} README shows it`;
+      img.alt = `${text}, as a ${img.dataset.groundImg} README shows it`;
     });
     code("banner-html").textContent = readmeBanner(text, look, centred);
     code("banner-markdown").textContent = markdownBanner(text, look);
     code("banner-url").textContent = `https://ascii.rest${bannerPath(text, false, look)}`;
+    code("banner-react").textContent = reactBanner(text, look);
+    code("banner-svg").textContent = svgBanner(text, look);
     code("banner-terminal").textContent = terminalBanner(text, look);
     code("banner-cli").textContent = cliBanner(text, look);
     const query = new URLSearchParams(bannerPath(text, false, look).split("?")[1] ?? "");
@@ -269,7 +338,7 @@ const ways = [
     history.replaceState(null, "", `?${query.toString().replace(/%2C/g, ",")}`);
   };
 
-  // The buttons pressed for the look, the art's own colour offered only with art, and its chip in that colour.
+  // The buttons pressed for the look, the art's own colour and the art's place offered only with art.
   const same = (value: string) => {
     const c = look.color;
     return value === (c === null ? "" : c === "art" ? "art" : c.join(","));
@@ -278,13 +347,13 @@ const ways = [
     for (const b of colours) b.setAttribute("aria-pressed", String(same(b.dataset.colour!)));
     const preset = colours.some((b) => same(b.dataset.colour!));
     one.classList.toggle("on", !preset && Array.isArray(look.color) && look.color.length === 1);
-    two.classList.toggle("on", !preset && Array.isArray(look.color) && look.color.length === 2);
-    for (const b of effects) b.setAttribute("aria-pressed", String(b.dataset.effect === look.effect));
-    for (const b of places) {
-      b.setAttribute("aria-pressed", String(b.dataset.place === look.place));
-      b.disabled = !look.art;
+    two.classList.toggle("on", !preset && Array.isArray(look.color) && look.color.length > 1);
+    for (const b of grounds) b.setAttribute("aria-pressed", String((b.dataset.ground || null) === look.bg));
+    groundCustom.classList.toggle("on", Boolean(look.bg) && !grounds.some((b) => b.dataset.ground === look.bg));
+    for (const b of sets) {
+      b.setAttribute("aria-pressed", String(look[b.dataset.set as keyof Look] === b.dataset.value));
+      if (b.dataset.set === "place") b.disabled = !look.art;
     }
-    for (const b of sizes) b.setAttribute("aria-pressed", String(b.dataset.size === look.size));
     const artButton = colours.find((b) => b.dataset.colour === "art")!;
     artButton.disabled = !look.art;
     artButton.title = look.art ? "" : "pick some art first";
@@ -305,7 +374,7 @@ const ways = [
   colours.forEach((b) =>
     b.addEventListener("click", () => {
       const v = b.dataset.colour!;
-      look.color = v === "" ? null : v === "art" ? "art" : (v.split(",") as [string] | [string, string]);
+      look.color = v === "" ? null : v === "art" ? "art" : v.split(",");
       show();
     }),
   );
@@ -319,9 +388,11 @@ const ways = [
   two.addEventListener("click", (e) => {
     if (e.target === two || e.target === two.firstElementChild) fade();
   });
-  effects.forEach((b) => b.addEventListener("click", () => ((look.effect = b.dataset.effect as Look["effect"]), show())));
-  places.forEach((b) => b.addEventListener("click", () => ((look.place = b.dataset.place as Look["place"]), show())));
-  sizes.forEach((b) => b.addEventListener("click", () => ((look.size = b.dataset.size as Look["size"]), show())));
+  grounds.forEach((b) => b.addEventListener("click", () => ((look.bg = b.dataset.ground || null), show())));
+  const ground = () => ((look.bg = hex(groundInput.value)), show());
+  groundInput.addEventListener("input", ground);
+  groundCustom.addEventListener("click", ground);
+  sets.forEach((b) => b.addEventListener("click", () => ((look as unknown as Record<string, string>)[b.dataset.set!] = b.dataset.value!, show())));
   select.addEventListener("change", () => {
     look.art = select.value;
     if (!look.art && look.color === "art") look.color = null;
@@ -336,7 +407,7 @@ const ways = [
       if (!svg) return;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-      a.download = `${clean(input.value).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "banner"}${b.dataset.save === "dark" ? ".dark" : ""}.svg`;
+      a.download = `${clean(input.value, look.font).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "banner"}${b.dataset.save === "dark" ? ".dark" : ""}.svg`;
       document.body.append(a);
       a.click();
       a.remove();
@@ -346,8 +417,9 @@ const ways = [
   // A colour a link asked for that is no preset sets the custom inputs, so they show it.
   if (Array.isArray(look.color) && !colours.some((b) => same(b.dataset.colour!))) {
     if (look.color.length === 1) anyInput.value = look.color[0];
-    else [fromInput.value, toInput.value] = look.color as [string, string];
+    else [fromInput.value, toInput.value] = [look.color[0], look.color[look.color.length - 1]];
   }
+  if (look.bg && !grounds.some((b) => b.dataset.ground === look.bg)) groundInput.value = look.bg;
   document.querySelectorAll<HTMLElement>("[data-maker-only]").forEach((el) => (el.hidden = false));
   form.hidden = false;
   setArtChip();
@@ -438,7 +510,8 @@ const ways = [
 
   .places {
     display: inline-flex;
-    gap: 2ch;
+    flex-wrap: wrap;
+    gap: 0.25rem 2ch;
   }
 
   /* A choice made reads in ink and in brackets, as a selected tab does. */
@@ -538,7 +611,14 @@ const ways = [
     margin-top: 0.75rem;
   }
 
-  /* A URL, a query or the marks stay on one line. */
+  .note a {
+    text-decoration-line: underline;
+    text-decoration-style: dotted;
+    text-decoration-color: var(--muted);
+    text-underline-offset: 0.25em;
+  }
+
+  /* A URL or the marks stay on one line. */
   .note code {
     white-space: nowrap;
   }

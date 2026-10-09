@@ -1,13 +1,14 @@
 /*
  * The Worker in front of ascii.rest's built files. It draws the README
  * banners, /banner/<text>.svg and /banner/<text>.dark.svg, with the choices in
- * the query that lib/banner.ts reads: color, effect, tagline, art, place and
- * size. Art is a logo's own README SVG, read from the built files. It keeps
+ * the query that lib/banner.ts reads: color, effect, speed, font, shadow, fill,
+ * tagline, art, place, size and bg. Art is a logo's own README SVG, read from
+ * the built files, so no logo is drawn again here. It keeps
  * each banner it draws in the edge cache. Every other request goes on to the
  * built site, the page at /banner/ among them; wrangler.jsonc sends it only
  * what is under /banner/.
  */
-import { CHARS, MAX, banner, bannerPath, clean, read } from "./lib/banner";
+import { CHARS, MAX, artDark, banner, bannerPath, clean, read } from "./lib/banner";
 
 interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -43,11 +44,11 @@ async function draw(request: Request, url: URL, name: string, env: Env, ctx: Con
   }
   const dark = text.endsWith(".dark");
   if (dark) text = text.slice(0, -".dark".length);
-  const words = clean(text);
-  if (!words) return refuse(404, `nothing to draw: a banner's text takes ${CHARS}`);
-  if (words.length > MAX) return refuse(400, `a banner takes up to ${MAX} characters, and this one has ${words.length}`);
   const look = read(url.searchParams);
   if (typeof look === "string") return refuse(400, look);
+  const words = clean(text, look.font);
+  if (!words) return refuse(404, `nothing to draw: a banner's text takes ${CHARS}`);
+  if (words.length > MAX) return refuse(400, `a banner takes up to ${MAX} characters, and this one has ${words.length}`);
 
   // One key for each banner, whatever else the URL carries or however it orders its query.
   const key = new Request(new URL(bannerPath(words, dark, look), url).href);
@@ -56,7 +57,7 @@ async function draw(request: Request, url: URL, name: string, env: Env, ctx: Con
 
   let art: string | null = null;
   if (look.art) {
-    const found = await env.ASSETS.fetch(new Request(new URL(`/svg/${look.art}${dark ? ".dark" : ""}.svg`, url)));
+    const found = await env.ASSETS.fetch(new Request(new URL(`/svg/${look.art}${artDark(look, dark) ? ".dark" : ""}.svg`, url)));
     if (!found.ok) return refuse(400, `there is no logo, company or distro called "${look.art}"; https://ascii.rest/banner/ lists them`);
     art = await found.text();
   }
