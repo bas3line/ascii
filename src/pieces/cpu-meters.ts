@@ -138,7 +138,7 @@ export default function cpuMeters({ commands = meta.options.commands }: Partial<
       c.u = clamp(want + (rand() - 0.5) * 0.12, 0.004, 0.95);
       c.k = clamp(c.u * (0.1 + rand() * 0.22) + rand() * 0.015, 0, 0.97 + rand() * 0.03 - c.u);
       busy += c.u + c.k;
-      jobs.forEach((j, n) => (share[n] += ((c.u + c.k) * c.part[n]) / want));
+      jobs.forEach((_, n) => (share[n] += ((c.u + c.k) * c.part[n]) / want));
     }
     const working = jobs.some((j) => j.left);
     mem.used = clamp(mem.used + (4.4 + (working ? 2.6 : 0) - mem.used) * 0.12 + (rand() - 0.5) * 0.05, 3, 9);

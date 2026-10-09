@@ -1,0 +1,97 @@
+---
+/*
+ * A docs page: the site's shell with the docs' index in the sidebar instead of
+ * the pieces, the page's own headings above it, its Markdown, and the pages
+ * before and after it. Code blocks get a [copy] button, and the tags from
+ * ascii.rest/element are defined, so a page can show <ascii-banner> live.
+ */
+import type { MarkdownLayoutProps } from "astro";
+import Layout from "./Layout.astro";
+import { DOCS, pages } from "../lib/docs";
+import { REPO } from "../lib/library";
+
+type Props = MarkdownLayoutProps<{ title: string; description: string }>;
+
+const { frontmatter, url = "/docs/", headings = [] } = Astro.props;
+const path = url.endsWith("/") ? url : `${url}/`;
+const at = pages.findIndex((p) => p.href === path);
+const prev = pages[at - 1];
+const next = pages[at + 1];
+const file = path === "/docs/" ? "index" : path.slice("/docs/".length, -1);
+const sections = headings.filter((h) => h.depth === 2);
+---
+
+<Layout title={`${frontmatter.title} · ascii.rest docs`} description={frontmatter.description} path={path}>
+  <!-- The docs' prose is in a sans, IBM Plex Sans, for reading at length; the rest of the page is in Paper Mono. -->
+  <link slot="head" rel="preconnect" href="https://fonts.googleapis.com" />
+  <link slot="head" rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link slot="head" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet" />
+  <h1 slot="heading">{frontmatter.title}</h1>
+
+  <nav slot="side" class="docs-nav" aria-label="Docs">
+    {DOCS.map((section) => (
+      <>
+        <h2>{section.label}</h2>
+        <ul role="list">
+          {section.pages.map((p) => (
+            <li>
+              <a href={p.href} aria-current={p.href === path ? "page" : undefined}>{p.title}</a>
+            </li>
+          ))}
+        </ul>
+      </>
+    ))}
+    <h2>more</h2>
+    <ul role="list">
+      <li><a href="/#pieces">every piece</a></li>
+      <li><a href="/banner/">banner maker</a></li>
+      <li><a href="https://www.npmjs.com/package/ascii.rest">npm</a></li>
+      <li><a href={REPO}>github</a></li>
+    </ul>
+  </nav>
+
+  <p class="lede">{frontmatter.description}</p>
+
+  {sections.length > 1 && (
+    <nav class="toc muted" aria-label="On this page">
+      <span>on this page</span>
+      {sections.map((h) => <a href={`#${h.slug}`}>{h.text}</a>)}
+    </nav>
+  )}
+
+  <article class="docs">
+    <slot />
+  </article>
+
+  <nav class="pager" aria-label="Docs pages">
+    {prev ? <a href={prev.href}>&lt; {prev.title}</a> : <span></span>}
+    {next ? <a href={next.href}>{next.title} &gt;</a> : <span></span>}
+  </nav>
+  <p class="edit muted"><a href={`${REPO}/blob/main/site/src/pages/docs/${file}.md`}>[edit this page on github]</a></p>
+</Layout>
+
+<script>
+  import "ascii.rest/element";
+
+  // Each code block gets a [copy] button, as the rest of the site's code does.
+  document.querySelectorAll<HTMLPreElement>(".docs pre").forEach((pre) => {
+    const button = document.createElement("button");
+    button.className = "button copy";
+    button.type = "button";
+    button.innerHTML = "<span>[copy]</span>";
+    const label = button.firstElementChild as HTMLElement;
+    button.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(pre.textContent ?? "");
+        label.textContent = "[copied]";
+      } catch {
+        label.textContent = "[select and copy]";
+      }
+      setTimeout(() => (label.textContent = "[copy]"), 1600);
+    });
+    const wrap = document.createElement("div");
+    wrap.className = "snippet";
+    pre.replaceWith(wrap);
+    wrap.append(pre, button);
+  });
+</script>

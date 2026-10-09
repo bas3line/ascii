@@ -1,11 +1,12 @@
 ---
 /*
- * One piece: a large live preview with its downloads, the ways to put it on a
- * page, and its source.
+ * One piece: a large live preview with its downloads and ways to share it, the
+ * ways to put it on a page, and its source.
  */
 import Layout from "../layouts/Layout.astro";
 import Art from "../components/Art.astro";
 import Downloads from "../components/Downloads.astro";
+import Share from "../components/Share.astro";
 import Usage from "../components/Usage.astro";
 import { REPO, issue, pieces, type Piece } from "../lib/library";
 
@@ -56,11 +57,13 @@ const kb = bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} kB`;
       <Art piece={piece} />
     </div>
     <Downloads piece={piece} />
+    <Share piece={piece} />
   </section>
 
   <section class="block">
     <div class="head">
       <h2>use it</h2>
+      <span class="tools"><a href="/docs/">[docs]</a><a href="/docs/copy/">[copy it in]</a></span>
     </div>
     <Usage piece={piece} />
   </section>

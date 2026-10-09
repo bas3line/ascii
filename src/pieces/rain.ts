@@ -98,7 +98,7 @@ export default function rain(): Frame {
       }
     });
 
-    for (const [x, y, age, li, id] of splashes) {
+    for (const [x, y, age, li] of splashes) {
       if (x < 0 || x >= cols) continue;
       const p = pool[y][x];
       if (p >= 0) {

@@ -106,11 +106,12 @@ export const SUPPORT = [
 /**
  * Who sponsors ascii.rest, in this order: under the home page's first scene, on the author page and in the README. Each
  * is shown by its own official logo, `/sponsors/<logo>.svg` for a light page and `<logo>.dark.svg` for a dark one, at
- * `height` rem in its box: Command Code's wordmark from commandcode.ai/brand, Cloudflare's logo with its wordmark from
- * cloudflare.com/img.
+ * `height` rem in its box: Command Code's wordmark from commandcode.ai/brand, Vercel's logotype from the press kit on
+ * vercel.com/geist/brands, Cloudflare's logo with its wordmark from cloudflare.com/img.
  */
 export const SPONSORS = [
   { name: "Command Code", href: "https://commandcode.ai", logo: "command-code", height: 1.6 },
+  { name: "Vercel", href: "https://vercel.com", logo: "vercel", height: 1.5 },
   { name: "Cloudflare", href: "https://www.cloudflare.com", logo: "cloudflare", height: 3.1 },
 ] as const;
 export const INSTALL = "npm install ascii.rest";

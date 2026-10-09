@@ -233,13 +233,16 @@ function painter({ cols, rows, palette, ground, cell = 2 }: Meta, colour: boolea
   return Object.assign(out, { size, paint });
 }
 
-/** A piece's first frame as plain text, its rows paired as on a terminal: for a pipe or a log, where nothing plays. */
+/**
+ * A piece's frame as plain text, its rows paired as on a terminal: for a pipe or a log, where nothing plays. The frame
+ * is the one the piece names to be held still, `meta.still`, every letter of a typed banner say, or else its first.
+ */
 export async function still(piece: Piece | PieceName, { light = false, options = {} }: Pick<PlayOptions, "light" | "options"> = {}): Promise<string> {
   const mod = await resolve(piece);
   const cells = painter(mod.meta, false);
   // its whole size: there is no terminal to fit
   cells.size(mod.meta.cols, Math.ceil(mod.meta.rows / 2));
-  cells.paint(mod.default({ ...mod.meta.options, ...options })(0, { paper: light }));
+  cells.paint(mod.default({ ...mod.meta.options, ...options })(mod.meta.still ?? 0, { paper: light }));
   return Array.from({ length: cells.rows }, (_, y) => cells.ch.slice(y * cells.cols, (y + 1) * cells.cols).join("")).join("\n");
 }
 
@@ -410,3 +413,6 @@ export async function play(
     if (seconds !== undefined && seconds * 1000 < 2 ** 31) end = setTimeout(() => stop(), Math.max(0, seconds * 1000));
   });
 }
+
+// A text in block letters, printed where the cursor is: a CLI's name as it starts.
+export { banner, type Bannered, type PrintOptions } from "./print.ts";

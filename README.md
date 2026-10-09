@@ -1,6 +1,14 @@
 <div align="center">
 
-# ascii.rest
+<a href="https://ascii.rest">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://ascii.rest/banner/ascii.rest.dark.svg?color=f97316,f778ba&tagline=animated%20ascii%20art%20for%20web%20pages">
+    <img alt="ascii.rest: animated ascii art for web pages" src="https://ascii.rest/banner/ascii.rest.svg?color=f97316,f778ba&tagline=animated%20ascii%20art%20for%20web%20pages">
+  </picture>
+</a>
+
+<br>
+<br>
 
 <a href="https://ascii.rest/donut/">
   <picture>
@@ -11,14 +19,14 @@
 
 <sub>Thanks to the sponsors who make running ascii.rest possible</sub>
 
-<a href="https://commandcode.ai"><picture><source media="(prefers-color-scheme: dark)" srcset="site/public/sponsors/command-code.dark.svg"><img alt="Command Code" src="site/public/sponsors/command-code.svg" height="28"></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://www.cloudflare.com"><picture><source media="(prefers-color-scheme: dark)" srcset="site/public/sponsors/cloudflare.dark.svg"><img alt="Cloudflare" src="site/public/sponsors/cloudflare.svg" height="52"></picture></a>
+<a href="https://commandcode.ai"><picture><source media="(prefers-color-scheme: dark)" srcset="site/public/sponsors/command-code.dark.svg"><img alt="Command Code" src="site/public/sponsors/command-code.svg" height="28"></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://vercel.com"><picture><source media="(prefers-color-scheme: dark)" srcset="site/public/sponsors/vercel.dark.svg"><img alt="Vercel" src="site/public/sponsors/vercel.svg" height="26"></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://www.cloudflare.com"><picture><source media="(prefers-color-scheme: dark)" srcset="site/public/sponsors/cloudflare.dark.svg"><img alt="Cloudflare" src="site/public/sponsors/cloudflare.svg" height="52"></picture></a>
 
 <br>
 
-Animated ascii art for web pages.<br>
-217 pieces for React, Next.js, Astro or plain HTML.
+217 pieces for React, Next.js, Astro or plain HTML.<br>
+The banner above is drawn by ascii.rest: [make your own](https://ascii.rest/banner/).
 
-[ascii.rest](https://ascii.rest) · [install](#install) · [pieces](#pieces) · [contributing](CONTRIBUTING.md)
+[ascii.rest](https://ascii.rest) · [docs](https://ascii.rest/docs/) · [install](#install) · [pieces](#pieces) · [contributing](CONTRIBUTING.md)
 
 [![by @bas3line](https://img.shields.io/badge/by-%40bas3line-181717?logo=github&logoColor=white)](https://github.com/bas3line)
 [![CI](https://github.com/bas3line/ascii/actions/workflows/ci.yml/badge.svg)](https://github.com/bas3line/ascii/actions/workflows/ci.yml)
@@ -51,21 +59,29 @@ I've always been a fan of Markdown files and terminal-style websites: plain text
 npm install ascii.rest
 ```
 
-Or skip installing: the [HTML tag](#html-no-build-step) loads everything from ascii.rest.
+Or skip installing: the [HTML tag](#html-no-build-step) loads everything from ascii.rest. Or copy the source into your project, to keep and change, through shadcn or the CLI:
+
+```sh
+npx shadcn@latest add https://ascii.rest/r/ascii.json https://ascii.rest/r/donut.json
+npx ascii.rest add ascii donut
+```
+
+Every way, with every option, is in [the docs](https://ascii.rest/docs/).
 
 ## React and Next.js
 
 ```tsx
-import { Ascii } from "ascii.rest/react";
+import { Ascii, Banner } from "ascii.rest/react";
 import { donut } from "ascii.rest/pieces";
 
 <Ascii piece={donut} />
 <Ascii piece="night-coast" />                          // fetched by name when it mounts
 <Ascii piece={donut} options={{ fps: 12 }} className="art" />
 <Ascii piece="rust" mono />                            // a logo in one ink
+<Banner text="hello" color={["#f97316", "#f778ba"]} shadow="rounded" />
 ```
 
-`Ascii` is a client component (`"use client"`), so it goes straight into the Next.js app router. Text pieces draw into a `<pre>` in its colour and font size; the coloured ones, scenes, logos, companies and distros, draw onto a `<canvas>` as wide as its container, or into a `<pre>` in one ink with `mono`.
+`Ascii` and `Banner` are client components (`"use client"`), so they go straight into the Next.js app router. Text pieces draw into a `<pre>` in its colour and font size; the coloured ones, scenes, logos, companies and distros, draw onto a `<canvas>` as wide as its container, or into a `<pre>` in one ink with `mono`. [React](https://ascii.rest/docs/react/) and [Next.js](https://ascii.rest/docs/nextjs/) in the docs.
 
 ## Astro
 
@@ -103,12 +119,67 @@ A README runs no script, so every logo, company and distro also comes as an anim
 
 GitHub shows the dark one in its dark theme. Each piece's page on ascii.rest has its snippet under `readme`.
 
+### Banners
+
+Your name, or your project's, in [big text](https://ascii.rest/big-text/)'s block letters with a glint that passes now and then, sized to the text:
+
+```html
+<a href="https://ascii.rest/banner/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://ascii.rest/banner/my-project.dark.svg">
+    <img alt="my-project" src="https://ascii.rest/banner/my-project.svg">
+  </picture>
+</a>
+```
+
+The URL is the banner: `https://ascii.rest/banner/<text>.svg`, and `.dark.svg` for GitHub's dark theme. It takes up to 20 characters, letters, digits, spaces and `. , ! ? ' : - + = / _`, drawn in capitals unless the font is `mixed`, in GitHub's own text colour. The query carries the rest:
+
+| query | |
+| --- | --- |
+| `color` | the letters' colour, `ff6a00`; more for a fade, `ff6a00,f778ba`; or `art`, the art's own colour |
+| `effect` | `glint` by default, a glint every few seconds; `type`, the letters type in once and stay; `still` |
+| `speed` | `slow`, `normal` or `fast` |
+| `font` | `block` by default, `slim`, `tall`, `bold`, `round`, `wide`, `mixed` (lower case too) or `italic` |
+| `shadow` | `double` by default, `single`, `heavy`, `rounded`, `ascii` or `none` |
+| `fill` | the letters' character: `shade` by default, `block`, `light`, `hash` or `at` |
+| `tagline` | a line under the letters, typed out, up to 60 characters |
+| `art` | any logo, company or distro of the library, `rust`, beside the letters, or with `place=right`, `above` or `below` |
+| `size` | `s`, `m` by default, or `l`: how big a README shows it |
+| `bg` | a colour behind it all, as a card: `0d1117` |
+
+```html
+<img alt="ferris" src="https://ascii.rest/banner/ferris.svg?art=rust&color=art&tagline=fast%2C%20safe%2C%20fun">
+```
+
+[ascii.rest/banner](https://ascii.rest/banner/) makes one as you choose and gives the snippet, in HTML, Markdown, as a URL, in React or in code. Every logo's page has a link that starts one with it. Anyone who prefers reduced motion gets it still. [GitHub README](https://ascii.rest/docs/readme/) in the docs.
+
+### Banners and SVGs in your own code
+
+Everything a URL can choose, and much more, is an option in code. `banner()` makes any text a piece, so it plays wherever a piece does, and `svg()` turns any piece into an animated SVG:
+
+```ts
+import { banner } from "ascii.rest/banner";
+import { bannerSvg, svg } from "ascii.rest/svg";
+import { rust } from "ascii.rest/pieces";
+
+const hello = banner("hello", { font: "slim", shadow: "rounded", fill: "#", color: ["#f97316", "#f778ba"], glint: { every: 5 } });
+svg(hello);                                                     // a string: write it to a file, or serve it
+bannerSvg("ferris", { art: rust, color: "art", tagline: "fast, safe, fun", place: "above" });
+```
+
+Every option of [banner()](https://ascii.rest/docs/banners/) and [svg()](https://ascii.rest/docs/svg/) is in the docs.
+
+### Image to ascii
+
+[ascii.rest/make](https://ascii.rest/make/) turns your own logo or a photo into animated ascii. It takes an SVG, PNG, JPG, WebP or GIF, and works in your browser, so nothing is uploaded. You get an embed for any page, two SVGs for a README, and a piece file to add to the library. [Image to ascii](https://ascii.rest/docs/images/) in the docs.
+
 ## In a terminal
 
 ```sh
 npx ascii.rest rust                        # plays until you press a key
 npx ascii.rest night-coast --seconds 10
 npx ascii.rest list                        # every piece's name, by category
+npx ascii.rest banner 'my cli'             # your text in block letters
 ```
 
 The logos, companies, distros and scenes play in their own colours, in 24-bit colour. A scene is shrunk to fit the terminal, whatever its size, and drawn in tones, two of its rows in each of the terminal's as half blocks, so the dots it is made of blend as they do on a page. `--mono` draws a coloured piece in the terminal's own colour, for a terminal without 24-bit colour, and `--light` takes the colours meant for a light background. `--fps` and `--seconds` set the speed and the length. The piece plays centred; any other piece wider or taller than the terminal shows only its middle, and it says so when it stops. Piped or redirected, it prints its first frame as text.
@@ -135,6 +206,27 @@ if (interrupted) process.exit(130);
 
 It resolves with `{ interrupted, cropped, piece, terminal }`: `cropped` is true when the terminal was smaller than the piece, whose size and the terminal's are in `piece` and `terminal`.
 
+### As a banner
+
+```ts
+import { banner } from "ascii.rest/terminal";
+
+await banner("my-cli", { color: ["#ff6a00", "#f778ba"], tagline: "v1.0, fast" });
+```
+
+`banner(text, options?)` prints the text in block letters where the cursor is, lets the glint pass once, or the letters type in, and resolves, leaving the banner in the scrollback with the rest of your output, unlike `play()`, which takes over the screen. It takes every option of [banner()](https://ascii.rest/docs/banners/), the font, shadow, fill, effect and colours, and is sized to the text, with narrower letters if the terminal is too narrow for square ones and the plain text if it is too narrow for those. Piped, it prints the banner at once with no colour. With `NO_COLOR` set it leaves out the colours but still moves. Call it at the start of a line, and a terminal too short to show the whole banner gets it still. `npx ascii.rest banner <text>` takes `--seconds`, `--color`, `--tagline`, `--font`, `--shadow`, `--effect` and `--light`.
+
+| option | |
+| --- | --- |
+| `seconds` | how long the glint takes to pass, or the letters to type in; 1 by default, 0 prints it still |
+| `color` | the letters' colour as `#rrggbb`, or more for a fade along them; the terminal's own by default, and the shadow is dimmed |
+| `tagline` | a line under the banner, dimmed, once it has moved |
+| `light` | for a light terminal: solid letters that the glint lightens |
+| `out` | where it prints: `process.stdout` by default |
+| `font`, `shadow`, `fill`, `effect`, … | as [banner()](https://ascii.rest/docs/banners/#options) takes them |
+
+It resolves with `{ cols, rows, interrupted }`: the banner's size, 0 by 0 if it printed the plain text, and `interrupted` if Ctrl+C stopped it moving.
+
 ## TypeScript, anywhere
 
 ```ts
@@ -145,6 +237,8 @@ const stop = mount(document.querySelector("pre")!, donut, { fps: 12 });
 ```
 
 ## API
+
+The short of it is below; [the docs](https://ascii.rest/docs/api/) have everything each module exports, `ascii.rest/banner` and `ascii.rest/svg` among them.
 
 ### `mount(element, piece, options?)`
 
@@ -226,9 +320,12 @@ New pieces, fixes and ideas are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) cove
 
 ## Acknowledgements
 
+<a href="https://www.greptile.com"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/thanks/greptile.dark.svg"><img alt="Greptile" src=".github/thanks/greptile.svg" height="28"></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<a href="https://paper.design/mono"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/thanks/paper.dark.svg"><img alt="Paper" src=".github/thanks/paper.svg" height="28"></picture></a>
+
 Special thanks to:
 
 - [Greptile](https://www.greptile.com), for reviewing ascii.rest's pull requests for free, as it does for open-source projects.
+- [Paper](https://paper.design), for [Paper Mono](https://paper.design/mono), the typeface the [ascii.rest](https://ascii.rest) site is set in, free under the [SIL Open Font License](https://github.com/paper-design/paper-mono/blob/main/OFL.txt).
 
 ## Author
 

@@ -1,0 +1,72 @@
+---
+/*
+ * <Banner text="hello" />: any text as a banner (banner() in ascii.rest/banner),
+ * its resting frame rendered on the server, so the page is whole before any
+ * script runs, then the live banner once it loads. Every option of banner() is
+ * a prop.
+ * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
+ *
+ *   ---
+ *   import Banner from "ascii.rest/astro/banner";
+ *   ---
+ *   <Banner text="hello" shadow="rounded" effect="type" />
+ *   <Banner text="hello" color={["#f97316", "#f778ba"]} class="hero" />
+ */
+import { banner, type BannerOptions } from "../../dist/banner.js";
+
+interface Props extends BannerOptions {
+  /** The text, in block letters. */
+  text: string;
+  /** What the picture shows, for screen readers. The text otherwise. */
+  label?: string;
+  /** Draws a coloured banner as text in one ink, like any other. */
+  mono?: boolean;
+  class?: string;
+}
+
+const { text, label, mono = false, class: className, ...options } = Astro.props;
+const piece = banner(text, options);
+const { meta } = piece;
+const onCanvas = !mono && Boolean(meta.palette);
+// Where it rests, as the banner names it: every letter typed, or the glint out of sight.
+const still = onCanvas ? "" : piece.default()(meta.still ?? 0, { paper: false });
+const json = Object.keys(options).length ? JSON.stringify(options) : undefined;
+---
+
+<ascii-banner text={text} options={json} label={label} mono={mono || undefined} class={className}>
+  {
+    onCanvas ? (
+      <div style={`aspect-ratio: ${meta.cols} / ${meta.rows * 2}`} />
+    ) : (
+      <pre role="img" aria-label={label ?? meta.name}>{still}</pre>
+    )
+  }
+</ascii-banner>
+
+<script>
+  import "../../dist/ascii.js";
+</script>
+
+<style is:global>
+  /* The tag's defaults, here too so the first frame is set right before the script runs. :where keeps them easy to override. */
+  @font-face {
+    font-family: "ascii.rest mono";
+    src: url("https://ascii.rest/fonts/ascii-rest-mono.woff2") format("woff2");
+    unicode-range: U+00B0, U+00B7, U+2022, U+2500-259F, U+25CF;
+    font-display: swap;
+  }
+
+  :where(ascii-banner) {
+    display: block;
+  }
+
+  :where(ascii-banner > pre) {
+    margin: 0;
+    font: inherit;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "ascii.rest mono", monospace;
+    line-height: 1.2;
+    letter-spacing: 0;
+    white-space: pre;
+    font-variant-ligatures: none;
+  }
+</style>

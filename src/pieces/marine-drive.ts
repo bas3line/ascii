@@ -415,7 +415,7 @@ export default function marineDrive(): Frame {
   }
 
   // the ships' lights stretch down the water too
-  for (const [x, r0, cr, cg, cb] of shipLights) {
+  for (const [x, , cr, cg, cb] of shipLights) {
     for (let r = HZ; r < HZ + 14; r++) {
       const a = Math.exp(-(r - HZ) / 5) * 0.35;
       for (let dx = -1; dx <= 1; dx++) {

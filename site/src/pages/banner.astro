@@ -1,0 +1,721 @@
+---
+/*
+ * /banner/: a text in block letters as an animated SVG for a GitHub README,
+ * and the same in a terminal, in React or from your own code. Every choice
+ * bannerSvg() offers that a URL can carry is a control here: the colour or a
+ * fade, the font, the shadow's lines, the letters' character, how it moves and
+ * how fast, a tagline typed out under it, any of the library's logos,
+ * companies or distros on any side of it, a background and a size. A Vercel
+ * function (banner/[file].ts) serves each banner at /banner/<text>.svg; this page draws
+ * the same SVG in the browser as you choose (lib/banner.ts), the art from its
+ * own README SVG, so what it shows is what a README gets. The choices ride in
+ * the page's URL, as they do in the banner's, so a banner can be linked to.
+ * Without script the form stays hidden and the page shows its own banner.
+ */
+import { banner as letters, fonts, type FontName } from "ascii.rest/banner";
+import Layout from "../layouts/Layout.astro";
+import { groups } from "../lib/library";
+import {
+  EFFECTS,
+  FILLS,
+  FONTS,
+  MARKS,
+  MAX,
+  PLACES,
+  PLAIN,
+  SHADOWS,
+  SIZES,
+  SPEEDS,
+  TAGLINE,
+  bannerPath,
+  cliBanner,
+  markdownBanner,
+  reactBanner,
+  readmeBanner,
+  svgBanner,
+  terminalBanner,
+  type Look,
+} from "../lib/banner";
+import { looping } from "../lib/svg";
+
+const text = "ascii.rest";
+const look: Look = PLAIN;
+// The letters' colours to pick from, after GitHub's own text colour: single colours, then fades.
+const COLOURS = [
+  { name: "orange", value: "#f97316" },
+  { name: "green", value: "#3fb950" },
+  { name: "blue", value: "#4493f8" },
+  { name: "purple", value: "#ab7df8" },
+  { name: "pink", value: "#f778ba" },
+  { name: "sunset", value: "#f97316,#f778ba" },
+  { name: "ocean", value: "#22d3ee,#4493f8" },
+  { name: "aurora", value: "#3fb950,#22d3ee,#ab7df8" },
+];
+const GROUNDS = [
+  { name: "ink", value: "#0d1117" },
+  { name: "paper", value: "#f6f8fa" },
+];
+const chip = (value: string) => {
+  const stops = value.split(",");
+  return stops.length > 1 ? `background: linear-gradient(90deg, ${stops.join(", ")})` : `background: ${value}`;
+};
+// A font's name in its own letters, small: its pixels, one cell each with no shadow, as an SVG path a run of them a
+// row, in the button's colour. Drawn once here, not the banner's text on every key.
+const sample = (font: FontName) => {
+  const piece = letters(font, { font, pixel: 1, gap: 1, shadow: "none", effect: "still" });
+  const lines = piece.default()(0).split("\n");
+  const d = lines.flatMap((line, y) => [...line.matchAll(/[^ ]+/g)].map((m) => `M${m.index} ${y}h${m[0].length}v1h-${m[0].length}z`)).join("");
+  return { cols: piece.meta.cols, rows: piece.meta.rows, d };
+};
+// Pixels of the screen a pixel of a font's sample takes: at 2, italic's lean blurs into noise.
+const DOT = 3;
+// The fonts that draw lower case too, rather than every letter as a capital.
+const cased = FONTS.filter((f) => "cased" in fonts[f] && fonts[f].cased);
+// The rows of choices that are one word each: the look's key, its label, and each value with its name, the fonts with
+// their samples.
+const ROWS: { key: keyof Look; label: string; values: { value: string; name: string; sample?: ReturnType<typeof sample> }[] }[] = [
+  { key: "font", label: "font", values: FONTS.map((f) => ({ value: f, name: f, sample: sample(f) })) },
+  { key: "shadow", label: "shadow", values: SHADOWS.map((s) => ({ value: s, name: s })) },
+  { key: "fill", label: "letters", values: Object.entries(FILLS).map(([k, v]) => ({ value: k, name: `${v} ${k}` })) },
+  { key: "effect", label: "motion", values: EFFECTS.map((e) => ({ value: e, name: e === "type" ? "type in" : e })) },
+  { key: "speed", label: "speed", values: Object.keys(SPEEDS).map((s) => ({ value: s, name: s })) },
+  { key: "size", label: "size", values: SIZES.map((s) => ({ value: s, name: { s: "small", m: "medium", l: "large" }[s] })) },
+];
+// The art: every piece with a README SVG, by category, as the sidebar orders them.
+const arts = groups
+  .flatMap((g) => g.categories)
+  .map((c) => ({ name: c.name, pieces: c.pieces.filter((p) => looping(p.category, p.options)) }))
+  .filter((c) => c.pieces.length);
+const count = arts.reduce((n, c) => n + c.pieces.length, 0);
+// To start from: each a link to this page with its choices.
+const EXAMPLES = [
+  { name: "ferris, beside rust, in its orange", query: "?text=ferris&art=rust&color=art" },
+  { name: "a fade and a tagline", query: "?text=bas3line&color=f97316,f778ba&tagline=making%20ascii.rest" },
+  { name: "i use arch, typed in under its logo", query: "?text=i%20use%20arch&art=arch-linux&place=above&effect=type&color=art" },
+  { name: "slim, rounded, on a card", query: "?text=hello%20world&font=slim&shadow=rounded&color=22d3ee,4493f8&bg=0d1117&tagline=a%20card%20of%20its%20own" },
+  { name: "plain ascii, held still", query: "?text=old%20school&shadow=ascii&fill=hash&effect=still" },
+];
+const grounds = [
+  { theme: "light", dark: false },
+  { theme: "dark", dark: true },
+];
+const ways = [
+  { name: "html", id: "banner-html", code: readmeBanner(text, look) },
+  { name: "markdown", id: "banner-markdown", code: markdownBanner(text, look) },
+  { name: "url", id: "banner-url", code: `https://ascii.rest${bannerPath(text, false, look)}` },
+  { name: "react", id: "banner-react", code: reactBanner(text, look) },
+  { name: "svg", id: "banner-svg", code: svgBanner(text, look) },
+  { name: "terminal", id: "banner-terminal", code: terminalBanner(text, look) },
+  { name: "cli", id: "banner-cli", code: cliBanner(text, look) },
+];
+---
+
+<Layout
+  title="readme banners · ascii.rest"
+  description="Your name or your project's in animated ascii block letters, with any font, shadow, colour, tagline and logo, for a GitHub README, a web page or a terminal."
+  path="/banner/"
+  card={{ path: "/og/big-text.png", alt: "HELLO in ascii block letters with a line shadow, on ascii.rest, by @bas3line" }}
+>
+  <h1 slot="heading">readme banners</h1>
+
+  <p class="lede">
+    Your name, or your project's, in block letters that glint, type in or hold still: an animated SVG for a GitHub README,
+    which runs no script, or the same on a page and in a terminal. Pick a font, a shadow, a colour or a fade, a tagline
+    typed out under it, and any of the library's {count} logos, companies and distros beside it. Everything here is an
+    option in code too: <a href="/docs/banners/">the docs</a> have every one.
+  </p>
+
+  <p class="examples muted" data-maker-only hidden>
+    <span>try</span>
+    {EXAMPLES.map((e) => <a href={e.query}>[{e.name}]</a>)}
+  </p>
+
+  <form class="maker" data-maker hidden>
+    <p class="field">
+      <label for="banner-text">text</label>
+      <input id="banner-text" class="line" name="text" value={text} maxlength={MAX} autocomplete="off" autocapitalize="none" spellcheck="false" />
+      <span class="left muted" role="status"></span>
+    </p>
+    <p class="field">
+      <label for="banner-tagline">tagline</label>
+      <input id="banner-tagline" class="line wide" name="tagline" maxlength={TAGLINE} placeholder="a line under it, typed out" autocomplete="off" />
+    </p>
+    <p class="field" role="group" aria-label="colour of the letters">
+      <span class="label">colour</span>
+      <button class="button pick" type="button" data-colour="" aria-pressed="true"><span>github</span></button>
+      {COLOURS.map((c) => (
+        <button class="button pick" type="button" data-colour={c.value} aria-pressed="false">
+          <span><i style={chip(c.value)}></i>{c.name}</span>
+        </button>
+      ))}
+      <button class="button pick" type="button" data-colour="art" aria-pressed="false" disabled title="pick some art first">
+        <span><i class="art-chip"></i>the art's</span>
+      </button>
+      <label class="button pick custom" data-custom="one">
+        <span><input type="color" value="#e5534b" aria-label="any colour" />any</span>
+      </label>
+      <span class="button pick custom" data-custom="two">
+        <span>
+          <input type="color" value="#e5534b" aria-label="a fade from this colour" /><input type="color" value="#4493f8" aria-label="to this colour" />fade
+        </span>
+      </span>
+    </p>
+    {ROWS.map((row) => (
+      <p class="field" role="group" aria-label={row.label}>
+        <span class="label">{row.label}</span>
+        {row.values.map((v) =>
+          v.sample ? (
+            <button class="button pick sample" type="button" data-set={row.key} data-value={v.value} aria-pressed={String(look[row.key] === v.value)} aria-label={v.name} title={v.name}>
+              <span>
+                <svg width={v.sample.cols * DOT} height={v.sample.rows * DOT} viewBox={`0 0 ${v.sample.cols} ${v.sample.rows}`} fill="currentColor" shape-rendering="crispEdges" aria-hidden="true">
+                  <path d={v.sample.d} />
+                </svg>
+              </span>
+            </button>
+          ) : (
+            <button class="button pick" type="button" data-set={row.key} data-value={v.value} aria-pressed={String(look[row.key] === v.value)}>
+              <span>{v.name}</span>
+            </button>
+          ),
+        )}
+      </p>
+    ))}
+    <p class="field">
+      <label for="banner-art">art</label>
+      <select id="banner-art" name="art">
+        <option value="">none</option>
+        {arts.map((c) => (
+          <optgroup label={c.name}>
+            {c.pieces.map((p) => <option value={p.slug}>{p.name}</option>)}
+          </optgroup>
+        ))}
+      </select>
+      <span class="places" role="group" aria-label="where the art goes">
+        {PLACES.map((p) => (
+          <button class="button pick" type="button" data-set="place" data-value={p} aria-pressed={String(p === look.place)} disabled>
+            <span>{p}</span>
+          </button>
+        ))}
+      </span>
+    </p>
+    <p class="field" role="group" aria-label="background">
+      <span class="label">card</span>
+      <button class="button pick" type="button" data-ground="" aria-pressed="true"><span>none</span></button>
+      {GROUNDS.map((g) => (
+        <button class="button pick" type="button" data-ground={g.value} aria-pressed="false">
+          <span><i style={chip(g.value)}></i>{g.name}</span>
+        </button>
+      ))}
+      <label class="button pick custom" data-custom="ground">
+        <span><input type="color" value="#1a1d21" aria-label="any background" />any</span>
+      </label>
+    </p>
+  </form>
+
+  <div class="previews">
+    {grounds.map((g) => (
+      <figure class:list={["preview", g.theme]}>
+        <div class="sheet">
+          <img data-ground-img={g.theme} src={bannerPath(text, g.dark, look)} alt={`${text}, as a ${g.theme} README shows it`} />
+        </div>
+        <figcaption>
+          {g.theme}
+          <button class="button" type="button" data-save={g.theme} hidden><span>[download svg]</span></button>
+        </figcaption>
+      </figure>
+    ))}
+  </div>
+
+  <section class="block">
+    <div class="head">
+      <h2>use it</h2>
+      <span class="tools" data-maker-only hidden>
+        <button class="button pick" type="button" data-align aria-pressed="false"><span>centred</span></button>
+      </span>
+    </div>
+    <div class="usage" data-tabs>
+      <div class="tabs" role="tablist" aria-label="Ways to use it" hidden>
+        {ways.map((way, i) => (
+          <button class="button" type="button" role="tab" id={`banner-tab-${i}`} aria-controls={`banner-panel-${i}`}>
+            <span>{way.name}</span>
+          </button>
+        ))}
+      </div>
+      {ways.map((way, i) => (
+        <div role="tabpanel" id={`banner-panel-${i}`} aria-labelledby={`banner-tab-${i}`}>
+          <div class="head">
+            <h3 class="way">{way.name}</h3>
+            <span class="tools">
+              <button class="button" type="button" data-copy={way.id} hidden><span>[copy]</span></button>
+            </span>
+          </div>
+          <pre class="code" id={way.id}>{way.code}</pre>
+        </div>
+      ))}
+    </div>
+    <p class="muted note">
+      The URL is the banner: <code>https://ascii.rest/banner/&lt;text&gt;.svg</code>, and <code>.dark.svg</code> for
+      GitHub's dark theme. Up to {MAX} characters: letters, digits, spaces and <code>{MARKS}</code>, in capitals{cased.length ? `, or as you type them in ${cased.join(" and ")}` : ""}. The query
+      carries the rest, and <a href="/docs/readme/#change-how-a-banner-looks">the docs</a> list every key. React, the SVG from your own code and
+      the terminal take each choice as an option, and many more: see <a href="/docs/banners/">banner()</a> and
+      <a href="/docs/svg/">bannerSvg()</a>. Anyone who prefers reduced motion gets it still.
+    </p>
+  </section>
+</Layout>
+
+<script>
+  import { inkOf, namespaced } from "ascii.rest/svg";
+  import {
+    PLAIN,
+    artDark,
+    banner,
+    bannerPath,
+    clean,
+    cleanTagline,
+    cliBanner,
+    hex,
+    markdownBanner,
+    query as queryOf,
+    reactBanner,
+    read,
+    readmeBanner,
+    svgBanner,
+    terminalBanner,
+    type Ink,
+    type Look,
+  } from "../lib/banner";
+
+  const form = document.querySelector<HTMLFormElement>("[data-maker]")!;
+  const input = form.querySelector<HTMLInputElement>("#banner-text")!;
+  const tagline = form.querySelector<HTMLInputElement>("#banner-tagline")!;
+  const left = form.querySelector<HTMLElement>(".left")!;
+  const select = form.querySelector<HTMLSelectElement>("#banner-art")!;
+  const colours = [...form.querySelectorAll<HTMLButtonElement>("[data-colour]")];
+  const grounds = [...form.querySelectorAll<HTMLButtonElement>("[data-ground]")];
+  const sets = [...form.querySelectorAll<HTMLButtonElement>("[data-set]")];
+  const one = form.querySelector<HTMLElement>('[data-custom="one"]')!;
+  const two = form.querySelector<HTMLElement>('[data-custom="two"]')!;
+  const groundCustom = form.querySelector<HTMLElement>('[data-custom="ground"]')!;
+  const [anyInput] = one.querySelectorAll<HTMLInputElement>("input");
+  const [fromInput, toInput] = two.querySelectorAll<HTMLInputElement>("input");
+  const [groundInput] = groundCustom.querySelectorAll<HTMLInputElement>("input");
+  const artChip = form.querySelector<HTMLElement>(".art-chip")!;
+  const align = document.querySelector<HTMLButtonElement>("[data-align]")!;
+  const images = [...document.querySelectorAll<HTMLImageElement>("img[data-ground-img]")];
+  const saves = [...document.querySelectorAll<HTMLButtonElement>("[data-save]")];
+  const code = (id: string) => document.getElementById(id)!;
+
+  // The page's URL holds the banner's own query, with its text and whether the snippet is centred. A key it can't take
+  // is left out, and said so, rather than lose the rest: each is tried on top of the ones taken, color last, as
+  // color=art needs the art.
+  const asked = new URLSearchParams(location.search);
+  const taken = new URLSearchParams();
+  const wrong: string[] = [];
+  for (const [k, v] of [...asked].sort(([a], [b]) => Number(a === "color") - Number(b === "color"))) {
+    if (k === "text" || k === "center") continue;
+    const trial = new URLSearchParams(taken);
+    trial.append(k, v);
+    const r = read(trial);
+    if (typeof r === "string") wrong.push(r);
+    else taken.append(k, v);
+  }
+  const first = read(taken);
+  const look: Look = typeof first === "string" ? { ...PLAIN } : first;
+  // Said with the first draw, then gone with the first change.
+  let linkNote = wrong.length ? `part of this link was left out: ${wrong.join("; ")}` : "";
+  let centred = asked.get("center") === "1";
+  if (asked.get("text")) input.value = asked.get("text")!.slice(0, input.maxLength);
+  tagline.value = look.tagline;
+  select.value = look.art;
+  if (select.value !== look.art) look.art = "";
+  if (look.color === "art" && !look.art) look.color = null;
+
+  // Each logo's README SVG, light and dark, fetched once; a fetch that fails is forgotten, so the next draw tries again.
+  const arts = new Map<string, Promise<string | null>>();
+  const artOf = (slug: string, dark: boolean) => {
+    const key = `${slug}${dark ? ".dark" : ""}`;
+    if (!arts.has(key))
+      arts.set(
+        key,
+        fetch(`/svg/${key}.svg`)
+          .then((r) => (r.ok ? r.text() : null), () => null)
+          .then((svg) => (svg === null && arts.delete(key), svg)),
+      );
+    return arts.get(key)!;
+  };
+  // The art's own colour, for code, which has no art to take it from: from its light README SVG and its dark one, which
+  // differ for a logo in one ink, black on a light page and white on a dark one.
+  const artInk = async (slug: string): Promise<Ink> => {
+    const [light, dark] = await Promise.all(
+      [false, true].map(async (dark) => {
+        const svg = await artOf(slug, dark);
+        const part = svg && namespaced(svg, "");
+        return (part && inkOf(part)) || null;
+      }),
+    );
+    return light && dark ? { light, dark } : (dark ?? light);
+  };
+
+  // The page's URL: the banner's query, its text and whether the snippet is centred.
+  const remember = (text: string) => {
+    const q = new URLSearchParams(queryOf(look).slice(1));
+    if (text) q.set("text", text);
+    if (centred) q.set("center", "1");
+    const s = q.toString().replace(/%2C/g, ",");
+    history.replaceState(null, "", s ? `?${s}` : location.pathname);
+  };
+
+  const ways = ["banner-html", "banner-markdown", "banner-url", "banner-react", "banner-svg", "banner-terminal", "banner-cli"];
+  const copies = [...document.querySelectorAll<HTMLButtonElement>(".usage button[data-copy]")];
+  // Nothing to draw, or a draw still to come: no copying the last banner's snippets, no saving its SVGs.
+  const ready = (yes: boolean) => {
+    for (const b of [...copies, ...saves]) b.setAttribute("aria-disabled", String(!yes));
+    for (const b of saves) b.disabled = !yes;
+  };
+  const urls: string[] = [];
+  const drawn: Record<string, string> = {};
+  let turn = 0;
+  const show = async () => {
+    const mine = ++turn;
+    const text = clean(input.value, look.font);
+    look.tagline = cleanTagline(tagline.value);
+    // what the font has no letter for, said once each
+    const out = [...new Set([...input.value].filter((ch) => !/\s/.test(ch) && !clean(ch, look.font)))].join(" ");
+    left.textContent = [out && `left out: ${out}`, linkNote].filter(Boolean).join(". ");
+    linkNote = "";
+    mark();
+    ready(false);
+    if (!text) {
+      // An empty banner: the previews and snippets go, rather than keep the last name, and so does the name in the URL.
+      for (const img of images) img.hidden = true;
+      for (const id of ways) code(id).textContent = "Type some letters or digits above.";
+      for (const k of Object.keys(drawn)) delete drawn[k];
+      remember("");
+      return;
+    }
+    const want = look.art;
+    const pieces = await Promise.all(images.map((img) => (want ? artOf(want, artDark(look, img.dataset.groundImg === "dark")) : null)));
+    const ink = look.color === "art" && want ? await artInk(want) : null;
+    if (mine !== turn) return;
+    if (want && pieces.some((p) => p === null)) {
+      left.textContent = `couldn't load the ${select.selectedOptions[0]?.textContent ?? want} logo: try again, or pick another`;
+      return;
+    }
+    const svgs = images.map((img, i) => banner(text, { dark: img.dataset.groundImg === "dark", look, art: pieces[i] })!.svg);
+    urls.splice(0).forEach((url) => URL.revokeObjectURL(url));
+    images.forEach((img, i) => {
+      const url = URL.createObjectURL(new Blob([svgs[i]], { type: "image/svg+xml" }));
+      urls.push(url);
+      drawn[img.dataset.groundImg!] = svgs[i];
+      img.src = url;
+      img.hidden = false;
+      img.alt = `${text}, as a ${img.dataset.groundImg} README shows it`;
+    });
+    code("banner-html").textContent = readmeBanner(text, look, centred);
+    code("banner-markdown").textContent = markdownBanner(text, look);
+    code("banner-url").textContent = `https://ascii.rest${bannerPath(text, false, look)}`;
+    code("banner-react").textContent = reactBanner(text, look, ink);
+    code("banner-svg").textContent = svgBanner(text, look);
+    code("banner-terminal").textContent = terminalBanner(text, look, ink);
+    code("banner-cli").textContent = cliBanner(text, look, ink);
+    remember(text);
+    ready(true);
+  };
+
+  // The buttons pressed for the look, the art's own colour and the art's place offered only with art.
+  const same = (value: string) => {
+    const c = look.color;
+    return value === (c === null ? "" : c === "art" ? "art" : c.join(","));
+  };
+  const mark = () => {
+    for (const b of colours) b.setAttribute("aria-pressed", String(same(b.dataset.colour!)));
+    const preset = colours.some((b) => same(b.dataset.colour!));
+    one.classList.toggle("on", !preset && Array.isArray(look.color) && look.color.length === 1);
+    two.classList.toggle("on", !preset && Array.isArray(look.color) && look.color.length > 1);
+    for (const b of grounds) b.setAttribute("aria-pressed", String((b.dataset.ground || null) === look.bg));
+    groundCustom.classList.toggle("on", Boolean(look.bg) && !grounds.some((b) => b.dataset.ground === look.bg));
+    for (const b of sets) {
+      b.setAttribute("aria-pressed", String(look[b.dataset.set as keyof Look] === b.dataset.value));
+      if (b.dataset.set === "place") b.disabled = !look.art;
+    }
+    const artButton = colours.find((b) => b.dataset.colour === "art")!;
+    artButton.disabled = !look.art;
+    artButton.title = look.art ? "" : "pick some art first";
+    align.setAttribute("aria-pressed", String(centred));
+  };
+  const setArtChip = async () => {
+    artChip.style.background = "";
+    const want = look.art;
+    if (!want) return;
+    const svg = await artOf(want, document.documentElement.dataset.theme === "dark");
+    // Another logo, or none, picked while this one loaded: its colour is not the chip's any more.
+    if (look.art !== want) return;
+    const art = svg && namespaced(svg, "");
+    const fill = art && inkOf(art);
+    if (fill) artChip.style.background = fill;
+  };
+
+  input.addEventListener("input", show);
+  tagline.addEventListener("input", show);
+  form.addEventListener("submit", (e) => e.preventDefault());
+  colours.forEach((b) =>
+    b.addEventListener("click", () => {
+      const v = b.dataset.colour!;
+      look.color = v === "" ? null : v === "art" ? "art" : v.split(",");
+      show();
+    }),
+  );
+  // Clicking "any" or "fade" takes the colours already in them; the pickers they open change them.
+  const any = () => ((look.color = [hex(anyInput.value)!]), show());
+  anyInput.addEventListener("input", any);
+  one.addEventListener("click", any);
+  const fade = () => ((look.color = [hex(fromInput.value)!, hex(toInput.value)!]), show());
+  fromInput.addEventListener("input", fade);
+  toInput.addEventListener("input", fade);
+  two.addEventListener("click", (e) => {
+    if (e.target === two || e.target === two.firstElementChild) fade();
+  });
+  grounds.forEach((b) => b.addEventListener("click", () => ((look.bg = b.dataset.ground || null), show())));
+  const ground = () => ((look.bg = hex(groundInput.value)), show());
+  groundInput.addEventListener("input", ground);
+  groundCustom.addEventListener("click", ground);
+  sets.forEach((b) => b.addEventListener("click", () => ((look as unknown as Record<string, string>)[b.dataset.set!] = b.dataset.value!, show())));
+  select.addEventListener("change", () => {
+    look.art = select.value;
+    if (!look.art && look.color === "art") look.color = null;
+    setArtChip();
+    show();
+  });
+  align.addEventListener("click", () => ((centred = !centred), show()));
+  saves.forEach((b) => {
+    b.hidden = false;
+    b.addEventListener("click", () => {
+      const svg = drawn[b.dataset.save!];
+      if (!svg || b.disabled) return;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+      a.download = `${clean(input.value, look.font).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "banner"}${b.dataset.save === "dark" ? ".dark" : ""}.svg`;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+    });
+  });
+  // A colour a link asked for that is no preset sets the custom inputs, so they show it.
+  if (Array.isArray(look.color) && !colours.some((b) => same(b.dataset.colour!))) {
+    if (look.color.length === 1) anyInput.value = look.color[0];
+    else [fromInput.value, toInput.value] = [look.color[0], look.color[look.color.length - 1]];
+  }
+  if (look.bg && !grounds.some((b) => b.dataset.ground === look.bg)) groundInput.value = look.bg;
+  document.querySelectorAll<HTMLElement>("[data-maker-only]").forEach((el) => (el.hidden = false));
+  form.hidden = false;
+  setArtChip();
+  show();
+</script>
+
+<style>
+  .examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 2ch;
+    max-width: 96ch;
+    margin-top: 1.25rem;
+  }
+
+  .examples a {
+    color: var(--muted);
+  }
+
+  .maker {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 2rem;
+  }
+
+  .field {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 2ch;
+  }
+
+  .field label:not(.pick),
+  .field .label {
+    min-width: 8ch;
+    color: var(--muted);
+  }
+
+  .line,
+  select {
+    width: min(100%, 32ch);
+    padding: 0.15rem 0;
+    border: 0;
+    border-bottom: 1px dotted var(--muted);
+    border-radius: 0;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .line.wide {
+    width: min(100%, 60ch);
+  }
+
+  .line::placeholder {
+    color: var(--muted);
+    opacity: 1;
+  }
+
+  select {
+    width: auto;
+    min-width: 24ch;
+    cursor: pointer;
+  }
+
+  select option,
+  select optgroup {
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  .line:focus,
+  select:focus {
+    outline: none;
+    border-bottom-style: solid;
+    border-bottom-color: var(--ink);
+  }
+
+  /* iOS zooms into a field set under 16px. */
+  @media (hover: none) and (pointer: coarse) {
+    .line,
+    select {
+      font-size: 16px;
+    }
+  }
+
+  .places {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 2ch;
+  }
+
+  /* A choice made reads in ink and in brackets, as a selected tab does. */
+  .pick > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6ch;
+  }
+
+  .pick > span::before {
+    content: "[";
+    margin-right: -0.6ch;
+    visibility: hidden;
+  }
+
+  .pick > span::after {
+    content: "]";
+    margin-left: -0.6ch;
+    visibility: hidden;
+  }
+
+  .pick[aria-pressed="true"],
+  .pick.on {
+    color: var(--ink);
+  }
+
+  .pick[aria-pressed="true"] > span::before,
+  .pick[aria-pressed="true"] > span::after,
+  .pick.on > span::before,
+  .pick.on > span::after {
+    visibility: visible;
+  }
+
+  /* A font's sample sits where its name would, in the button's colour. */
+  .pick.sample svg {
+    display: block;
+  }
+
+  .pick:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+
+  @media (hover: hover) {
+    .pick:disabled:hover > span {
+      background: none;
+      color: var(--muted);
+    }
+  }
+
+  .pick i,
+  .pick input {
+    display: inline-block;
+    width: 0.8em;
+    height: 0.8em;
+  }
+
+  .pick i.art-chip {
+    background: repeating-linear-gradient(45deg, var(--muted) 0 2px, transparent 2px 4px);
+  }
+
+  .pick input {
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .pick input + input {
+    margin-left: -0.4ch;
+  }
+
+  .pick input::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+
+  .pick input::-webkit-color-swatch {
+    border: 0;
+  }
+
+  .pick input::-moz-color-swatch {
+    border: 0;
+  }
+
+  .previews {
+    margin-top: 2rem;
+  }
+
+  .preview .sheet {
+    min-height: 7rem;
+  }
+
+  .preview figcaption {
+    display: flex;
+    gap: 2ch;
+  }
+
+  .note {
+    max-width: 72ch;
+    margin-top: 0.75rem;
+  }
+
+  .note a {
+    text-decoration-line: underline;
+    text-decoration-style: dotted;
+    text-decoration-color: var(--muted);
+    text-underline-offset: 0.25em;
+  }
+
+  /* A URL or the marks stay on one line. */
+  .note code {
+    white-space: nowrap;
+  }
+
+  section.block {
+    margin-top: 2.5rem;
+  }
+</style>

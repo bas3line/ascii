@@ -1,7 +1,7 @@
 // npm run added: writes src/data/added.json, the day each piece came into the
 // library, from git: the commit that added src/pieces/<slug>.ts, carried through
 // renames. The site marks the recent ones new. The build reads this file and
-// never git, because Workers Builds may clone only the last commit. Run it after
+// never git, because a deploy's build (Vercel's) clones only the last commits. Run it after
 // pieces land; until then a piece missing from the file counts as new.
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs";

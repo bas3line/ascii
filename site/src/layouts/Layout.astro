@@ -64,9 +64,9 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={image} />
     <meta name="twitter:image:alt" content={imageAlt} />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!-- The site's face, Paper Mono, served from here: every page uses it, so it is fetched at once. -->
+    <link rel="preload" href="/fonts/paper-mono.woff2" as="font" type="font/woff2" crossorigin />
+    <slot name="head" />
   </head>
 
   <body>
@@ -74,6 +74,15 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
       <aside class="side">
         <a class="home" href="/">{NAME}</a>
         <p class="by">by <a href="/author/" rel="author">@{AUTHOR.name}</a></p>
+        <p class="make">
+          <a href="/docs/" aria-current={path.startsWith("/docs/") ? "page" : undefined}>[docs]</a>
+          <a href="/banner/" aria-current={path === "/banner/" ? "page" : undefined}>[make a banner]</a>
+          <a href="/make/" aria-current={path === "/make/" ? "page" : undefined}>[image to ascii]</a>
+        </p>
+        {Astro.slots.has("side") ? (
+          <slot name="side" />
+        ) : (
+        <>
         <form class="find" role="search" hidden>
           <label class="sr" for="find">Search the pieces</label>
           <input
@@ -117,6 +126,8 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
             </>
           ))}
         </nav>
+        </>
+        )}
       </aside>
 
       <script is:inline>
@@ -126,6 +137,8 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
         // script below puts the sidebar's scroll back, so that lands where it was.
         (function () {
           var form = document.querySelector(".find");
+          // The docs have their own index in the sidebar, and no search.
+          if (!form) return;
           var input = form.querySelector("input");
           var found = form.querySelector(".found");
           var nav = document.querySelector(".side nav");
@@ -236,10 +249,12 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
       </script>
 
       <main class="page">
+        <slot name="notice" />
         <div class="top">
           <slot name="heading" />
           <span class="tools">
             <button id="motion" class="button" type="button" hidden><span>[play anyway]</span></button>
+            <a href="/docs/">[docs]</a>
             <a href={REPO}>[github]</a>
             <button id="theme" class="button" type="button" aria-label="Switch to dark theme" hidden><span>[dark]</span></button>
           </span>
@@ -247,6 +262,7 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
         <slot />
         <footer class="foot muted">
           <p class="asks">
+            <a href="/docs/">[docs]</a>
             <a href={issue("logo")}>[request a logo]</a>
             <a href={issue("piece")}>[suggest a piece]</a>
             <a href={bug}>[report a bug]</a>
@@ -417,18 +433,27 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
       );
       document.querySelectorAll<HTMLElement>("pre[data-piece]").forEach((pre) => io.observe(pre));
 
+      // Each [copy] button copies the text of the element it names, then shows its own label again. Where the browser
+      // won't copy, a hidden source is shown and selected, so it can be copied by hand.
       document.querySelectorAll<HTMLButtonElement>("button[data-copy]").forEach((button) => {
         button.hidden = false;
         const label = button.firstElementChild as HTMLElement;
+        const own = label.textContent;
         button.addEventListener("click", async () => {
-          const text = document.getElementById(button.dataset.copy!)?.textContent ?? "";
+          const source = document.getElementById(button.dataset.copy!);
+          const text = source?.textContent ?? "";
+          if (text.trim() === "" || button.getAttribute("aria-disabled") === "true") return;
           try {
             await navigator.clipboard.writeText(text);
             label.textContent = "[copied]";
           } catch {
             label.textContent = "[select and copy]";
+            if (source) {
+              source.hidden = false;
+              getSelection()?.selectAllChildren(source);
+            }
           }
-          setTimeout(() => (label.textContent = "[copy]"), 1600);
+          setTimeout(() => (label.textContent = own), 1600);
         });
       });
 

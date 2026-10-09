@@ -119,7 +119,7 @@ export default function pondRipples(): Frame {
       // The fainter ring following it in, only while the first is strong; a dot every other step.
       const r2 = R - WAVE;
       if (life > 0.55 && r2 > 1.4)
-        ellipse(cols, rows, dp.x, dp.y, r2, r2, (i, mark, ang) => {
+        ellipse(cols, rows, dp.x, dp.y, r2, r2, (i, _mark, ang) => {
           if (Math.floor(((ang + Math.PI) * r2) / 1.1) % 2) draw(i, "·", 1, who);
         });
     });

@@ -119,7 +119,7 @@ export default function sparkline({
   const reset = () => {
     made = 0;
     rings = series.map(() => new Float32Array(W));
-    rands = series.map((s, i) => mulberry32(911 + i * 7919));
+    rands = series.map((_, i) => mulberry32(911 + i * 7919));
     states = series.map(() => ({ v: 0.4, busy: 0, cap: 0.82, n: 0 }));
   };
   const fill = (need: number) => {

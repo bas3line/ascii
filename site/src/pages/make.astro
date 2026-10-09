@@ -1,0 +1,572 @@
+---
+/*
+ * Image to ascii: an image in, SVG, PNG, JPG, WebP, GIF or any other the
+ * browser reads, and an animated ascii logo out. The page draws it in the
+ * browser by the method the library's logos were drawn by (lib/logo.ts), plays
+ * it with the library's own mount, and writes it out as a piece file, an embed
+ * snippet and README SVGs (lib/logo-file.ts). Nothing is uploaded.
+ */
+import Layout from "../layouts/Layout.astro";
+import { glyphShapes } from "../lib/glyphs";
+import { REPO } from "../lib/library";
+import { LIMIT } from "../lib/logo";
+
+// The characters' shapes, worked out here at build time; the drawing itself runs in the browser.
+const glyphs = await glyphShapes();
+---
+
+<Layout
+  title="image to ascii · ascii.rest"
+  description="Turn any image, SVG, PNG, JPG, WebP or GIF, into an animated ascii logo in your browser: a piece for the library, an embed for any page, and SVGs for a README."
+  path="/make/"
+>
+  <h1 slot="heading">image to ascii</h1>
+
+  <p class="lede">
+    Drop in an image, an SVG, PNG, JPG, WebP or GIF, and get it back as animated ascii in its own colours. A logo is drawn the way the library's
+    logos are, each cell the character whose shape best matches its edge there; a photo is shaded, each cell as dense as the image is bright
+    there. A plain background is left out.
+  </p>
+  <p class="lede muted">It all happens in your browser. The file is never uploaded, and nothing is sent anywhere.</p>
+
+  <section class="block maker" style="margin-top: 2rem" data-glyphs={JSON.stringify(glyphs)}>
+    <div class="well big drop" id="drop">
+      <div class="prompt" id="prompt">
+        <p>drop an image here</p>
+        <p class="muted">svg, png, jpg, webp or gif</p>
+        <p class="muted">
+          or <button class="button" type="button" id="pick"><span>[pick a file]</span></button> or paste one
+        </p>
+      </div>
+    </div>
+    <input type="file" id="file" accept="image/*,.svg" hidden />
+    <p class="facts" id="facts" hidden>
+      <span id="size"></span>
+      <span id="colours"></span>
+      <span id="moves"></span>
+      <span id="bytes"></span>
+      <button class="button" type="button" id="ink"><span>[mono]</span></button>
+      <button class="button" type="button" id="ground" hidden><span>[keep the background]</span></button>
+      <button class="button" type="button" id="again"><span>[another image]</span></button>
+    </p>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <section class="block">
+    <div class="head">
+      <h2>settings</h2>
+    </div>
+    <div class="controls">
+      <label for="name">name</label>
+      <span><input id="name" type="text" maxlength="32" autocomplete="off" spellcheck="false" value="my logo" /></span>
+
+      <label for="width">width</label>
+      <span><input id="width" type="number" min="16" max={LIMIT.cols} step="1" value="64" inputmode="numeric" /> columns, at most {LIMIT.cols}</span>
+
+      <span class="label" id="style-label">style</span>
+      <span class="choice" role="group" aria-labelledby="style-label">
+        <button class="button" type="button" data-style="logo" aria-pressed="true"><span>logo</span></button>
+        <button class="button" type="button" data-style="shade" aria-pressed="false"><span>shade</span></button>
+      </span>
+
+      <span class="label" id="motion-label">motion</span>
+      <span class="choice" role="group" aria-labelledby="motion-label">
+        <button class="button" type="button" data-motion="glint" aria-pressed="true"><span>glint</span></button>
+        <button class="button" type="button" data-motion="scan" aria-pressed="false"><span>scan</span></button>
+        <span>every <input id="every" type="number" min="3" max="60" step="1" value="5" inputmode="numeric" aria-label="seconds between passes" /> s</span>
+      </span>
+
+      <span class="label" id="category-label">category</span>
+      <span class="choice" role="group" aria-labelledby="category-label">
+        <button class="button" type="button" data-category="companies" aria-pressed="true"><span>companies</span></button>
+        <button class="button" type="button" data-category="logos" aria-pressed="false"><span>logos</span></button>
+        <button class="button" type="button" data-category="distros" aria-pressed="false"><span>distros</span></button>
+      </span>
+    </div>
+    <p class="muted note">
+      Logo draws each edge with the character that matches its shape, as the library's logos are drawn. Shade picks each character by how bright
+      the image is there, from <code>.</code> to <code>@</code>, which suits a photo; an image with no plain background starts in shade.
+    </p>
+    <p class="muted note">
+      A company or a language glints, as the library's logos do; a distro has a scan line run down it. The width is the most columns it may take;
+      a tall logo takes fewer, since a piece is at most {LIMIT.rows} rows.
+    </p>
+  </section>
+
+  <section class="block">
+    <div class="head">
+      <h2><label for="paste">or paste an svg's markup</label></h2>
+      <span class="tools">
+        <button class="button" type="button" id="paste-go"><span>[draw it]</span></button>
+      </span>
+    </div>
+    <textarea id="paste" rows="5" spellcheck="false" autocomplete="off" placeholder='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">...</svg>'></textarea>
+  </section>
+
+  <div id="out" hidden>
+    <section class="block">
+      <div class="head">
+        <h2>embed it</h2>
+        <span class="tools">
+          <button class="button" type="button" data-copy="embed-code" hidden><span>[copy]</span></button>
+        </span>
+      </div>
+      <pre class="code out" id="embed-code"></pre>
+      <p class="muted note">
+        For any page, with no install and no build step: it loads mount.js from ascii.rest and plays the logo inlined in it, in colour on a canvas,
+        or in one ink in a pre while this page shows one ink. It reads the page's text colour to tell a light page from a dark one, and holds still for
+        anyone who prefers reduced motion.
+      </p>
+    </section>
+
+    <section class="block">
+      <div class="head">
+        <h2>readme</h2>
+        <span class="tools">
+          <button class="button" type="button" id="svg-light"><span>[light svg]</span></button>
+          <button class="button" type="button" id="svg-dark"><span>[dark svg]</span></button>
+          <button class="button" type="button" data-copy="readme-code" hidden><span>[copy]</span></button>
+        </span>
+      </div>
+      <pre class="code" id="readme-code"></pre>
+      <p class="muted note">
+        Two animated SVGs, one loop of the glint or the scan, which play in a GitHub README with no script. Put them beside the README; GitHub shows the
+        dark one in its dark theme.
+      </p>
+    </section>
+
+    <section class="block">
+      <div class="head">
+        <h2 id="file-name">logo.ts</h2>
+        <span class="tools">
+          <button class="button" type="button" data-copy="source-code" hidden><span>[copy]</span></button>
+          <button class="button" type="button" id="download"><span>[download]</span></button>
+        </span>
+      </div>
+      <pre class="code out" id="source-code"></pre>
+      <p class="muted note">
+        A piece in the library's own format. To add it, put it in src/pieces/, run npm run gen and npm run check, and open a pull request, as
+        <a href={`${REPO}/blob/main/CONTRIBUTING.md`}>CONTRIBUTING.md</a> says.
+      </p>
+    </section>
+  </div>
+</Layout>
+
+<style>
+  .prompt {
+    text-align: center;
+  }
+
+  .drop.over {
+    outline: 1px dotted var(--ink);
+    outline-offset: -0.75rem;
+  }
+
+  .status:empty {
+    display: none;
+  }
+
+  .status {
+    margin-top: 0.75rem;
+    color: var(--ink);
+  }
+
+  .facts + .status {
+    margin-top: 0.25rem;
+  }
+
+  .facts {
+    margin-top: 0.75rem;
+  }
+
+  /* site.css gives .facts its display after [hidden], so hidden needs saying again. */
+  .facts[hidden] {
+    display: none;
+  }
+
+  .controls {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: baseline;
+    gap: 0.75rem 3ch;
+  }
+
+  .controls > label,
+  .controls > .label {
+    color: var(--muted);
+  }
+
+  .choice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 2ch;
+  }
+
+  /* The choice in force wears its brackets, as a usage tab does; the others keep the room for them. */
+  .choice [aria-pressed] > span::before {
+    content: "[";
+    visibility: hidden;
+  }
+
+  .choice [aria-pressed] > span::after {
+    content: "]";
+    visibility: hidden;
+  }
+
+  .choice [aria-pressed="true"] {
+    color: var(--ink);
+  }
+
+  .choice [aria-pressed="true"] > span::before,
+  .choice [aria-pressed="true"] > span::after {
+    visibility: visible;
+  }
+
+  input,
+  textarea {
+    margin: 0;
+    padding: 0 1ch;
+    border: 0;
+    border-radius: 0;
+    background: var(--well);
+    color: var(--ink);
+    font: inherit;
+  }
+
+  #name {
+    width: min(100%, 34ch);
+  }
+
+  input[type="number"] {
+    width: 6ch;
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  textarea {
+    display: block;
+    width: 100%;
+    min-height: 8rem;
+    padding: 1rem 2ch;
+    color: var(--text);
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    resize: vertical;
+  }
+
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: 1px dotted var(--ink);
+    outline-offset: 2px;
+  }
+
+  ::placeholder {
+    color: var(--muted);
+    opacity: 1;
+  }
+
+  .note {
+    max-width: 72ch;
+    margin-top: 0.75rem;
+  }
+
+  .note a {
+    text-decoration-line: underline;
+    text-decoration-style: dotted;
+    text-decoration-thickness: 1px;
+    text-decoration-color: var(--muted);
+    text-underline-offset: 0.25em;
+  }
+
+  .head h2 label {
+    cursor: inherit;
+  }
+
+  pre.out {
+    max-height: 26rem;
+    overflow: auto;
+  }
+
+  #out {
+    margin-top: 2.5rem;
+  }
+</style>
+
+<script>
+  import { mount, names, type Piece } from "ascii.rest";
+  import { draw, isSvg, raster, render, type Drawing, type Glyph, type Source, type Style } from "../lib/logo";
+  import { about, clean, embed, picture, piece, source, type Kind, type Settings } from "../lib/logo-file";
+  import { svgOf } from "../lib/svg";
+
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+  const glyphs = JSON.parse(document.querySelector<HTMLElement>(".maker")!.dataset.glyphs!) as Glyph[];
+
+  const drop = $("drop"), prompt = $("prompt"), picker = $<HTMLInputElement>("file"), status = $("status");
+  const nameInput = $<HTMLInputElement>("name"), widthInput = $<HTMLInputElement>("width"), everyInput = $<HTMLInputElement>("every");
+  const paste = $<HTMLTextAreaElement>("paste"), inkButton = $<HTMLButtonElement>("ink"), groundButton = $<HTMLButtonElement>("ground");
+
+  let src: Source | null = null;
+  // The last image that isn't an SVG, kept so its background can be put back, or taken out again.
+  let image: Blob | null = null;
+  let keepGround = false;
+  let style: Style = "logo";
+  let drawing: Drawing | null = null;
+  let file = "";
+  let named = false; // the reader typed the name, so a new file keeps it
+  let category: Kind = "companies";
+  let made: { piece: Piece; slug: string; ts: string } | null = null;
+  let stop = () => {};
+  // Logos come in colour or in one ink, and the choice holds from page to page, as on the rest of the site.
+  let mono = false;
+  try {
+    mono = localStorage.getItem("ascii-ink") === "mono";
+  } catch {}
+  const motion = () => {
+    try {
+      return localStorage.getItem("ascii-motion") === "play";
+    } catch {
+      return false;
+    }
+  };
+
+  const say = (text: string) => (status.textContent = text);
+  const later = (fn: () => void, ms: number) => {
+    let timer = 0;
+    return () => {
+      clearTimeout(timer);
+      timer = window.setTimeout(fn, ms);
+    };
+  };
+  const width = () => Math.max(16, Math.min(80, Math.round(+widthInput.value) || 64));
+  const settings = (): Settings => ({ proper: nameInput.value, file, category, every: +everyInput.value || 5 });
+
+  // An image's name without its extension, as the piece's name, unless the reader typed one.
+  const nameFrom = (from: string) => {
+    const ext = /\.(svg|png|jpe?g|webp|gif|avif|bmp|ico|tiff?)$/i;
+    if (!named && ext.test(from)) nameInput.value = clean(from.replace(ext, "").replace(/[-_]+/g, " ")) || "my logo";
+  };
+
+  // Each image taken gets the next number; a read that finishes after a newer one began is dropped, so the last image
+  // chosen is the one shown, however long each takes to decode.
+  let reading = 0;
+
+  async function take(markup: string, from: string, mine = ++reading) {
+    say("drawing it");
+    let next: Source;
+    try {
+      next = await render(markup);
+    } catch (error) {
+      if (mine === reading) say((error as Error).message);
+      return;
+    }
+    if (mine !== reading) return;
+    src = next;
+    image = null;
+    file = from;
+    nameFrom(from);
+    groundButton.hidden = true;
+    pickStyle("logo");
+  }
+
+  // Any other image: drawn, its plain background left out unless the reader keeps it.
+  async function takeImage(blob: Blob, from: string, mine = ++reading) {
+    say("drawing it");
+    let next: Source;
+    try {
+      next = await raster(blob, { keepGround });
+    } catch (error) {
+      if (mine === reading) say((error as Error).message);
+      return;
+    }
+    if (mine !== reading) return;
+    src = next;
+    image = blob;
+    file = from;
+    nameFrom(from);
+    // A photo, or anything with no plain ground, reads best shaded; a new image starts in the style that suits it.
+    pickStyle(src.photo ? "shade" : "logo");
+    // A background was found: say so, and offer it back; or it was kept, and can be taken out again.
+    groundButton.hidden = !src.ground && !keepGround;
+    groundButton.firstElementChild!.textContent = keepGround ? "[remove the background]" : "[keep the background]";
+  }
+
+  function redraw() {
+    if (!src) return;
+    drawing = draw(src, width(), glyphs, style);
+    update();
+  }
+
+  const styles = [...document.querySelectorAll<HTMLButtonElement>("[data-style]")];
+  function pickStyle(next: Style) {
+    style = next;
+    for (const b of styles) b.setAttribute("aria-pressed", String(b.dataset.style === next));
+    redraw();
+  }
+  for (const b of styles) b.addEventListener("click", () => pickStyle(b.dataset.style as Style));
+
+  function update() {
+    if (!drawing) return;
+    const s = settings();
+    const { slug, every, scan } = about(drawing, s);
+    const ts = source(drawing, s);
+    made = { piece: piece(drawing, s), slug, ts };
+    play();
+    const n = drawing.colors.length;
+    $("size").textContent = `${drawing.cols}×${drawing.rows}`;
+    $("colours").textContent = n === 1 ? "1 colour" : `${n} colours`;
+    $("moves").textContent = scan ? `a scan every ${every} s` : `a glint every ${every} s`;
+    const bytes = new TextEncoder().encode(ts).length;
+    $("bytes").textContent = `${(bytes / 1024).toFixed(1)} kB`;
+    $("file-name").textContent = `${slug}.ts`;
+    $("source-code").textContent = ts;
+    $("embed-code").textContent = embed(drawing, s, mono);
+    $("readme-code").textContent = picture(drawing, s);
+    prompt.hidden = true;
+    $("facts").hidden = false;
+    $("out").hidden = false;
+    // A taken name matters most, since the piece can't be added under it; then the background left out, if any.
+    if ((names as string[]).includes(slug)) say(`the library already has a piece called ${slug}: give this one another name to add it`);
+    else say(src?.ground ? `left out its background, ${src.ground}` : "");
+  }
+
+  // Plays the piece in the well with the library's own mount, as a canvas in colour or a <pre> in one ink.
+  function play() {
+    if (!made) return;
+    stop();
+    const { meta } = made.piece;
+    const el = document.createElement(mono ? "pre" : "canvas");
+    el.className = "art";
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", meta.name);
+    el.style.setProperty("--cols", String(meta.cols));
+    el.style.setProperty("--rows", String(meta.rows));
+    if (!mono) el.style.width = "var(--fit)";
+    drop.querySelector(".art")?.remove();
+    drop.append(el);
+    stop = mount(el, made.piece, { motion: motion() });
+  }
+
+  function save(name: string, text: string, type: string) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([text], { type }));
+    a.download = name;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }
+
+  async function read(f: File | undefined) {
+    if (!f) return;
+    // Its number is taken now, before the file is read, so a big SVG still being read can't win over a later image.
+    const mine = ++reading;
+    // An SVG is read as markup; anything else as an image, which the browser decodes.
+    const svg = isSvg(f) || (!f.type && /^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/i.test(await f.slice(0, 512).text()));
+    if (svg) {
+      if (f.size > 4_000_000) return say("that svg is over 4 MB, which is a lot for a logo");
+      return take(await f.text(), f.name, mine);
+    }
+    if (f.size > 40_000_000) return say("that image is over 40 MB: try a smaller one");
+    if (f.type && !f.type.startsWith("image/")) return say("that is not an image: try an svg, png, jpg, webp or gif");
+    keepGround = false;
+    takeImage(f, f.name, mine);
+  }
+
+  // --- in ---------------------------------------------------------------------
+
+  $("pick").addEventListener("click", () => picker.click());
+  $("again").addEventListener("click", () => picker.click());
+  picker.addEventListener("change", () => {
+    read(picker.files?.[0]);
+    picker.value = "";
+  });
+  $("paste-go").addEventListener("click", () => {
+    if (paste.value.trim()) take(paste.value, "pasted markup");
+  });
+  // An image pasted anywhere on the page, a screenshot say; text pasted into a field stays text.
+  addEventListener("paste", (e) => {
+    const f = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith("image/"));
+    if (!f) return;
+    e.preventDefault();
+    read(new File([f], f.name || "pasted image.png", { type: f.type }));
+  });
+  groundButton.addEventListener("click", () => {
+    if (!image) return;
+    keepGround = !keepGround;
+    takeImage(image, file);
+  });
+
+  // A file can be dropped anywhere on the page; the well shows where it lands.
+  let depth = 0;
+  const carriesFile = (e: DragEvent) => [...(e.dataTransfer?.types ?? [])].includes("Files");
+  addEventListener("dragenter", (e) => {
+    if (!carriesFile(e)) return;
+    depth++;
+    drop.classList.add("over");
+  });
+  addEventListener("dragleave", (e) => {
+    if (!carriesFile(e)) return;
+    if (--depth <= 0) (depth = 0), drop.classList.remove("over");
+  });
+  addEventListener("dragover", (e) => {
+    if (carriesFile(e)) e.preventDefault();
+  });
+  addEventListener("drop", (e) => {
+    if (!carriesFile(e)) return;
+    e.preventDefault();
+    depth = 0;
+    drop.classList.remove("over");
+    read(e.dataTransfer?.files[0]);
+  });
+
+  // --- settings ---------------------------------------------------------------
+
+  const soon = later(update, 150);
+  nameInput.addEventListener("input", () => {
+    named = true;
+    soon();
+  });
+  widthInput.addEventListener("input", later(redraw, 250));
+  everyInput.addEventListener("input", soon);
+
+  const motions = [...document.querySelectorAll<HTMLButtonElement>("[data-motion]")];
+  const categories = [...document.querySelectorAll<HTMLButtonElement>("[data-category]")];
+  // A distro is scanned, and a language or a company glints.
+  const choose = (kind: Kind) => {
+    category = kind;
+    for (const b of categories) b.setAttribute("aria-pressed", String(b.dataset.category === kind));
+    for (const b of motions) b.setAttribute("aria-pressed", String(b.dataset.motion === (kind === "distros" ? "scan" : "glint")));
+    update();
+  };
+  for (const b of categories) b.addEventListener("click", () => choose(b.dataset.category as Kind));
+  for (const b of motions) b.addEventListener("click", () => choose(b.dataset.motion === "scan" ? "distros" : category === "distros" ? "companies" : category));
+
+  const label = () => {
+    inkButton.firstElementChild!.textContent = mono ? "[colour]" : "[mono]";
+    inkButton.setAttribute("aria-label", mono ? "Show the logo in colour" : "Show the logo in one ink");
+  };
+  label();
+  inkButton.addEventListener("click", () => {
+    mono = !mono;
+    try {
+      localStorage.setItem("ascii-ink", mono ? "mono" : "colour");
+    } catch {}
+    label();
+    update();
+  });
+  // The header's [play anyway] stores its choice; start the logo again under it.
+  $("motion")?.addEventListener("click", () => setTimeout(play, 0));
+
+  // --- out --------------------------------------------------------------------
+
+  $("download").addEventListener("click", () => made && save(`${made.slug}.ts`, made.ts, "text/plain;charset=utf-8"));
+  $("svg-light").addEventListener("click", () => made && save(`${made.slug}.svg`, svgOf(made.piece, false), "image/svg+xml"));
+  $("svg-dark").addEventListener("click", () => made && save(`${made.slug}.dark.svg`, svgOf(made.piece, true), "image/svg+xml"));
+</script>

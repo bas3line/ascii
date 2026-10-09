@@ -2,38 +2,156 @@
 /*
  * npx ascii.rest <piece>: plays a piece in the terminal until a key is pressed.
  * npx ascii.rest list: every piece's name, by category.
+ * npx ascii.rest banner <text>: the text in block letters, with a passing glint.
+ * npx ascii.rest add <name...>: a piece's TypeScript, copied into your project.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
 import { parseArgs } from "node:util";
+import { drawable, fonts, shadows, type Effect, type FontName, type ShadowName } from "./banner.ts";
 import { isPiece, load, names, type PieceName } from "./library.ts";
-import { play, still } from "./terminal.ts";
+import { banner, play, still } from "./terminal.ts";
 import type { Category } from "./types.ts";
 
-const HELP = `ascii.rest: animated ascii art, in your terminal.
+const or = (words: string[]) => (words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : words[0]);
 
-  npx ascii.rest <piece>     plays a piece until you press a key
-  npx ascii.rest list        every piece, by category
+const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
 
-  --mono          a coloured piece in the terminal's own colour
-  --light         for a light terminal: the light colours, and shading flipped
-  --fps <n>       frames a second, instead of the piece's own
-  --seconds <n>   stops after n seconds
-  -h, --help      this help
-  -v, --version   the version
+  npx ascii.rest <piece>          plays a piece until you press a key
+  npx ascii.rest list             every piece, by category
+  npx ascii.rest banner <text>    your text in block letters, with a glint
+  npx ascii.rest add <name...>    copies pieces' TypeScript into your project
+
+  --mono            a coloured piece in the terminal's own colour
+  --light           for a light terminal: the light colours, and shading flipped
+  --fps <n>         frames a second, instead of the piece's own
+  --seconds <n>     stops after n seconds; for a banner, how long it moves
+
+  a banner:
+  --color <hex>     its letters in this colour, like ff6a00, or two or more
+                    for a fade, like ff6a00,f778ba
+  --tagline <s>     a line under it
+  --font <name>     ${or(Object.keys(fonts))}
+  --shadow <name>   ${[...Object.keys(shadows), "none"].join(", ")}
+  --effect <name>   glint, type or still
+
+  add:
+  --dir <path>      where the files go: components/ascii, or src/components/ascii
+                    when there is a src folder
+  --overwrite       replace files that are already there
+  --registry <url>  another copy of the registry: https://ascii.rest/r
+
+  -h, --help        this help
+  -v, --version     the version
 
   npx ascii.rest rust
   npx ascii.rest night-coast --seconds 10
-  npx ascii.rest donut --light
+  npx ascii.rest banner 'my cli' --color ff6a00,f778ba --tagline 'v1.0, fast'
+  npx ascii.rest add ascii donut banner
 
-Every piece, on a page: https://ascii.rest
+Every piece, on a page: https://ascii.rest. The docs: https://ascii.rest/docs/
 `;
+
+const REGISTRY = "https://ascii.rest/r";
+
+interface RegistryItem {
+  name: string;
+  files?: { path: string; content?: string; target?: string }[];
+  registryDependencies?: string[];
+  dependencies?: string[];
+}
+
+// Each name's registry item, and every item it depends on, once each, dependencies first.
+async function items(wanted: string[], registry: string): Promise<RegistryItem[]> {
+  const seen = new Map<string, RegistryItem>();
+  // Fetched already, or being fetched: an item that needs itself, A to B to A, is fetched once and the loop ends there.
+  const visited = new Set<string>();
+  const visit = async (ref: string) => {
+    // A name, or an item's URL; ascii.rest's own follow --registry, so another copy of the registry serves them all.
+    // As a URL resolves it, so r/../r/loop.json is r/loop.json.
+    let url: string;
+    try {
+      url = new URL(/^https?:\/\//.test(ref) ? ref.replace(/^https:\/\/ascii\.rest\/r(?=\/)/, registry) : `${registry}/${ref}.json`).href;
+    } catch {
+      throw new Usage(`"${clean(ref)}" is not a name or a URL to add`);
+    }
+    if (visited.has(url)) return;
+    visited.add(url);
+    let res: Response;
+    try {
+      res = await fetch(url);
+    } catch (error) {
+      throw new Usage(`couldn't reach ${clean(url)}: ${clean(error instanceof Error ? ((error.cause as Error | undefined)?.message ?? error.message) : error)}`);
+    }
+    if (!res.ok) throw new Usage(`there is no "${clean(ref)}" to add (${clean(url)} answered ${res.status}). npx ascii.rest list shows every piece.`);
+    let item: RegistryItem;
+    try {
+      item = (await res.json()) as RegistryItem;
+    } catch {
+      throw new Usage(`${clean(url)} is not a registry item: it isn't JSON`);
+    }
+    if (typeof item !== "object" || item === null) throw new Usage(`${clean(url)} is not a registry item`);
+    for (const dep of item.registryDependencies ?? []) await visit(dep);
+    seen.set(url, item);
+  };
+  for (const name of wanted) await visit(name);
+  return [...seen.values()];
+}
+
+async function add(wanted: string[], { dir, overwrite, registry }: { dir?: string; overwrite: boolean; registry: string }) {
+  if (!wanted.length) throw new Usage(`add what? npx ascii.rest add ascii donut`);
+  const root = process.cwd();
+  const into = dir ?? (existsSync(join(root, "src")) ? join("src", "components", "ascii") : join("components", "ascii"));
+  const all = await items(wanted, registry);
+  const base = resolve(root, into);
+  // Every file names its place under the components folder, @components/ascii/<path>, and must land inside it: a
+  // registry is someone else's JSON, so a path with .. in it, an absolute one or one with a control character, content
+  // that isn't text and a dependency that isn't a package's name are each refused before anything is written.
+  const place = (file: { path: string; target?: string; content?: unknown }) => {
+    const named = file.target ?? file.path;
+    if (typeof named !== "string" || /[\u0000-\u001f\u007f-\u009f]/.test(named)) throw new Usage(`refusing a file named ${JSON.stringify(named)}`);
+    const rest = named.replace(/^@components\/ascii(\/|$)/, "");
+    const path = resolve(base, rest);
+    if (isAbsolute(rest) || !path.startsWith(base + sep)) throw new Usage(`refusing "${named}": it would land outside ${into}`);
+    if (file.content !== undefined && typeof file.content !== "string") throw new Usage(`refusing "${named}": its content isn't text`);
+    return path;
+  };
+  const deps = new Set<string>();
+  for (const item of all) {
+    for (const file of item.files ?? []) place(file);
+    for (const d of item.dependencies ?? []) {
+      if (typeof d !== "string" || !/^(@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*(@[\w.^~-]+)?$/i.test(d)) throw new Usage(`refusing ${clean(item.name)}: ${JSON.stringify(d)} is not a package to install`);
+      deps.add(d);
+    }
+  }
+  const wrote: string[] = [], kept: string[] = [];
+  for (const item of all) {
+    for (const file of item.files ?? []) {
+      const path = place(file);
+      if (existsSync(path) && !overwrite) {
+        kept.push(relative(root, path));
+        continue;
+      }
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, file.content ?? "");
+      wrote.push(relative(root, path));
+    }
+  }
+  let s = wrote.length ? `wrote\n${wrote.map((p) => `  ${p}`).join("\n")}\n` : "";
+  if (kept.length) s += `kept, already there (--overwrite replaces them)\n${kept.map((p) => `  ${p}`).join("\n")}\n`;
+  if (deps.size) s += `it needs ${[...deps].join(", ")}: npm install ${[...deps].join(" ")}\n`;
+  process.stdout.write(`${s}\nThe docs for what you added: https://ascii.rest/docs/copy/\n`);
+}
 
 // The order of the sidebar on ascii.rest and of the table in the README.
 const ORDER: Category[] = ["scenes", "ui", "data", "type", "logos", "companies", "distros", "shapes", "space", "physics", "nature", "creatures", "objects", "generative", "effects"];
 
 class Usage extends Error {}
+
+// Someone else's text, without the control characters that would move a terminal's cursor or change its colours.
+const clean = (s: unknown) => String(s).replace(/[\u0000-\u001f\u007f-\u009f]/g, "?");
 
 const version = () => (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 
@@ -59,8 +177,6 @@ function distance(a: string, b: string) {
     }
   return d[a.length][b.length];
 }
-
-const or = (words: string[]) => (words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : words[0]);
 
 // A piece by its file name, or by the name it shows: "night coast", "c++", "newton's cradle".
 async function find(wanted: string): Promise<PieceName> {
@@ -108,15 +224,60 @@ async function main() {
       light: { type: "boolean" },
       fps: { type: "string" },
       seconds: { type: "string" },
+      color: { type: "string" },
+      tagline: { type: "string" },
+      font: { type: "string" },
+      shadow: { type: "string" },
+      effect: { type: "string" },
+      dir: { type: "string" },
+      overwrite: { type: "boolean" },
+      registry: { type: "string" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
     },
   });
   if (values.version) return void process.stdout.write(`${version()}\n`);
   if (values.help || !positionals.length) return void process.stdout.write(HELP);
-  if (positionals.length > 1) throw new Usage(`one piece at a time: npx ascii.rest <piece>`);
+  if (positionals[0] === "add" && [values.mono, values.light, values.fps, values.seconds, values.color, values.tagline, values.font, values.shadow, values.effect].some((v) => v !== undefined))
+    throw new Usage(`add takes only --dir, --overwrite and --registry: npx ascii.rest add donut --dir src/ascii`);
+  if (positionals[0] === "add") return add(positionals.slice(1), { dir: values.dir, overwrite: values.overwrite === true, registry: (values.registry ?? REGISTRY).replace(/\/$/, "") });
+  if ([values.dir, values.overwrite, values.registry].some((v) => v !== undefined))
+    throw new Usage(`--dir, --overwrite and --registry are for add: npx ascii.rest add donut --dir src/ascii`);
+  if (positionals[0] === "banner") {
+    if (values.mono !== undefined || values.fps !== undefined)
+      throw new Usage(`--mono and --fps are for a piece: a banner has no colour unless you give it one, and moves for --seconds`);
+    // the words after it, as the shell split them
+    const text = positionals.slice(1).join(" ");
+    // How long it moves: 0 prints it still, and it has to end.
+    const seconds = values.seconds === undefined ? undefined : Number(values.seconds);
+    if (seconds !== undefined && !(Number.isFinite(seconds) && seconds >= 0)) throw new Usage(`--seconds for a banner takes a number of 0 or more, not "${values.seconds}"`);
+    const font = values.font ?? "block";
+    if (!Object.hasOwn(fonts, font)) throw new Usage(`--font takes ${or(Object.keys(fonts))}, not "${font}"`);
+    if (!drawable(text, font as FontName).trim()) throw new Usage(`a banner takes letters, digits, spaces and . , ! ? ' : - + = / _: npx ascii.rest banner 'my cli'`);
+    const colors = values.color?.split(",").map((c) => c.trim().replace(/^#/, ""));
+    if (colors && colors.some((c) => !/^[0-9a-f]{6}$/i.test(c)))
+      throw new Usage(`--color takes six hex digits, like ff6a00, or more for a fade, like ff6a00,f778ba, not "${values.color}"`);
+    const shadow = values.shadow;
+    if (shadow !== undefined && shadow !== "none" && !Object.hasOwn(shadows, shadow)) throw new Usage(`--shadow takes ${or([...Object.keys(shadows), "none"])}, not "${shadow}"`);
+    const effect = values.effect;
+    if (effect !== undefined && !["glint", "type", "still"].includes(effect)) throw new Usage(`--effect takes glint, type or still, not "${effect}"`);
+    const { interrupted } = await banner(text, {
+      seconds,
+      light: values.light === true,
+      color: colors?.map((c) => `#${c}`),
+      tagline: values.tagline,
+      font: font as FontName,
+      shadow: shadow as ShadowName | "none" | undefined,
+      effect: effect as Effect | undefined,
+    });
+    if (interrupted) process.exitCode = 130;
+    return;
+  }
+  if ([values.color, values.tagline, values.font, values.shadow, values.effect].some((v) => v !== undefined))
+    throw new Usage(`--color, --tagline, --font, --shadow and --effect are for a banner: npx ascii.rest banner <text> --color ff6a00`);
   const fps = number("fps", values.fps, 60);
   const seconds = number("seconds", values.seconds);
+  if (positionals.length > 1) throw new Usage(`one piece at a time: npx ascii.rest <piece>`);
   if (positionals[0] === "list") return list();
 
   const slug = await find(positionals[0]);
@@ -134,6 +295,12 @@ async function main() {
   }
   if (played.interrupted) process.exitCode = 130;
 }
+
+// Piped into something that stops reading, `| head` say, the rest has nowhere to go: that is the end, not an error.
+process.stdout.on("error", (error: NodeJS.ErrnoException) => {
+  if (error.code === "EPIPE") process.exit(0);
+  throw error;
+});
 
 main().catch((error: unknown) => {
   // parseArgs reports a bad flag as a TypeError with a code; anything else is a real failure, shown with its stack.
