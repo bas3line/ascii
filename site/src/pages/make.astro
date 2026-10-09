@@ -10,16 +10,13 @@ import Layout from "../layouts/Layout.astro";
 import { glyphShapes } from "../lib/glyphs";
 import { REPO } from "../lib/library";
 import { LIMIT } from "../lib/logo";
+import { PAGES, pageCardOf } from "../lib/pages";
 
 // The characters' shapes, worked out here at build time; the drawing itself runs in the browser.
 const glyphs = await glyphShapes();
 ---
 
-<Layout
-  title="image to ascii · ascii.rest"
-  description="Turn any image, SVG, PNG, JPG, WebP or GIF, into an animated ascii logo in your browser: a piece for the library, an embed for any page, and SVGs for a README."
-  path="/make/"
->
+<Layout title={`${PAGES.make.title} · ascii.rest`} description={PAGES.make.description} path={PAGES.make.path} card={pageCardOf("make")}>
   <h1 slot="heading">image to ascii</h1>
 
   <p class="lede">
@@ -30,12 +27,12 @@ const glyphs = await glyphShapes();
   <p class="lede muted">It all happens in your browser. The file is never uploaded, and nothing is sent anywhere.</p>
 
   <section class="block maker" style="margin-top: 2rem" data-glyphs={JSON.stringify(glyphs)}>
-    <div class="well big drop" id="drop">
+    <div class="well big drop empty" id="drop" role="button" tabindex="0" aria-label="Choose an image, or drop one here">
       <div class="prompt" id="prompt">
         <p>drop an image here</p>
         <p class="muted">svg, png, jpg, webp or gif</p>
         <p class="muted">
-          or <button class="button" type="button" id="pick"><span>[pick a file]</span></button> or paste one
+          or <span class="button pick"><span>[pick a file]</span></span> or paste one
         </p>
       </div>
     </div>
@@ -160,6 +157,16 @@ const glyphs = await glyphShapes();
   .drop.over {
     outline: 1px dotted var(--ink);
     outline-offset: -0.75rem;
+  }
+
+  /* Empty, the well is a button that opens the file picker; once the art shows it is only the art. */
+  .drop.empty {
+    cursor: pointer;
+  }
+
+  .drop.empty:focus-visible {
+    outline: 1px dotted var(--ink);
+    outline-offset: 2px;
   }
 
   .status:empty {
@@ -429,6 +436,9 @@ const glyphs = await glyphShapes();
     $("embed-code").textContent = embed(drawing, s, mono);
     $("readme-code").textContent = picture(drawing, s);
     prompt.hidden = true;
+    // The art is showing: the well stops being a button, and [another image] is the way to start again.
+    drop.classList.remove("empty");
+    for (const a of ["role", "tabindex", "aria-label"]) drop.removeAttribute(a);
     $("facts").hidden = false;
     $("out").hidden = false;
     // A taken name matters most, since the piece can't be added under it; then the background left out, if any.
@@ -481,7 +491,16 @@ const glyphs = await glyphShapes();
 
   // --- in ---------------------------------------------------------------------
 
-  $("pick").addEventListener("click", () => picker.click());
+  // The empty well is the one control that opens the picker: on a click anywhere in it, [pick a file] included, which
+  // is only its words styled as a button, not a second control; and on Enter or Space while the well has focus.
+  drop.addEventListener("click", () => {
+    if (drop.classList.contains("empty")) picker.click();
+  });
+  drop.addEventListener("keydown", (e) => {
+    if (e.target !== drop || !drop.classList.contains("empty") || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault();
+    picker.click();
+  });
   $("again").addEventListener("click", () => picker.click());
   picker.addEventListener("change", () => {
     read(picker.files?.[0]);

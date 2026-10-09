@@ -15,6 +15,7 @@
 import { banner as letters, fonts, type FontName } from "ascii.rest/banner";
 import Layout from "../layouts/Layout.astro";
 import { groups } from "../lib/library";
+import { PAGES, pageCardOf } from "../lib/pages";
 import {
   EFFECTS,
   FILLS,
@@ -111,10 +112,10 @@ const ways = [
 ---
 
 <Layout
-  title="readme banners · ascii.rest"
-  description="Your name or your project's in animated ascii block letters, with any font, shadow, colour, tagline and logo, for a GitHub README, a web page or a terminal."
-  path="/banner/"
-  card={{ path: "/og/big-text.png", alt: "HELLO in ascii block letters with a line shadow, on ascii.rest, by @bas3line" }}
+  title={`${PAGES.banner.title} · ascii.rest`}
+  description={PAGES.banner.description}
+  path={PAGES.banner.path}
+  card={pageCardOf("banner")}
 >
   <h1 slot="heading">readme banners</h1>
 
