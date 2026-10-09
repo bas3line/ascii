@@ -6,6 +6,7 @@
  * another starts a README banner with it beside its name, and its video or
  * GIF from the downloads makes a post that moves.
  */
+import { clean } from "../lib/banner";
 import { LINKS, SITE, readmeUsage, type Piece } from "../lib/library";
 import { looping } from "../lib/svg";
 
@@ -22,6 +23,8 @@ const text = logo ? `${piece.name}, in animated ascii, for any page or README` :
 const x = `https://x.com/intent/tweet?${new URLSearchParams({ text, url, via })}`;
 const linkedin = `https://www.linkedin.com/sharing/share-offsite/?${new URLSearchParams({ url })}`;
 const id = `share-${piece.slug}`;
+// The banner says the piece's name, or its slug where the letters can't draw all of the name: "csharp", not "C" for C#.
+const named = clean(piece.name).toLowerCase() === piece.name.toLowerCase().trim().replace(/\s+/g, " ") ? piece.name : piece.slug;
 ---
 
 <p class="share">
@@ -30,7 +33,7 @@ const id = `share-${piece.slug}`;
   <a href={linkedin}>[post on linkedin]</a>
   <button class="button" type="button" data-copy={`${id}-link`} hidden><span>[copy link]</span></button>
   {readme && <button class="button" type="button" data-copy={`${id}-readme`} hidden><span>[copy readme snippet]</span></button>}
-  {readme && <a href={`/banner/?${new URLSearchParams({ text: piece.name, art: piece.slug, color: "art" })}`}>[make a banner with it]</a>}
+  {readme && <a href={`/banner/?${new URLSearchParams({ text: named, art: piece.slug, color: "art" })}`}>[make a banner with it]</a>}
 </p>
 <!-- What the buttons copy; shown, and selected, only when the browser won't copy it. -->
 <p id={`${id}-link`} class="fallback" hidden>{url}</p>

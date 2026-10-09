@@ -12,6 +12,8 @@ import { CHARS, MAX, artDark, banner, bannerPath, clean, read } from "./lib/bann
 
 interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
+  /** The deployed version (wrangler.jsonc's version_metadata), so a deploy starts each banner's cache afresh. */
+  CF_VERSION_METADATA?: { id: string };
 }
 
 interface Context {
@@ -50,9 +52,11 @@ async function draw(request: Request, url: URL, name: string, env: Env, ctx: Con
   if (!words) return refuse(404, `nothing to draw: a banner's text takes ${CHARS}`);
   if (words.length > MAX) return refuse(400, `a banner takes up to ${MAX} characters, and this one has ${words.length}`);
 
-  // One key for each banner, whatever else the URL carries or however it orders its query.
-  const key = new Request(new URL(bannerPath(words, dark, look), url).href);
-  const kept = await edge().match(key);
+  // One key for each banner, whatever else the URL carries or however it orders its query, and for each deploy: a
+  // banner drawn by an older one is not served after a fix to how they are drawn.
+  const key = new URL(bannerPath(words, dark, look), url);
+  key.searchParams.set("deploy", env.CF_VERSION_METADATA?.id ?? "");
+  const kept = await edge().match(key.href);
   if (kept) return request.method === "HEAD" ? new Response(null, kept) : kept;
 
   let art: string | null = null;
@@ -62,7 +66,7 @@ async function draw(request: Request, url: URL, name: string, env: Env, ctx: Con
     art = await found.text();
   }
   const response = new Response(banner(words, { dark, look, art })!.svg, { headers: HEADERS });
-  ctx.waitUntil(edge().put(key, response.clone()));
+  ctx.waitUntil(edge().put(key.href, response.clone()));
   return request.method === "HEAD" ? new Response(null, response) : response;
 }
 

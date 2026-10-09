@@ -25,6 +25,7 @@ export interface Item {
   description: string;
   files: { path: string; type: FileType; target: string; content: string }[];
   registryDependencies: string[];
+  dependencies?: string[];
   docs?: string;
 }
 
@@ -74,8 +75,12 @@ export const items: Item[] = [
   ),
   item("banner", "banner", "banner(): any text in block letters as a piece, every part of it an option.", [["src/banner.ts", src("banner.ts"), "registry:lib"]], ["core"]),
   item("svg", "svg", "svg() and bannerSvg(): any piece, or a banner with a tagline and a logo, as an animated SVG.", [["src/svg.ts", src("svg.ts"), "registry:lib"]], ["banner"]),
-  item("ascii", "Ascii", "<Ascii>: any piece in React and Next.js.", [["registry/ascii.tsx", reg("ascii.tsx"), "registry:component"]], ["core"]),
-  item("ascii-banner", "Banner", "<Banner>: any text in block letters in React and Next.js.", [["registry/ascii-banner.tsx", reg("ascii-banner.tsx"), "registry:component"]], ["ascii", "banner"]),
+  // The React components name react as an npm dependency, which a React project has already.
+  { ...item("ascii", "Ascii", "<Ascii>: any piece in React and Next.js.", [["registry/ascii.tsx", reg("ascii.tsx"), "registry:component"]], ["core"]), dependencies: ["react"] },
+  {
+    ...item("ascii-banner", "Banner", "<Banner>: any text in block letters in React and Next.js.", [["registry/ascii-banner.tsx", reg("ascii-banner.tsx"), "registry:component"]], ["ascii", "banner"]),
+    dependencies: ["react"],
+  },
   ...pieces.map((p) =>
     item(p.slug, p.name, `${p.note}.`, [[`src/pieces/${p.slug}.ts`, p.source, "registry:lib"]], /from "\.\.\/banner(\.ts)?"/.test(p.source) ? ["core", "banner"] : ["core"]),
   ),

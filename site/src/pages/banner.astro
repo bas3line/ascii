@@ -251,11 +251,13 @@ const ways = [
     cliBanner,
     hex,
     markdownBanner,
+    query as queryOf,
     reactBanner,
     read,
     readmeBanner,
     svgBanner,
     terminalBanner,
+    type Ink,
     type Look,
   } from "../lib/banner";
 
@@ -279,10 +281,24 @@ const ways = [
   const saves = [...document.querySelectorAll<HTMLButtonElement>("[data-save]")];
   const code = (id: string) => document.getElementById(id)!;
 
-  // The page's URL holds the banner's own query, with its text and whether the snippet is centred.
+  // The page's URL holds the banner's own query, with its text and whether the snippet is centred. A key it can't take
+  // is left out, and said so, rather than lose the rest: each is tried on top of the ones taken, color last, as
+  // color=art needs the art.
   const asked = new URLSearchParams(location.search);
-  const first = read(asked);
+  const taken = new URLSearchParams();
+  const wrong: string[] = [];
+  for (const [k, v] of [...asked].sort(([a], [b]) => Number(a === "color") - Number(b === "color"))) {
+    if (k === "text" || k === "center") continue;
+    const trial = new URLSearchParams(taken);
+    trial.append(k, v);
+    const r = read(trial);
+    if (typeof r === "string") wrong.push(r);
+    else taken.append(k, v);
+  }
+  const first = read(taken);
   const look: Look = typeof first === "string" ? { ...PLAIN } : first;
+  // Said with the first draw, then gone with the first change.
+  let linkNote = wrong.length ? `part of this link was left out: ${wrong.join("; ")}` : "";
   let centred = asked.get("center") === "1";
   if (asked.get("text")) input.value = asked.get("text")!.slice(0, input.maxLength);
   tagline.value = look.tagline;
@@ -303,11 +319,26 @@ const ways = [
       );
     return arts.get(key)!;
   };
-  // The art's own colour, as a terminal shows it: from its dark README SVG.
-  const artInk = async (slug: string) => {
-    const svg = await artOf(slug, true);
-    const part = svg && namespaced(svg, "");
-    return (part && inkOf(part)) || null;
+  // The art's own colour, for code, which has no art to take it from: from its light README SVG and its dark one, which
+  // differ for a logo in one ink, black on a light page and white on a dark one.
+  const artInk = async (slug: string): Promise<Ink> => {
+    const [light, dark] = await Promise.all(
+      [false, true].map(async (dark) => {
+        const svg = await artOf(slug, dark);
+        const part = svg && namespaced(svg, "");
+        return (part && inkOf(part)) || null;
+      }),
+    );
+    return light && dark ? { light, dark } : (dark ?? light);
+  };
+
+  // The page's URL: the banner's query, its text and whether the snippet is centred.
+  const remember = (text: string) => {
+    const q = new URLSearchParams(queryOf(look).slice(1));
+    if (text) q.set("text", text);
+    if (centred) q.set("center", "1");
+    const s = q.toString().replace(/%2C/g, ",");
+    history.replaceState(null, "", s ? `?${s}` : location.pathname);
   };
 
   const ways = ["banner-html", "banner-markdown", "banner-url", "banner-react", "banner-svg", "banner-terminal", "banner-cli"];
@@ -326,14 +357,16 @@ const ways = [
     look.tagline = cleanTagline(tagline.value);
     // what the font has no letter for, said once each
     const out = [...new Set([...input.value].filter((ch) => !/\s/.test(ch) && !clean(ch, look.font)))].join(" ");
-    left.textContent = out ? `left out: ${out}` : "";
+    left.textContent = [out && `left out: ${out}`, linkNote].filter(Boolean).join(". ");
+    linkNote = "";
     mark();
     ready(false);
     if (!text) {
-      // An empty banner: the previews and snippets go, rather than keep the last name.
+      // An empty banner: the previews and snippets go, rather than keep the last name, and so does the name in the URL.
       for (const img of images) img.hidden = true;
       for (const id of ways) code(id).textContent = "Type some letters or digits above.";
       for (const k of Object.keys(drawn)) delete drawn[k];
+      remember("");
       return;
     }
     const want = look.art;
@@ -361,10 +394,7 @@ const ways = [
     code("banner-svg").textContent = svgBanner(text, look);
     code("banner-terminal").textContent = terminalBanner(text, look, ink);
     code("banner-cli").textContent = cliBanner(text, look, ink);
-    const query = new URLSearchParams(bannerPath(text, false, look).split("?")[1] ?? "");
-    query.set("text", text);
-    if (centred) query.set("center", "1");
-    history.replaceState(null, "", `?${query.toString().replace(/%2C/g, ",")}`);
+    remember(text);
     ready(true);
   };
 

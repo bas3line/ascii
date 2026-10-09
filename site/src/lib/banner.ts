@@ -13,8 +13,8 @@ import { bannerSvg, darkColor } from "ascii.rest/svg";
 const SITE = "https://ascii.rest";
 
 /**
- * The most characters a banner holds: 20 of the widest, M, are 239 columns, about 1,200 pixels, and take the Worker
- * some 8 ms to draw, inside the 10 ms of CPU a request has on Workers Free.
+ * The most characters a banner holds: 20 of the widest, M, are 239 columns, about 1,200 pixels. Its CPU time, measured
+ * in Node, not on Workers, is under the 10 ms a request has on Workers Free; FPS keeps a slow one to the same work.
  */
 export const MAX = 20;
 /** The longest tagline, in characters. */
@@ -32,8 +32,13 @@ export const SHADOWS = [...(Object.keys(shadows) as ShadowName[]), "none"] as co
 export const FILLS = { shade: "▓", block: "█", light: "▒", hash: "#", at: "@" } as const;
 /** How fast it moves, as a URL takes it. */
 export const SPEEDS = { slow: 0.6, normal: 1, fast: 1.8 } as const;
-// Pixels a column, as a README shows it with no width of its own.
-const SCALE = { s: 3, m: 5, l: 8 };
+/**
+ * Frames a second its SVG is sampled at: a slow one fewer, so it has as many frames as a normal one, each held longer.
+ * Its loop is longer, and at 15 it would be that much bigger and slower to draw.
+ */
+export const FPS = { slow: 9, normal: 15, fast: 15 } as const;
+/** Pixels a column, as a README shows it with no width of its own. */
+export const SCALE = { s: 3, m: 5, l: 8 } as const;
 
 export interface Look {
   /** The letters' colour: GitHub's own (null), one colour, a fade of two or more, or the art's own colour. */
@@ -129,9 +134,14 @@ export function read(query: URLSearchParams): Look | string {
 /** The query for a look, in one order with the plain banner's choices left out, so each banner has one URL. */
 export function query(look: Look): string {
   const q: string[] = [];
-  // Brackets escaped too, so the URL can end a Markdown link; commas kept, for a fade's colours.
+  // Brackets escaped too, so the URL can end a Markdown link; commas kept in a fade's colours, and only there, as a
+  // browser drops a comma that ends a URL in a srcset, which a tagline's could.
   const put = (key: string, value: string) =>
-    q.push(`${key}=${encodeURIComponent(value).replace(/[()'*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`).replace(/%2C/g, ",")}`);
+    q.push(
+      `${key}=${encodeURIComponent(value)
+        .replace(/[()'*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)
+        .replace(/%2C/g, key === "color" ? "," : "%2C")}`,
+    );
   if (look.color) put("color", look.color === "art" ? "art" : look.color.map((c) => c.slice(1)).join(","));
   for (const key of ["effect", "speed", "font", "shadow", "fill"] as const) if (look[key] !== PLAIN[key]) put(key, look[key]);
   if (look.tagline) put("tagline", look.tagline);
@@ -178,15 +188,27 @@ export const markdownBanner = (text: string, look: Look = PLAIN) =>
 
 // In single quotes, which keep a shell's hands off ! and $; a quote in it ends them, is escaped and opens them again.
 const quoted = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
-// The letters' colours as code can take them: the art's own colour is resolved first, by whoever has the art's SVG.
-const colorsOf = (look: Look, ink?: string | null) => (look.color === "art" ? (ink ? [ink] : null) : look.color);
 
 /**
- * The command that shows a banner in a terminal: everything a terminal can show of it. `ink` is the art's own colour,
- * for a look that takes its colour from the art, since a terminal draws no art to take it from.
+ * The art's own colour, for a look that takes its colour from the art, since code draws no art to take it from: one,
+ * or one for each theme, as a logo in one ink has, black on a light page and white on a dark one.
  */
-export function terminalBanner(text: string, look: Look = PLAIN, ink?: string | null) {
-  const colors = colorsOf(look, ink);
+export type Ink = string | { light: string; dark: string } | null;
+// The letters' colours as code can take them: the art's own colour is resolved first, by whoever has the art's SVGs.
+const colorsOf = (look: Look, ink?: Ink): readonly string[] | { light: string; dark: string } | null => {
+  if (look.color !== "art") return look.color;
+  if (!ink) return null;
+  if (typeof ink === "string" || ink.light === ink.dark) return [typeof ink === "string" ? ink : ink.dark];
+  return ink;
+};
+
+/**
+ * The command that shows a banner in a terminal: everything a terminal can show of it. Of a colour for each theme, it
+ * takes the dark one, as most terminals are.
+ */
+export function terminalBanner(text: string, look: Look = PLAIN, ink?: Ink) {
+  const c = colorsOf(look, ink);
+  const colors = c && "light" in c ? [c.dark] : c;
   return (
     `npx ascii.rest banner ${quoted(clean(text, look.font))}` +
     (colors ? ` --color ${colors.map((c) => c.slice(1)).join(",")}` : "") +
@@ -198,10 +220,11 @@ export function terminalBanner(text: string, look: Look = PLAIN, ink?: string | 
 }
 
 // A banner's options, each a name and its value as code: only what differs from banner()'s own defaults.
-function options(look: Look, ink?: string | null): [string, string][] {
+function options(look: Look, ink?: Ink): [string, string][] {
   const colors = colorsOf(look, ink);
+  const code = (c: readonly string[]) => (c.length === 1 ? JSON.stringify(c[0]) : `[${c.map((v) => JSON.stringify(v)).join(", ")}]`);
   const list: [string, string | false][] = [
-    ["color", colors ? (colors.length === 1 ? JSON.stringify(colors[0]) : `[${colors.map((c) => JSON.stringify(c)).join(", ")}]`) : false],
+    ["color", colors ? ("light" in colors ? `{ light: ${JSON.stringify(colors.light)}, dark: ${JSON.stringify(colors.dark)} }` : code(colors)) : false],
     ["font", look.font !== PLAIN.font && JSON.stringify(look.font)],
     ["shadow", look.shadow !== PLAIN.shadow && JSON.stringify(look.shadow)],
     ["fill", look.fill !== PLAIN.fill && JSON.stringify(FILLS[look.fill])],
@@ -213,13 +236,13 @@ function options(look: Look, ink?: string | null): [string, string][] {
 const object = (list: [string, string][]) => (list.length ? `{ ${list.map(([k, v]) => `${k}: ${v}`).join(", ")} }` : "");
 
 /** The same in a CLI of your own, as it starts. */
-export function cliBanner(text: string, look: Look = PLAIN, ink?: string | null) {
+export function cliBanner(text: string, look: Look = PLAIN, ink?: Ink) {
   const o = object([...options(look, ink), ...(look.tagline ? [["tagline", JSON.stringify(look.tagline)] as [string, string]] : [])]);
   return [`import { banner } from "ascii.rest/terminal";`, ``, `await banner(${JSON.stringify(clean(text, look.font))}${o ? `, ${o}` : ""});`].join("\n");
 }
 
 /** The same on a page, in React or Next.js: each option a prop, a string as a string and anything else in braces. */
-export function reactBanner(text: string, look: Look = PLAIN, ink?: string | null) {
+export function reactBanner(text: string, look: Look = PLAIN, ink?: Ink) {
   const props = options(look, ink).map(([k, v]) => (v.startsWith('"') ? `${k}=${v}` : `${k}={${v}}`));
   return [`import { Banner } from "ascii.rest/react";`, ``, `<Banner text=${JSON.stringify(clean(text, look.font))}${props.length ? ` ${props.join(" ")}` : ""} />`].join("\n");
 }
@@ -233,6 +256,8 @@ export function svgBanner(text: string, look: Look = PLAIN) {
     ["art", Boolean(look.art) && camel(look.art)],
     ["place", Boolean(look.art) && look.place !== PLAIN.place && JSON.stringify(look.place)],
     ["background", Boolean(look.bg) && JSON.stringify(look.bg)],
+    ["scale", look.size !== PLAIN.size && String(SCALE[look.size])],
+    ["fps", FPS[look.speed] !== 15 && String(FPS[look.speed])],
   ];
   const o = object([...options(look), ...extra.filter((e): e is [string, string] => e[1] !== false)]);
   const art = look.art ? `import { ${camel(look.art)} } from "ascii.rest/pieces";\n` : "";
@@ -261,6 +286,7 @@ export function banner(text: string, { dark = false, look = PLAIN, art = null }:
     place: look.place,
     background: look.bg ?? undefined,
     scale: SCALE[look.size],
+    fps: FPS[look.speed],
   });
   return { svg, text: words };
 }
