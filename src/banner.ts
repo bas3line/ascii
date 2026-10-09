@@ -118,9 +118,15 @@ export interface BannerOptions {
   shadowColor?: Themed<string>;
   /** Blank cells around it: one number for every side, or [rows, columns]. */
   pad?: number | readonly [number, number];
-  /** A fixed size to centre it in, rather than its own; narrower pixels if it would not fit. */
+  /**
+   * A fixed size to centre it in, rather than its own, so `pad` does not apply: narrower pixels, a column at a time, if
+   * it would not fit, and cropped if it still would not.
+   */
   size?: { cols: number; rows: number };
-  /** The widest it may be: narrower pixels, then 1, when it would be wider. */
+  /**
+   * The widest it should be: narrower pixels, a column at a time, while it is wider. At one column a pixel it can still be
+   * wider; `size` crops to a width.
+   */
   max?: number;
   /** Its name, for screen readers and titles: the text by default. */
   name?: string;
@@ -142,7 +148,34 @@ const INK = { light: "#1f2328", dark: "#f0f6fc" };
 const QUIET = { light: "#59636e", dark: "#9198a1" };
 const HEX = /^#[0-9a-f]{6}$/i;
 
-const resolve = (font: BannerOptions["font"]): Font => (typeof font === "object" ? font : fonts[font ?? "block"] ?? fonts.block);
+function resolve(font: BannerOptions["font"]): Font {
+  if (font !== undefined && font !== null && typeof font === "object") return font;
+  const name = font ?? "block";
+  if (!Object.hasOwn(fonts, name)) throw new Error(`ascii.rest: there is no font named "${name}": there are ${Object.keys(fonts).join(" and ")}, or pass one of your own`);
+  return fonts[name as FontName];
+}
+
+// What a banner's options must be, each with the error that says so.
+const fail = (what: string) => {
+  throw new Error(`ascii.rest: ${what}`);
+};
+const whole = (v: unknown, name: string, least: number) =>
+  v === undefined || (Number.isInteger(v) && (v as number) >= least) ? (v as number | undefined) : fail(`${name} takes a whole number of ${least} or more, not ${String(v)}`);
+const positive = (v: unknown, name: string) =>
+  v === undefined || (typeof v === "number" && Number.isFinite(v) && v > 0) ? (v as number | undefined) : fail(`${name} takes a number above 0, not ${String(v)}`);
+// A character for the art: one, or `most` of them, none a control character.
+const chars = (v: unknown, name: string, most: number) => {
+  const check = (s: unknown) =>
+    typeof s === "string" && [...s].length >= 1 && [...s].length <= most && !/[\u0000-\u001f\u007f-\u009f]/.test(s)
+      ? s
+      : fail(`${name} takes ${most === 1 ? "one character" : "one or two characters"}, not ${JSON.stringify(s)}`);
+  if (v === undefined) return undefined;
+  if (typeof v === "object" && v !== null) {
+    const g = v as Grounds;
+    return { dark: g.dark === undefined ? undefined : check(g.dark), light: g.light === undefined ? undefined : check(g.light) };
+  }
+  return check(v);
+};
 
 /** The characters of a text that a font draws, in the case they came in; a banner leaves out the rest. */
 export function drawable(text: string, font: BannerOptions["font"] = "block"): string {
@@ -172,31 +205,45 @@ function fade(stops: readonly string[], n: number): string[] {
 const pick = <T>(themed: Themed<T> | undefined, theme: "light" | "dark"): T | undefined =>
   themed !== null && typeof themed === "object" && !Array.isArray(themed) ? (themed as { light?: T; dark?: T })[theme] : (themed as T | undefined);
 
-/** A banner of `text`, as a piece. It throws when the font draws none of the text. */
+/**
+ * A banner of `text`, as a piece. It throws, with a message that says what to change, when the font draws none of the
+ * text, and for an option it can't take: a font or shadow it doesn't know, a colour that isn't #rrggbb, a fill that
+ * isn't one character, a gap, pad or pixel that isn't a whole number, an effect that isn't glint, type or still.
+ */
 export function banner(text: string, options: BannerOptions = {}): BannerPiece {
   const font = resolve(options.font);
+  if (!drawable(text, font).trim()) fail(`the font draws none of "${text}"`);
   const glyphs = shapes(text, font);
-  if (!glyphs.length) throw new Error(`ascii.rest: the font draws none of "${text}"`);
-  const gap = options.gap ?? 2;
-  const shade = options.shadow === "none" ? null : (shadows[options.shadow as ShadowName] ?? options.shadow ?? shadows.double);
-  if (shade !== null && [...shade].length !== 16) throw new Error(`ascii.rest: a shadow takes 16 characters, not ${[...shade].length}`);
+  const effect = options.effect ?? "glint";
+  if (!["glint", "type", "still"].includes(effect)) fail(`effect takes "glint", "type" or "still", not ${JSON.stringify(effect)}`);
+  const gap = whole(options.gap, "gap", 0) ?? 2;
+  let shade: string | null = shadows.double;
+  if (options.shadow === "none") shade = null;
+  else if (options.shadow !== undefined) {
+    shade = Object.hasOwn(shadows, options.shadow) ? shadows[options.shadow as ShadowName] : options.shadow;
+    if (typeof shade !== "string" || [...shade].length !== 16 || /[\u0000-\u001f\u007f-\u009f]/.test(shade))
+      fail(`shadow takes ${[...Object.keys(shadows), "none"].join(", ")}, or 16 characters of your own, not ${JSON.stringify(options.shadow)}`);
+  }
   const joins = shade === null ? [] : [...shade];
   const h = font.height;
   // The letters' columns at s columns a pixel, the shadow's one included.
   const span = (s: number) => glyphs.reduce((w, g) => w + g[0].length * s, 0) + gap * (glyphs.length - 1) + (shade ? 1 : 0);
-  const [padY, padX] = typeof options.pad === "number" ? [options.pad, options.pad] : (options.pad ?? [0, 0]);
+  const pads: readonly unknown[] = typeof options.pad === "number" || options.pad === undefined ? [options.pad ?? 0, options.pad ?? 0] : options.pad;
+  const [padY, padX] = pads.map((p, i) => whole(p, i ? "pad's columns" : "pad", 0) ?? 0);
   const tall = h + (shade ? 1 : 0);
 
-  let s = Math.max(1, Math.round(options.pixel ?? 2));
+  let s = whole(options.pixel, "pixel", 1) ?? 2;
+  const max = positive(options.max, "max");
   let cols: number, rows: number, x0: number, y0: number;
   if (options.size) {
-    ({ cols, rows } = options.size);
-    // Square pixels while they leave a column each side; one column a pixel when they would not.
-    if (span(s) > cols - 2) s = 1;
+    cols = whole(options.size.cols, "size.cols", 1)!;
+    rows = whole(options.size.rows, "size.rows", 1)!;
+    // Narrower pixels, a column at a time, until they leave a column each side; at one column a pixel it is cropped.
+    while (s > 1 && span(s) > cols - 2) s--;
     x0 = Math.max(0, Math.floor((cols - span(s)) / 2));
     y0 = Math.floor((rows - tall) / 2);
   } else {
-    if (options.max !== undefined) while (s > 1 && span(s) + 2 * padX > options.max) s--;
+    if (max !== undefined) while (s > 1 && span(s) + 2 * padX > max) s--;
     cols = span(s) + 2 * padX;
     rows = tall + 2 * padY;
     x0 = padX;
@@ -237,21 +284,32 @@ export function banner(text: string, options: BannerOptions = {}): BannerPiece {
   // Characters, by ground.
   const both = (v: string | Grounds | undefined, dark: string, light: string) =>
     typeof v === "string" ? { dark: v, light: v } : { dark: v?.dark ?? dark, light: v?.light ?? light };
-  const fill = both(options.fill, "▓", "█");
+  const fill = both(chars(options.fill, "fill", 1), "▓", "█");
   const gl = options.glint ?? {};
-  const shine = both(gl.chars, "██", "▒▓");
-  const speed = options.speed && options.speed > 0 ? options.speed : 1;
-  const first = (gl.first ?? 0.5) / speed, sweep = (gl.sweep ?? 2.4) / speed, every = (gl.every ?? 3.2) / speed;
-  const width = gl.width ?? 2.4, slant = gl.slant ?? 1.2;
-  const effect = options.effect ?? "glint";
-  const step = (options.type?.step ?? 2 / 15) / speed;
+  const shine = both(chars(gl.chars, "glint.chars", 2), "██", "▒▓");
+  const speed = positive(options.speed, "speed") ?? 1;
+  const firstAt = gl.first ?? 0.5;
+  if (typeof firstAt !== "number" || !Number.isFinite(firstAt)) fail(`glint.first takes a number of seconds, not ${String(firstAt)}`);
+  const first = firstAt / speed, sweep = (positive(gl.sweep, "glint.sweep") ?? 2.4) / speed, every = (positive(gl.every, "glint.every") ?? 3.2) / speed;
+  const width = positive(gl.width, "glint.width") ?? 2.4;
+  const slant = gl.slant ?? 1.2;
+  if (typeof slant !== "number" || !Number.isFinite(slant)) fail(`glint.slant takes a number, not ${String(slant)}`);
+  const step = (positive(options.type?.step, "type.step") ?? 2 / 15) / speed;
+  // A moment the glint is out of sight: what a still shows and where an SVG's loop starts. 0 when it is out of sight
+  // then, as it is by default; else halfway through its rest; with no rest, a glint that comes round before it is
+  // across, the moment one starts.
+  const rest = every <= sweep ? first : ((-first % every) + every) % every >= sweep ? 0 : (first + sweep + (every - sweep) / 2) % every;
 
   // Typing: the columns up to the end of each letter's shadow, in turn.
   const ends: number[] = [];
   for (let i = 0, e = x0; i < glyphs.length; i++) ends.push((e += glyphs[i][0].length * s + (i ? gap : 0)) + (shade ? 1 : 0));
 
   // Colour: a palette of two halves, light then dark, each the shadow's colour then the letters' along their width.
-  const colored = options.color !== undefined || options.shadowColor !== undefined;
+  const colored = (options.color !== undefined && options.color !== null) || (options.shadowColor !== undefined && options.shadowColor !== null);
+  for (const theme of ["light", "dark"] as const) {
+    const c = pick(options.color ?? undefined, theme);
+    if (Array.isArray(c) && c.length === 0) fail("color takes a colour as #rrggbb, or two or more for a fade, not an empty list");
+  }
   const steps = (() => {
     const c = [pick(options.color, "light"), pick(options.color, "dark")];
     return c.some((v) => Array.isArray(v) && v.length > 1) ? Math.max(2, Math.min(30, cols)) : 1;
@@ -260,10 +318,10 @@ export function banner(text: string, options: BannerOptions = {}): BannerPiece {
   if (colored) {
     palette = [];
     for (const theme of ["light", "dark"] as const) {
-      const c = pick(options.color, theme);
-      const stops = c === undefined ? [INK[theme]] : typeof c === "string" ? [c] : [...c];
-      const quiet = pick(options.shadowColor, theme) ?? QUIET[theme];
-      for (const v of [...stops, quiet]) if (!HEX.test(v)) throw new Error(`ascii.rest: a colour takes #rrggbb, not "${v}"`);
+      const c = pick(options.color ?? undefined, theme);
+      const stops = c === undefined || c === null ? [INK[theme]] : typeof c === "string" ? [c] : Array.isArray(c) ? [...c] : fail(`a colour takes #rrggbb, not ${JSON.stringify(c)}`);
+      const quiet = pick(options.shadowColor ?? undefined, theme) ?? QUIET[theme];
+      for (const v of [...stops, quiet]) if (typeof v !== "string" || !HEX.test(v)) fail(`a colour takes #rrggbb, not ${JSON.stringify(v)}`);
       palette.push(quiet, ...fade(stops, steps));
     }
   }
@@ -276,7 +334,7 @@ export function banner(text: string, options: BannerOptions = {}): BannerPiece {
     const glinting = effect === "glint";
     let p = -99;
     if (glinting) {
-      // The glint crosses at an even pace, then rests out of sight. Frame 0 is at rest.
+      // The glint crosses at an even pace, then rests out of sight until it comes round again.
       const u = (((t - first) % every) + every) % every / sweep;
       if (u < 1) p = left + (right - left) * u;
     }
@@ -310,7 +368,7 @@ export function banner(text: string, options: BannerOptions = {}): BannerPiece {
 
   const motion =
     effect === "glint"
-      ? { seconds: every, from: 0, once: false, pass: [first, first + sweep] as const }
+      ? { seconds: every, from: rest, once: false, pass: [first, first + sweep] as const }
       : effect === "type"
         ? { seconds: step * ends.length + 4 / 15, from: 0, once: true }
         : { seconds: 0, from: 0, once: false };
@@ -324,8 +382,8 @@ export function banner(text: string, options: BannerOptions = {}): BannerPiece {
     fps: effect === "still" ? 0 : 24,
     ...(palette ? { palette } : {}),
     ...(effect === "glint" ? { loop: every } : {}),
-    // Held still, a typed banner shows every letter, not the first.
-    ...(effect === "type" ? { still: motion.seconds } : {}),
+    // Held still, a glinting banner shows its glint out of sight, and a typed one every letter, not the first.
+    ...(effect === "glint" && rest ? { still: rest } : effect === "type" ? { still: motion.seconds } : {}),
   };
   return { meta, default: (): Frame => frame, text: drawable(text, font), motion };
 }

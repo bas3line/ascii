@@ -61,11 +61,16 @@ const attr = (s: string) => esc(s).replace(/"/g, "&quot;");
 const xml = (s: string) =>
   s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f￾￿]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, "");
 
-/** Frames as a part, its classes and keyframes under `prefix`. A cell is `cell` widths tall: 2, or 1 for a square grid. */
+/**
+ * Frames as a part, its classes and keyframes under `prefix`. A cell is `cell` widths tall: 2, or 1 for a square grid.
+ * It throws for an `fps` that isn't 1 to 60.
+ */
 export function part({ cols, rows, palette, every, from: t0, at, once = false, fps = 15, cell = 2 }: Loop & { cell?: number }, prefix = ""): Part {
+  if (!(fps >= 1 && fps <= 60)) throw new Error(`ascii.rest: fps takes 1 to 60, not ${fps}`);
   const CH = CW * cell;
   const n = Math.max(1, Math.round(every * fps));
-  const shots = Array.from({ length: n }, (_, i) => at(t0 + i / fps));
+  // Played once, the last shot is at the end, so it holds what the end shows, however few frames a second.
+  const shots = Array.from({ length: n }, (_, i) => at(once && i === n - 1 ? t0 + every : t0 + i / fps));
   const same = (a: Shot, b: Shot) => a.text === b.text && a.color.every((v, i) => v === b.color[i]);
 
   // each distinct frame, with the slots it shows in
@@ -141,8 +146,10 @@ export function wrap({ width: w, height: h, css, body }: Part, label: string, sc
 }
 
 /**
- * An SVG that this module wrote, as a part again with its classes and keyframes under `prefix`, so it can sit beside
- * another: its size from its viewBox, its CSS without the rule all rows share, and its groups. Null for any other SVG.
+ * An SVG that this module wrote, as a part again with its classes, keyframes and gradient under `prefix`, so it can sit
+ * beside another: its size from its viewBox, its CSS without the rule all rows share, and its groups. Null for any other
+ * SVG. The same goes for two of these SVGs inlined in one HTML page: their classes are bare, f, k0, c1 and so on, and a
+ * page's styles reach every inline SVG on it, so give all but one a prefix.
  */
 export function namespaced(svg: string, prefix: string): Part | null {
   const box = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svg);
@@ -152,11 +159,13 @@ export function namespaced(svg: string, prefix: string): Part | null {
     .slice(MONO.length)
     .replace(/\.([ck]\d+|f)\{/g, `.${prefix}$1{`)
     .replace(/@keyframes k(\d+)/g, `@keyframes ${prefix}k$1`)
-    .replace(/animation-name:k(\d+)/g, `animation-name:${prefix}k$1`);
+    .replace(/animation-name:k(\d+)/g, `animation-name:${prefix}k$1`)
+    .replace(/url\(#g\)/g, `url(#${prefix}g)`);
   const body = svg
     .slice(style.index + style[0].length, svg.lastIndexOf("</svg>"))
     .replace(/class="f k(\d+)"/g, `class="${prefix}f ${prefix}k$1"`)
-    .replace(/class="c(\d+)"/g, `class="${prefix}c$1"`);
+    .replace(/class="c(\d+)"/g, `class="${prefix}c$1"`)
+    .replace(/<linearGradient id="g"/g, `<linearGradient id="${prefix}g"`);
   return { width: +box[1], height: +box[2], css, body };
 }
 
@@ -210,10 +219,21 @@ export interface SvgOptions {
 }
 
 const INK = { light: "#1f2328", dark: "#f0f6fc" };
+const HEX = /^#[0-9a-f]{6}$/i;
+// A colour or a size from a caller, checked before it is written into the SVG.
+const hex = (v: unknown, name: string) => {
+  if (v !== undefined && (typeof v !== "string" || !HEX.test(v))) throw new Error(`ascii.rest: ${name} takes a colour as #rrggbb, not ${JSON.stringify(v)}`);
+  return v as string | undefined;
+};
+const num = (v: unknown, name: string) => {
+  if (v !== undefined && (typeof v !== "number" || !Number.isFinite(v) || v < 0)) throw new Error(`ascii.rest: ${name} takes a number of 0 or more, not ${String(v)}`);
+  return v as number | undefined;
+};
 
 /** A piece as a part, in the colours of `dark` or light. */
 function pieceLoop(piece: Piece, o: SvgOptions): Loop {
   const { meta } = piece;
+  hex(o.ink, "ink");
   const options = { ...meta.options, ...o.options };
   const frame = piece.default(options);
   // One buffer for every frame, as a piece writes only its inked cells: the README SVGs have always been made this way.
@@ -233,9 +253,12 @@ function pieceLoop(piece: Piece, o: SvgOptions): Loop {
   };
 }
 
-/** A piece as an animated SVG. */
+/**
+ * A piece as an animated SVG. Its classes are bare, so to inline two in one HTML page, give one a prefix with
+ * namespaced(). It throws for an `ink` that isn't #rrggbb or an `fps` that isn't 1 to 60.
+ */
 export function svg(piece: Piece, options: SvgOptions = {}): string {
-  return wrap(part({ ...pieceLoop(piece, options), cell: piece.meta.cell ?? 2 }), options.label ?? `${piece.meta.name}, in ascii, from ascii.rest`, options.scale);
+  return wrap(part({ ...pieceLoop(piece, options), cell: piece.meta.cell ?? 2 }), options.label ?? `${piece.meta.name}, in ascii, from ascii.rest`, num(options.scale, "scale"));
 }
 
 export interface BannerSvgOptions {
@@ -276,7 +299,6 @@ export interface BannerSvgOptions {
 export type BannerSvgColor = BannerOptions["color"] | "art";
 
 const QUIET = { light: "#59636e", dark: "#9198a1" };
-const HEX = /^#[0-9a-f]{6}$/i;
 const themed = <T>(v: Themed<T> | undefined, dark: boolean): T | undefined =>
   v !== null && typeof v === "object" && !Array.isArray(v) ? (v as { light?: T; dark?: T })[dark ? "dark" : "light"] : (v as T | undefined);
 
@@ -286,19 +308,21 @@ export const darkColor = (hex: string) =>
 
 /**
  * A banner as an animated SVG, with a tagline under it, a piece beside or above it and a background if you like.
- * Without a colour it is in GitHub's own text colours for the theme. It throws when the font draws none of the text.
+ * Without a colour it is in GitHub's own text colours for the theme. It throws when banner() would, for a background or
+ * tagline colour that isn't #rrggbb, and for art as { svg } that ascii.rest/svg didn't write.
  */
 export function bannerSvg(text: string, options: Omit<BannerOptions, "color"> & { color?: BannerSvgColor } & BannerSvgOptions = {}): string {
   // On a background its colours follow the background, dark or light, not the page: a dark card on a light README
   // takes the dark ones.
-  const ground = themed(options.background, options.dark ?? false);
-  const dark = ground && HEX.test(ground) ? darkColor(ground) : (options.dark ?? false);
+  const ground = hex(themed(options.background, options.dark ?? false), "background");
+  const dark = ground ? darkColor(ground) : (options.dark ?? false);
   const theme = dark ? "dark" : "light";
-  const art = !options.art
-    ? null
-    : "svg" in options.art
-      ? namespaced(options.art.svg, "a")
-      : part({ ...pieceLoop(options.art, { dark }), cell: options.art.meta.cell ?? 2 }, "a");
+  for (const k of ["taglineSize", "spacing", "padding", "radius", "artSize"] as const) num(options[k], k);
+  let art: Part | null = null;
+  if (options.art && "svg" in options.art) {
+    art = namespaced(options.art.svg, "a");
+    if (!art) throw new Error("ascii.rest: art takes a piece, or { svg } of an SVG that ascii.rest/svg wrote");
+  } else if (options.art) art = part({ ...pieceLoop(options.art, { dark }), cell: options.art.meta.cell ?? 2 }, "a");
   // A still banner holds its art still too, on its first frame.
   if (art && options.effect === "still") art.css += `.af{animation:none}.ak0{opacity:1}`;
 
@@ -322,10 +346,17 @@ export function bannerSvg(text: string, options: Omit<BannerOptions, "color"> & 
   };
   const palette = meta.palette!.slice(dark ? meta.palette!.length / 2 : 0);
   if (fade) palette[1] = "url(#g)";
-  const letters = part({ cols: meta.cols, rows: meta.rows, palette, every: motion.seconds || 1, from: 0, at, once: motion.once, fps: options.fps });
+  const letters = part({ cols: meta.cols, rows: meta.rows, palette, every: motion.seconds || 1, from: motion.from, at, once: motion.once, fps: options.fps });
+  // The fade runs from the middle of the letters' first column to the middle of their last, as it does on a canvas:
+  // the columns of the cells a letter inks once they are all in.
+  let lo = meta.cols, hi = 0;
+  if (fade) {
+    const all = at(meta.still ?? motion.from);
+    for (let i = 0; i < all.color.length; i++) if (all.color[i]) (lo = Math.min(lo, i % meta.cols)), (hi = Math.max(hi, i % meta.cols));
+  }
   if (fade)
     letters.body =
-      `<defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${letters.width}" y2="0">` +
+      `<defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="${(lo + 0.5) * CW}" y1="0" x2="${(hi + 0.5) * CW}" y2="0">` +
       fade.map((c, i) => `<stop offset="${+(i / (fade.length - 1)).toFixed(3)}" stop-color="${c}"/>`).join("") +
       `</linearGradient></defs>${letters.body}`;
 
@@ -345,7 +376,7 @@ export function bannerSvg(text: string, options: Omit<BannerOptions, "color"> & 
       width: (chars.length + (moves ? 1 : 0)) * size * 0.6,
       height: tall,
       css:
-        `.st{font:${size}px ${FACES};fill:${themed(options.taglineColor, dark) ?? quiet}}` +
+        `.st{font:${size}px ${FACES};fill:${hex(themed(options.taglineColor, dark), "taglineColor") ?? quiet}}` +
         (moves
           ? `.st tspan{opacity:0;animation:si 1ms forwards}.st .sc{animation:sb 1.06s step-end infinite}@keyframes si{to{opacity:1}}@keyframes sb{0%{opacity:1}50%{opacity:0}}` +
             `@media (prefers-reduced-motion:reduce){.st tspan{animation:none;opacity:1}.st .sc{display:none}}`

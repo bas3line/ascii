@@ -84,7 +84,8 @@ export interface BannerProps extends BannerOptions {
 
 /**
  * <Banner>: any text as a banner, every option of banner() a prop. With no colour it is text in the element's own
- * colour; with one, a fade or one for each theme, it is drawn on a canvas.
+ * colour; with one, a fade or one for each theme, it is drawn on a canvas. Props banner() can't take render nothing,
+ * and the console says why.
  *
  *   <Banner text="hello" color={["#f97316", "#f778ba"]} shadow="rounded" effect="type" />
  */
@@ -95,7 +96,8 @@ export function Banner({ text, label, mono, fps, className, style, ...options }:
     const [t, o] = JSON.parse(key) as [string, BannerOptions];
     try {
       return banner(t, o);
-    } catch {
+    } catch (error) {
+      console.warn("<Banner> could not draw:", error);
       return null;
     }
   }, [key]);

@@ -33,7 +33,8 @@ export function Banner({ text, label, mono, fps, className, style, ...options }:
     const [t, o] = JSON.parse(key) as [string, BannerOptions];
     try {
       return banner(t, o);
-    } catch {
+    } catch (error) {
+      console.warn("<Banner> could not draw:", error);
       return null;
     }
   }, [key]);

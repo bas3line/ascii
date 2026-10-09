@@ -37,13 +37,24 @@ const STYLE =
 // On a server there is no HTMLElement to extend; the class is never used there.
 const Base = (typeof HTMLElement === "undefined" ? class {} : HTMLElement) as typeof HTMLElement;
 
+// One start for any number of changes in a row, such as every attribute's as the tag upgrades, a microtask later.
+const queued = new WeakSet<HTMLElement>();
+const soon = (el: HTMLElement, start: () => void) => {
+  if (queued.has(el)) return;
+  queued.add(el);
+  queueMicrotask(() => {
+    queued.delete(el);
+    if (el.isConnected) start();
+  });
+};
+
 export class AsciiArt extends Base {
   static observedAttributes = ["piece", "src", "fps", "options", "label", "mono"];
   #stop: (() => void) | null = null;
   #run = 0;
 
   connectedCallback() {
-    this.#start();
+    soon(this, () => this.#start());
   }
 
   disconnectedCallback() {
@@ -53,7 +64,7 @@ export class AsciiArt extends Base {
   }
 
   attributeChangedCallback() {
-    if (this.isConnected) this.#start();
+    if (this.isConnected) soon(this, () => this.#start());
   }
 
   async #start() {
@@ -91,14 +102,15 @@ export class AsciiArt extends Base {
  *   <ascii-banner text="hello" color="#f97316,#f778ba" shadow="rounded"></ascii-banner>
  *
  * Attributes: text; font, shadow, fill, effect and speed as banner() takes them; color, a colour or several for a
- * fade, comma separated; shadow-color; pixel and gap, numbers; options, JSON for any other option; label; mono.
+ * fade, comma separated; shadow-color; pixel and gap, numbers; options, JSON for any other option; label; mono. An
+ * empty attribute is as good as none. One banner() can't take draws nothing and says why in the console.
  */
 export class AsciiBanner extends Base {
   static observedAttributes = ["text", "font", "shadow", "fill", "effect", "speed", "color", "shadow-color", "pixel", "gap", "options", "label", "mono"];
   #stop: (() => void) | null = null;
 
   connectedCallback() {
-    this.#start();
+    soon(this, () => this.#start());
   }
 
   disconnectedCallback() {
@@ -107,11 +119,11 @@ export class AsciiBanner extends Base {
   }
 
   attributeChangedCallback() {
-    if (this.isConnected) this.#start();
+    if (this.isConnected) soon(this, () => this.#start());
   }
 
   #start() {
-    const get = (name: string) => this.getAttribute(name) ?? undefined;
+    const get = (name: string) => this.getAttribute(name)?.trim() || undefined;
     const num = (name: string) => (get(name) !== undefined && !Number.isNaN(+get(name)!) ? +get(name)! : undefined);
     const list = (v: string | undefined) => (v === undefined ? undefined : v.includes(",") ? v.split(",").map((c) => c.trim()) : v.trim());
     let piece: Piece;

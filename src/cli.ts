@@ -39,6 +39,7 @@ const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
   --dir <path>      where the files go: components/ascii, or src/components/ascii
                     when there is a src folder
   --overwrite       replace files that are already there
+  --registry <url>  another copy of the registry: https://ascii.rest/r
 
   -h, --help        this help
   -v, --version     the version
@@ -67,12 +68,24 @@ async function items(wanted: string[], registry: string): Promise<RegistryItem[]
   const visited = new Set<string>();
   const visit = async (ref: string) => {
     // A name, or an item's URL; ascii.rest's own follow --registry, so another copy of the registry serves them all.
-    const url = /^https?:\/\//.test(ref) ? ref.replace(/^https:\/\/ascii\.rest\/r(?=\/)/, registry) : `${registry}/${ref}.json`;
+    // As a URL resolves it, so r/../r/loop.json is r/loop.json.
+    let url: string;
+    try {
+      url = new URL(/^https?:\/\//.test(ref) ? ref.replace(/^https:\/\/ascii\.rest\/r(?=\/)/, registry) : `${registry}/${ref}.json`).href;
+    } catch {
+      throw new Usage(`"${clean(ref)}" is not a name or a URL to add`);
+    }
     if (visited.has(url)) return;
     visited.add(url);
     const res = await fetch(url);
-    if (!res.ok) throw new Usage(`there is no "${ref}" to add (${url} answered ${res.status}). npx ascii.rest list shows every piece.`);
-    const item = (await res.json()) as RegistryItem;
+    if (!res.ok) throw new Usage(`there is no "${clean(ref)}" to add (${clean(url)} answered ${res.status}). npx ascii.rest list shows every piece.`);
+    let item: RegistryItem;
+    try {
+      item = (await res.json()) as RegistryItem;
+    } catch {
+      throw new Usage(`${clean(url)} is not a registry item: it isn't JSON`);
+    }
+    if (typeof item !== "object" || item === null) throw new Usage(`${clean(url)} is not a registry item`);
     for (const dep of item.registryDependencies ?? []) await visit(dep);
     seen.set(url, item);
   };
@@ -87,18 +100,27 @@ async function add(wanted: string[], { dir, overwrite, registry }: { dir?: strin
   const all = await items(wanted, registry);
   const base = resolve(root, into);
   // Every file names its place under the components folder, @components/ascii/<path>, and must land inside it: a
-  // registry is someone else's JSON, and a path with .. in it, or an absolute one, is refused before anything is written.
-  const place = (file: { path: string; target?: string }) => {
-    const rest = (file.target ?? file.path).replace(/^@components\/ascii\//, "");
+  // registry is someone else's JSON, so a path with .. in it, an absolute one or one with a control character, content
+  // that isn't text and a dependency that isn't a package's name are each refused before anything is written.
+  const place = (file: { path: string; target?: string; content?: unknown }) => {
+    const named = file.target ?? file.path;
+    if (typeof named !== "string" || /[\u0000-\u001f\u007f-\u009f]/.test(named)) throw new Usage(`refusing a file named ${JSON.stringify(named)}`);
+    const rest = named.replace(/^@components\/ascii(\/|$)/, "");
     const path = resolve(base, rest);
-    if (isAbsolute(rest) || !path.startsWith(base + sep)) throw new Usage(`refusing "${file.target ?? file.path}": it would land outside ${into}`);
+    if (isAbsolute(rest) || !path.startsWith(base + sep)) throw new Usage(`refusing "${named}": it would land outside ${into}`);
+    if (file.content !== undefined && typeof file.content !== "string") throw new Usage(`refusing "${named}": its content isn't text`);
     return path;
   };
-  for (const item of all) for (const file of item.files ?? []) place(file);
-  const wrote: string[] = [], kept: string[] = [];
   const deps = new Set<string>();
   for (const item of all) {
-    item.dependencies?.forEach((d) => deps.add(d));
+    for (const file of item.files ?? []) place(file);
+    for (const d of item.dependencies ?? []) {
+      if (typeof d !== "string" || !/^(@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*(@[\w.^~-]+)?$/i.test(d)) throw new Usage(`refusing ${clean(item.name)}: ${JSON.stringify(d)} is not a package to install`);
+      deps.add(d);
+    }
+  }
+  const wrote: string[] = [], kept: string[] = [];
+  for (const item of all) {
     for (const file of item.files ?? []) {
       const path = place(file);
       if (existsSync(path) && !overwrite) {
@@ -120,6 +142,9 @@ async function add(wanted: string[], { dir, overwrite, registry }: { dir?: strin
 const ORDER: Category[] = ["scenes", "ui", "data", "type", "logos", "companies", "distros", "shapes", "space", "physics", "nature", "creatures", "objects", "generative", "effects"];
 
 class Usage extends Error {}
+
+// Someone else's text, without the control characters that would move a terminal's cursor or change its colours.
+const clean = (s: unknown) => String(s).replace(/[\u0000-\u001f\u007f-\u009f]/g, "?");
 
 const version = () => (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 
@@ -208,9 +233,12 @@ async function main() {
   });
   if (values.version) return void process.stdout.write(`${version()}\n`);
   if (values.help || !positionals.length) return void process.stdout.write(HELP);
-  const fps = number("fps", values.fps, 60);
   if (positionals[0] === "add") return add(positionals.slice(1), { dir: values.dir, overwrite: values.overwrite === true, registry: (values.registry ?? REGISTRY).replace(/\/$/, "") });
+  if ([values.dir, values.overwrite, values.registry].some((v) => v !== undefined))
+    throw new Usage(`--dir, --overwrite and --registry are for add: npx ascii.rest add donut --dir src/ascii`);
   if (positionals[0] === "banner") {
+    if (values.mono !== undefined || values.fps !== undefined)
+      throw new Usage(`--mono and --fps are for a piece: a banner has no colour unless you give it one, and moves for --seconds`);
     // the words after it, as the shell split them
     const text = positionals.slice(1).join(" ");
     // How long it moves: 0 prints it still, and it has to end.
@@ -240,6 +268,7 @@ async function main() {
   }
   if ([values.color, values.tagline, values.font, values.shadow, values.effect].some((v) => v !== undefined))
     throw new Usage(`--color, --tagline, --font, --shadow and --effect are for a banner: npx ascii.rest banner <text> --color ff6a00`);
+  const fps = number("fps", values.fps, 60);
   const seconds = number("seconds", values.seconds);
   if (positionals.length > 1) throw new Usage(`one piece at a time: npx ascii.rest <piece>`);
   if (positionals[0] === "list") return list();

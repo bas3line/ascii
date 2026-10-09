@@ -39,15 +39,16 @@ const sgr = (hex: string) => `\x1b[38;2;${parseInt(hex.slice(1, 3), 16)};${parse
  * Prints a banner, and its tagline under it, and resolves once it has moved. It prints from the cursor, which should be
  * at the start of a line: end any output before it with a newline, or its first row starts mid-line and moving it
  * writes over that line. Piped, it prints at once with no colour. With NO_COLOR set it has no colour but still moves.
- * A terminal too short to show it whole gets it still. It throws when the font draws none of the text, and when
- * `seconds` is not 0 or more.
+ * A terminal too short to show it whole gets it still, and one resized while it moves stops it where it is, as the
+ * rows may have wrapped. It throws when banner() would, and when `seconds` is not 0 or more.
  */
 export async function banner(text: string, { seconds = 1, tagline = "", light = false, out = process.stdout, ...options }: PrintOptions = {}): Promise<Bannered> {
   if (!Number.isFinite(seconds) || seconds < 0) throw new Error(`ascii.rest: seconds takes a number of 0 or more, not ${seconds}`);
   const words = drawable(text, options.font).trim().replace(/\s+/g, " ");
   if (!words) throw new Error(`ascii.rest: the font draws none of "${text}"`);
   const tty = out.isTTY === true;
-  const width = out.columns || 80;
+  // A column short of the width: a row that fills it leaves the cursor on its last column, and \x1b[K would clear it.
+  const width = (out.columns || 80) - 1;
   const piece = make(words, { ...options, max: width });
   const { meta, motion } = piece;
   const plain = !tty || Boolean(process.env.NO_COLOR);
@@ -58,16 +59,18 @@ export async function banner(text: string, { seconds = 1, tagline = "", light = 
   }
   const done: Bannered = { cols: meta.cols, rows: meta.rows, interrupted: false };
 
-  const frame = piece.default();
-  const { palette } = meta;
+  // Without colour, the same banner with one, only to tell its shadow from its letters: its characters are the same.
+  const colored = Boolean(meta.palette);
+  const sorter = colored ? piece : make(words, { ...options, max: width, color: "#000000" });
+  const frame = sorter.default();
+  const palette = sorter.meta.palette!;
   const color = new Uint8Array(meta.cols * meta.rows);
-  const base = palette && !light ? palette.length / 2 : 0;
+  const base = light ? 0 : palette.length / 2;
   // The shadow takes its own colour only when one was asked for; otherwise it is dimmed, as it is without colour.
-  const tinted = options.shadowColor !== undefined;
-  const ink = (c: string, k: number) => {
-    if (!palette) return /[─-╿]/.test(c) ? "\x1b[2m" : "";
+  const tinted = colored && options.shadowColor !== undefined;
+  const ink = (k: number) => {
     const i = color[k] - base;
-    return i === 0 ? (tinted ? sgr(palette[base]) : "\x1b[2m") : sgr(palette[base + i]);
+    return i === 0 ? (tinted ? sgr(palette[base]) : "\x1b[2m") : colored ? sgr(palette[base + i]) : "";
   };
   // Each line in runs of one ink, back to the terminal's own colours at its end.
   const paint = (lines: string[]) =>
@@ -76,7 +79,7 @@ export async function banner(text: string, { seconds = 1, tagline = "", light = 
       if (plain) return line;
       let s = "", state = "";
       [...line].forEach((c, x) => {
-        const next = c === " " ? state : ink(c, y * meta.cols + x);
+        const next = c === " " ? state : ink(y * meta.cols + x);
         if (next !== state) {
           s += (state ? "\x1b[0m" : "") + next;
           state = next;
@@ -87,10 +90,10 @@ export async function banner(text: string, { seconds = 1, tagline = "", light = 
     });
   const lines = (t: number) => {
     color.fill(0);
-    return paint(frame(t, { paper: light, color: palette ? color : undefined }).split("\n"));
+    return paint(frame(t, { paper: light, color }).split("\n"));
   };
   // Where it rests: the glint out of sight, every letter typed, or the still.
-  const rest = lines(motion.once ? motion.seconds : 0);
+  const rest = lines(meta.still ?? 0);
   // It moves in place by going back up over its own rows, so a terminal too short to show them all gets the still.
   const room = !out.rows || out.rows > meta.rows + 1;
   if (!tty || seconds === 0 || !(motion.seconds > 0) || !room) {
@@ -111,13 +114,15 @@ export async function banner(text: string, { seconds = 1, tagline = "", light = 
       shown = next;
     };
     const show = () => out.write(SHOW);
+    // An output it can't stop listening to doesn't get listened to, so the listener can't outlive the banner.
+    const listens = typeof out.on === "function" && typeof out.off === "function";
     const stop = (error?: { error: unknown }) => {
       if (over) return;
       over = true;
       clearInterval(timer);
       process.off("SIGINT", interrupt);
       process.off("exit", restore);
-      out.off?.("resize", resize);
+      if (listens) out.off!("resize", resize);
       try {
         // the tagline once it is done, so the redraws above have only the banner's rows to go back over
         if (!error) out.write(under);
@@ -149,7 +154,7 @@ export async function banner(text: string, { seconds = 1, tagline = "", light = 
     };
     process.on("SIGINT", interrupt);
     process.on("exit", restore);
-    out.on?.("resize", resize);
+    if (listens) out.on!("resize", resize);
     safely(() => out.write(HIDE + shown.map((line) => `${line}\n`).join("")));
     if (over) return;
     const start = performance.now();
