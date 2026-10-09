@@ -7,7 +7,7 @@ description: Add animated ascii art and text banners to any web page with one sc
 Add one script tag to an HTML page and you get two new tags. `<ascii-art>` plays a piece. `<ascii-banner>` draws your own text in big block letters.
 
 <figure class="video">
-  <video src="https://cdn.ascii.rest/videos/html.mp4" poster="https://cdn.ascii.rest/videos/html.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <video src="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/html.mp4" poster="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/html.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
   <figcaption>Both tags on a plain HTML page, with their attributes changed one at a time.</figcaption>
 </figure>
 

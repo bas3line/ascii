@@ -7,7 +7,7 @@ description: Get an animation on your page in under two minutes, with one script
 Pick the way that fits your project and follow its steps. Each one ends with something moving on your screen.
 
 <figure class="video">
-  <video src="https://cdn.ascii.rest/videos/quickstart.mp4" poster="https://cdn.ascii.rest/videos/quickstart.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <video src="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/quickstart.mp4" poster="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/quickstart.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
   <figcaption>One script tag on a plain page, then npm install and a banner in React.</figcaption>
 </figure>
 

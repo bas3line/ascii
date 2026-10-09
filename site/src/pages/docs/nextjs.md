@@ -7,7 +7,7 @@ description: Play pieces and banners on Next.js pages, with the app router or th
 You can play any piece and draw any banner on a Next.js page, with the app router or the pages router. You can also serve a banner as an SVG image from a route handler, or make SVG files when you build.
 
 <figure class="video">
-  <video src="https://cdn.ascii.rest/videos/react.mp4" poster="https://cdn.ascii.rest/videos/react.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <video src="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/react.mp4" poster="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/react.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
   <figcaption>A Next.js page playing a piece and a banner, with their props changed as it runs.</figcaption>
 </figure>
 

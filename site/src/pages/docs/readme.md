@@ -10,7 +10,7 @@ A GitHub README can't run scripts, so ascii.rest serves animated SVG images that
 - A **banner**: any text you like, in big block letters.
 
 <figure class="video">
-  <video src="https://cdn.ascii.rest/videos/banner-maker.mp4" poster="https://cdn.ascii.rest/videos/banner-maker.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <video src="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/banner-maker.mp4" poster="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/banner-maker.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
   <figcaption>The banner maker: typing a name, picking colours and a logo, copying the snippet, and the banner on GitHub.</figcaption>
 </figure>
 
@@ -59,6 +59,8 @@ Set `width` (or `height`) on the `<img>`. Without it, a logo shows at its full s
 You don't have to write this yourself. On every logo's page, the **readme** tab has the snippet, and **[copy readme snippet]** copies it. The snippet sets `width` to half the logo's full size.
 
 The library's other pieces, such as [donut](/donut/), have no hosted image: `https://ascii.rest/svg/donut.svg` returns 404. To put one of those in a README, [make the SVG yourself](#make-your-own-svg-and-commit-it).
+
+For your own logo, which isn't in the library, make the two SVGs on [image to ascii](/make/), then commit them next to your README. The [image to ascii docs](/docs/images/#add-it-to-a-github-readme) have the steps.
 
 ## Add a banner with any text
 

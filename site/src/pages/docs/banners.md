@@ -7,7 +7,7 @@ description: Draw any text in big block letters, then change its font, shadow, c
 A banner is any text you choose, drawn in big block letters with a drop shadow. By default it has a glint: a bright band that sweeps across the letters every few seconds. Every part of it is an option: the font, the shadow, the colours, the motion and the size.
 
 <figure class="video">
-  <video src="https://cdn.ascii.rest/videos/banners.mp4" poster="https://cdn.ascii.rest/videos/banners.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <video src="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/banners.mp4" poster="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/banners.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
   <figcaption>A banner's options changed one at a time: font, shadow, fill, colours, effect and speed.</figcaption>
 </figure>
 

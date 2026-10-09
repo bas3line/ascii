@@ -7,7 +7,7 @@ description: Write your own animation as a piece, then play it in React, on any 
 A **piece** is one animation, like `donut` or `rust`. You can write your own in a few lines of TypeScript. It then plays in React, on any web page, as an SVG and in a terminal, the same way the library's pieces do.
 
 <figure class="video">
-  <video src="https://cdn.ascii.rest/videos/pieces.mp4" poster="https://cdn.ascii.rest/videos/pieces.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <video src="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/pieces.mp4" poster="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/pieces.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
   <figcaption>Writing a new piece, orbit, and playing it.</figcaption>
 </figure>
 

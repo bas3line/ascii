@@ -7,7 +7,7 @@ description: Turn any piece, or a banner of your own text, into an animated SVG 
 `ascii.rest/svg` turns any piece, or a banner of your own text, into an animated SVG. The SVG plays where JavaScript can't run, like a GitHub README or an `<img>` tag.
 
 <figure class="video">
-  <video src="https://cdn.ascii.rest/videos/svg.mp4" poster="https://cdn.ascii.rest/videos/svg.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <video src="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/svg.mp4" poster="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/svg.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
   <figcaption>bannerSvg() in a Node script writes a file, and the README shows it.</figcaption>
 </figure>
 
