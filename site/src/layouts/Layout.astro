@@ -64,9 +64,8 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={image} />
     <meta name="twitter:image:alt" content={imageAlt} />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!-- The site's face, Paper Mono, served from here: every page uses it, so it is fetched at once. -->
+    <link rel="preload" href="/fonts/paper-mono.woff2" as="font" type="font/woff2" crossorigin />
     <slot name="head" />
   </head>
 

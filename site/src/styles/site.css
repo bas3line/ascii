@@ -1,11 +1,19 @@
 /*
- * ascii.rest: one monospace face, ink on a pale ground or the reverse, and a
- * sidebar index on wide screens. The art sits in the system monospace face.
- * Where that face lacks the box drawing and block glyphs (Android's has none),
- * they come from "ascii.rest mono", a 3 KB cut of JetBrains Mono (OFL) one
- * cell wide like the rest, so every row keeps its width. A browser fetches it
- * only when an earlier face lacks the glyph.
+ * ascii.rest: one monospace face, Paper Mono (paper.design/mono, OFL, served
+ * from /fonts), ink on a pale ground or the reverse, and a sidebar index on
+ * wide screens. The art sits in the system monospace face. Where that face
+ * lacks the box drawing and block glyphs (Android's has none), they come from
+ * "ascii.rest mono", a 3 KB cut of JetBrains Mono (OFL) one cell wide like the
+ * rest, so every row keeps its width. A browser fetches it only when an earlier
+ * face lacks the glyph.
  */
+
+@font-face {
+  font-family: "Paper Mono";
+  src: url("/fonts/paper-mono.woff2") format("woff2");
+  font-weight: 100 800;
+  font-display: swap;
+}
 
 @font-face {
   font-family: "ascii.rest mono";
@@ -21,6 +29,7 @@
   --muted: #5f6873;
   --well: #eceef0;
   --pad: 0.5ch;
+  --mono: "Paper Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --art: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "ascii.rest mono", monospace;
   color-scheme: light;
 }
@@ -61,7 +70,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 0.875rem;
   line-height: 1.65;
   font-variant-ligatures: none;
@@ -922,9 +931,9 @@ pre.code {
 }
 
 /*
- * The docs are read at length, so their prose is set for reading: IBM Plex Sans, the sans of the site's own mono, at
- * 16px with room between lines, and paragraphs no wider than about 70 characters. Headings, code, tables' first
- * column and the sidebar stay in the mono, so code reads as code.
+ * The docs are read at length, so their prose is set for reading: IBM Plex Sans at 16px with room between lines, and
+ * paragraphs no wider than about 70 characters. Headings, code, tables' first column and the sidebar stay in the
+ * site's mono, Paper Mono, so code reads as code.
  */
 .docs {
   --read: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -968,7 +977,7 @@ pre.code {
 
 .docs h2,
 .docs h3 {
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--mono);
   line-height: 1.4;
 }
 
@@ -1019,7 +1028,7 @@ pre.code {
 
 .docs li::marker {
   color: var(--muted);
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--mono);
 }
 
 .docs a {
@@ -1035,7 +1044,7 @@ pre.code {
   padding: 0.1em 0.35em;
   background: var(--well);
   color: var(--ink);
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 0.875em;
   overflow-wrap: anywhere;
 }
@@ -1055,7 +1064,7 @@ pre.code {
   overflow-x: auto;
   background: var(--well);
   color: var(--text);
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 0.8125rem;
   line-height: 1.6;
   tab-size: 2;
@@ -1070,7 +1079,7 @@ pre.code {
   position: absolute;
   top: 1rem;
   right: 2ch;
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 0.8125rem;
   line-height: 1.6;
 }
@@ -1093,7 +1102,7 @@ pre.code {
 
 .docs th {
   color: var(--ink);
-  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 0.875rem;
   font-weight: 500;
 }

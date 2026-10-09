@@ -323,6 +323,7 @@ New pieces, fixes and ideas are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) cove
 Special thanks to:
 
 - [Greptile](https://www.greptile.com), for reviewing ascii.rest's pull requests for free, as it does for open-source projects.
+- [Paper](https://paper.design), for [Paper Mono](https://paper.design/mono), the typeface the [ascii.rest](https://ascii.rest) site is set in, free under the [SIL Open Font License](https://github.com/paper-design/paper-mono/blob/main/OFL.txt).
 
 ## Author
 
