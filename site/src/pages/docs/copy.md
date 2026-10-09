@@ -7,7 +7,7 @@ description: Copy the TypeScript of any piece, the banner or the React component
 You can copy ascii.rest's source into your project instead of installing it from npm. The files become yours: change any line, and nothing updates unless you ask.
 
 <figure class="video">
-  <video src="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/copy.mp4" poster="https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/copy.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <video src="https://cdn.ascii.rest/videos/copy.mp4" poster="https://cdn.ascii.rest/videos/copy.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
   <figcaption>Adding a piece with shadcn and with npx ascii.rest add, then using and changing the copied files.</figcaption>
 </figure>
 
