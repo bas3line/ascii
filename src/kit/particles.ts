@@ -23,9 +23,9 @@
  *     sway: 1, glyphs: "*+'.", colors: ["#fde047", "#f97316", "#7f1d1d"],
  *   });
  *
- *   // A word that bursts apart every 3 seconds, each letter flying as itself.
+ *   // A word that holds for a second, then blows apart, each letter flying as itself.
  *   export default particles({ name: "boom", period: 3 }, {
- *     emitter: { text: "BOOM" }, burst: { every: 3 }, speed: [6, 14], gravity: 12, life: 3,
+ *     emitter: { text: "BOOM" }, burst: { every: 3 }, hold: 1, speed: [6, 14], gravity: 12, life: 3,
  *   });
  *
  * Units. Positions (an emitter's, a particle's x and y, `floor`) are columns
