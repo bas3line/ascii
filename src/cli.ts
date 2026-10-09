@@ -2,30 +2,35 @@
 /*
  * npx ascii.rest <piece>: plays a piece in the terminal until a key is pressed.
  * npx ascii.rest list: every piece's name, by category.
+ * npx ascii.rest banner <text>: the text in block letters, with a passing glint.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  */
 import { readFileSync } from "node:fs";
 import process from "node:process";
 import { parseArgs } from "node:util";
 import { isPiece, load, names, type PieceName } from "./library.ts";
-import { play, still } from "./terminal.ts";
+import { drawable } from "./pieces/big-text.ts";
+import { banner, play, still } from "./terminal.ts";
 import type { Category } from "./types.ts";
 
 const HELP = `ascii.rest: animated ascii art, in your terminal.
 
-  npx ascii.rest <piece>     plays a piece until you press a key
-  npx ascii.rest list        every piece, by category
+  npx ascii.rest <piece>          plays a piece until you press a key
+  npx ascii.rest list             every piece, by category
+  npx ascii.rest banner <text>    your text in block letters, with a glint
 
   --mono          a coloured piece in the terminal's own colour
   --light         for a light terminal: the light colours, and shading flipped
   --fps <n>       frames a second, instead of the piece's own
-  --seconds <n>   stops after n seconds
+  --seconds <n>   stops after n seconds; for a banner, how long its glint takes
+  --color <hex>   a banner's letters in this colour, like ff6a00
   -h, --help      this help
   -v, --version   the version
 
   npx ascii.rest rust
   npx ascii.rest night-coast --seconds 10
   npx ascii.rest donut --light
+  npx ascii.rest banner 'my cli' --color ff6a00
 
 Every piece, on a page: https://ascii.rest
 `;
@@ -108,15 +113,27 @@ async function main() {
       light: { type: "boolean" },
       fps: { type: "string" },
       seconds: { type: "string" },
+      color: { type: "string" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
     },
   });
   if (values.version) return void process.stdout.write(`${version()}\n`);
   if (values.help || !positionals.length) return void process.stdout.write(HELP);
-  if (positionals.length > 1) throw new Usage(`one piece at a time: npx ascii.rest <piece>`);
   const fps = number("fps", values.fps, 60);
   const seconds = number("seconds", values.seconds);
+  if (positionals[0] === "banner") {
+    // the words after it, as the shell split them
+    const text = positionals.slice(1).join(" ");
+    if (!drawable(text).trim()) throw new Usage(`a banner takes letters, digits, spaces and . , ! ? ' : - + = / _: npx ascii.rest banner 'my cli'`);
+    const color = values.color?.replace(/^#/, "");
+    if (color !== undefined && !/^[0-9a-f]{6}$/i.test(color)) throw new Usage(`--color takes six hex digits, like ff6a00, not "${values.color}"`);
+    const { interrupted } = await banner(text, { seconds, light: values.light === true, color: color && `#${color}` });
+    if (interrupted) process.exitCode = 130;
+    return;
+  }
+  if (values.color !== undefined) throw new Usage(`--color is for a banner: npx ascii.rest banner <text> --color ff6a00`);
+  if (positionals.length > 1) throw new Usage(`one piece at a time: npx ascii.rest <piece>`);
   if (positionals[0] === "list") return list();
 
   const slug = await find(positionals[0]);

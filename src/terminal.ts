@@ -410,3 +410,6 @@ export async function play(
     if (seconds !== undefined && seconds * 1000 < 2 ** 31) end = setTimeout(() => stop(), Math.max(0, seconds * 1000));
   });
 }
+
+// A text in block letters, printed where the cursor is: a CLI's name as it starts.
+export { banner, type BannerOptions, type Bannered } from "./banner.ts";

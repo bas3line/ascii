@@ -103,12 +103,28 @@ A README runs no script, so every logo, company and distro also comes as an anim
 
 GitHub shows the dark one in its dark theme. Each piece's page on ascii.rest has its snippet under `readme`.
 
+### Banners
+
+Your name, or your project's, in [big text](https://ascii.rest/big-text/)'s block letters with a glint that passes now and then, sized to the text:
+
+```html
+<a href="https://ascii.rest/banner/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://ascii.rest/banner/my-project.dark.svg">
+    <img alt="my-project" src="https://ascii.rest/banner/my-project.svg">
+  </picture>
+</a>
+```
+
+The URL is the banner: `https://ascii.rest/banner/<text>.svg`, and `.dark.svg` for GitHub's dark theme. It takes up to 20 characters, letters, digits, spaces and `. , ! ? ' : - + = / _`, drawn in capitals, in GitHub's own text colour; `?color=ff6a00` colours the letters. [ascii.rest/banner](https://ascii.rest/banner/) makes one as you type and gives the snippet.
+
 ## In a terminal
 
 ```sh
 npx ascii.rest rust                        # plays until you press a key
 npx ascii.rest night-coast --seconds 10
 npx ascii.rest list                        # every piece's name, by category
+npx ascii.rest banner 'my cli'             # your text in block letters
 ```
 
 The logos, companies, distros and scenes play in their own colours, in 24-bit colour. A scene is shrunk to fit the terminal, whatever its size, and drawn in tones, two of its rows in each of the terminal's as half blocks, so the dots it is made of blend as they do on a page. `--mono` draws a coloured piece in the terminal's own colour, for a terminal without 24-bit colour, and `--light` takes the colours meant for a light background. `--fps` and `--seconds` set the speed and the length. The piece plays centred; any other piece wider or taller than the terminal shows only its middle, and it says so when it stops. Piped or redirected, it prints its first frame as text.
@@ -134,6 +150,25 @@ if (interrupted) process.exit(130);
 | `out` | where it draws: `process.stdout` by default |
 
 It resolves with `{ interrupted, cropped, piece, terminal }`: `cropped` is true when the terminal was smaller than the piece, whose size and the terminal's are in `piece` and `terminal`.
+
+### As a banner
+
+```ts
+import { banner } from "ascii.rest/terminal";
+
+await banner("my-cli", { color: "#ff6a00" });
+```
+
+`banner(text, options?)` prints the text in [big text](https://ascii.rest/big-text/)'s block letters where the cursor is, lets the glint pass once and resolves, leaving the banner in the scrollback with the rest of your output, unlike `play()`, which takes over the screen. It is sized to the text, with narrower letters if the terminal is too narrow for square ones and the plain text if it is too narrow for those. Piped, it prints the banner with no colour and resolves at once; `NO_COLOR` leaves out the colours too. `npx ascii.rest banner <text>` takes the same options as `--seconds`, `--color` and `--light`.
+
+| option | |
+| --- | --- |
+| `seconds` | how long the glint takes to pass; 1 by default, 0 prints it still |
+| `color` | the letters' colour as `#rrggbb`; the terminal's own by default, and the shadow is dimmed |
+| `light` | for a light terminal: solid letters that the glint lightens |
+| `out` | where it prints: `process.stdout` by default |
+
+It resolves with `{ cols, rows, interrupted }`: the banner's size, 0 by 0 if it printed the plain text, and `interrupted` if Ctrl+C stopped the glint.
 
 ## TypeScript, anywhere
 
