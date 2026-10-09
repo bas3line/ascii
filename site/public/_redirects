@@ -16,6 +16,20 @@
 /getting-started/ /docs/ 301
 /install /docs/install/ 301
 /install/ /docs/install/ 301
+/quickstart /docs/quickstart/ 301
+/quickstart/ /docs/quickstart/ 301
+/quick-start /docs/quickstart/ 301
+/quick-start/ /docs/quickstart/ 301
+/docs/quick-start /docs/quickstart/ 301
+/docs/quick-start/ /docs/quickstart/ 301
+/examples /docs/examples/ 301
+/examples/ /docs/examples/ 301
+/faq /docs/faq/ 301
+/faq/ /docs/faq/ 301
+/help /docs/faq/ 301
+/help/ /docs/faq/ 301
+/docs/questions /docs/faq/ 301
+/docs/questions/ /docs/faq/ 301
 /api /docs/api/ 301
 /api/ /docs/api/ 301
 /reference /docs/api/ 301
@@ -47,15 +61,24 @@
 /docs/banner /docs/banners/ 301
 /docs/banner/ /docs/banners/ 301
 /docs/html-tag /docs/html/ 301
+/docs/html-tag/ /docs/html/ 301
 /docs/web-components /docs/html/ 301
+/docs/web-components/ /docs/html/ 301
 /docs/vanilla /docs/typescript/ 301
+/docs/vanilla/ /docs/typescript/ 301
 /docs/javascript /docs/typescript/ 301
+/docs/javascript/ /docs/typescript/ 301
 /docs/contract /docs/pieces/ 301
+/docs/contract/ /docs/pieces/ 301
 /docs/custom /docs/pieces/ 301
+/docs/custom/ /docs/pieces/ 301
 /banners /banner/ 301
 /banners/ /banner/ 301
 
 # Elsewhere.
 /npm https://www.npmjs.com/package/ascii.rest 302
+/npm/ https://www.npmjs.com/package/ascii.rest 302
 /github https://github.com/bas3line/ascii 302
+/github/ https://github.com/bas3line/ascii 302
 /source https://github.com/bas3line/ascii 302
+/source/ https://github.com/bas3line/ascii 302

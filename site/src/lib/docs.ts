@@ -8,7 +8,9 @@ export const DOCS = [
     label: "start",
     pages: [
       { href: "/docs/", title: "introduction" },
+      { href: "/docs/quickstart/", title: "quick start" },
       { href: "/docs/install/", title: "install" },
+      { href: "/docs/examples/", title: "examples" },
     ],
   },
   {
@@ -37,6 +39,7 @@ export const DOCS = [
     pages: [
       { href: "/docs/api/", title: "api" },
       { href: "/docs/cli/", title: "cli" },
+      { href: "/docs/faq/", title: "questions" },
     ],
   },
 ] as const;
