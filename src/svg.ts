@@ -230,21 +230,29 @@ const num = (v: unknown, name: string) => {
   return v as number | undefined;
 };
 
-/** A piece as a part, in the colours of `dark` or light. */
+// Whether a CSS colour, #rrggbb or rgb(), is dark: the test mount() makes of a piece's ground.
+const isDark = (css: string) => {
+  const c = css[0] === "#" ? [1, 3, 5].map((i) => parseInt(css.slice(i, i + 2), 16)) : (css.match(/[\d.]+/g) || []).map(Number);
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] < 128;
+};
+
+/** A piece as a part, in the colours of `dark` or light, or of its own ground where it has one. */
 function pieceLoop(piece: Piece, o: SvgOptions): Loop {
   const { meta } = piece;
   hex(o.ink, "ink");
+  // On its own ground it is drawn for that ground, as mount() draws it, whatever the page.
+  const dark = meta.ground ? isDark(meta.ground) : !!o.dark;
   const options = { ...meta.options, ...o.options };
   const frame = piece.default(options);
   // One buffer for every frame, as a piece writes only its inked cells: the README SVGs have always been made this way.
   const color = new Uint8Array(meta.cols * meta.rows);
-  const at = (t: number) => ({ text: frame(t, { paper: !o.dark, color: meta.palette ? color : undefined }), color: color.slice() });
+  const at = (t: number) => ({ text: frame(t, { paper: !dark, color: meta.palette ? color : undefined }), color: color.slice() });
   const loop = loopOf(piece, options);
   const every = o.seconds ?? loop.every;
   return {
     cols: meta.cols,
     rows: meta.rows,
-    palette: meta.palette ?? [o.ink ?? INK[o.dark ? "dark" : "light"]],
+    palette: meta.palette ?? [o.ink ?? INK[dark ? "dark" : "light"]],
     every: every > 0 ? every : 1,
     from: o.from ?? loop.from,
     at: every > 0 ? at : () => at(o.from ?? 0),

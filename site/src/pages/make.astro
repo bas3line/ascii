@@ -353,14 +353,21 @@ const glyphs = await glyphShapes();
     if (!named && ext.test(from)) nameInput.value = clean(from.replace(ext, "").replace(/[-_]+/g, " ")) || "my logo";
   };
 
-  async function take(markup: string, from: string) {
+  // Each image taken gets the next number; a read that finishes after a newer one began is dropped, so the last image
+  // chosen is the one shown, however long each takes to decode.
+  let reading = 0;
+
+  async function take(markup: string, from: string, mine = ++reading) {
     say("drawing it");
+    let next: Source;
     try {
-      src = await render(markup);
+      next = await render(markup);
     } catch (error) {
-      say((error as Error).message);
+      if (mine === reading) say((error as Error).message);
       return;
     }
+    if (mine !== reading) return;
+    src = next;
     image = null;
     file = from;
     nameFrom(from);
@@ -369,14 +376,17 @@ const glyphs = await glyphShapes();
   }
 
   // Any other image: drawn, its plain background left out unless the reader keeps it.
-  async function takeImage(blob: Blob, from: string) {
+  async function takeImage(blob: Blob, from: string, mine = ++reading) {
     say("drawing it");
+    let next: Source;
     try {
-      src = await raster(blob, { keepGround });
+      next = await raster(blob, { keepGround });
     } catch (error) {
-      say((error as Error).message);
+      if (mine === reading) say((error as Error).message);
       return;
     }
+    if (mine !== reading) return;
+    src = next;
     image = blob;
     file = from;
     nameFrom(from);
@@ -455,16 +465,18 @@ const glyphs = await glyphShapes();
 
   async function read(f: File | undefined) {
     if (!f) return;
+    // Its number is taken now, before the file is read, so a big SVG still being read can't win over a later image.
+    const mine = ++reading;
     // An SVG is read as markup; anything else as an image, which the browser decodes.
     const svg = isSvg(f) || (!f.type && /^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/i.test(await f.slice(0, 512).text()));
     if (svg) {
       if (f.size > 4_000_000) return say("that svg is over 4 MB, which is a lot for a logo");
-      return take(await f.text(), f.name);
+      return take(await f.text(), f.name, mine);
     }
     if (f.size > 40_000_000) return say("that image is over 40 MB: try a smaller one");
     if (f.type && !f.type.startsWith("image/")) return say("that is not an image: try an svg, png, jpg, webp or gif");
     keepGround = false;
-    takeImage(f, f.name);
+    takeImage(f, f.name, mine);
   }
 
   // --- in ---------------------------------------------------------------------
