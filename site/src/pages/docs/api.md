@@ -182,9 +182,9 @@ Returns the characters of `text` that the font can draw, in the case you gave th
 
 ### fonts
 
-`const fonts: { block: Font; slim: Font }`
+`const fonts: { block: Font; slim: Font; tall: Font; bold: Font; round: Font; wide: Font; mixed: Font; italic: Font }`
 
-The two built-in fonts. Both are five rows tall. Most `block` letters are four or five pixels wide. `slim` letters are three.
+The eight built-in fonts. `block`, `slim`, `wide` and `italic` are five rows tall, `round` six, `tall` and `bold` seven, and `mixed` nine. `mixed` is `cased`, so it draws lower case too. Each one is shown on [banners](/docs/banners/#change-the-font).
 
 ### shadows
 
@@ -199,7 +199,7 @@ The built-in shadow styles, `double`, `single`, `heavy`, `rounded` and `ascii`. 
 | `BannerOptions` | Every option of `banner()`: `font`, `pixel`, `gap`, `shadow`, `fill`, `effect`, `speed`, `glint`, `type`, `color`, `shadowColor`, `pad`, `size`, `max` and `name`. Each is explained on [banners](/docs/banners/#options). |
 | `BannerPiece` | A `Piece` with two more fields: `text`, the characters it drew, and `motion`, `{ seconds, from, once, pass? }`. See [BannerPiece motion](#bannerpiece-motion). |
 | `Font` | A pixel font of your own: `{ height: number; glyphs: Record<string, string>; cased?: boolean }`. Each glyph is its rows joined by a pipe character, with `#` for a pixel. Without `cased`, text is drawn in capitals. |
-| `FontName` | `"block"` or `"slim"`. |
+| `FontName` | `"block"`, `"slim"`, `"tall"`, `"bold"`, `"round"`, `"wide"`, `"mixed"` or `"italic"`. |
 | `ShadowName` | `"double"`, `"single"`, `"heavy"`, `"rounded"` or `"ascii"`. |
 | `Effect` | How a banner moves: `"glint"`, `"type"` or `"still"`. |
 | `Colors` | One colour as `#rrggbb`, or an array of two or more for a fade: `string` or `readonly string[]`. |

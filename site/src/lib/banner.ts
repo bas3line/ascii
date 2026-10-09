@@ -14,8 +14,8 @@ import { bannerSvg, darkColor } from "ascii.rest/svg";
 const SITE = "https://ascii.rest";
 
 /**
- * The most characters a banner holds: 20 of the widest, M, are 239 columns, about 1,200 pixels, and some 5 ms of CPU
- * to draw, measured in Node; FPS keeps a slow one to the same work.
+ * The most characters a banner holds: 20 of the widest, bold's M, are 359 columns, about 1,800 pixels, and some 9 ms of
+ * CPU to draw, measured in Node; FPS keeps a slow one to the same work.
  */
 export const MAX = 20;
 /** The longest tagline, in characters. */

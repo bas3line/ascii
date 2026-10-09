@@ -197,7 +197,7 @@ The text above is the shape it leaves behind. In your terminal the letters fade 
 
 - Every word after `banner` is part of the text, so `banner my cli` and `banner 'my cli'` print the same.
 - Quote the text when it has characters your shell reads, like `!` or `$`. Single quotes are the safest. Use double quotes for text with an apostrophe.
-- The letters cover A to Z, digits, spaces and `. , ! ? ' : - + = / _`. Lower case prints as capitals.
+- The letters cover A to Z, digits, spaces and `. , ! ? ' : - + = / _`. Lower case prints as capitals, except with `--font mixed`.
 - Other characters are left out. If nothing is left, it stops with an error and exit code 1. No text, or only spaces, gets the same error:
 
 ```text
@@ -210,7 +210,7 @@ ascii.rest: a banner takes letters, digits, spaces and . , ! ? ' : - + = / _: np
 | --- | --- | --- |
 | `--color <hex>` | colours the letters. One colour is six hex digits, like `ff6a00`. Two or more, comma separated, like `ff6a00,f778ba`, fade from one to the next. A `#` in front is fine. | no colour: your terminal's text colour, with the shadow dimmed |
 | `--tagline <text>` | prints a dimmed line under the banner | no tagline |
-| `--font <name>` | the letters: `block` or `slim` | `block` |
+| `--font <name>` | the letters: `block`, `slim`, `tall`, `bold`, `round`, `wide`, `mixed` or `italic` | `block` |
 | `--shadow <name>` | the lines of the drop shadow: `double`, `single`, `heavy`, `rounded`, `ascii` or `none` | `double` |
 | `--effect <name>` | how it moves: `glint` (a bright band sweeps across once), `type` (the letters type in) or `still` (no motion) | `glint` |
 | `--seconds <n>` | how long the glint or the typing takes. `0` prints it at once, still. Takes any number of 0 or more. | `1` |

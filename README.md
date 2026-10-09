@@ -132,14 +132,14 @@ Your name, or your project's, in [big text](https://ascii.rest/big-text/)'s bloc
 </a>
 ```
 
-The URL is the banner: `https://ascii.rest/banner/<text>.svg`, and `.dark.svg` for GitHub's dark theme. It takes up to 20 characters, letters, digits, spaces and `. , ! ? ' : - + = / _`, drawn in capitals, in GitHub's own text colour. The query carries the rest:
+The URL is the banner: `https://ascii.rest/banner/<text>.svg`, and `.dark.svg` for GitHub's dark theme. It takes up to 20 characters, letters, digits, spaces and `. , ! ? ' : - + = / _`, drawn in capitals unless the font is `mixed`, in GitHub's own text colour. The query carries the rest:
 
 | query | |
 | --- | --- |
 | `color` | the letters' colour, `ff6a00`; more for a fade, `ff6a00,f778ba`; or `art`, the art's own colour |
 | `effect` | `glint` by default, a glint every few seconds; `type`, the letters type in once and stay; `still` |
 | `speed` | `slow`, `normal` or `fast` |
-| `font` | `block` by default, or `slim` |
+| `font` | `block` by default, `slim`, `tall`, `bold`, `round`, `wide`, `mixed` (lower case too) or `italic` |
 | `shadow` | `double` by default, `single`, `heavy`, `rounded`, `ascii` or `none` |
 | `fill` | the letters' character: `shade` by default, `block`, `light`, `hash` or `at` |
 | `tagline` | a line under the letters, typed out, up to 60 characters |

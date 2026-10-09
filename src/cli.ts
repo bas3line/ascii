@@ -15,6 +15,8 @@ import { isPiece, load, names, type PieceName } from "./library.ts";
 import { banner, play, still } from "./terminal.ts";
 import type { Category } from "./types.ts";
 
+const or = (words: string[]) => (words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : words[0]);
+
 const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
 
   npx ascii.rest <piece>          plays a piece until you press a key
@@ -31,7 +33,7 @@ const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
   --color <hex>     its letters in this colour, like ff6a00, or two or more
                     for a fade, like ff6a00,f778ba
   --tagline <s>     a line under it
-  --font <name>     ${Object.keys(fonts).join(" or ")}
+  --font <name>     ${or(Object.keys(fonts))}
   --shadow <name>   ${[...Object.keys(shadows), "none"].join(", ")}
   --effect <name>   glint, type or still
 
@@ -175,8 +177,6 @@ function distance(a: string, b: string) {
     }
   return d[a.length][b.length];
 }
-
-const or = (words: string[]) => (words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : words[0]);
 
 // A piece by its file name, or by the name it shows: "night coast", "c++", "newton's cradle".
 async function find(wanted: string): Promise<PieceName> {

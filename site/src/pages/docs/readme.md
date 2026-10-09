@@ -82,7 +82,7 @@ What the text can hold:
 
 - Up to 20 characters.
 - Letters, digits, spaces, and these marks: `. , ! ? ' : - + = / _`
-- Letters are always drawn as capitals.
+- Letters are drawn as capitals, except with `font=mixed`, which keeps lower case.
 - Any other character is left out. If nothing is left to draw, the URL returns 404.
 - Write the text the way a URL needs it: a space is `%20` and a comma is `%2C`. JavaScript's `encodeURIComponent()` does this for you.
 
@@ -108,7 +108,7 @@ Every key a banner URL takes:
 | `color` | The letters' colour. Two or more colours make a fade from the first to the last. `art` uses the main colour of the logo you set with `art`. | Six hex digits, without `#`: `f97316`. Up to eight, separated by commas: `f97316,f778ba`. Or `art`. | GitHub's text colour |
 | `effect` | How it moves. | `glint`: a bright band, the glint, sweeps across the letters every few seconds. `type`: the letters type in once, then stay. `still`: no motion. | `glint` |
 | `speed` | How fast it moves. | `slow`, `normal`, `fast`. `slow` is 0.6 times as fast as `normal`, and `fast` is 1.8 times. | `normal` |
-| `font` | The shape of the letters. | `block`: wide letters, most of them 8 or 10 columns. `slim`: narrow letters, every one 6 columns. | `block` |
+| `font` | The shape of the letters. Each one is shown on [banners](/docs/banners/#change-the-font). | `block`: most letters 8 or 10 columns, 5 rows. `slim`: narrow letters, every one 6 columns. `tall`: 10 columns, 7 rows, thin strokes. `bold`: most 12 columns, 7 rows, heavy strokes. `round`: 10 columns, 6 rows, rounded corners. `wide`: 12 or 14 columns. `mixed`: capitals and lower case, 9 rows. `italic`: letters that lean right. | `block` |
 | `shadow` | The lines of the drop shadow. | `double` (║ ═), `single` (│ ─), `heavy` (┃ ━), `rounded` (╭ ╯), `ascii` (\| - +), `none` | `double` |
 | `fill` | The character the letters are made of. | `shade`: ▓ in the dark theme, █ in the light theme. `block`: █. `light`: ▒. `hash`: #. `at`: @. | `shade` |
 | `tagline` | A line of plain text under the letters. It types out one character at a time, then a cursor blinks after it. With `effect=still`, it shows at once, with no cursor. | Any text, up to 60 characters. | none |
@@ -121,7 +121,7 @@ A few rules:
 
 - Leave a key out to keep its default.
 - Write a space in the tagline as `%20` and a comma as `%2C`. The commas between colours stay as plain commas.
-- A value the URL can't take returns 400 with one line that says what it takes, for example `font takes block, slim`.
+- A value the URL can't take returns 400 with one line that says what it takes, for example `effect takes glint, type, still`.
 - A key the URL doesn't know is ignored. A misspelt key gives you the default, not an error.
 
 More examples, each with its URL:
@@ -320,7 +320,7 @@ Open the image's URL in a browser tab. If a banner URL is wrong, it answers with
 
 | you see | why | fix |
 | --- | --- | --- |
-| 400 `font takes block, slim` (or another key) | A value the URL can't take. | Use one of the values in [the table](#change-how-a-banner-looks). |
+| 400 `effect takes glint, type, still` (or another key) | A value the URL can't take. | Use one of the values in [the table](#change-how-a-banner-looks). |
 | 400 `a banner takes up to 20 characters` | The text is too long. | Shorten it. |
 | 400 `a tagline takes up to 60 characters` | The tagline is too long. | Shorten it. |
 | 400 `there is no logo, company or distro called ...` or `art takes the name of a logo ...` | `art` isn't the name of a logo image. Use the piece's name, with dashes: `arch-linux`. | Use a name from [the logo images](#add-a-logo). |

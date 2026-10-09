@@ -12,6 +12,7 @@
  * the page's URL, as they do in the banner's, so a banner can be linked to.
  * Without script the form stays hidden and the page shows its own banner.
  */
+import { banner as letters, fonts, type FontName } from "ascii.rest/banner";
 import Layout from "../layouts/Layout.astro";
 import { groups } from "../lib/library";
 import {
@@ -58,9 +59,22 @@ const chip = (value: string) => {
   const stops = value.split(",");
   return stops.length > 1 ? `background: linear-gradient(90deg, ${stops.join(", ")})` : `background: ${value}`;
 };
-// The rows of choices that are one word each: the look's key, its label, and each value with its name.
-const ROWS: { key: keyof Look; label: string; values: { value: string; name: string }[] }[] = [
-  { key: "font", label: "font", values: FONTS.map((f) => ({ value: f, name: f })) },
+// A font's name in its own letters, small: its pixels, one cell each with no shadow, as an SVG path a run of them a
+// row, in the button's colour. Drawn once here, not the banner's text on every key.
+const sample = (font: FontName) => {
+  const piece = letters(font, { font, pixel: 1, gap: 1, shadow: "none", effect: "still" });
+  const lines = piece.default()(0).split("\n");
+  const d = lines.flatMap((line, y) => [...line.matchAll(/[^ ]+/g)].map((m) => `M${m.index} ${y}h${m[0].length}v1h-${m[0].length}z`)).join("");
+  return { cols: piece.meta.cols, rows: piece.meta.rows, d };
+};
+// Pixels of the screen a pixel of a font's sample takes: at 2, italic's lean blurs into noise.
+const DOT = 3;
+// The fonts that draw lower case too, rather than every letter as a capital.
+const cased = FONTS.filter((f) => "cased" in fonts[f] && fonts[f].cased);
+// The rows of choices that are one word each: the look's key, its label, and each value with its name, the fonts with
+// their samples.
+const ROWS: { key: keyof Look; label: string; values: { value: string; name: string; sample?: ReturnType<typeof sample> }[] }[] = [
+  { key: "font", label: "font", values: FONTS.map((f) => ({ value: f, name: f, sample: sample(f) })) },
   { key: "shadow", label: "shadow", values: SHADOWS.map((s) => ({ value: s, name: s })) },
   { key: "fill", label: "letters", values: Object.entries(FILLS).map(([k, v]) => ({ value: k, name: `${v} ${k}` })) },
   { key: "effect", label: "motion", values: EFFECTS.map((e) => ({ value: e, name: e === "type" ? "type in" : e })) },
@@ -149,11 +163,21 @@ const ways = [
     {ROWS.map((row) => (
       <p class="field" role="group" aria-label={row.label}>
         <span class="label">{row.label}</span>
-        {row.values.map((v) => (
-          <button class="button pick" type="button" data-set={row.key} data-value={v.value} aria-pressed={String(look[row.key] === v.value)}>
-            <span>{v.name}</span>
-          </button>
-        ))}
+        {row.values.map((v) =>
+          v.sample ? (
+            <button class="button pick sample" type="button" data-set={row.key} data-value={v.value} aria-pressed={String(look[row.key] === v.value)} aria-label={v.name} title={v.name}>
+              <span>
+                <svg width={v.sample.cols * DOT} height={v.sample.rows * DOT} viewBox={`0 0 ${v.sample.cols} ${v.sample.rows}`} fill="currentColor" shape-rendering="crispEdges" aria-hidden="true">
+                  <path d={v.sample.d} />
+                </svg>
+              </span>
+            </button>
+          ) : (
+            <button class="button pick" type="button" data-set={row.key} data-value={v.value} aria-pressed={String(look[row.key] === v.value)}>
+              <span>{v.name}</span>
+            </button>
+          ),
+        )}
       </p>
     ))}
     <p class="field">
@@ -231,7 +255,7 @@ const ways = [
     </div>
     <p class="muted note">
       The URL is the banner: <code>https://ascii.rest/banner/&lt;text&gt;.svg</code>, and <code>.dark.svg</code> for
-      GitHub's dark theme. Up to {MAX} characters: letters, digits, spaces and <code>{MARKS}</code>, in capitals. The query
+      GitHub's dark theme. Up to {MAX} characters: letters, digits, spaces and <code>{MARKS}</code>, in capitals{cased.length ? `, or as you type them in ${cased.join(" and ")}` : ""}. The query
       carries the rest, and <a href="/docs/readme/#change-how-a-banner-looks">the docs</a> list every key. React, the SVG from your own code and
       the terminal take each choice as an option, and many more: see <a href="/docs/banners/">banner()</a> and
       <a href="/docs/svg/">bannerSvg()</a>. Anyone who prefers reduced motion gets it still.
@@ -606,6 +630,11 @@ const ways = [
   .pick.on > span::before,
   .pick.on > span::after {
     visibility: visible;
+  }
+
+  /* A font's sample sits where its name would, in the button's colour. */
+  .pick.sample svg {
+    display: block;
   }
 
   .pick:disabled {

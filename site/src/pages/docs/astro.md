@@ -95,7 +95,7 @@ The second, third and fourth lines draw these:
 <div class="demo"><ascii-banner text="hello" font="slim" shadow="none"></ascii-banner></div>
 <div class="demo"><ascii-banner text="hello" color="#f97316,#f778ba"></ascii-banner></div>
 
-The text can use the letters A to Z, the digits 0 to 9, spaces, and `. , ! ? ' : - + = / _`. Lower case letters are drawn as capitals. Any other character is left out. If none of your text can be drawn, Astro prints this error, and `astro build` stops:
+The text can use the letters A to Z, the digits 0 to 9, spaces, and `. , ! ? ' : - + = / _`. Lower case letters are drawn as capitals, except in the `mixed` font. Any other character is left out. If none of your text can be drawn, Astro prints this error, and `astro build` stops:
 
 ```text
 ascii.rest: the font draws none of "日本"

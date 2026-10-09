@@ -109,8 +109,8 @@ These are all the attributes `<ascii-banner>` takes:
 
 | attribute | what it does | default |
 | --- | --- | --- |
-| `text` | The text to draw. Lower case letters are drawn as capitals. | none |
-| `font` | The letters: `block`, or `slim` for narrower ones. | `block` |
+| `text` | The text to draw. Lower case letters are drawn as capitals, except in the `mixed` font. | none |
+| `font` | The letters: `block`, `slim`, `tall`, `bold`, `round`, `wide`, `mixed` or `italic`. [banners](/docs/banners/#change-the-font) shows each one. | `block` |
 | `shadow` | The drop shadow's lines: `double`, `single`, `heavy`, `rounded`, `ascii`, `none`, or 16 characters of your own. | `double` |
 | `fill` | The one character the letters are made of, like `#`. | `▓` on a dark page, `█` on a light one |
 | `effect` | How it moves: `glint` (the glint sweeps across now and then), `type` (the letters type in one at a time, then stay) or `still`. | `glint` |

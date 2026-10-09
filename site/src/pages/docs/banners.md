@@ -99,7 +99,7 @@ Every option is optional. With none, you get the block font, a double-line shado
 
 | option | what it does | default |
 | --- | --- | --- |
-| `font` | the letters: `"block"`, `"slim"`, or [a font of your own](#use-a-font-of-your-own) | `"block"` |
+| `font` | the letters: `"block"`, `"slim"`, `"tall"`, `"bold"`, `"round"`, `"wide"`, `"mixed"`, `"italic"`, or [a font of your own](#use-a-font-of-your-own). See [change the font](#change-the-font) | `"block"` |
 | `shadow` | the shadow's line style: `"double"`, `"single"`, `"heavy"`, `"rounded"`, `"ascii"`, `"none"`, or [16 characters of your own](#draw-the-shadow-with-your-own-characters) | `"double"` |
 | `fill` | the one character the letters are drawn with, or `{ dark, light }` for each kind of page | `"▓"` on a dark page, `"█"` on a light one |
 | `color` | the letters' colour: one `#rrggbb`, a list of them for a fade, or `{ light, dark }` | none: the page's text colour |
@@ -144,18 +144,137 @@ A README URL takes a few named choices, not every option. [github readme](/docs/
 
 ## Change the font
 
-Two fonts are built in: `block`, the default, and `slim`, which is narrower. Both are five rows tall. Both draw the letters A to Z, the digits 0 to 9, spaces, and `. , ! ? ' : - + = / _`.
+Eight fonts are built in. `block` is the default.
+
+| font | rows | its letters |
+| --- | --- | --- |
+| `block` | 5 | four or five pixels wide |
+| `slim` | 5 | three pixels wide, so a banner is narrower |
+| `tall` | 7 | five pixels wide in thin strokes, like a dot-matrix display |
+| `bold` | 7 | six pixels wide on two-pixel stems, the heaviest |
+| `round` | 6 | five pixels wide, with their corners rounded off |
+| `wide` | 5 | six or seven pixels wide, the widest |
+| `mixed` | 9 | capitals and lower case, with room for the tails of g, j, p, q and y |
+| `italic` | 5 | capitals that lean right |
+
+Every font draws the letters A to Z, the digits 0 to 9, spaces, and `. , ! ? ' : - + = / _`. `mixed` draws lower case too. The others draw every letter as a capital. A character the font doesn't have is left out.
+
+Pick one with `font`:
 
 ```ts
 import { banner } from "ascii.rest/banner";
 
-banner("block");
-banner("slim", { font: "slim" });
+banner("hello", { font: "tall" });
+banner("Hello", { font: "mixed" });
 ```
 
-<div class="demo" style="gap: 1rem"><ascii-banner text="block"></ascii-banner><ascii-banner text="slim" font="slim"></ascii-banner></div>
+The same name works everywhere:
 
-The built-in fonts draw every letter as a capital. A character the font doesn't have is left out.
+- In React and Astro, `<Banner text="hello" font="tall" />`. In HTML, `<ascii-banner text="hello" font="tall"></ascii-banner>`.
+- In a README banner's URL, `?font=tall`: `https://ascii.rest/banner/hello.svg?font=tall`.
+- In the [banner maker](/banner/), the font row. Each font there shows its name in its own letters.
+- In a terminal, `npx ascii.rest banner hello --font tall`.
+
+<div class="demo" style="gap: 1rem"><ascii-banner text="block"></ascii-banner><ascii-banner text="slim" font="slim"></ascii-banner><ascii-banner text="tall" font="tall"></ascii-banner><ascii-banner text="bold" font="bold"></ascii-banner><ascii-banner text="round" font="round"></ascii-banner><ascii-banner text="wide" font="wide"></ascii-banner><ascii-banner text="Mixed" font="mixed"></ascii-banner><ascii-banner text="italic" font="italic"></ascii-banner></div>
+
+Here is each font's name in it, as `banner(name, { font: name }).default()(0)` prints it.
+
+`block`:
+
+```text
+▓▓▓▓▓▓╗   ▓▓╗         ▓▓▓▓╗     ▓▓▓▓▓▓╗ ▓▓╗   ▓▓╗
+▓▓╔═══▓▓╗ ▓▓║       ▓▓╔═══▓▓╗ ▓▓╔═════╝ ▓▓║ ▓▓╔═╝
+▓▓▓▓▓▓╔═╝ ▓▓║       ▓▓║   ▓▓║ ▓▓║       ▓▓▓▓╔═╝
+▓▓╔═══▓▓╗ ▓▓║       ▓▓║   ▓▓║ ▓▓║       ▓▓╔═▓▓╗
+▓▓▓▓▓▓╔═╝ ▓▓▓▓▓▓▓▓╗ ╚═▓▓▓▓╔═╝ ╚═▓▓▓▓▓▓╗ ▓▓║ ╚═▓▓╗
+╚═════╝   ╚═══════╝   ╚═══╝     ╚═════╝ ╚═╝   ╚═╝
+```
+
+`slim`:
+
+```text
+  ▓▓▓▓╗ ▓▓╗     ▓▓▓▓▓▓╗ ▓▓╗ ▓▓╗
+▓▓╔═══╝ ▓▓║     ╚═▓▓╔═╝ ▓▓▓▓▓▓║
+╚═▓▓╗   ▓▓║       ▓▓║   ▓▓╔═▓▓║
+  ╚═▓▓╗ ▓▓║       ▓▓║   ▓▓║ ▓▓║
+▓▓▓▓╔═╝ ▓▓▓▓▓▓╗ ▓▓▓▓▓▓╗ ▓▓║ ▓▓║
+╚═══╝   ╚═════╝ ╚═════╝ ╚═╝ ╚═╝
+```
+
+`tall`:
+
+```text
+▓▓▓▓▓▓▓▓▓▓╗   ▓▓▓▓▓▓╗   ▓▓╗         ▓▓╗
+╚═══▓▓╔═══╝ ▓▓╔═════▓▓╗ ▓▓║         ▓▓║
+    ▓▓║     ▓▓║     ▓▓║ ▓▓║         ▓▓║
+    ▓▓║     ▓▓▓▓▓▓▓▓▓▓║ ▓▓║         ▓▓║
+    ▓▓║     ▓▓╔═════▓▓║ ▓▓║         ▓▓║
+    ▓▓║     ▓▓║     ▓▓║ ▓▓║         ▓▓║
+    ▓▓║     ▓▓║     ▓▓║ ▓▓▓▓▓▓▓▓▓▓╗ ▓▓▓▓▓▓▓▓▓▓╗
+    ╚═╝     ╚═╝     ╚═╝ ╚═════════╝ ╚═════════╝
+```
+
+`bold`:
+
+```text
+▓▓▓▓▓▓▓▓▓▓╗     ▓▓▓▓▓▓▓▓╗   ▓▓▓▓╗         ▓▓▓▓▓▓▓▓╗
+▓▓▓▓╔═══▓▓▓▓╗ ▓▓▓▓╔═══▓▓▓▓╗ ▓▓▓▓║         ▓▓▓▓╔═▓▓▓▓╗
+▓▓▓▓║   ▓▓▓▓║ ▓▓▓▓║   ▓▓▓▓║ ▓▓▓▓║         ▓▓▓▓║ ╚═▓▓▓▓╗
+▓▓▓▓▓▓▓▓▓▓╔═╝ ▓▓▓▓║   ▓▓▓▓║ ▓▓▓▓║         ▓▓▓▓║   ▓▓▓▓║
+▓▓▓▓╔═══▓▓▓▓╗ ▓▓▓▓║   ▓▓▓▓║ ▓▓▓▓║         ▓▓▓▓║   ▓▓▓▓║
+▓▓▓▓║   ▓▓▓▓║ ▓▓▓▓║   ▓▓▓▓║ ▓▓▓▓║         ▓▓▓▓║ ▓▓▓▓╔═╝
+▓▓▓▓▓▓▓▓▓▓╔═╝ ╚═▓▓▓▓▓▓▓▓╔═╝ ▓▓▓▓▓▓▓▓▓▓▓▓╗ ▓▓▓▓▓▓▓▓╔═╝
+╚═════════╝     ╚═══════╝   ╚═══════════╝ ╚═══════╝
+```
+
+`round`:
+
+```text
+  ▓▓▓▓▓▓╗     ▓▓▓▓▓▓╗   ▓▓╗     ▓▓╗ ▓▓╗     ▓▓╗ ▓▓▓▓▓▓╗
+▓▓╔═════▓▓╗ ▓▓╔═════▓▓╗ ▓▓║     ▓▓║ ▓▓▓▓╗   ▓▓║ ▓▓╔═══▓▓╗
+▓▓║   ▓▓╔═╝ ▓▓║     ▓▓║ ▓▓║     ▓▓║ ▓▓╔═▓▓╗ ▓▓║ ▓▓║   ╚═▓▓╗
+▓▓▓▓▓▓╔═╝   ▓▓║     ▓▓║ ▓▓║     ▓▓║ ▓▓║ ▓▓║ ▓▓║ ▓▓║     ▓▓║
+▓▓╔═══▓▓╗   ▓▓║     ▓▓║ ▓▓║     ▓▓║ ▓▓║ ╚═▓▓▓▓║ ▓▓║   ▓▓╔═╝
+▓▓║   ╚═▓▓╗ ╚═▓▓▓▓▓▓╔═╝ ╚═▓▓▓▓▓▓╔═╝ ▓▓║   ╚═▓▓║ ▓▓▓▓▓▓╔═╝
+╚═╝     ╚═╝   ╚═════╝     ╚═════╝   ╚═╝     ╚═╝ ╚═════╝
+```
+
+`wide`:
+
+```text
+▓▓╗         ▓▓╗ ▓▓▓▓▓▓╗ ▓▓▓▓▓▓▓▓▓▓╗   ▓▓▓▓▓▓▓▓▓▓▓▓╗
+▓▓║   ▓▓╗   ▓▓║ ╚═▓▓╔═╝ ▓▓╔═══════▓▓╗ ▓▓╔═════════╝
+▓▓║ ▓▓╔═▓▓╗ ▓▓║   ▓▓║   ▓▓║       ▓▓║ ▓▓▓▓▓▓▓▓▓▓╗
+▓▓▓▓╔═╝ ╚═▓▓▓▓║   ▓▓║   ▓▓║       ▓▓║ ▓▓╔═══════╝
+▓▓╔═╝     ╚═▓▓║ ▓▓▓▓▓▓╗ ▓▓▓▓▓▓▓▓▓▓╔═╝ ▓▓▓▓▓▓▓▓▓▓▓▓╗
+╚═╝         ╚═╝ ╚═════╝ ╚═════════╝   ╚═══════════╝
+```
+
+`mixed`, with `"Mixed"`. Its last two rows are for tails, so they are blank here:
+
+```text
+▓▓╗     ▓▓╗ ▓▓╗                                 ▓▓╗
+▓▓▓▓╗ ▓▓▓▓║ ╚═╝                                 ▓▓║
+▓▓╔═▓▓╔═▓▓║ ▓▓╗ ▓▓╗     ▓▓╗   ▓▓▓▓▓▓╗     ▓▓▓▓▓▓▓▓║
+▓▓║ ▓▓║ ▓▓║ ▓▓║ ╚═▓▓╗ ▓▓╔═╝ ▓▓╔═════▓▓╗ ▓▓╔═════▓▓║
+▓▓║ ╚═╝ ▓▓║ ▓▓║   ╚═▓▓╔═╝   ▓▓▓▓▓▓▓▓▓▓║ ▓▓║     ▓▓║
+▓▓║     ▓▓║ ▓▓║   ▓▓╔═▓▓╗   ▓▓╔═══════╝ ▓▓║     ▓▓║
+▓▓║     ▓▓║ ▓▓║ ▓▓╔═╝ ╚═▓▓╗ ╚═▓▓▓▓▓▓▓▓╗ ╚═▓▓▓▓▓▓▓▓║
+╚═╝     ╚═╝ ╚═╝ ╚═╝     ╚═╝   ╚═══════╝   ╚═══════╝
+```
+
+`italic`:
+
+```text
+  ▓▓▓▓▓▓╗   ▓▓▓▓▓▓▓▓▓▓╗     ▓▓▓▓╗       ▓▓╗     ▓▓▓▓▓▓╗       ▓▓▓▓▓▓╗
+  ╚═▓▓╔═╝   ╚═══▓▓╔═══╝   ▓▓╔═══▓▓╗   ▓▓╔═╝     ╚═▓▓╔═╝     ▓▓╔═════╝
+    ▓▓║         ▓▓║       ▓▓▓▓▓▓▓▓║   ▓▓║         ▓▓║       ▓▓║
+  ▓▓╔═╝       ▓▓╔═╝     ▓▓╔═══▓▓╔═╝ ▓▓╔═╝       ▓▓╔═╝     ▓▓╔═╝
+▓▓▓▓▓▓╗       ▓▓║       ▓▓║   ▓▓║   ▓▓▓▓▓▓▓▓╗ ▓▓▓▓▓▓╗     ╚═▓▓▓▓▓▓╗
+╚═════╝       ╚═╝       ╚═╝   ╚═╝   ╚═══════╝ ╚═════╝       ╚═════╝
+```
+
+`fonts` holds every built-in font by name, and `FontName` is the type of a name.
 
 ### Use a font of your own
 
@@ -457,7 +576,7 @@ It throws unless each value is one it takes:
 | what you pass | what it takes |
 | --- | --- |
 | the text | at least one character the font can draw. Spaces alone count as none. |
-| `font` | `"block"`, `"slim"`, or a font of your own |
+| `font` | the name of a [built-in font](#change-the-font), or a font of your own |
 | `shadow` | `"double"`, `"single"`, `"heavy"`, `"rounded"`, `"ascii"`, `"none"`, or exactly 16 characters |
 | `fill` | exactly one character |
 | `glint.chars` | one or two characters |

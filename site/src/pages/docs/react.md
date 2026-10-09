@@ -211,7 +211,7 @@ The second, third and fourth lines draw these:
 <div class="demo"><ascii-banner text="hello" color="#f97316,#f778ba"></ascii-banner></div>
 <div class="demo"><ascii-banner text="hello" font="slim" pixel="1" fill="#"></ascii-banner></div>
 
-The text can use the letters A to Z, the digits 0 to 9, spaces, and `. , ! ? ' : - + = / _`. Lower case letters are drawn as capitals. Any other character is left out.
+The text can use the letters A to Z, the digits 0 to 9, spaces, and `. , ! ? ' : - + = / _`. Lower case letters are drawn as capitals, except in the `mixed` font. Any other character is left out.
 
 With no `color` and no `shadowColor`, a banner is drawn like a text piece: in a `<pre>`, in your text colour, sized with `font-size`. With either one, it is drawn like a coloured piece: on a canvas, in those colours, sized with its width. See [set the size](#set-the-size).
 
