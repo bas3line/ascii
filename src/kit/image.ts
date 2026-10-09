@@ -7,8 +7,9 @@
  * normal piece, a still or glinting now and then, so it plays wherever a piece
  * does: mount(), <Ascii>, <ascii-art>, svg() for a README, play() in a
  * terminal. fromImage() reads a URL, a file, an <img> or a canvas in a
- * browser, and a PNG by its path or URL in Node; fromPixels() takes pixels
- * you have decoded already, anywhere.
+ * browser, and a PNG by its path, URL or bytes in Node; fromPixels() takes
+ * pixels you have decoded already, anywhere. drawImage() draws one into a
+ * piece of your own, beside anything else you draw there.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
  *   import { fromImage } from "ascii.rest/kit";
@@ -17,7 +18,7 @@
  *   mount(canvas, await fromImage("/logo.svg", { width: 40, glint: true }));
  */
 import type { Category } from "../types.ts";
-import { MAX, NONE, checkMeta, fail, hex, piece, ramp as rampOf, type KitPiece, type RampName } from "./core.ts";
+import { MAX, NONE, and, checkMeta, fail, hex, isHex, piece, ramp as rampOf, type KitPiece, type Palette, type PaletteSpec, type RampName, type Surface } from "./core.ts";
 import { CH, CW, FILL, GLYPHS, GX, GY } from "./glyphs.ts";
 
 /** How cells are chosen: by the shape of the image's edge through them, or by how bright it is there. */
@@ -42,7 +43,7 @@ export interface ImageOptions {
   /**
    * "remove" (the default): an image with no transparency of its own whose border is mostly one colour has that colour
    * taken out, from the edges inwards, so the same colour inside it (white letters on a shape, say) stays. "keep" draws
-   * the image as it is, and then it is never taken for a photo.
+   * the image as it is: a plain ground stays in it, drawn as a logo is, and a photo is still shaded.
    */
   background?: "remove" | "keep";
   /**
@@ -100,13 +101,26 @@ export interface Drawing {
   knocked: boolean;
   /** The plain background taken out, as #rrggbb, or null when none was. */
   ground: string | null;
+  /**
+   * The ramp a shaded drawing's characters come from, light to dense, so they can be turned round on a light page.
+   * drawing() sets it; a drawing of your own may leave it out, and the `ramp` option is used instead.
+   */
+  ramp?: string;
+}
+
+/** A piece made from an image, carrying the drawing it plays, so drawImage() and imagePalette() can take it too. */
+export interface ImagePiece extends KitPiece {
+  readonly drawing: Drawing;
 }
 
 /** RGBA pixels, row by row, 4 bytes a pixel, as ImageData.data holds them. (draw's `Pixels` is its half-block canvas.) */
 export type PixelArray = Uint8Array | Uint8ClampedArray;
 
-/** What fromImage() reads: a URL (a string or URL), SVG markup, a Blob or File, an <img>, an ImageBitmap or a canvas; in Node, a PNG's path too. */
-export type ImageSource = string | URL | Blob | HTMLImageElement | HTMLCanvasElement | ImageBitmap | OffscreenCanvas;
+/**
+ * What fromImage() reads: a URL (a string or URL), SVG markup, a Blob or File, an <img>, an ImageBitmap or a canvas, or
+ * an image file's bytes (a Buffer is one); in Node, a PNG's path too.
+ */
+export type ImageSource = string | URL | Blob | HTMLImageElement | HTMLCanvasElement | ImageBitmap | OffscreenCanvas | Uint8Array | ArrayBuffer;
 
 const MARGIN = { x: 2, y: 1 };
 /** /make/'s shade ramp, light to dense. */
@@ -146,24 +160,55 @@ interface Settings {
 
 const whole = (v: unknown, lo: number, hi: number) => typeof v === "number" && Number.isInteger(v) && v >= lo && v <= hi;
 
+// A value as an error message shows it: short, whatever it is, so a Buffer or a long array isn't printed whole.
+function shown(v: unknown): string {
+  if (typeof v === "string") return JSON.stringify(v.length > 40 ? `${v.slice(0, 40)}...` : v);
+  if (v === null || typeof v !== "object") return typeof v === "function" ? "a function" : String(v);
+  const name = (v as object).constructor?.name;
+  return Array.isArray(v) ? `an array of ${v.length}` : name && name !== "Object" ? `a ${name}` : "an object";
+}
+
+// An options object's keys checked against what it takes, naming the one meant where a near name was written.
+const NEAR_NAMES: Record<string, string> = { colour: "color", colours: "color", colors: "color", cols: "width", columns: "width", rows: "height", fps: "glint", loop: "glint", every: "glint" };
+function known(o: object, keys: readonly string[], what: string): void {
+  for (const k of Object.keys(o))
+    if (!keys.includes(k)) {
+      const near = NEAR_NAMES[k] && keys.includes(NEAR_NAMES[k]) ? ` (did you mean ${NEAR_NAMES[k]}?)` : "";
+      fail(`${what} has no option ${JSON.stringify(k)}${near}: it takes ${and(keys)}`);
+    }
+}
+
+const OPTIONS = ["width", "height", "style", "background", "color", "glint", "ramp", "invert", "name", "note", "category"] as const;
+
+// The seconds between glints a glint option asks for, 0 for none.
+function glintEvery(glint: unknown): number {
+  if (glint === undefined || glint === false) return 0;
+  if (glint === true) return 5;
+  if (!glint || typeof glint !== "object") fail(`glint takes true, false or { every: seconds }, not ${shown(glint)}`);
+  known(glint, ["every"], "glint");
+  const every = (glint as { every?: unknown }).every ?? 5;
+  if (typeof every !== "number" || !Number.isFinite(every) || every < PASS + 0.5)
+    fail(`glint.every takes a number of seconds of ${PASS + 0.5} or more (a glint takes ${PASS} to cross), not ${String(every)}`);
+  return every;
+}
+
+const checkInvert = (invert: unknown) => {
+  if (invert !== true && invert !== false && invert !== "auto") fail(`invert takes true, false or "auto", not ${shown(invert)}`);
+};
+
 // Every option checked, with its default, the moment a piece is asked for.
 function settings(o: ImageOptions | undefined): Settings {
   if (o === undefined || o === null) o = {};
-  if (typeof o !== "object") fail(`an image takes an options object, such as { width: 48 }, not ${String(o)}`);
+  if (typeof o !== "object") fail(`an image takes an options object, such as { width: 48 }, not ${shown(o)}`);
+  known(o, OPTIONS, "an image");
   const { width = 48, height = MAX.rows, style, background = "remove", color = true, glint = false, ramp = RAMP, invert = "auto", name = "image", note, category = "logos" } = o;
   if (!whole(width, 8, MAX.cols)) fail(`width takes a whole number of columns from 8 to ${MAX.cols}, not ${String(width)}`);
   if (!whole(height, 3, MAX.rows)) fail(`height takes a whole number of rows from 3 to ${MAX.rows}, not ${String(height)}`);
   if (style !== undefined && style !== "logo" && style !== "shade") fail(`style takes "logo" or "shade", not ${JSON.stringify(style)}`);
   if (background !== "remove" && background !== "keep") fail(`background takes "remove" or "keep", not ${JSON.stringify(background)}`);
   if (typeof color !== "boolean") fail(`color takes true (the image's colours) or false (one ink), not ${JSON.stringify(color)}`);
-  let every = 0;
-  if (glint === true) every = 5;
-  else if (glint && typeof glint === "object") {
-    every = glint.every ?? 5;
-    if (typeof every !== "number" || !Number.isFinite(every) || every < PASS + 0.5)
-      fail(`glint.every takes a number of seconds of ${PASS + 0.5} or more (a glint takes ${PASS} to cross), not ${String(every)}`);
-  } else if (glint !== false) fail(`glint takes true, false or { every: seconds }, not ${JSON.stringify(glint)}`);
-  if (invert !== true && invert !== false && invert !== "auto") fail(`invert takes true, false or "auto", not ${JSON.stringify(invert)}`);
+  const every = glintEvery(glint);
+  checkInvert(invert);
   if (typeof name !== "string" || !name.trim()) fail(`name takes a line of text, such as "my logo", not ${JSON.stringify(name)}`);
   if (note !== undefined && (typeof note !== "string" || !note || note.length > 72)) fail(`note takes one line of 1 to 72 characters, not ${JSON.stringify(note)}`);
   // The category is checked as a piece's meta is, so drawing() turns away the same ones as fromPixels().
@@ -198,14 +243,15 @@ function draw(rgba: PixelArray, W: number, H: number, set: Settings): Drawing {
   checkPixels(rgba, W, H);
   const found = clearGround(rgba, W, H, !set.keep);
   const data = found.data;
-  const photo = found.opaque && !found.ground && !set.keep;
+  // A photo: opaque, with no plain ground, whether or not a ground would have been taken out.
+  const photo = found.opaque && !found.plain;
   const style: ImageStyle = set.style ?? (photo ? "shade" : "logo");
   const ground = found.ground ?? null;
   const box = trim(data, W, H);
   if (!box) {
     const { cols, rows } = size(W / H, set.width, set.height);
     const blank = Array.from({ length: rows }, () => " ".repeat(cols));
-    return { style, cols, rows, colors: [[0, 0, 0]], art: blank, ink: blank.slice(), mono: blank.slice(), knocked: false, ground };
+    return { style, cols, rows, colors: [[0, 0, 0]], art: blank, ink: blank.slice(), mono: blank.slice(), knocked: false, ground, ramp: set.ramp };
   }
 
   const { cols, rows } = size(box.w / box.h, set.width, set.height);
@@ -300,10 +346,12 @@ function draw(rgba: PixelArray, W: number, H: number, set: Settings): Drawing {
       light[c] = sa ? sl / sa : 0;
     }
 
-  // Shaded, the image's own range of brightness, its darkest and brightest cells but the odd few, spans the ramp.
+  // Shaded, the image's own range of brightness, its darkest and brightest cells but the odd few, spans the ramp. An
+  // image of one brightness has no range to span, so it is shaded by how bright it is: white dense, black light.
   const shades = set.ramp;
   const lit = [...light].filter((_, c) => cover[c] >= 0.1).sort((a, b) => a - b);
-  const lo = lit[Math.floor(lit.length * 0.02)] ?? 0, hi = lit[Math.floor(lit.length * 0.98)] ?? 1;
+  let lo = lit[Math.floor(lit.length * 0.02)] ?? 0, hi = lit[Math.floor(lit.length * 0.98)] ?? 1;
+  if (hi - lo < 0.02) (lo = 0), (hi = 1);
   const shade = (c: number) => shades[Math.max(0, Math.min(shades.length - 1, Math.floor(((light[c] - lo) / Math.max(1e-6, hi - lo)) * shades.length)))];
 
   const art: string[] = [], ink: string[] = [], mono: string[] = [];
@@ -328,7 +376,7 @@ function draw(rgba: PixelArray, W: number, H: number, set: Settings): Drawing {
     ink.push(i);
     mono.push(m);
   }
-  return { style, cols, rows, colors, art, ink, mono, knocked, ground };
+  return { style, cols, rows, colors, art, ink, mono, knocked, ground, ramp: shades };
 }
 
 /**
@@ -394,16 +442,16 @@ function trim(data: PixelArray, W: number, H: number) {
 /**
  * Takes a plain ground out of an image that has no transparency of its own, when `take`: the colour most of its border
  * is, from the edges inwards, and softly at the edge of what is left, where the image's own edge was blended into it.
- * Works on a copy, so the caller's pixels are never changed. Says whether the image is opaque and the ground it took as
- * #rrggbb, if any: none when the image has a transparency of its own or its border isn't mostly one colour.
+ * Works on a copy, so the caller's pixels are never changed. Says whether the image is opaque, whether its border is
+ * a plain ground (mostly one colour), and the ground it took as #rrggbb, if any: none when the image has a transparency
+ * of its own, its border isn't plain, or it was asked not to.
  */
-function clearGround(src: PixelArray, W: number, H: number, take: boolean): { data: PixelArray; opaque: boolean; ground?: string } {
+function clearGround(src: PixelArray, W: number, H: number, take: boolean): { data: PixelArray; opaque: boolean; plain: boolean; ground?: string } {
   const border: number[] = [];
   for (let x = 0; x < W; x++) border.push(x, (H - 1) * W + x);
   for (let y = 1; y < H - 1; y++) border.push(y * W, y * W + W - 1);
   // An image whose border is already mostly clear has a transparency of its own.
-  if (border.filter((p) => src[p * 4 + 3] < 128).length > border.length / 2) return { data: src, opaque: false };
-  if (!take) return { data: src, opaque: true };
+  if (border.filter((p) => src[p * 4 + 3] < 128).length > border.length / 2) return { data: src, opaque: false, plain: false };
   // The border's commonest colour, in buckets of 16 a channel, and the mean of the pixels in it.
   const buckets = new Map<number, number[]>();
   for (const p of border) {
@@ -412,7 +460,8 @@ function clearGround(src: PixelArray, W: number, H: number, take: boolean): { da
     (buckets.get(key) ?? buckets.set(key, []).get(key)!).push(p);
   }
   const top = [...buckets.values()].sort((a, b) => b.length - a.length)[0];
-  if (top.length < border.length * SHARE) return { data: src, opaque: true };
+  if (top.length < border.length * SHARE) return { data: src, opaque: true, plain: false };
+  if (!take) return { data: src, opaque: true, plain: true };
   const g = [0, 1, 2].map((c) => Math.round(top.reduce((s, p) => s + src[p * 4 + c], 0) / top.length));
   const data = new Uint8ClampedArray(src.subarray(0, W * H * 4));
   const far = (p: number) => Math.hypot(data[p * 4] - g[0], data[p * 4 + 1] - g[1], data[p * 4 + 2] - g[2]);
@@ -444,7 +493,7 @@ function clearGround(src: PixelArray, W: number, H: number, take: boolean): { da
     const beside = (x > 0 && out[p - 1]) || (x < W - 1 && out[p + 1]) || (p >= W && out[p - W]) || (p + W < W * H && out[p + W]);
     if (beside) data[p * 4 + 3] = Math.round(255 * Math.max(0, Math.min(1, (far(p) - NEAR) / NEAR)));
   }
-  return { data, opaque: true, ground: hex(g) };
+  return { data, opaque: true, plain: true, ground: hex(g) };
 }
 
 /** White, as the logo generators' knock took it. */
@@ -548,9 +597,10 @@ function quantize(data: PixelArray, W: number, box: { x: number; y: number; w: n
   return C.map((c) => c.map(Math.round) as RGB);
 }
 
-// --- colours on a dark page ----------------------------------------------------------
+// --- colours on a dark page, and a shading's on a light one -----------------------------
 
 const PAGE: RGB = [19, 21, 24]; // the site's dark page
+const PAPER: RGB = [255, 255, 255];
 /** The site's ink on its dark page: a black is drawn in it there, as the vercel and apple logos are. */
 const LIGHT: RGB = [232, 235, 239];
 
@@ -590,24 +640,40 @@ function lift(c: RGB, dim = false): RGB {
   return out;
 }
 
+/**
+ * A shading's light colour darkened on a light page until it reads, as lift() does on a dark one: a grey to 2.4
+ * against the paper, a colour to 2.8. A photo's brightest parts are a few light characters there, and drawn in near
+ * white as well they would vanish.
+ */
+function sink(c: RGB): RGB {
+  const [h, s, l] = hsl(c);
+  const g = grey(c);
+  const want = g ? 2.4 : 2.8;
+  let k = l, out = c;
+  while (contrast(out, PAPER) < want && k > 0.2) out = fromHsl([h, g ? 0 : s, (k -= 0.01)]);
+  return out;
+}
+
 const tint = (c: RGB, k: number) => c.map((v) => Math.round(v + (255 - v) * k)) as RGB;
 
 /**
  * The piece's colours, as /make/ writes them: for a light page, the image's colours as drawn and then twice lighter for
- * the glint; for a dark page the same, lifted. Colour i is the drawn one, n + i and 2n + i its glint.
+ * the glint; for a dark page the same, lifted. Colour i is the drawn one, n + i and 2n + i its glint. A shading's light
+ * colours are darkened until they read on paper, which /make/ leaves as they are.
  */
-function palette(colors: RGB[], style: ImageStyle) {
-  const runs = (cs: RGB[]) => [...cs, ...cs.map((c) => tint(c, 0.35)), ...cs.map((c) => tint(c, 0.7))].map(hex);
+function palette(colors: readonly RGB[], style: ImageStyle) {
+  const runs = (cs: readonly RGB[]) => [...cs, ...cs.map((c) => tint(c, 0.35)), ...cs.map((c) => tint(c, 0.7))].map(hex);
   const dim = style === "shade" || colors.some((c) => white(...c));
-  return { light: runs(colors), dark: runs(colors.map((c) => lift(c, dim))) };
+  return { light: runs(style === "shade" ? colors.map(sink) : colors), dark: runs(colors.map((c) => lift(c, dim))) };
 }
 
 // --- the piece ----------------------------------------------------------------------
 
 // A drawing passed in by hand, checked: rows of cols characters, and colours its ink can index.
-function checkDrawing(d: Drawing): void {
-  if (!d || typeof d !== "object") fail("fromDrawing() takes a drawing, as drawing() returns it");
+function checkDrawing(d: Drawing, fn: string): void {
+  if (!d || typeof d !== "object") fail(`${fn}() takes a drawing, as drawing() returns it, or a piece fromImage() made, not ${shown(d)}`);
   const { cols, rows, colors, art, ink, mono } = d;
+  if (d.ramp !== undefined) rampOf(d.ramp);
   if (!whole(cols, 1, MAX.cols) || !whole(rows, 1, MAX.rows)) fail(`a drawing takes whole numbers of columns from 1 to ${MAX.cols} and rows from 1 to ${MAX.rows}, not ${String(cols)} by ${String(rows)}`);
   if (d.style !== "logo" && d.style !== "shade") fail(`a drawing's style takes "logo" or "shade", not ${JSON.stringify(d.style)}`);
   if (!Array.isArray(colors) || !colors.length || colors.length > 10 || !colors.every((c) => Array.isArray(c) && c.length === 3 && c.every((v) => whole(v, 0, 255))))
@@ -626,21 +692,50 @@ function checkDrawing(d: Drawing): void {
   });
 }
 
-/**
- * A drawing as a piece: a still, or glinting now and then with `glint`. Takes the same options as fromPixels(), of
- * which the size, style and background were for the drawing and are not used here; `ramp` must be the one the drawing
- * was shaded with, so the shades can be turned round (`invert`).
- */
-export function fromDrawing(d: Drawing, o?: ImageOptions): KitPiece {
-  return pieceOf(d, settings(o));
+// A drawing worked out once, to be drawn frame after frame: its cells as char codes for each way it is drawn (in colour,
+// in one ink, and turned round), each cell's colour, the solid cells the glint turns to slashes, where along the glint
+// each cell lies, and the 3n colours for each theme.
+interface Prepared {
+  cols: number;
+  rows: number;
+  n: number;
+  shade: boolean;
+  art: Uint16Array;
+  mono: Uint16Array;
+  turned: Uint16Array;
+  ink: Uint8Array;
+  hard: Uint8Array[];
+  pos: Float32Array;
+  /** The ink's first and last place along the glint; lo is above hi when there is no ink. */
+  lo: number;
+  hi: number;
+  light: string[];
+  dark: string[];
+  /** drawImage()'s palette index for each of the 3n colours, for each palette it draws into, on paper and dark. */
+  index: WeakMap<Palette, (Uint8Array | undefined)[]>;
 }
 
-function pieceOf(d: Drawing, set: Settings): KitPiece {
-  checkDrawing(d);
+// Each drawing's workings, by the ramp asked for (the drawing's own, or else the option's).
+const prepared = new WeakMap<Drawing, Map<string, Prepared>>();
+
+// The drawing a piece fromImage() made plays, or a drawing as it is.
+function drawingOf(img: Drawing | ImagePiece, fn: string): Drawing {
+  if (img && typeof img === "object" && "meta" in img) {
+    if ("drawing" in img) return img.drawing;
+    fail(`${fn}() takes a drawing or a piece fromImage() made, not another piece: lay that one over with compose's layer() or over()`);
+  }
+  return img as Drawing;
+}
+
+// A drawing checked and worked out, once for each drawing (and ramp), so drawing it each frame allocates nothing.
+function prepare(d: Drawing, ramp: string, fn: string): Prepared {
+  const asked = d && typeof d === "object" && d.ramp !== undefined ? d.ramp : ramp;
+  const had = d && typeof d === "object" ? prepared.get(d)?.get(asked) : undefined;
+  if (had) return had;
+  checkDrawing(d, fn);
   const { cols, rows, style } = d;
   const cells = cols * rows;
-  const n = d.colors.length;
-  const shades = set.ramp;
+  const shades = rampOf(asked);
   // What the glint turns to slashes: solid shapes, or every shade but the two lightest.
   const solid = style === "shade" ? shades.slice(2).replace(/ /g, "") : SOLID;
 
@@ -665,40 +760,146 @@ function pieceOf(d: Drawing, set: Settings): KitPiece {
       // The glint crosses the image's ink, edge to edge, rather than the whole frame.
       if (inked || a !== " " || m !== " ") (lo = Math.min(lo, pos[i])), (hi = Math.max(hi, pos[i]));
     }
+  const { light, dark } = palette(d.colors, style);
+  const p: Prepared = { cols, rows, n: d.colors.length, shade: style === "shade", art, mono, turned, ink, hard, pos, lo, hi, light, dark, index: new WeakMap() };
+  if (!prepared.has(d)) prepared.set(d, new Map());
+  prepared.get(d)!.set(asked, p);
+  return p;
+}
+
+/**
+ * Draws a prepared drawing into s with its top left at x, y, as its frame at t: blank cells left as they are, the glint
+ * crossing every `every` seconds (0 for none), the shades turned round as `invert` says, and each cell in the palette
+ * index `idx` gives for its place among the 3n colours, or in none.
+ */
+function paint(s: Surface, p: Prepared, x: number, y: number, t: number, every: number, invert: boolean | "auto", idx: Uint8Array | null): void {
+  const turn = p.shade && (invert === true || (invert === "auto" && s.paper));
+  const chars = turn ? p.turned : idx ? p.art : p.mono;
+  const solidAt = p.hard[turn ? 2 : idx ? 0 : 1];
+  const { cols, n, pos, ink } = p;
+  // Nothing drawn, nothing to glint.
+  const at = every && p.lo <= p.hi && t >= START ? p.lo - HALF + ((p.hi - p.lo + 2 * HALF) * ((t - START) % every)) / PASS : -Infinity;
+  x = Math.floor(x);
+  y = Math.floor(y);
+  const c0 = Math.max(0, -x), c1 = Math.min(cols, s.cols - x), r1 = Math.min(p.rows, s.rows - y);
+  for (let r = Math.max(0, -y); r < r1; r++)
+    for (let c = c0, i = r * cols + c0; c < c1; c++, i++) {
+      let ch = chars[i];
+      // a blank cell is left as it is, so the image lays over whatever is under it
+      if (ch === 32) continue;
+      let k = 0;
+      const dist = Math.abs(pos[i] - at);
+      if (dist < HALF) {
+        k = 1 - dist / HALF;
+        k = k * k * (3 - 2 * k);
+      }
+      if (k > 0.55 && solidAt[i]) ch = SLASH;
+      s.put((r + y) * s.cols + c + x, ch, idx ? idx[(k > 0.6 ? 2 : k > 0.25 ? 1 : 0) * n + ink[i]] : NONE);
+    }
+}
+
+/**
+ * A drawing as a piece: a still, or glinting now and then with `glint`. Takes the same options as fromPixels(), of
+ * which the size, style and background were for the drawing and are not used here. Its shades are turned round
+ * (`invert`) by the ramp drawing() recorded in it; for a drawing of your own with none, give `ramp`.
+ */
+export function fromDrawing(d: Drawing, o?: ImageOptions): ImagePiece {
+  return pieceOf(d, settings(o), "fromDrawing");
+}
+
+function pieceOf(d: Drawing, set: Settings, fn: string): ImagePiece {
+  const p = prepare(d, set.ramp, fn);
   // Nothing drawn, nothing to glint: a still.
-  const every = lo <= hi ? set.every : 0;
-  const span = hi - lo + 2 * HALF;
-  const kind = style === "shade" ? "shaded" : "drawn";
+  const every = p.lo <= p.hi ? set.every : 0;
+  const kind = p.shade ? "shaded" : "drawn";
   const note = set.note ?? `${set.name}, ${kind} in ascii${every ? ", glinting now and then" : ""}`.slice(0, 72);
 
-  const spec = { name: set.name, note, category: set.category, cols, rows, fps: every ? 30 : 0, ...(every ? { loop: every } : {}) };
-  return piece(set.color ? { ...spec, palette: palette(d.colors, style) } : spec, {
+  const spec = { name: set.name, note, category: set.category, cols: p.cols, rows: p.rows, fps: every ? 30 : 0, ...(every ? { loop: every } : {}) };
+  const made = piece(set.color ? { ...spec, palette: { light: p.light, dark: p.dark } } : spec, {
     setup: () => {
       // Each theme's palette index for colour j of the 3n (drawn, half lit, lit), made on the first frame in the theme.
       const index: (Uint8Array | undefined)[] = [undefined, undefined];
       return (t, s, ctx) => {
-        const colour = !!s.palette && !ctx.mono;
-        const turn = style === "shade" && (set.invert === true || (set.invert === "auto" && ctx.paper));
-        const chars = turn ? turned : colour ? art : mono;
-        const solidAt = hard[turn ? 2 : colour ? 0 : 1];
-        const idx = colour ? (index[+ctx.paper] ??= Uint8Array.from({ length: 3 * n }, (_, j) => s.palette!.index(j, ctx.paper))) : null;
-        const at = every && t >= START ? lo - HALF + (span * ((t - START) % every)) / PASS : -Infinity;
-        for (let i = 0; i < cells; i++) {
-          let c = chars[i];
-          // a blank cell stays EMPTY, so the image can be laid over another piece
-          if (c === 32) continue;
-          let k = 0;
-          const dist = Math.abs(pos[i] - at);
-          if (dist < HALF) {
-            k = 1 - dist / HALF;
-            k = k * k * (3 - 2 * k);
-          }
-          if (k > 0.55 && solidAt[i]) c = SLASH;
-          s.put(i, c, idx ? idx[(k > 0.6 ? 2 : k > 0.25 ? 1 : 0) * n + ink[i]] : NONE);
-        }
+        const idx = s.palette && !ctx.mono ? (index[+ctx.paper] ??= Uint8Array.from({ length: 3 * p.n }, (_, j) => s.palette!.index(j, ctx.paper))) : null;
+        paint(s, p, 0, 0, t, every, set.invert, idx);
       };
     },
   });
+  return { ...made, drawing: d };
+}
+
+/** What drawImage() takes besides where, all of it optional. */
+export interface DrawImageOptions {
+  /** The frame's time in seconds, for the glint: 0. */
+  t?: number;
+  /**
+   * The logos' glint, as fromImage() takes it: false. The piece drawing it sets its own fps, and its loop to the
+   * glint's `every`, 5 seconds by default.
+   */
+  glint?: boolean | { every?: number };
+  /** Whether a shading's shades are turned round, as fromImage() takes it: "auto", on a light page. */
+  invert?: boolean | "auto";
+}
+
+/**
+ * Draws an image into a surface you have, its top left (its margin included) at column x, row y, so it sits beside
+ * whatever else your piece draws: text, boxes, a field, particles. Takes a piece fromImage() or fromPixels() made, or a
+ * drawing. Its blank cells are left as they are, so it lays over what is under it, and what falls outside the surface is
+ * left out. In colour, each cell takes the piece's colour nearest its own: give the piece imagePalette() and they are
+ * the image's own, lifted on a dark page as fromImage() lifts them. In a piece in one ink, or one played as text, it is
+ * drawn as fromImage() draws it in one ink. A drawing is worked out the first time it is drawn: draw a changed one as a
+ * new object.
+ *
+ *   const logo = await fromImage("/logo.png", { width: 24 });
+ *   export default piece({ name: "card", cols: 60, rows: 12, loop: 5, palette: imagePalette(logo) }, (t, s) => {
+ *     drawImage(s, logo, 0, 0, { t, glint: true });
+ *     s.write(26, 5, "my project");
+ *   });
+ */
+export function drawImage(s: Surface, img: Drawing | ImagePiece, x = 0, y = 0, o?: DrawImageOptions): void {
+  if (!s || typeof s !== "object" || typeof s.put !== "function" || !Number.isInteger(s.cols) || !Number.isInteger(s.rows))
+    fail(`drawImage() takes the surface to draw on first, as a piece's drawing is given it: (t, s) => drawImage(s, logo), not ${shown(s)}`);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) fail(`drawImage() takes the column and row of the image's top left as numbers, not ${shown(x)} and ${shown(y)}`);
+  let t = 0, every = 0, invert: boolean | "auto" = "auto";
+  if (o !== undefined) {
+    if (!o || typeof o !== "object") fail(`drawImage() takes its options as an object, such as { t, glint: true }, not ${shown(o)}`);
+    known(o, ["t", "glint", "invert"], "drawImage()");
+    if (o.t !== undefined && typeof o.t !== "number") fail(`drawImage()'s t takes the frame's time in seconds, not ${shown(o.t)}`);
+    // a time that isn't finite is the first frame, as piece() takes it
+    t = Number.isFinite(o.t) ? (o.t as number) : 0;
+    every = glintEvery(o.glint);
+    if (o.invert !== undefined) checkInvert((invert = o.invert));
+  }
+  const p = prepare(drawingOf(img, "drawImage"), RAMP, "drawImage");
+  let idx: Uint8Array | null = null;
+  const pal = s.palette;
+  if (pal && !s.mono) {
+    let themes = p.index.get(pal);
+    if (!themes) p.index.set(pal, (themes = [undefined, undefined]));
+    const paper = s.paper;
+    idx = themes[+paper] ??= Uint8Array.from(paper ? p.light : p.dark, (c) => pal.index(c, paper));
+  }
+  paint(s, p, x, y, t, every, invert, idx);
+}
+
+/**
+ * The colours for a piece that draws an image with drawImage(), so the image keeps its own: for each theme, any of your
+ * own first, so your colour i is index i on both themes and the first is the piece's ink, then the image's colours and
+ * their glint, as fromImage() makes them. Yours are one list for both themes, or { light, dark } of the same length.
+ *
+ *   palette: imagePalette(logo, { light: ["#1f2328"], dark: ["#f0f6fc"] })
+ */
+export function imagePalette(img: Drawing | ImagePiece, colors?: PaletteSpec): { light: string[]; dark: string[] } {
+  const p = prepare(drawingOf(img, "imagePalette"), RAMP, "imagePalette");
+  if (colors === undefined) return { light: [...p.light], dark: [...p.dark] };
+  const mine = (Array.isArray(colors) ? { light: colors, dark: colors } : colors) as { light: readonly string[]; dark: readonly string[] };
+  const list = (l: unknown) => Array.isArray(l) && l.every(isHex);
+  if (!mine || typeof mine !== "object" || !list(mine.light) || !list(mine.dark) || mine.light.length !== mine.dark.length)
+    fail(`imagePalette() takes colours of your own as a list of #rrggbb, or { light, dark } lists of the same length, not ${shown(colors)}`);
+  const room = 32 - p.light.length;
+  if (mine.light.length > room)
+    fail(`this image's ${p.n} colours and their glint take ${2 * p.light.length} of the 64 a piece can have, which leaves room for ${room} of your own, not ${mine.light.length}`);
+  return { light: [...mine.light, ...p.light], dark: [...mine.dark, ...p.dark] };
 }
 
 /**
@@ -709,9 +910,9 @@ function pieceOf(d: Drawing, set: Settings): KitPiece {
  *   const { data, info } = await sharp("logo.png").ensureAlpha().raw().toBuffer({ resolveWithObject: true });
  *   export default fromPixels(data, info.width, info.height, { name: "my logo", glint: true });
  */
-export function fromPixels(rgba: PixelArray, width: number, height: number, o?: ImageOptions): KitPiece {
+export function fromPixels(rgba: PixelArray, width: number, height: number, o?: ImageOptions): ImagePiece {
   const set = settings(o);
-  return pieceOf(draw(rgba, width, height, set), set);
+  return pieceOf(draw(rgba, width, height, set), set, "fromPixels");
 }
 
 // --- reading an image ---------------------------------------------------------------------
@@ -726,18 +927,20 @@ const isMarkup = (text: string) => /^\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*(
  * /make/ draws it, and needs a page (not a worker). Nothing leaves the page.
  *
  * In Node (and wherever else there is no createImageBitmap), a PNG: by its path, a file: URL such as
- * `new URL("./logo.png", import.meta.url)`, an http(s) URL, or a Blob, decoded by the kit itself, so a script that
- * writes a README's SVG needs nothing else. Any other format there takes a decoder of your own and fromPixels().
+ * `new URL("./logo.png", import.meta.url)`, an http(s) URL, its bytes (readFileSync's Buffer), or a Blob, decoded by
+ * the kit itself, so a script that writes a README's SVG needs nothing else. Any other format there takes a decoder of
+ * your own and fromPixels().
  *
- * Rejects, saying what went wrong, for options or an image it can't take.
+ * The piece carries its drawing, so drawImage() can draw it into a piece of your own as well. Rejects, saying what went
+ * wrong, for options or an image it can't take.
  *
  *   const logo = await fromImage(input.files[0], { width: 40, glint: true });
  *   export default await fromImage(new URL("./logo.png", import.meta.url), { glint: true });
  */
-export async function fromImage(src: ImageSource, o?: ImageOptions): Promise<KitPiece> {
+export async function fromImage(src: ImageSource, o?: ImageOptions): Promise<ImagePiece> {
   const set = settings(o);
   const { data, width, height } = await pixelsOf(src);
-  return pieceOf(draw(data, width, height, set), set);
+  return pieceOf(draw(data, width, height, set), set, "fromImage");
 }
 
 /** An image's pixels as ImageData holds them: RGBA, row by row, 4 bytes a pixel. */
@@ -747,31 +950,39 @@ export interface PixelData {
   height: number;
 }
 
+const SOURCES = "a URL, a path, SVG markup, a file's bytes, a Blob, an <img>, an ImageBitmap or a canvas";
+
 async function pixelsOf(src: ImageSource): Promise<PixelData> {
   if (typeof src === "string") {
     if (isMarkup(src)) return svg(src);
     const s = src.trim();
-    if (!s) fail("fromImage() takes a URL, a path, SVG markup, a Blob, an <img>, an ImageBitmap or a canvas, not an empty string");
+    if (!s) fail(`fromImage() takes ${SOURCES}, not an empty string`);
     // Off a page, a string with no scheme (C:\ is a drive, not one) is a file's path, and a file: URL is read from disk.
     if (files() && (!/^[a-z][a-z\d+.-]+:/i.test(s) || /^file:/i.test(s))) return blob(await file(/^file:/i.test(s) ? new URL(s) : s));
     return blob(await load(s));
   }
   if (typeof URL !== "undefined" && src instanceof URL) return blob(src.protocol === "file:" && files() ? await file(src) : await load(src.href));
   if (typeof Blob !== "undefined" && src instanceof Blob) return blob(src);
+  // An image file's bytes, as readFileSync() or a fetch's arrayBuffer() gives them.
+  if (src instanceof Uint8Array || src instanceof ArrayBuffer) return blob(new Blob([src as Uint8Array<ArrayBuffer>]));
+  if (src instanceof Uint8ClampedArray) fail("fromImage() takes an image file, not pixels: for RGBA pixels, as ImageData.data holds them, use fromPixels(data, width, height)");
   if (typeof HTMLImageElement !== "undefined" && src instanceof HTMLImageElement) return image(src);
   if (src && typeof src === "object" && typeof (src as { width?: unknown }).width === "number" && typeof (src as { height?: unknown }).height === "number")
     return drawn(src as CanvasImageSource, (src as ImageBitmap).width, (src as ImageBitmap).height);
-  fail(`fromImage() takes a URL, a path, SVG markup, a Blob, an <img>, an ImageBitmap or a canvas, not ${String(src)}`);
+  fail(`fromImage() takes ${SOURCES}, not ${shown(src)}`);
 }
+
+// A URL as an error message shows it: a data: URL's data left out.
+const where = (url: string) => (url.length > 80 ? `${url.slice(0, 60)}...` : url);
 
 async function load(url: string): Promise<Blob> {
   let res: Response;
   try {
     res = await fetch(url);
   } catch {
-    fail(`fromImage() could not load ${url}: from another site, it must allow it (CORS); or pass a Blob or an <img>`);
+    fail(`fromImage() could not load ${where(url)}: ${files() ? "check the address and the network" : "from another site, it must allow it (CORS); or pass a Blob or an <img>"}`);
   }
-  if (!res.ok) fail(`fromImage() could not load ${url}: ${res.status} ${res.statusText}`.trim());
+  if (!res.ok) fail(`fromImage() could not load ${where(url)}: ${res.status} ${res.statusText}`.trim());
   const b = await res.blob();
   // A server that says nothing of the type: an .svg URL is still read as SVG.
   return !b.type && /\.svg(?:[?#]|$)/i.test(url) ? new Blob([b], { type: "image/svg+xml" }) : b;
@@ -947,7 +1158,13 @@ export async function readPng(bytes: Uint8Array | ArrayBuffer): Promise<PixelDat
 
   const all = new Uint8Array(idat.reduce((n, c) => n + c.length, 0));
   idat.reduce((at, c) => (all.set(c, at), at + c.length), 0);
-  const raw = await inflate(all);
+  // The bytes the rows take, each with its filter byte, so data that inflates to far more is never read whole.
+  let need = 0;
+  for (const [x0, y0, dx, dy] of interlace ? ADAM7 : [[0, 0, 1, 1]]) {
+    const w = Math.ceil((width - x0) / dx), h = Math.ceil((height - y0) / dy);
+    if (w > 0 && h > 0) need += h * (1 + Math.ceil((w * channels * depth) / 8));
+  }
+  const raw = await inflate(all, need);
 
   // A sample as stored (1 to 16 bits) and as 8 bits.
   const sample = (line: Uint8Array, k: number) =>
@@ -1005,13 +1222,28 @@ export async function readPng(bytes: Uint8Array | ArrayBuffer): Promise<PixelDat
   return { data: out, width, height };
 }
 
-// zlib's inflate, with the DecompressionStream that Node and browsers both have.
-async function inflate(data: Uint8Array): Promise<Uint8Array> {
+// zlib's inflate, with the DecompressionStream that Node and browsers both have. Read to its end, so its checksum is
+// checked, unless it runs well past the `need` bytes the rows take: then the rest, however much, is never read.
+async function inflate(data: Uint8Array, need: number): Promise<Uint8Array> {
   if (typeof DecompressionStream !== "function") fail("reading a PNG needs DecompressionStream, which this runtime lacks: decode it yourself and pass its pixels to fromPixels()");
+  const parts: Uint8Array[] = [];
+  let got = 0;
   try {
-    const stream = new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("deflate"));
-    return new Uint8Array(await new Response(stream).arrayBuffer());
+    const reader = new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("deflate")).getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      parts.push(value);
+      got += value.length;
+      if (got > need + 65536) {
+        await reader.cancel().catch(() => {});
+        break;
+      }
+    }
   } catch {
     return fail("could not read that PNG: its image data is damaged");
   }
+  const out = new Uint8Array(got);
+  parts.reduce((at, p) => (out.set(p, at), at + p.length), 0);
+  return out;
 }

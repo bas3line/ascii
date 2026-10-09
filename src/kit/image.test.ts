@@ -9,9 +9,9 @@ import { pathToFileURL } from "node:url";
 import { deflateSync } from "node:zlib";
 import { svg } from "../svg.ts";
 import type { Piece } from "../types.ts";
-import { mulberry32, snapshot } from "./core.ts";
+import { mulberry32, piece, rgb, snapshot } from "./core.ts";
 import { CH, CW, FILL, GLYPHS, GX, GY } from "./glyphs.ts";
-import { drawing, fromDrawing, fromImage, fromPixels, readPng, type Drawing } from "./image.ts";
+import { drawImage, drawing, fromDrawing, fromImage, fromPixels, imagePalette, readPng, type Drawing, type ImagePiece } from "./image.ts";
 
 type RGBA = [number, number, number, number];
 
@@ -301,7 +301,50 @@ test("an image with no plain ground is a photo, shaded by brightness; the ramp t
   assert.equal(drawing(ramp, 80, 40, { width: 24, style: "logo" }).art[y].trim(), FILL.repeat(20));
   // and the shade style asked for on a logo: the red square, one brightness, is one shade
   assert.match(drawing(square(), 64, 64, { style: "shade" }).art[5].trim(), /^(.)\1+$/);
+  // a shading records its ramp, so it can be turned round from the drawing alone
+  assert.equal(d.ramp, order);
+  assert.equal(spaced.ramp, " .:-=+*#%@");
 });
+
+test("a photo keeps being shaded with its background kept; a logo on a plain ground is drawn as one", () => {
+  // noise: no plain ground, so a photo either way
+  const noise = mulberry32(7);
+  const photo = image(80, 40, () => [noise() * 255, noise() * 255, noise() * 255, 255]);
+  assert.equal(drawing(photo, 80, 40, { width: 20 }).style, "shade");
+  assert.equal(drawing(photo, 80, 40, { width: 20, background: "keep" }).style, "shade");
+  // a disc on white: a logo, its ground taken out or kept
+  const disc = image(60, 60, (x, y) => (Math.hypot(x - 30, y - 30) < 22 ? [30, 80, 200, 255] : [255, 255, 255, 255]));
+  assert.equal(drawing(disc, 60, 60, { width: 30 }).style, "logo");
+  assert.equal(drawing(disc, 60, 60, { width: 30, background: "keep" }).style, "logo");
+});
+
+test("an image of one brightness is shaded by how bright it is, not all in one end of the ramp", () => {
+  const flat = (v: number) => image(40, 40, () => [v, v, v, 255]);
+  const row = (v: number) => drawing(flat(v), 40, 40, { style: "shade", background: "keep", width: 12 }).art[2].trim();
+  assert.match(row(255), /^@+$/);
+  assert.match(row(0), /^\.+$/);
+  assert.match(row(128), /^[=+]+$/);
+});
+
+test("a shading's colours read on a light page; a logo's are its own", () => {
+  const lum = (h: string) => {
+    const f = (v: number) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    const [r, g, b] = rgb(h);
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const onWhite = (h: string) => 1.05 / (lum(h) + 0.05);
+  // light greys, shaded: drawn on paper no lighter than a grey of 2.4 against it
+  const ramp = image(80, 40, (x) => [160 + x, 160 + x, 160 + x, 255]);
+  const d = drawing(ramp, 80, 40, { width: 24 });
+  const n = d.colors.length;
+  assert.ok(d.colors.some((c) => onWhite(hexOf(c)) < 2), `a light grey among ${JSON.stringify(d.colors)}`);
+  const pal = fromPixels(ramp, 80, 40, { width: 24 }).meta.palette!;
+  for (const c of pal.slice(0, n)) assert.ok(onWhite(c) >= 2.39, `${c} on paper: ${onWhite(c).toFixed(2)}`);
+  // a logo's yellow stays its own yellow on paper, as /make/ draws it
+  const yellow = fromPixels(image(20, 20, (x, y) => (inside(x, y, 4, 4, 16, 16) ? [255, 212, 59, 255] : CLEAR)), 20, 20, { width: 16 }).meta.palette!;
+  assert.equal(yellow[0], "#ffd43b");
+});
+const hexOf = (c: readonly number[]) => "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
 
 test("colours are quantised to the image's own, and every cell's colour is in the palette", () => {
   // three bars, red, green and blue, with clear gaps between them so no pixel blends two
@@ -516,6 +559,128 @@ test("fromDrawing makes the same piece as fromPixels, and takes a drawing of you
   contract(p);
 });
 
+// --- an image in a piece of your own ----------------------------------------------------------------------
+
+// A blue disc with a white dot in it: two colours, and a hole in one ink.
+const dotted = () =>
+  image(60, 60, (x, y) => {
+    const r = Math.hypot(x - 30, y - 30);
+    return r < 4 ? [255, 255, 255, 255] : r < 22 ? [30, 80, 200, 255] : CLEAR;
+  });
+
+test("the piece carries its drawing", () => {
+  const p: ImagePiece = fromPixels(dotted(), 60, 60, { width: 30 });
+  assert.deepEqual(p.drawing, drawing(dotted(), 60, 60, { width: 30 }));
+  assert.equal(fromDrawing(p.drawing).drawing, p.drawing);
+});
+
+test("drawImage draws an image into a piece of your own, as fromPixels draws it, wherever it is put", () => {
+  const logo = fromPixels(dotted(), 60, 60, { width: 20, glint: true });
+  const d = logo.drawing;
+  const at = [7, 3];
+  const host = piece({ name: "host", cols: 40, rows: 16, loop: 5, palette: imagePalette(logo, ["#808080"]) }, (t, s) => {
+    s.fill(".", 0);
+    drawImage(s, logo, at[0], at[1], { t, glint: true });
+  });
+  for (const paper of [false, true])
+    for (const t of [0, 1, 1.4, 2.2]) {
+      const mine = snapshot(logo, t, { paper }), there = snapshot(host, t, { paper });
+      const own = mine.text.split("\n"), lines = there.text.split("\n");
+      for (let y = 0; y < d.rows; y++)
+        for (let x = 0; x < d.cols; x++) {
+          const i = (y + at[1]) * 40 + x + at[0];
+          if (own[y][x] === " ") {
+            // blank cells leave what was under them
+            assert.equal(lines[y + at[1]][x + at[0]], ".");
+            assert.equal(host.meta.palette![there.color![i]], "#808080");
+            continue;
+          }
+          assert.equal(lines[y + at[1]][x + at[0]], own[y][x], `t=${t} ${x},${y}`);
+          // the same colour, as #rrggbb, glint and all
+          assert.equal(host.meta.palette![there.color![i]], logo.meta.palette![mine.color![y * d.cols + x]], `t=${t} ${x},${y}${paper ? " on paper" : ""}`);
+        }
+      // and nothing else changed
+      assert.equal(lines[0], ".".repeat(40));
+    }
+  // in one ink, the one-ink drawing: the white dot left out
+  const mono = snapshot(host, 0, { mono: true }).text.split("\n");
+  d.mono.forEach((l, y) => [...l].forEach((ch, x) => ch !== " " && assert.equal(mono[y + at[1]][x + at[0]], ch)));
+  assert.notDeepEqual(d.mono, d.art);
+});
+
+test("drawImage clips at the edges, takes a drawing, and draws in one ink or the nearest colours", () => {
+  const logo = fromPixels(dotted(), 60, 60, { width: 20 });
+  const d = logo.drawing;
+  // part off every edge: the part inside is drawn, nothing throws
+  for (const [x, y] of [[-5, -2], [12, 6], [-30, 0], [0, -20], [40, 16]]) {
+    const p = piece({ name: "edge", cols: 16, rows: 8 }, (_, s) => drawImage(s, d, x, y));
+    const lines = snapshot(p).text.split("\n");
+    for (let r = 0; r < 8; r++)
+      for (let c = 0; c < 16; c++) {
+        const want = d.mono[r - y]?.[c - x] ?? " ";
+        assert.equal(lines[r][c], want, `at ${x},${y}: ${c},${r}`);
+      }
+  }
+  // a piece with no palette: the one-ink drawing, by fractions floored
+  const plain = piece({ name: "plain", cols: d.cols + 4, rows: d.rows + 2 }, (_, s) => drawImage(s, logo, 2.7, 1.2));
+  const lines = snapshot(plain).text.split("\n");
+  assert.equal(lines.slice(1, 1 + d.rows).map((l) => l.slice(2, 2 + d.cols)).join("\n"), d.mono.join("\n"));
+  assert.equal(lines[0].trim() + lines.at(-1)!.trim(), "");
+  // a palette of your own: each cell the nearest of its colours
+  const own = piece({ name: "own", cols: d.cols, rows: d.rows, palette: ["#000000", "#2050c0", "#ffffff"] }, (_, s) => drawImage(s, logo));
+  const { text, color } = snapshot(own, 0, { paper: true });
+  const blue = d.colors.findIndex(([r]) => r < 100);
+  for (let i = 0; i < text.length; i++) {
+    const y = Math.floor(i / (d.cols + 1)), x = i % (d.cols + 1);
+    if (x === d.cols || text[i] === " ") continue;
+    assert.equal(color![y * d.cols + x], d.ink[y][x] === String(blue) ? 1 : 2, `${x},${y}`);
+  }
+  // a shading, turned round on paper as fromPixels turns it
+  const ramp = image(80, 40, (x) => [x * 3, x * 3, x * 3, 255]);
+  const shaded = fromPixels(ramp, 80, 40, { width: 24, color: false });
+  const host = piece({ name: "shaded", cols: shaded.meta.cols, rows: shaded.meta.rows }, (_, s) => drawImage(s, shaded));
+  for (const paper of [false, true]) assert.equal(snapshot(host, 0, { paper }).text, snapshot(shaded, 0, { paper }).text);
+  const kept = piece({ name: "kept", cols: shaded.meta.cols, rows: shaded.meta.rows }, (_, s) => drawImage(s, shaded, 0, 0, { invert: false }));
+  assert.equal(snapshot(kept, 0, { paper: true }).text, snapshot(shaded, 0).text);
+});
+
+test("drawImage says what is wrong with what it is given", () => {
+  const logo = fromPixels(square(), 64, 64, { width: 12 });
+  const run = (draw: (s: never) => void) => snapshot(piece({ name: "x", cols: 20, rows: 10 }, (_, s) => draw(s as never)));
+  assert.throws(() => drawImage(null as never, logo), /drawImage\(\) takes the surface to draw on first/);
+  assert.throws(() => run((s) => drawImage(s, logo, NaN, 0)), /takes the column and row of the image's top left as numbers, not NaN and 0/);
+  assert.throws(() => run((s) => drawImage(s, {} as never)), /a drawing takes whole numbers of columns/);
+  assert.throws(() => run((s) => drawImage(s, null as never)), /drawImage\(\) takes a drawing, as drawing\(\) returns it, or a piece fromImage\(\) made, not null/);
+  assert.throws(() => run((s) => drawImage(s, piece({ name: "other", cols: 4, rows: 2 }, () => {}) as never)), /not another piece: lay that one over with compose's layer\(\) or over\(\)/);
+  assert.throws(() => run((s) => drawImage(s, logo, 0, 0, { period: 2 } as never)), /drawImage\(\) has no option "period": it takes t, glint and invert/);
+  assert.throws(() => run((s) => drawImage(s, logo, 0, 0, { t: "1" } as never)), /t takes the frame's time in seconds, not "1"/);
+  assert.throws(() => run((s) => drawImage(s, logo, 0, 0, { glint: { every: 1 } })), /glint\.every takes a number of seconds of 2\.5 or more/);
+  assert.throws(() => run((s) => drawImage(s, logo, 0, 0, { invert: "yes" as never })), /invert takes true, false or "auto", not "yes"/);
+  // a time that isn't finite is the first frame
+  assert.doesNotThrow(() => run((s) => drawImage(s, logo, 0, 0, { t: Infinity, glint: true })));
+});
+
+test("imagePalette: your colours first, then the image's and their glint, for each theme", () => {
+  const logo = fromPixels(dotted(), 60, 60, { width: 20 });
+  const own = logo.meta.palette!, n3 = own.length / 2;
+  assert.deepEqual(imagePalette(logo), { light: own.slice(0, n3), dark: own.slice(n3) });
+  assert.deepEqual(imagePalette(logo.drawing), imagePalette(logo));
+  const one = imagePalette(logo, ["#123456"]);
+  assert.deepEqual([one.light[0], one.dark[0]], ["#123456", "#123456"]);
+  assert.deepEqual(one.light.slice(1), own.slice(0, n3));
+  const two = imagePalette(logo, { light: ["#000000"], dark: ["#ffffff"] });
+  assert.deepEqual([two.light[0], two.dark[0]], ["#000000", "#ffffff"]);
+  // a piece made with it takes text in your first colour
+  const p = piece({ name: "card", cols: 4, rows: 1, palette: two }, (_, s) => s.write(0, 0, "hi"));
+  assert.equal(p.meta.palette![snapshot(p, 0, { paper: true }).color![0]], "#000000");
+  assert.equal(p.meta.palette![snapshot(p, 0).color![0]], "#ffffff");
+  assert.throws(() => imagePalette(logo, ["red"]), /imagePalette\(\) takes colours of your own as a list of #rrggbb, or \{ light, dark \} lists of the same length, not an array of 1/);
+  assert.throws(() => imagePalette(logo, { light: ["#000000"], dark: [] }), /lists of the same length/);
+  // this image's 2 colours take 12 of the 64, which leaves 26
+  assert.throws(() => imagePalette(logo, Array.from({ length: 27 }, () => "#000000")), /this image's 2 colours and their glint take 12 of the 64 a piece can have, which leaves room for 26 of your own, not 27/);
+  assert.equal(imagePalette(logo, Array.from({ length: 26 }, () => "#000000")).light.length, 32);
+});
+
 test("every option is checked when the piece is made, with what to change", () => {
   const sq = square();
   const bad: [object, RegExp][] = [
@@ -534,6 +699,11 @@ test("every option is checked when the piece is made, with what to change", () =
     [{ note: "x".repeat(73) }, /note takes one line of 1 to 72 characters/],
     [{ ramp: "x" }, /a ramp takes a name/],
     [{ category: "pictures" }, /category takes one of/],
+    // an option it doesn't take is named, and the one meant where it is near
+    [{ colour: false }, /an image has no option "colour" \(did you mean color\?\): it takes width, height, style, .* and category/],
+    [{ fps: 12 }, /no option "fps" \(did you mean glint\?\)/],
+    [{ size: 40 }, /an image has no option "size": it takes width/],
+    [{ glint: { period: 2 } }, /glint has no option "period": it takes every/],
   ];
   for (const [o, re] of bad) {
     assert.throws(() => fromPixels(sq, 64, 64, o as never), re, JSON.stringify(o));
@@ -630,6 +800,12 @@ test("readPng says what is wrong with bytes it can't read", async () => {
   const two = { width: 2, height: 2, depth: 8, type: 0, at: () => [5] };
   await assert.rejects(readPng(short(two, Uint8Array.from([0, 5, 5]))), /its image data is cut short/);
   await assert.rejects(readPng(short(two, Uint8Array.from([7, 5, 5, 0, 5, 5]))), /a row has filter 7, which PNG has none of/);
+  // image data that inflates to far more than its rows: the rows are read, and the rest never is
+  const rows = Uint8Array.from([0, 5, 6, 0, 7, 8]);
+  const long = new Uint8Array(32 << 20);
+  long.set(rows);
+  const read = await readPng(short(two, long));
+  assert.deepEqual([...read.data].filter((_, i) => i % 4 === 0), [5, 6, 7, 8]);
 });
 
 test("fromImage in Node reads a PNG by its path, a file: URL, a Blob or a data: URL, as fromPixels draws it", async () => {
@@ -640,11 +816,17 @@ test("fromImage in Node reads a PNG by its path, a file: URL, a Blob or a data: 
   try {
     const file = join(dir, "square.png");
     writeFileSync(file, bytes);
-    const sources = [file, pathToFileURL(file), pathToFileURL(file).href, new Blob([bytes]), `data:image/png;base64,${Buffer.from(bytes).toString("base64")}`];
+    // its path, its URL, its bytes as a Uint8Array, a Buffer and an ArrayBuffer, a Blob, a data: URL
+    const sources = [file, pathToFileURL(file), pathToFileURL(file).href, bytes, Buffer.from(bytes), bytes.slice().buffer, new Blob([bytes]), `data:image/png;base64,${Buffer.from(bytes).toString("base64")}`];
     for (const src of sources) {
       const piece = await fromImage(src as never, { width: 30, glint: true });
       assert.deepEqual(snapshot(piece, 1.3), want, String(src).slice(0, 40));
     }
+    // pixels are fromPixels()'s, and what it can't take is described in a few words, not printed whole
+    await assert.rejects(fromImage(new Uint8ClampedArray(16) as never), /fromImage\(\) takes an image file, not pixels: .* use fromPixels\(data, width, height\)/);
+    await assert.rejects(fromImage(Array.from({ length: 5000 }, (_, i) => i) as never), /, not an array of 5000$/);
+    await assert.rejects(fromImage(new Map() as never), /, not a Map$/);
+    await assert.rejects(fromImage(join(dir, "nope", "x".repeat(200) + ".png")), /there is no such file/);
     // the options are checked before the image is read
     await assert.rejects(fromImage(join(dir, "missing.png"), { width: 3 }), /width takes a whole number of columns/);
     await assert.rejects(fromImage(join(dir, "missing.png")), /fromImage\(\) could not read .*missing\.png: there is no such file/);
@@ -656,7 +838,7 @@ test("fromImage in Node reads a PNG by its path, a file: URL, a Blob or a data: 
     writeFileSync(join(dir, "logo.svg"), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>');
     await assert.rejects(fromImage(join(dir, "logo.svg")), /draws SVG on a page/);
     await assert.rejects(fromImage("  "), /not an empty string/);
-    await assert.rejects(fromImage(42 as never), /fromImage\(\) takes a URL, a path, SVG markup, a Blob, an <img>, an ImageBitmap or a canvas, not 42/);
+    await assert.rejects(fromImage(42 as never), /fromImage\(\) takes a URL, a path, SVG markup, a file's bytes, a Blob, an <img>, an ImageBitmap or a canvas, not 42/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -685,6 +867,26 @@ test("the example assets: the python logo in its two colours, the moon in greys"
   const span = (l: string) => l.trim().length;
   assert.ok(span(m.art[16]) > 2 * span(m.art[1]));
   for (const ch of ".:-=+*#%@") assert.ok(m.art.join("").includes(ch), ch);
+});
+
+test("the examples: each exports a piece as its default, which keeps the frame contract", async () => {
+  const load = async (name: string) => (await import(`../../examples/kit/${name}`)).default as ImagePiece;
+  const logo = await load("image-logo.ts"), photo = await load("image-photo.ts"), badge = await load("image-badge.ts");
+  for (const p of [logo, photo, badge]) {
+    assert.equal(typeof p.default, "function");
+    contract(p, [0, 0.7, 1.3, 2.4, 4.1, 5.3]);
+  }
+  assert.deepEqual([logo.meta.cols, logo.meta.rows, logo.meta.loop], [48, 24, 5]);
+  assert.deepEqual([photo.meta.cols, photo.meta.rows, photo.meta.fps], [64, 32, 0]);
+  // the badge: the logo at its top left, then a line typed and answered, over again every 5 seconds
+  const python = (await asset("python.png")) as { data: Uint8ClampedArray; width: number; height: number };
+  const small = drawing(python.data, python.width, python.height, { width: 32 });
+  const at = (t: number) => snapshot(badge, t, { mono: true }).text.split("\n");
+  small.mono.forEach((l, y) => assert.equal(at(4)[y].slice(0, small.cols), l, `row ${y}`));
+  assert.equal(at(0.5)[8].slice(34).trim(), "");
+  assert.match(at(0.5)[7], />>> print\('_ *$/);
+  assert.equal(at(4)[8].slice(34).trim(), "hello, ascii");
+  assert.deepEqual(at(9), at(4));
 });
 
 // --- in a browser ---------------------------------------------------------------------------------------------
@@ -766,7 +968,7 @@ test("fromImage reads a Blob, a URL, an <img>, a bitmap and a canvas through cre
     assert.deepEqual([drawn.at(-1)!.w, drawn.at(-1)!.h], [2400, 1200]);
     await assert.rejects(fromImage("https://example.com/missing.png"), /could not load https:\/\/example\.com\/missing\.png: 404 Not Found/);
     await assert.rejects(fromImage(new Blob(["not an image"], { type: "image/png" })), /could not read that image: try an svg, png, jpg, webp or gif/);
-    await assert.rejects(fromImage(42 as never), /fromImage\(\) takes a URL, a path, SVG markup, a Blob/);
+    await assert.rejects(fromImage(42 as never), /fromImage\(\) takes a URL, a path, SVG markup, a file's bytes, a Blob/);
     // SVG is drawn as an image on a page, which Node has none of
     await assert.rejects(fromImage('<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>'), /draws SVG on a page/);
     await assert.rejects(fromImage(new Blob(["<svg/>"], { type: "image/svg+xml" })), /draws SVG on a page/);

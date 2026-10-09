@@ -11,7 +11,4 @@
  */
 import { fromImage } from "../../src/kit/image.ts";
 
-const moon = await fromImage(new URL("./assets/moon.png", import.meta.url), { name: "moon", style: "shade", width: 64 });
-
-export const meta = moon.meta;
-export default moon.default;
+export default await fromImage(new URL("./assets/moon.png", import.meta.url), { name: "moon", style: "shade", width: 64 });
