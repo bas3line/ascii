@@ -1,0 +1,405 @@
+/*
+ * field: ascii art from a formula. Give it a function of x, y and t that
+ * returns a brightness and it does the rest: the character for each cell from
+ * a ramp, colours by value from a few stops (or by a function of your own),
+ * ordered dithering between characters, coordinates that keep a circle round
+ * on the tall 1:2 cells, and the ramp turned round on a light page so bright
+ * still reads as bright. A field is a whole piece in one call, field(), or is
+ * drawn into a grid you are drawing already, all of it or a region, with
+ * drawField(). Part of ascii.rest by @bas3line (https://github.com/bas3line),
+ * MIT licensed.
+ *
+ *   import { field } from "ascii.rest/kit";
+ *
+ *   export default field({ name: "sea", ramp: "blocks", colors: ["#0b3d91", "#7fdbff"], period: 2 },
+ *     (x, y, t) => 0.5 + 0.5 * Math.sin(x * 6 + y * 2 + Math.PI * t));
+ */
+import type { Options } from "../types.ts";
+import {
+  NONE,
+  bayer,
+  fail,
+  piece,
+  ramp as rampOf,
+  specOf,
+  spread,
+  type Color,
+  type KitPiece,
+  type MakerSpec,
+  type Palette,
+  type PaletteSpec,
+  type RampName,
+  type Region,
+  type Surface,
+} from "./core.ts";
+
+/**
+ * Where a cell is, besides x and y, for a field's function. One object is reused for every cell of a frame, so read
+ * what you need from it and keep nothing of it.
+ */
+export interface FieldCell<O extends Options = Options> {
+  /** The cell's column in the field's region, from 0 at its left. */
+  col: number;
+  /** The cell's row in the field's region, from 0 at its top. */
+  row: number;
+  /** 0 to 1 across the region, at the cell's centre: 0.5 is the middle. */
+  u: number;
+  /** 0 to 1 down the region, at the cell's centre: 0.5 is the middle. */
+  v: number;
+  /** The distance from the region's centre, in the units of x and y: Math.hypot(x, y). */
+  r: number;
+  /** The angle from the region's centre, Math.atan2(y, x): 0 points right and TAU / 4 points down, -PI to PI. */
+  a: number;
+  /** The region's width in cells. */
+  cols: number;
+  /** The region's height in cells. */
+  rows: number;
+  /** The piece's options, for field(): its defaults with the caller's on top. drawField() gives {}: your drawing has ctx.options. */
+  options: O;
+}
+
+/**
+ * A field: the brightness at x, y at t seconds, from 0 (no ink) to 1 (the ramp's densest character), or from `range`.
+ * x and y are centred on the region, 0, 0 in its middle, y down. With `aspect` (the default) they share one unit, the
+ * shorter side running -1 to 1, so a circle comes out round on the tall cells; without it each axis runs -1 to 1. A
+ * value past either end counts as that end.
+ *
+ * Return null, or NaN, where there is nothing, such as the sky over a sea or the corners round a ball: the cell is
+ * not drawn, on any page. 0 is different: it is the darkest shade, and a light page, which turns the ramp round, draws
+ * it in the densest ink. So `Math.sqrt(1 - at.r * at.r)` is a lit ball on an empty ground on both pages.
+ */
+export type FieldFn<O extends Options = Options> = (x: number, y: number, t: number, at: FieldCell<O>) => number | null;
+
+/** How a field is shaded: every option has a default that looks right with no tuning. */
+export interface FieldOptions<O extends Options = Options> {
+  /**
+   * The characters from no ink to the most: a name, "standard" (" .:-=+*#%@", the default), "detailed", "donut",
+   * "blocks" (" ░▒▓█"), "eighths", "dots", "lines", "stars" or "binary", or two or more characters of your own. A space
+   * in it is not drawn, so the field leaves those cells empty and anything under them shows.
+   */
+  ramp?: RampName | (string & {});
+  /**
+   * Colour by value: colours as #rrggbb from the lowest value to the highest, spread along their fade to `steps`
+   * colours; or { light, dark }, a list for each page, the same length. Without it (and without `color`) the field is
+   * one ink. Colours follow the value, not the ramp turned round on paper: give { light, dark } to pick colours that
+   * read on a light page. drawField() finds each colour in the surface's palette, the nearest when it is not one of
+   * them, and draws none on a surface with no palette.
+   */
+  colors?: PaletteSpec;
+  /** How many colours `colors` is spread to: 16. A whole number from 1 to 64, or up to 32 when `colors` is { light, dark }. */
+  steps?: number;
+  /**
+   * Colour by a function of your own instead: it gets the value (0 to 1, after `range` and `gamma`), x, y, t and the
+   * cell, and returns a colour: an index into the piece's colours or #rrggbb, found in them. field() needs `palette`
+   * (or `colors`) in its spec to pick from. It is not called for cells left empty, nor when colours are not shown.
+   */
+  color?: (value: number, x: number, y: number, t: number, at: FieldCell<O>) => Color;
+  /**
+   * Ordered 4 by 4 (Bayer) dithering: each cell's value nudged by up to half a step before it is rounded to a
+   * character (and a colour), so a smooth slope shows as a fine mix of neighbouring characters instead of hard bands.
+   * A character only ever moves to its neighbour on the ramp. false by default.
+   */
+  dither?: boolean;
+  /**
+   * Turns the ramp round, the densest character for 0. "auto" (the default) does it on a light page (env.paper): dense
+   * characters are bright light on a dark page but dark ink on paper, so bright parts stay bright. true always, false
+   * never. Cells where the function returns null are empty whichever way the ramp runs. "auto" suits a texture that
+   * fills the frame, such as a plasma; a shape on an empty ground, such as a sea or a glow, usually reads best with
+   * false and { light, dark } colours, drawn in dark ink on paper.
+   */
+  invert?: boolean | "auto";
+  /**
+   * true (the default): x and y share one unit, the shorter side -1 to 1, rows counted at their true height (the
+   * surface's aspect, 2 for the usual cell), so circles are round. false: each axis -1 to 1 whatever the shape.
+   */
+  aspect?: boolean;
+  /** The value raised to this power before shading: 1. Above 1 darkens the middle values and sharpens the bright, below 1 lifts them. */
+  gamma?: number;
+  /**
+   * The lowest and highest values your function returns, mapped to 0 and 1 before anything else: [0, 1]. [-1, 1] lets
+   * it return a sine as it is; a sum of four sines might be [-4, 4]. High before low turns it round.
+   */
+  range?: readonly [number, number];
+  /** Where in the surface to draw, in cells: all of it by default. Cells outside the surface are left out, the field keeping its shape. */
+  region?: Region;
+}
+
+/** What field() takes: a piece's spec (all optional, 64 by 24 by default), the field's options, and its period. */
+export type FieldSpec<O extends Options = Options> = MakerSpec<O> &
+  FieldOptions<O> & {
+    /** Its loop in seconds, when the function repeats exactly: it sets meta.loop, the loop svg() plays. None by default. */
+    period?: number;
+  };
+
+// --- the plan: options checked and worked out once -------------------------------
+
+interface Plan<O extends Options> {
+  codes: Uint16Array; // the ramp's characters as char codes
+  invert: boolean | "auto";
+  dither: boolean;
+  aspect: boolean;
+  gamma: number;
+  lo: number; // value = (returned - lo) * scale
+  scale: number;
+  region: Region | undefined;
+  steps: number;
+  palette: PaletteSpec | null; // `colors` spread to `steps`, as a piece's palette takes it
+  light: readonly string[] | null; // the spread colours for each page
+  dark: readonly string[] | null;
+  color: FieldOptions<O>["color"];
+  // Colour step to palette index, worked out once a palette and a page: [dark page, paper].
+  lut: [Uint8Array, Uint8Array];
+  lutFor: [Palette | null, Palette | null];
+}
+
+const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const show = (v: unknown) => (typeof v === "function" ? "a function" : typeof v === "string" ? JSON.stringify(v) : (JSON.stringify(v) ?? String(v)));
+
+// Checks every option a field takes, throwing for the first one it can't, and works out what each frame needs.
+function plan<O extends Options>(o: FieldOptions<O> | undefined, who: string): Plan<O> {
+  if (o === undefined || o === null) o = {};
+  else if (typeof o !== "object") fail(`${who} takes its options as an object, such as { ramp: "blocks" }, not ${show(o)}`);
+  const chars = rampOf(o.ramp ?? "standard");
+  const codes = Uint16Array.from(chars, (ch) => ch.charCodeAt(0));
+
+  const steps = o.steps ?? 16;
+  if (!Number.isInteger(steps) || steps < 1 || steps > 64) fail(`steps takes a whole number of colours from 1 to 64, not ${show(steps)}`);
+  let palette: PaletteSpec | null = null, light: readonly string[] | null = null, dark: readonly string[] | null = null;
+  if (o.colors !== undefined) {
+    const c = o.colors;
+    if (c === null || typeof c !== "object") fail(`colors takes a list of #rrggbb, or { light, dark }, not ${show(c)}`);
+    if (!Array.isArray(c) && steps > 32) fail(`steps takes up to 32 when colors has a light and a dark list (64 colours in all), not ${steps}`);
+    palette = spread(c, steps);
+    if (Array.isArray(palette)) light = dark = palette as readonly string[];
+    else ({ light, dark } = palette as { light: readonly string[]; dark: readonly string[] });
+  }
+  if (o.color !== undefined && typeof o.color !== "function")
+    fail(`color takes a function of the value, x, y, t and the cell that returns a colour, such as (v) => (v > 0.5 ? 1 : 0), not ${show(o.color)}`);
+  if (o.dither !== undefined && typeof o.dither !== "boolean") fail(`dither takes true or false, not ${show(o.dither)}`);
+  const invert = o.invert ?? "auto";
+  if (invert !== true && invert !== false && invert !== "auto") fail(`invert takes true, false or "auto", not ${show(invert)}`);
+  if (o.aspect !== undefined && typeof o.aspect !== "boolean") fail(`aspect takes true (circles round) or false (each axis -1 to 1), not ${show(o.aspect)}`);
+  const gamma = o.gamma ?? 1;
+  if (!finite(gamma) || gamma <= 0) fail(`gamma takes a number above 0, such as 1.5, not ${show(gamma)}`);
+  const range = o.range ?? [0, 1];
+  if (!Array.isArray(range) || range.length !== 2 || !finite(range[0]) || !finite(range[1]) || range[0] === range[1])
+    fail(`range takes the lowest and highest values the function returns, two different numbers such as [-1, 1], not ${show(range)}`);
+  const region = o.region;
+  if (region !== undefined && (region === null || typeof region !== "object" || ![region.x, region.y, region.cols, region.rows].every(finite)))
+    fail(`region takes { x, y, cols, rows } in cells, all numbers, not ${show(region)}`);
+
+  return {
+    codes,
+    invert,
+    dither: o.dither ?? false,
+    aspect: o.aspect ?? true,
+    gamma,
+    lo: range[0],
+    scale: 1 / (range[1] - range[0]),
+    // A copy: changing the object afterwards doesn't move a piece already made.
+    region: region && { x: region.x, y: region.y, cols: region.cols, rows: region.rows },
+    steps,
+    palette,
+    light,
+    dark,
+    color: o.color,
+    lut: [new Uint8Array(steps), new Uint8Array(steps)],
+    lutFor: [null, null],
+  };
+}
+
+// --- where each cell is: worked out once a surface and region ----------------------
+
+interface Geometry {
+  key: string;
+  c0: number; // the visible columns and rows of the region, region-relative: c0 up to c1, r0 up to r1
+  c1: number;
+  r0: number;
+  r1: number;
+  x: Float64Array; // by visible column
+  u: Float64Array;
+  y: Float64Array; // by visible row
+  v: Float64Array;
+  r: Float64Array; // by visible cell, row by row
+  a: Float64Array;
+}
+
+// Each surface keeps the last few regions a field was drawn into, so a frame costs no allocation.
+const geometries = new WeakMap<Surface, Geometry[]>();
+const KEEP = 8;
+
+function geometry(s: Surface, x0: number, y0: number, cols: number, rows: number, aspect: boolean): Geometry | null {
+  const c0 = Math.max(0, -x0), c1 = Math.min(cols, s.cols - x0);
+  const r0 = Math.max(0, -y0), r1 = Math.min(rows, s.rows - y0);
+  if (c0 >= c1 || r0 >= r1) return null;
+  const key = `${x0} ${y0} ${cols} ${rows} ${aspect ? 1 : 0} ${s.aspect}`;
+  let list = geometries.get(s);
+  if (!list) geometries.set(s, (list = []));
+  for (const g of list) if (g.key === key) return g;
+
+  const w = c1 - c0, h = r1 - r0;
+  // The region's true shape is cols wide by rows * aspect tall, in cell widths; half its shorter side is one unit.
+  const k = s.aspect;
+  const half = Math.min(cols, rows * k) / 2;
+  const g: Geometry = {
+    key, c0, c1, r0, r1,
+    x: new Float64Array(w), u: new Float64Array(w),
+    y: new Float64Array(h), v: new Float64Array(h),
+    r: new Float64Array(w * h), a: new Float64Array(w * h),
+  };
+  for (let c = c0; c < c1; c++) {
+    g.x[c - c0] = aspect ? (c + 0.5 - cols / 2) / half : ((c + 0.5) / cols) * 2 - 1;
+    g.u[c - c0] = (c + 0.5) / cols;
+  }
+  for (let r = r0; r < r1; r++) {
+    g.y[r - r0] = aspect ? ((r + 0.5 - rows / 2) * k) / half : ((r + 0.5) / rows) * 2 - 1;
+    g.v[r - r0] = (r + 0.5) / rows;
+  }
+  for (let j = 0, i = 0; j < h; j++)
+    for (let c = 0; c < w; c++, i++) {
+      g.r[i] = Math.hypot(g.x[c], g.y[j]);
+      g.a[i] = Math.atan2(g.y[j], g.x[c]);
+    }
+  list.unshift(g);
+  if (list.length > KEEP) list.pop();
+  return g;
+}
+
+// Colour step to palette index for this surface's palette and page, worked out on the first frame that needs it.
+function lutOf<O extends Options>(s: Surface, p: Plan<O>): Uint8Array {
+  const side = s.paper ? 1 : 0;
+  const palette = s.palette!;
+  const lut = p.lut[side];
+  if (p.lutFor[side] !== palette) {
+    const list = (s.paper ? p.light : p.dark)!;
+    for (let k = 0; k < p.steps; k++) lut[k] = palette.index(list[k], s.paper);
+    p.lutFor[side] = palette;
+  }
+  return lut;
+}
+
+// --- drawing -----------------------------------------------------------------------
+
+// The field at t into s, as the plan says. `at` is the one cell object handed to the function, filled in for each cell.
+function paint<O extends Options>(s: Surface, fn: FieldFn<O>, t: number, p: Plan<O>, at: FieldCell<O>): void {
+  const R = p.region;
+  const x0 = R ? Math.floor(R.x) : 0, y0 = R ? Math.floor(R.y) : 0;
+  const cols = R ? Math.floor(R.cols) : s.cols, rows = R ? Math.floor(R.rows) : s.rows;
+  if (cols < 1 || rows < 1) return;
+  const g = geometry(s, x0, y0, cols, rows, p.aspect);
+  if (!g) return;
+
+  const { codes, steps, lo, scale, gamma, dither } = p;
+  const n = codes.length;
+  const flip = p.invert === "auto" ? s.paper : p.invert;
+  // Colours are only worked out when they will be shown: a palette, and env.color given.
+  const shown = !s.mono && s.palette !== null;
+  const byFn = shown && p.color ? p.color : null;
+  const lut = shown && !byFn && p.light ? lutOf(s, p) : null;
+  const { chars, colors } = s;
+  const w = g.c1 - g.c0;
+  at.cols = cols;
+  at.rows = rows;
+
+  let checked = false;
+  for (let r = g.r0; r < g.r1; r++) {
+    const j = r - g.r0, y = g.y[j], sy = y0 + r;
+    at.row = r;
+    at.v = g.v[j];
+    for (let c = g.c0, i = j * w; c < g.c1; c++, i++) {
+      const x = g.x[c - g.c0], sx = x0 + c;
+      at.col = c;
+      at.u = g.u[c - g.c0];
+      at.r = g.r[i];
+      at.a = g.a[i];
+      let v = fn(x, y, t, at);
+      if (!checked) {
+        if (v === undefined) fail(NOTHING);
+        checked = true;
+      }
+      // null and NaN are nothing: the cell stays as it was, on any page.
+      if (typeof v !== "number" || v !== v) continue;
+      v = (v - lo) * scale;
+      v = v > 0 ? (v < 1 ? v : 1) : 0;
+      if (gamma !== 1) v = v ** gamma;
+      const jitter = dither ? bayer(sx, sy) : 0;
+      let k = Math.floor(v * n + jitter);
+      k = k < 0 ? 0 : k >= n ? n - 1 : k;
+      const ch = codes[flip ? n - 1 - k : k];
+      // A space is not drawn: the cell stays as it was, EMPTY on a fresh frame.
+      if (ch === 32) continue;
+      const cell = sy * s.cols + sx;
+      chars[cell] = ch;
+      if (lut) {
+        let q = Math.floor(v * steps + jitter);
+        q = q < 0 ? 0 : q >= steps ? steps - 1 : q;
+        colors[cell] = lut[q];
+      } else colors[cell] = byFn ? s.resolve(byFn(v, x, y, t, at)) : NONE;
+    }
+  }
+}
+
+const NO_OPTIONS: Options = Object.freeze({});
+const NOTHING = "a field's function returns a brightness, a number 0 to 1, or null where there is nothing, not undefined: does it return its value?";
+
+const cell = <O extends Options>(options: O): FieldCell<O> => ({ col: 0, row: 0, u: 0, v: 0, r: 0, a: 0, cols: 0, rows: 0, options });
+
+// A surface is anything shaped like one: duck-typed, so a Surface from another copy of the kit still works.
+const isSurface = (s: unknown): s is Surface =>
+  !!s && typeof s === "object" && (s as Surface).chars instanceof Uint16Array && (s as Surface).colors instanceof Uint8Array && Number.isInteger((s as Surface).cols);
+
+/**
+ * Draws a field into a surface you are drawing already, all of it or `region`: for a field behind text, inside a
+ * frame, or beside other drawing in one piece(). Cells whose character is a space are left as they were, so a field
+ * drawn over something lets it show where the field is dark. Colours, by `colors` or `color`, are found in the
+ * surface's palette; on a surface with no palette, or drawn in one ink, none are written.
+ *
+ *   piece({ name: "window", cols: 40, rows: 12 }, (t, s) => {
+ *     drawField(s, (x, y, t) => 0.5 + 0.5 * Math.sin(x * 4 + t), t, { region: { x: 2, y: 1, cols: 36, rows: 9 } });
+ *     s.write(2, 11, "a field in a window");
+ *   });
+ */
+export function drawField(s: Surface, fn: FieldFn, t: number, o?: FieldOptions): void {
+  if (!isSurface(s)) fail(`drawField() takes the Surface to draw into first, then the function and t: drawField(s, (x, y, t) => ..., t), not ${show(s)}`);
+  if (typeof fn !== "function") fail(`drawField() takes a function of x, y and t that returns a brightness 0 to 1, such as (x, y, t) => 0.5 + 0.5 * Math.sin(x * 6 + t), not ${show(fn)}`);
+  paint(s, fn, finite(t) ? t : 0, plan(o, "drawField()"), cell(NO_OPTIONS));
+}
+
+/**
+ * A piece from a field in one call: a spec (a name, its size, 64 by 24 by default, and the field's options) and a
+ * function of x, y and t that returns a brightness 0 to 1. With `colors` the piece is coloured by value; with `palette`
+ * and a `color` function, by your own rule; with neither it is text in the page's own colour. `period` sets meta.loop
+ * when the function repeats exactly, so svg() plays one seamless loop. Throws, saying what to change, for anything it
+ * can't take, when it is called rather than on the first frame.
+ *
+ *   export default field({ name: "pulse", ramp: "dots", period: 2 }, (x, y, t, at) => Math.cos(at.r * 9 - Math.PI * t));
+ */
+export function field<O extends Options = Options>(spec: FieldSpec<O>, fn: FieldFn<O>): KitPiece<O> {
+  if (typeof fn !== "function")
+    fail(`field() takes a spec and then a function of x, y and t that returns a brightness 0 to 1, such as field({ name: "sea" }, (x, y, t) => 0.5 + 0.5 * Math.sin(x * 6 + t)), not ${show(fn)}`);
+  const base = specOf<O>(spec, "field");
+  const p = plan<O>(spec, "field()");
+  const { period } = spec;
+  if (period !== undefined && !(finite(period) && period > 0)) fail(`period takes the field's loop in seconds, a number above 0, not ${show(period)}`);
+  if (spec.colors !== undefined && spec.palette !== undefined)
+    fail("field() takes colors (stops it spreads into the piece's colours) or palette (colours for a color function to pick from), not both");
+  if (p.color && spec.colors === undefined && spec.palette === undefined)
+    fail('field()\'s color function picks from the piece\'s colours: give the spec a palette, such as palette: ["#f97316", "#38bdf8"], or colors');
+
+  const made = piece<O>(
+    { ...base, palette: p.palette ?? spec.palette, loop: period ?? spec.loop },
+    {
+      setup: (options) => {
+        const at = cell(options);
+        return (t, s) => paint(s, fn, t, p, at);
+      },
+    },
+  );
+  // Called once now, at the centre at t = 0, so a function that returns nothing fails here and not on a page.
+  const probe = cell<O>({ ...made.meta.options } as O);
+  Object.assign(probe, { col: base.cols >> 1, row: base.rows >> 1, u: 0.5, v: 0.5, cols: base.cols, rows: base.rows });
+  const v = fn(0, 0, 0, probe);
+  if (v === undefined) fail(NOTHING);
+  if (v !== null && typeof v !== "number") fail(`a field's function returns a brightness, a number 0 to 1, or null where there is nothing, not ${show(v)}`);
+  return made;
+}
