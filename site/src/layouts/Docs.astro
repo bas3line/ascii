@@ -21,7 +21,12 @@ const file = path === "/docs/" ? "index" : path.slice("/docs/".length, -1);
 const sections = headings.filter((h) => h.depth === 2);
 ---
 
-<Layout title={`${frontmatter.title} · ascii.rest docs`} description={frontmatter.description} path={path}>
+<Layout
+  title={`${frontmatter.title} · ascii.rest docs`}
+  description={frontmatter.description}
+  path={path}
+  card={{ path: `/og/docs/${file}.png`, alt: `${frontmatter.title}, ascii.rest docs: ${frontmatter.description}` }}
+>
   <!-- The docs' prose is in a sans, IBM Plex Sans, for reading at length; the rest of the page is in Paper Mono. -->
   <link slot="head" rel="preconnect" href="https://fonts.googleapis.com" />
   <link slot="head" rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

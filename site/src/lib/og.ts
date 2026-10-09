@@ -53,12 +53,14 @@ interface Font {
 }
 
 const resolve = createRequire(import.meta.url).resolve;
-const face = (weight: 400 | 500): Font => {
+const face = (weight: 400 | 500 | 600): Font => {
   const file = readFileSync(resolve(`@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-${weight}-normal.woff`));
   return opentype.parse(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength)) as Font;
 };
 const REGULAR = face(400);
 const MEDIUM = face(500);
+/** The site card's name only. */
+const SEMIBOLD = face(600);
 
 const n = (v: number) => +v.toFixed(2);
 
@@ -78,12 +80,12 @@ function outline(font: Font, ch: string, x: number, y: number, size: number): st
   return d;
 }
 
-/** A run of text set from (x, y) on its baseline; returns its path and width. */
-function words(font: Font, text: string, x: number, y: number, size: number) {
+/** A run of text set from (x, y) on its baseline, `track` pixels added after each character; returns its path and width. */
+function words(font: Font, text: string, x: number, y: number, size: number, track = 0) {
   let d = "", at = x;
   for (const ch of text) {
     d += outline(font, ch, at, y, size);
-    at += (font.charToGlyph(ch).advanceWidth * size) / font.unitsPerEm;
+    at += (font.charToGlyph(ch).advanceWidth * size) / font.unitsPerEm + track;
   }
   return { d, width: at - x };
 }
@@ -391,13 +393,14 @@ const GITHUB =
 
 /**
  * The bottom row: the piece's name and the site on the left, the credit on the
- * right. Returns where the left words end and the right ones begin.
+ * right. Returns where the left words end and the right ones begin. A page's
+ * card passes the site as the name and its path as `after`, set close.
  */
-function footer(name: string, scene: boolean) {
+function footer(name: string, scene: boolean, after = "ascii.rest", gap = 2) {
   const size = 26, y = HEIGHT - 52;
   const title = words(MEDIUM, name, SIDE, y, size);
-  const siteX = SIDE + title.width + size * 0.6 * 2;
-  const site = words(REGULAR, "ascii.rest", siteX, y, size);
+  const siteX = SIDE + title.width + size * 0.6 * gap;
+  const site = words(REGULAR, after, siteX, y, size);
   const handle = "@bas3line";
   const hw = handle.length * size * 0.6;
   const by = words(REGULAR, handle, WIDTH - SIDE - hw, y, size);
@@ -432,5 +435,161 @@ export async function card(slug: PieceName, name: string): Promise<Uint8Array> {
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">${body}${foot.svg}</svg>`;
   const png = await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+  return new Uint8Array(png);
+}
+
+/** Splits text into lines of at most `max` characters, at spaces. */
+function wrap(text: string, max: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(/\s+/)) {
+    if (line && line.length + 1 + word.length > max) {
+      lines.push(line);
+      line = word;
+    } else line = line ? `${line} ${word}` : word;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+/**
+ * The share card for a page that shows no one piece, a docs page or a tool:
+ * its title as large as fits and its description under it, in the box the
+ * piece cards give their art, and along the bottom the site with the page's
+ * path, and the credit. The description is left off if it takes more than
+ * three lines.
+ */
+export async function pageCard(title: string, description: string, path: string): Promise<Uint8Array> {
+  const foot = footer("ascii.rest", false, path, 0);
+  const box = { x: SIDE, y: 52, w: WIDTH - 2 * SIDE, h: HEIGHT - 52 - 122 };
+  const size = Math.min(96, box.w / ([...title].length * 0.6));
+  const small = 30, leading = small * 1.45, gap = 30;
+  const lines = wrap(description, Math.floor(box.w / (small * 0.6)));
+  const told = lines.length <= 3 ? lines : [];
+  // The block's height from the title's cap height to the last line's baseline, centred in the box.
+  const cap = size * 0.7;
+  const tall = cap + (told.length ? gap + small * 0.7 + (told.length - 1) * leading : 0);
+  const top = box.y + (box.h - tall) / 2;
+  let body = `<path fill="${INK}" d="${words(MEDIUM, title, SIDE, top + cap, size).d}"/>`;
+  told.forEach((line, i) => {
+    body += `<path fill="${MUTED}" d="${words(REGULAR, line, SIDE, top + cap + gap + small * 0.7 + i * leading, small).d}"/>`;
+  });
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">` +
+    `<rect width="${WIDTH}" height="${HEIGHT}" fill="${GROUND}"/>${body}${foot.svg}</svg>`;
+  const png = await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+  return new Uint8Array(png);
+}
+
+// --- the site's card --------------------------------------------------------
+
+/*
+ * The site's own card, /og.png: night coast as a page paints it on a canvas
+ * 1260 wide, its middle in the card, shaded toward the bottom, under the
+ * name, the count of pieces, the frameworks and the credit. Its look was set
+ * by a screenshot of that page, so the scene's dots here are the ones the
+ * canvas draws (mount.ts), not the piece cards' circles: SF Mono's three dot
+ * glyphs at 10.5px, each centred in a 7px box at whole pixels, with the
+ * browser's text antialiasing, which lifts a partly covered pixel to the
+ * square root of its coverage. The text is laid out as that page's CSS laid
+ * it out.
+ */
+
+/** SF Mono's dot glyphs, in ems: width, height, and the centre's height above the baseline. */
+const CANVAS_DOTS: Record<string, [number, number, number]> = {
+  "·": [0.1323, 0.1323, 0.3621],
+  "•": [0.4023, 0.4023, 0.312],
+  "●": [0.6182, 0.6089, 0.3518],
+};
+
+const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+
+/** A scene painted as the canvas paints it, `span` pixels wide from `left`, as RGB bytes the size of the card. */
+function canvasScene(lines: string[], meta: Meta, color: Uint8Array, span: number, left: number): Buffer {
+  const { cols, rows, palette = [], ground = GROUND } = meta;
+  const out = new Float32Array(WIDTH * HEIGHT * 3);
+  const back = rgb(ground);
+  for (let i = 0; i < WIDTH * HEIGHT; i++) out.set(back, i * 3);
+  const inks = palette.map(rgb);
+  const w = span / cols, box = Math.ceil(w), size = w / 0.6;
+  // The glyph's baseline in its box: the box's middle, plus the 4px the font's middle stands over its baseline, to a whole pixel.
+  const base = Math.ceil(box / 2 + 4);
+  const ss = 6; // samples a pixel, each way
+  for (let r = 0; r < rows; r++) {
+    const gy = Math.round(r * w + (w - box) / 2);
+    const chars = [...(lines[r] ?? "")];
+    for (let c = 0; c < cols; c++) {
+      const dot = CANVAS_DOTS[chars[c]];
+      if (!dot) continue;
+      const gx = Math.round(c * w + (w - box) / 2);
+      const cx = gx + box / 2, cy = gy + base - dot[2] * size;
+      const rx = (dot[0] * size) / 2, ry = (dot[1] * size) / 2;
+      const ink = inks[color[r * cols + c]] ?? inks[0] ?? rgb(INK);
+      // Each glyph's whole box is copied, a little wider than its cell, so a big dot's edge runs into the next
+      // cell's, as the canvas drew it when the card was set (mount.ts before it kept each cell to its own pixels).
+      for (let Y = Math.max(0, gy); Y < gy + box && Y < HEIGHT; Y++) {
+        for (let X = gx; X < gx + box; X++) {
+          const px = X + left;
+          if (px < 0 || px >= WIDTH) continue;
+          let hit = 0;
+          for (let a = 0; a < ss; a++) {
+            for (let b = 0; b < ss; b++) {
+              const u = (X + (a + 0.5) / ss - cx) / rx, v = (Y + (b + 0.5) / ss - cy) / ry;
+              if (u * u + v * v <= 1) hit++;
+            }
+          }
+          if (!hit) continue;
+          const k = Math.sqrt(hit / (ss * ss));
+          const o = (Y * WIDTH + px) * 3;
+          for (let q = 0; q < 3; q++) out[o + q] = out[o + q] * (1 - k) + ink[q] * k;
+        }
+      }
+    }
+  }
+  return Buffer.from(Uint8Array.from(out, (v) => Math.round(v)));
+}
+
+/** The site's share card with the number of pieces the library has, as PNG bytes. */
+export async function siteCard(count: number): Promise<Uint8Array> {
+  const { meta, lines, color } = await still("night-coast");
+  const scene = canvasScene(lines, meta, color!, 1260, -30);
+  // The text block sits 52px off the bottom. From the bottom up: the row of
+  // frameworks and the credit (22px), 26px, the count (28px), 18px, the name
+  // (84px, set solid, -1px apart). Each line box is the font's own line height.
+  const em = REGULAR.unitsPerEm, A = REGULAR.ascender / em, D = -REGULAR.descender / em;
+  const rowTop = HEIGHT - 52 - 22 * (A + D);
+  const countTop = rowTop - 26 - 28 * (A + D);
+  const nameTop = countTop - 18 - 84;
+  // Baselines to whole pixels, as the screenshot has them.
+  const nameBase = Math.floor(nameTop + (84 - 84 * (A + D)) / 2 + 84 * A);
+  const countBase = Math.floor(countTop + 28 * A);
+  const rowBase = Math.round(rowTop + 22 * A);
+  const name = words(SEMIBOLD, "ascii.rest", SIDE, nameBase, 84, -1);
+  const line = words(REGULAR, `${count} animated ascii pieces for the web`, SIDE, countBase, 28);
+  const row = words(REGULAR, "React · Next.js · Astro · HTML", SIDE, rowBase, 22);
+  const handle = "@bas3line";
+  const hw = handle.length * 22 * 0.6;
+  const by = words(MEDIUM, handle, WIDTH - SIDE - hw, rowBase, 22);
+  const mark = 24, mx = WIDTH - SIDE - hw - 10 - mark, my = rowTop + (22 * (A + D) - mark) / 2;
+  const open = `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}">`;
+  const shade =
+    open +
+    `<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0.38" stop-color="${GROUND}" stop-opacity="0"/><stop offset="0.68" stop-color="${GROUND}" stop-opacity="0.72"/><stop offset="1" stop-color="${GROUND}" stop-opacity="0.94"/></linearGradient></defs>` +
+    `<rect width="${WIDTH}" height="${HEIGHT}" fill="url(#s)"/></svg>`;
+  const text =
+    open +
+    `<path fill="${INK}" d="${name.d}"/>` +
+    `<path fill="${SOFT}" d="${line.d}"/>` +
+    `<path fill="${MUTED}" d="${row.d}"/>` +
+    `<path fill="${INK}" d="${by.d}"/>` +
+    `<path fill="${INK}" transform="translate(${n(mx)} ${n(my)}) scale(${mark / 16})" d="${GITHUB}"/>` +
+    `</svg>`;
+  // The words' edges lifted as the browser lifts its text's: a partly covered pixel to the square root of its coverage.
+  const lit = await sharp(Buffer.from(text)).ensureAlpha().raw().toBuffer();
+  for (let i = 3; i < lit.length; i += 4) lit[i] = Math.round(255 * Math.sqrt(lit[i] / 255));
+  const png = await sharp(scene, { raw: { width: WIDTH, height: HEIGHT, channels: 3 } })
+    .composite([{ input: Buffer.from(shade) }, { input: lit, raw: { width: WIDTH, height: HEIGHT, channels: 4 } }])
+    .png({ compressionLevel: 9 })
+    .toBuffer();
   return new Uint8Array(png);
 }

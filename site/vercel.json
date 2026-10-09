@@ -17,11 +17,9 @@
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
     }
   ],
-  "rewrites": [
-    {"source": "/videos/:file", "destination": "https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/:file"}
-  ],
   "redirects": [
     {"source": "/:path((?!videos/).*)", "has": [{"type": "host", "value": "cdn.ascii.rest"}], "destination": "https://ascii.rest/:path", "statusCode": 308},
+    {"source": "/videos/:file", "destination": "https://xd8s9bimnuiwf5ec.public.blob.vercel-storage.com/videos/:file", "statusCode": 307},
     {"source": "/apple-touch-icon-precomposed.png", "destination": "/apple-touch-icon.png", "statusCode": 301},
     {"source": "/doc", "destination": "/docs/", "statusCode": 301},
     {"source": "/doc/", "destination": "/docs/", "statusCode": 301},
