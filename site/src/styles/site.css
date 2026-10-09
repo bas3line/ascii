@@ -411,8 +411,24 @@ a[aria-current="page"] {
   color: var(--muted);
 }
 
-.notice:hover .go {
+/* The whole line is one link, but only [take a look] lights up, as other links do: inverting the whole line, as
+   a:hover does, turned it into one solid bar and hid the tag and the glint. */
+@media (hover: hover) {
+  .notice:hover {
+    background: none;
+    color: var(--ink);
+  }
+}
+
+.notice:focus-visible {
+  background: none;
   color: var(--ink);
+}
+
+.notice:hover .go,
+.notice:focus-visible .go {
+  background: var(--ink);
+  color: var(--bg);
 }
 
 @keyframes notice-glint {
