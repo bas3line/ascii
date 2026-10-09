@@ -7,7 +7,7 @@
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
 import { parseArgs } from "node:util";
 import { drawable, fonts, shadows, type Effect, type FontName, type ShadowName } from "./banner.ts";
@@ -82,14 +82,22 @@ async function add(wanted: string[], { dir, overwrite, registry }: { dir?: strin
   const root = process.cwd();
   const into = dir ?? (existsSync(join(root, "src")) ? join("src", "components", "ascii") : join("components", "ascii"));
   const all = await items(wanted, registry);
+  const base = resolve(root, into);
+  // Every file names its place under the components folder, @components/ascii/<path>, and must land inside it: a
+  // registry is someone else's JSON, and a path with .. in it, or an absolute one, is refused before anything is written.
+  const place = (file: { path: string; target?: string }) => {
+    const rest = (file.target ?? file.path).replace(/^@components\/ascii\//, "");
+    const path = resolve(base, rest);
+    if (isAbsolute(rest) || !path.startsWith(base + sep)) throw new Usage(`refusing "${file.target ?? file.path}": it would land outside ${into}`);
+    return path;
+  };
+  for (const item of all) for (const file of item.files ?? []) place(file);
   const wrote: string[] = [], kept: string[] = [];
   const deps = new Set<string>();
   for (const item of all) {
     item.dependencies?.forEach((d) => deps.add(d));
     for (const file of item.files ?? []) {
-      // Every file names its place under the components folder: @components/ascii/<path>.
-      const rest = (file.target ?? file.path).replace(/^@components\/ascii\//, "");
-      const path = join(root, into, rest);
+      const path = place(file);
       if (existsSync(path) && !overwrite) {
         kept.push(relative(root, path));
         continue;
