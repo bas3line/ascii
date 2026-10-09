@@ -7,7 +7,7 @@
  * companies and the scan line for distros.
  */
 import type { Category, Frame, Piece } from "ascii.rest";
-import { black, palette, type Drawing } from "./logo";
+import { RAMP, black, palette, type Drawing } from "./logo";
 
 export type Kind = Extract<Category, "logos" | "companies" | "distros">;
 
@@ -81,6 +81,9 @@ export function source(d: Drawing, s: Settings, ts = true): string {
   const one = p.n === 1;
   const pass = p.scan ? "scan" : "glint";
   const opt = p.scan ? "scan" : "shine";
+  const shaded = d.style === "shade";
+  // Shaded, a cell turns round in one ink on a light page, first of all.
+  const turn = shaded ? `\n          if (paper && !color) ch = RAMP[RAMP.length - 1 - RAMP.indexOf(ch)];` : "";
 
   const meta = `${ex}const meta = {
   name: ${JSON.stringify(p.name)},
@@ -102,14 +105,17 @@ const MONO = ${block(d.mono)};
 // On a canvas, and the colour of each cell: an index into the logo's colours.
 const ART = ${block(d.art)};
 const INK = ${block(d.ink)};
-`;
+${shaded ? `
+// Light to dense. In one ink on a light page it is turned round, as dense reads as dark there.
+const RAMP = "${RAMP}";
+` : ""}`;
 
   const glint = `
 const START = 0.5; // seconds before the first glint
 const PASS = 2; // seconds a glint takes to cross
 const HALF = 5; // half its width, in cells
 const LEAN = 0.9; // cells it shifts left a row down, so it leans like a slash
-const SOLID = "8dbqpPYOo0"; // what the glint turns to slashes; thin edges keep their shape
+const SOLID = "${shaded ? "8dbqpPYOo0#%@" : "8dbqpPYOo0"}"; // what the glint turns to slashes; thin edges keep their shape
 
 const lines = (art${T(": string")}) => art.slice(1, -1).split("\\n").map((line) => line.padEnd(meta.cols));
 
@@ -135,7 +141,7 @@ ${ex}${T("default ")}function ${p.fn}({ shine = meta.options.shine }${T(`: Parti
       let line = "";
       for (let x = 0; x < cols; x++) {
         let ch = pic[y][x];
-        if (ch !== " ") {
+        if (ch !== " ") {${turn}
           const d = Math.abs(x + LEAN * y - at);
           let k = d < HALF ? 1 - d / HALF : 0;
           k = k * k * (3 - 2 * k);
@@ -191,7 +197,7 @@ ${ex}${T("default ")}function ${p.fn}({ scan = meta.options.scan }${T(`: Partial
       let line = "";
       for (let x = 0; x < cols; x++) {
         let ch = pic[y][x];
-        if (ch !== " ") {
+        if (ch !== " ") {${turn}
           if (level === 2) {
             const h = hash(x, y, tick);
             if (h % 4) ch = NOISE[(h >>> 2) % NOISE.length];
@@ -220,7 +226,7 @@ ${ex}${T("default ")}function ${p.fn}({ scan = meta.options.scan }${T(`: Partial
   return `/*
 ${wrap(`${p.name}: the ${clean(s.proper) || p.name} logo, ${motion}.`)}
  *
-${wrap(`Drawn from ${clean(s.file) || "its SVG"} on ascii.rest/make: each cell holds the character whose shape best matches the logo's edge through it, and 8 where the logo is solid. ${inColour}; in a <pre> it is one ink, from the same drawing${d.knocked ? " with its white left out" : ""}. The logo is a trademark of its owner, shown here to name the ${what}.`)}
+${wrap(`Drawn from ${clean(s.file) || "its image"} on ascii.rest/make: ${shaded ? "each cell holds a character as dense as the image is bright there, from RAMP" : "each cell holds the character whose shape best matches the logo's edge through it, and 8 where the logo is solid"}. ${inColour}; in a <pre> it is one ink, from the same drawing${d.knocked ? " with its white left out" : ""}${shaded ? ", its shades turned round on a light page" : ""}. The logo is a trademark of its owner, shown here to name the ${what}.`)}
  */
 import type { Frame, Meta } from "../types.ts";
 
@@ -236,7 +242,7 @@ ${body}`;
 /**
  * The piece itself, to play on the page: the plain script of `source`, run. Nothing in it is the reader's text but
  * the name, which `clean` has cut to letters, digits and a few marks and which sits in strings and a line comment;
- * the art is made of the characters in EDGE, and the rest is numbers and the code above.
+ * the art is made of the characters in EDGE or RAMP, and the rest is numbers and the code above.
  */
 export function piece(d: Drawing, s: Settings): Piece {
   const { fn } = parts(d, s);

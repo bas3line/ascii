@@ -1,6 +1,7 @@
 ---
 /*
- * Make a logo: an SVG in, an animated ascii logo out. The page draws it in the
+ * Image to ascii: an image in, SVG, PNG, JPG, WebP, GIF or any other the
+ * browser reads, and an animated ascii logo out. The page draws it in the
  * browser by the method the library's logos were drawn by (lib/logo.ts), plays
  * it with the library's own mount, and writes it out as a piece file, an embed
  * snippet and README SVGs (lib/logo-file.ts). Nothing is uploaded.
@@ -15,35 +16,38 @@ const glyphs = await glyphShapes();
 ---
 
 <Layout
-  title="make a logo · ascii.rest"
-  description="Turn an SVG logo into an animated ascii logo in your browser: a piece for the library, an embed for any page, and SVGs for a README."
+  title="image to ascii · ascii.rest"
+  description="Turn any image, SVG, PNG, JPG, WebP or GIF, into an animated ascii logo in your browser: a piece for the library, an embed for any page, and SVGs for a README."
   path="/make/"
 >
-  <h1 slot="heading">make a logo</h1>
+  <h1 slot="heading">image to ascii</h1>
 
   <p class="lede">
-    Drop in an SVG and get it back as an animated ascii logo, drawn the way the library's logos are: each cell holds the character whose shape
-    best matches the logo's edge through it, and 8 where the logo is solid, in the logo's own colours.
+    Drop in an image, an SVG, PNG, JPG, WebP or GIF, and get it back as animated ascii in its own colours. A logo is drawn the way the library's
+    logos are, each cell the character whose shape best matches its edge there; a photo is shaded, each cell as dense as the image is bright
+    there. A plain background is left out.
   </p>
   <p class="lede muted">It all happens in your browser. The file is never uploaded, and nothing is sent anywhere.</p>
 
   <section class="block maker" style="margin-top: 2rem" data-glyphs={JSON.stringify(glyphs)}>
     <div class="well big drop" id="drop">
       <div class="prompt" id="prompt">
-        <p>drop an svg here</p>
+        <p>drop an image here</p>
+        <p class="muted">svg, png, jpg, webp or gif</p>
         <p class="muted">
-          or <button class="button" type="button" id="pick"><span>[pick a file]</span></button>
+          or <button class="button" type="button" id="pick"><span>[pick a file]</span></button> or paste one
         </p>
       </div>
     </div>
-    <input type="file" id="file" accept=".svg,image/svg+xml" hidden />
+    <input type="file" id="file" accept="image/*,.svg" hidden />
     <p class="facts" id="facts" hidden>
       <span id="size"></span>
       <span id="colours"></span>
       <span id="moves"></span>
       <span id="bytes"></span>
       <button class="button" type="button" id="ink"><span>[mono]</span></button>
-      <button class="button" type="button" id="again"><span>[another svg]</span></button>
+      <button class="button" type="button" id="ground" hidden><span>[keep the background]</span></button>
+      <button class="button" type="button" id="again"><span>[another image]</span></button>
     </p>
     <p class="status" id="status" role="status" aria-live="polite"></p>
   </section>
@@ -58,6 +62,12 @@ const glyphs = await glyphShapes();
 
       <label for="width">width</label>
       <span><input id="width" type="number" min="16" max={LIMIT.cols} step="1" value="64" inputmode="numeric" /> columns, at most {LIMIT.cols}</span>
+
+      <span class="label" id="style-label">style</span>
+      <span class="choice" role="group" aria-labelledby="style-label">
+        <button class="button" type="button" data-style="logo" aria-pressed="true"><span>logo</span></button>
+        <button class="button" type="button" data-style="shade" aria-pressed="false"><span>shade</span></button>
+      </span>
 
       <span class="label" id="motion-label">motion</span>
       <span class="choice" role="group" aria-labelledby="motion-label">
@@ -74,6 +84,10 @@ const glyphs = await glyphShapes();
       </span>
     </div>
     <p class="muted note">
+      Logo draws each edge with the character that matches its shape, as the library's logos are drawn. Shade picks each character by how bright
+      the image is there, from <code>.</code> to <code>@</code>, which suits a photo; an image with no plain background starts in shade.
+    </p>
+    <p class="muted note">
       A company or a language glints, as the library's logos do; a distro has a scan line run down it. The width is the most columns it may take;
       a tall logo takes fewer, since a piece is at most {LIMIT.rows} rows.
     </p>
@@ -81,7 +95,7 @@ const glyphs = await glyphShapes();
 
   <section class="block">
     <div class="head">
-      <h2><label for="paste">or paste the markup</label></h2>
+      <h2><label for="paste">or paste an svg's markup</label></h2>
       <span class="tools">
         <button class="button" type="button" id="paste-go"><span>[draw it]</span></button>
       </span>
@@ -287,7 +301,7 @@ const glyphs = await glyphShapes();
 
 <script>
   import { mount, names, type Piece } from "ascii.rest";
-  import { draw, render, type Drawing, type Glyph, type Source } from "../lib/logo";
+  import { draw, isSvg, raster, render, type Drawing, type Glyph, type Source, type Style } from "../lib/logo";
   import { about, clean, embed, picture, piece, source, type Kind, type Settings } from "../lib/logo-file";
   import { svgOf } from "../lib/svg";
 
@@ -296,9 +310,13 @@ const glyphs = await glyphShapes();
 
   const drop = $("drop"), prompt = $("prompt"), picker = $<HTMLInputElement>("file"), status = $("status");
   const nameInput = $<HTMLInputElement>("name"), widthInput = $<HTMLInputElement>("width"), everyInput = $<HTMLInputElement>("every");
-  const paste = $<HTMLTextAreaElement>("paste"), inkButton = $<HTMLButtonElement>("ink");
+  const paste = $<HTMLTextAreaElement>("paste"), inkButton = $<HTMLButtonElement>("ink"), groundButton = $<HTMLButtonElement>("ground");
 
   let src: Source | null = null;
+  // The last image that isn't an SVG, kept so its background can be put back, or taken out again.
+  let image: Blob | null = null;
+  let keepGround = false;
+  let style: Style = "logo";
   let drawing: Drawing | null = null;
   let file = "";
   let named = false; // the reader typed the name, so a new file keeps it
@@ -329,6 +347,12 @@ const glyphs = await glyphShapes();
   const width = () => Math.max(16, Math.min(80, Math.round(+widthInput.value) || 64));
   const settings = (): Settings => ({ proper: nameInput.value, file, category, every: +everyInput.value || 5 });
 
+  // An image's name without its extension, as the piece's name, unless the reader typed one.
+  const nameFrom = (from: string) => {
+    const ext = /\.(svg|png|jpe?g|webp|gif|avif|bmp|ico|tiff?)$/i;
+    if (!named && ext.test(from)) nameInput.value = clean(from.replace(ext, "").replace(/[-_]+/g, " ")) || "my logo";
+  };
+
   async function take(markup: string, from: string) {
     say("drawing it");
     try {
@@ -337,16 +361,46 @@ const glyphs = await glyphShapes();
       say((error as Error).message);
       return;
     }
+    image = null;
     file = from;
-    if (!named && /\.svg$/i.test(from)) nameInput.value = clean(from.replace(/\.svg$/i, "").replace(/[-_]+/g, " ")) || "my logo";
-    redraw();
+    nameFrom(from);
+    groundButton.hidden = true;
+    pickStyle("logo");
+  }
+
+  // Any other image: drawn, its plain background left out unless the reader keeps it.
+  async function takeImage(blob: Blob, from: string) {
+    say("drawing it");
+    try {
+      src = await raster(blob, { keepGround });
+    } catch (error) {
+      say((error as Error).message);
+      return;
+    }
+    image = blob;
+    file = from;
+    nameFrom(from);
+    // A photo, or anything with no plain ground, reads best shaded; a new image starts in the style that suits it.
+    pickStyle(src.photo ? "shade" : "logo");
+    // A background was found: say so, and offer it back; or it was kept, and can be taken out again.
+    groundButton.hidden = !src.ground && !keepGround;
+    groundButton.firstElementChild!.textContent = keepGround ? "[remove the background]" : "[keep the background]";
+    if (src.ground) say(`left out its background, ${src.ground}`);
   }
 
   function redraw() {
     if (!src) return;
-    drawing = draw(src, width(), glyphs);
+    drawing = draw(src, width(), glyphs, style);
     update();
   }
+
+  const styles = [...document.querySelectorAll<HTMLButtonElement>("[data-style]")];
+  function pickStyle(next: Style) {
+    style = next;
+    for (const b of styles) b.setAttribute("aria-pressed", String(b.dataset.style === next));
+    redraw();
+  }
+  for (const b of styles) b.addEventListener("click", () => pickStyle(b.dataset.style as Style));
 
   function update() {
     if (!drawing) return;
@@ -368,7 +422,8 @@ const glyphs = await glyphShapes();
     prompt.hidden = true;
     $("facts").hidden = false;
     $("out").hidden = false;
-    say((names as string[]).includes(slug) ? `the library already has a piece called ${slug}: give this one another name to add it` : "");
+    if ((names as string[]).includes(slug)) say(`the library already has a piece called ${slug}: give this one another name to add it`);
+    else if (!src?.ground) say("");
   }
 
   // Plays the piece in the well with the library's own mount, as a canvas in colour or a <pre> in one ink.
@@ -400,8 +455,16 @@ const glyphs = await glyphShapes();
 
   async function read(f: File | undefined) {
     if (!f) return;
-    if (f.size > 4_000_000) return say("that file is over 4 MB, which is a lot for a logo");
-    take(await f.text(), f.name);
+    // An SVG is read as markup; anything else as an image, which the browser decodes.
+    const svg = isSvg(f) || (!f.type && /^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/i.test(await f.slice(0, 512).text()));
+    if (svg) {
+      if (f.size > 4_000_000) return say("that svg is over 4 MB, which is a lot for a logo");
+      return take(await f.text(), f.name);
+    }
+    if (f.size > 40_000_000) return say("that image is over 40 MB: try a smaller one");
+    if (f.type && !f.type.startsWith("image/")) return say("that is not an image: try an svg, png, jpg, webp or gif");
+    keepGround = false;
+    takeImage(f, f.name);
   }
 
   // --- in ---------------------------------------------------------------------
@@ -414,6 +477,18 @@ const glyphs = await glyphShapes();
   });
   $("paste-go").addEventListener("click", () => {
     if (paste.value.trim()) take(paste.value, "pasted markup");
+  });
+  // An image pasted anywhere on the page, a screenshot say; text pasted into a field stays text.
+  addEventListener("paste", (e) => {
+    const f = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith("image/"));
+    if (!f) return;
+    e.preventDefault();
+    read(new File([f], f.name || "pasted image.png", { type: f.type }));
+  });
+  groundButton.addEventListener("click", () => {
+    if (!image) return;
+    keepGround = !keepGround;
+    takeImage(image, file);
   });
 
   // A file can be dropped anywhere on the page; the well shows where it lands.
