@@ -1,0 +1,556 @@
+// node --test src/kit/vector.test.ts
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import * as donut from "../pieces/donut.ts";
+import { svg as toSvg } from "../svg.ts";
+import type { Piece } from "../types.ts";
+import { EMPTY, NONE, Palette, Surface, piece, snapshot } from "./core.ts";
+import { drawSvg, fromSvg, parseSvg, partCells, type PartCells, type PartMaterial, type PartPaint } from "./vector.ts";
+
+// The checks scripts/check.ts makes of a frame: rows lines of cols characters, colours inside the palette.
+function contract(p: Piece, times = [0, 0.5, 1, 2.5]) {
+  const { meta } = p;
+  for (const paper of [false, true])
+    for (const mono of [false, true]) {
+      const color = meta.palette && !mono ? new Uint8Array(meta.cols * meta.rows) : undefined;
+      const frame = p.default({ ...meta.options });
+      for (const t of times) {
+        const text = frame(t, { paper, color });
+        const lines = text.split("\n");
+        assert.equal(lines.length, meta.rows, `t=${t}: rows`);
+        for (const l of lines) assert.equal(l.length, meta.cols, `t=${t}: cols`);
+        if (color) for (const c of color) assert.ok(c < meta.palette!.length, `colour ${c} past the palette`);
+      }
+    }
+}
+
+const close = (a: readonly number[], b: readonly number[], eps = 1e-6) =>
+  assert.ok(a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= eps), `${JSON.stringify(a)} is not ${JSON.stringify(b)}`);
+const box = (d: string, attrs = "") => parseSvg(`<svg viewBox="0 0 100 100"><path ${attrs} d="${d}"/></svg>`).shapes[0].box;
+const lines = (text: string) => text.split("\n");
+const SQUARE = `<svg viewBox="0 0 10 10"><rect id="sq" width="10" height="10" fill="#2563eb"/></svg>`;
+const HEART = `<svg viewBox="0 0 24 24"><path id="heart" fill="#e11d48" d="M12 21C12 21 2 14.5 2 8.5A5 5 0 0 1 12 6a5 5 0 0 1 10 2.5C22 14.5 12 21 12 21z"/></svg>`;
+
+// --- reading -------------------------------------------------------------------------------------
+
+test("parseSvg reads the viewBox, else width and height, else the ink", () => {
+  assert.deepEqual(parseSvg(`<svg viewBox="-5 2 30 40"><circle r="1"/></svg>`).viewBox, [-5, 2, 30, 40]);
+  assert.deepEqual(parseSvg(`<svg width="64px" height="32"><circle r="1"/></svg>`).viewBox, [0, 0, 64, 32]);
+  close([...parseSvg(`<svg><rect x="3" y="4" width="5" height="6"/></svg>`).viewBox], [3, 4, 5, 6]);
+  const s = parseSvg(`<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY x "y">]><!-- a comment --><svg:svg xmlns:svg="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><svg:title>A &amp; B</svg:title><svg:rect width="1" height="1"/></svg:svg>`);
+  assert.equal(s.title, "A & B");
+  assert.equal(s.shapes.length, 1);
+});
+
+test("parseSvg throws for markup with no svg, and an empty svg has no shapes", () => {
+  assert.throws(() => parseSvg("<div>hello</div>"), /ascii\.rest: fromSvg takes SVG markup/);
+  assert.throws(() => parseSvg(42 as unknown as string), /takes SVG markup as a string/);
+  assert.deepEqual(parseSvg("<svg/>").shapes, []);
+  assert.deepEqual(parseSvg(`<svg viewBox="0 0 10 10"></svg>`).parts, []);
+});
+
+test("path commands, absolute and relative, lines and curves", () => {
+  close([...box("M10 10 h10 v10 h-10 z")], [10, 10, 10, 10]);
+  close([...box("M10 10 H20 V20 L10 20 Z")], [10, 10, 10, 10]);
+  // Pairs after a move are lines, and numbers run together as SVG allows.
+  close([...box("M0 0 10 0 10 10")], [0, 0, 10, 10]);
+  close([...box("M0,0L10-5.5.5 3")], [0, -5.5, 10, 8.5]);
+  // A cubic with both controls at y 10 bulges to 0.75 of that (boxes of curves are as near as their flattening, 0.05).
+  close([...box("M0 0 C0 10 10 10 10 0")], [0, 0, 10, 7.5], 0.05);
+  close([...box("m0 0 c0 10 10 10 10 0")], [0, 0, 10, 7.5], 0.05);
+  // S reflects the last control point: down, then up as far.
+  close([...box("M0 0 C0 10 10 10 10 0 S20 -10 20 0")], [0, -7.5, 20, 15], 0.05);
+  close([...box("M0 0 c0 10 10 10 10 0 s10 -10 10 0")], [0, -7.5, 20, 15], 0.05);
+  // A quadratic reaches half way to its control; T reflects it.
+  close([...box("M0 0 Q5 10 10 0 T20 0")], [0, -5, 20, 10], 0.05);
+  close([...box("M0 0 q5 10 10 0 t10 0")], [0, -5, 20, 10], 0.05);
+  // A command right after a close starts from where its subpath began, 5, 5, so it reaches 0, 0 (from the last point,
+  // 5, 15, it would reach only 0, 10).
+  close([...box("M5 5 h10 v10 z l-5 -5")], [0, 0, 15, 15]);
+});
+
+test("arcs: sweep and large flags, written run together, radii scaled up, zero radii as a line", () => {
+  // From 0, 0 to 20, 0 sweeping clockwise on the page: over the top.
+  close([...box("M0 10 a10 10 0 0 1 20 0")], [0, 0, 20, 10], 1e-3);
+  close([...box("M0 10 A10 10 0 0 0 20 10")], [0, 10, 20, 10], 1e-3);
+  // Flags written with no space between them or the next number: large 1, sweep 0, to 10, 0.
+  close([...box("M0 0a5 5 0 1010 0")], [0, 0, 10, 5], 1e-3);
+  // Radii too small to reach are scaled up until they just do: a half circle of radius 10.
+  close([...box("M0 10 A1 1 0 0 1 20 10")], [0, 0, 20, 10], 1e-3);
+  // The large arc of a circle of radius 10 through two points 10 apart goes most of the way round.
+  const b = box("M0 0 A10 10 0 1 1 10 0");
+  assert.ok(b[3] > 18 && b[3] <= 20.001, `large arc height ${b[3]}`);
+  close([...box("M0 0 A0 5 0 0 1 10 0")], [0, 0, 10, 0]);
+  // An ellipse turned 90 degrees: tall instead of wide.
+  const e = box("M0 0 A20 5 90 0 1 0 40");
+  assert.ok(e[2] < 6 && e[3] > 39, `rotated arc box ${e}`);
+});
+
+test("transforms on groups and shapes: translate, scale, rotate, matrix, skew", () => {
+  const s = parseSvg(`<svg viewBox="0 0 100 100">
+    <g transform="translate(5 5) rotate(90) scale(2)"><rect width="10" height="10"/></g>
+    <rect transform="matrix(1 0 0 1 3 4)" width="2" height="2"/>
+    <rect transform="rotate(180, 10, 10)" width="5" height="5"/>
+    <g transform="translate(50,50)"><g transform="scale(0.5)"><circle r="10"/></g></g>
+    <rect transform="skewX(45)" width="10" height="10"/>
+  </svg>`);
+  close([...s.shapes[0].box], [-15, 5, 20, 20], 1e-9);
+  close([...s.shapes[1].box], [3, 4, 2, 2], 1e-9);
+  close([...s.shapes[2].box], [15, 15, 5, 5], 1e-9);
+  close([...s.shapes[3].box], [45, 45, 10, 10], 1e-6);
+  close([...s.shapes[4].box], [0, 0, 20, 10], 1e-9);
+});
+
+test("rects with rounded corners, circles, ellipses, lines, polylines and polygons", () => {
+  const s = parseSvg(`<svg viewBox="0 0 100 100">
+    <rect x="1" y="2" width="10" height="4" rx="9"/>
+    <circle cx="20" cy="20" r="5"/><ellipse cx="40" cy="40" rx="6" ry="3"/>
+    <line x1="0" y1="0" x2="10" y2="10" stroke="red"/><polyline points="0,0 5,5 10,0" stroke="red" fill="none"/>
+    <polygon points="0 0 10 0 5 8"/><rect width="0" height="5"/><circle r="0"/>
+  </svg>`);
+  assert.deepEqual(s.shapes.map((x) => x.tag), ["rect", "circle", "ellipse", "line", "polyline", "polygon"]);
+  close([...s.shapes[0].box], [1, 2, 10, 4], 1e-9);
+  close([...s.shapes[1].box], [15, 15, 10, 10], 1e-6);
+  close([...s.shapes[2].box], [34, 37, 12, 6], 1e-6);
+  // A stroke's box takes in half its width.
+  close([...s.shapes[3].box], [-0.5, -0.5, 11, 11], 1e-9);
+  assert.equal(s.shapes[3].fill, null);
+  close([...s.shapes[5].box], [0, 0, 10, 8], 1e-9);
+  // The rounded rect's outline is made of lines and cubics.
+  assert.ok([...s.shapes[0].ops].includes(2));
+});
+
+test("styles: inherited, attributes, style=\"\", <style> rules, colours in every notation", () => {
+  const s = parseSvg(`<svg viewBox="0 0 10 10" color="#123456">
+    <style>.a { fill: #00ff00 } #b { fill: rgb(255, 0, 0) } rect.c { stroke: hsl(240, 100%, 50%); stroke-width: 2 } g path { fill: red }</style>
+    <g fill="gold" stroke-width="3" opacity="0.5">
+      <rect width="1" height="1"/>
+      <rect class="a" width="1" height="1"/>
+      <rect id="b" class="a" width="1" height="1" fill="blue"/>
+      <rect class="c" width="1" height="1" style="fill:#abc; fill-opacity: 0.5"/>
+      <rect width="1" height="1" fill="currentColor"/>
+      <rect width="1" height="1" fill="none" stroke="#ff000080"/>
+      <rect width="1" height="1" display="none"/>
+      <rect width="1" height="1" visibility="hidden"/>
+      <rect width="1" height="1" fill-rule="evenodd" fill="rgba(0,0,255,0.5)"/>
+    </g>
+  </svg>`);
+  const sh = s.shapes;
+  assert.equal(sh.length, 7);
+  assert.equal(sh[0].fill, "#ffd700");
+  assert.equal(sh[0].fillOpacity, 0.5);
+  assert.equal(sh[1].fill, "#00ff00");
+  // An id's rule beats a class's, and a <style> rule beats an attribute.
+  assert.equal(sh[2].fill, "#ff0000");
+  // style="" beats them all; #abc is #aabbcc; opacity and fill-opacity multiply.
+  assert.equal(sh[3].fill, "#aabbcc");
+  assert.equal(sh[3].fillOpacity, 0.25);
+  assert.equal(sh[3].stroke, "#0000ff");
+  assert.equal(sh[3].strokeWidth, 2);
+  // currentColor takes the color property when there is one.
+  assert.equal(sh[4].fill, "#123456");
+  assert.equal(sh[5].fill, null);
+  assert.equal(sh[5].stroke, "#ff0000");
+  assert.ok(Math.abs(sh[5].strokeOpacity - (0.5 * 128) / 255) < 1e-9);
+  assert.equal(sh[6].fillRule, "evenodd");
+  assert.equal(sh[6].fillOpacity, 0.25);
+  // A shape painted currentColor with no color property is the page's own colour.
+  assert.equal(parseSvg(`<svg viewBox="0 0 1 1"><rect width="1" height="1" fill="currentColor"/></svg>`).shapes[0].fill, "currentColor");
+});
+
+test("gradients are their stops' mean colour; <use> draws what it points at, moved", () => {
+  const s = parseSvg(`<svg viewBox="0 0 100 100">
+    <defs>
+      <linearGradient id="g"><stop offset="0" stop-color="#000000"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
+      <linearGradient id="h" href="#g"/>
+      <circle id="dot" r="2" class="dot"/>
+    </defs>
+    <rect width="10" height="10" fill="url(#g)"/>
+    <rect width="10" height="10" fill="url('#h')"/>
+    <rect width="10" height="10" fill="url(#missing) #00ff00"/>
+    <use href="#dot" x="10" y="20"/><use xlink:href="#dot" x="30" y="40" id="second"/>
+  </svg>`);
+  assert.equal(s.shapes[0].fill, "#808080");
+  assert.equal(s.shapes[1].fill, "#808080");
+  assert.equal(s.shapes[2].fill, "#00ff00");
+  close([...s.shapes[3].box], [8, 18, 4, 4], 1e-6);
+  close([...s.shapes[4].box], [28, 38, 4, 4], 1e-6);
+  // Nothing in <defs> is drawn where it stands: only the two uses of the dot.
+  assert.equal(s.shapes.length, 5);
+  // The dots are black, the default fill, so black is a part too.
+  assert.deepEqual([...s.parts].sort(), ["#000000", "#808080", "#dot", "#second", "#00ff00", ".dot"].sort());
+});
+
+test("a nested svg and a symbol fit their viewBox into their size", () => {
+  const s = parseSvg(`<svg viewBox="0 0 100 100">
+    <svg x="10" y="10" width="20" height="20" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>
+    <symbol id="s" viewBox="0 0 2 2"><rect width="2" height="2"/></symbol>
+    <use href="#s" x="50" y="50" width="10" height="10"/>
+  </svg>`);
+  close([...s.shapes[0].box], [10, 10, 20, 20], 1e-9);
+  close([...s.shapes[1].box], [50, 50, 10, 10], 1e-9);
+});
+
+// --- drawing -------------------------------------------------------------------------------------
+
+test("fromSvg makes a normal piece: the frame contract in colour and one ink, on paper and dark pages", () => {
+  for (const p of [fromSvg(HEART), fromSvg(HEART, { "#heart": ["pulse", "glint"] }), fromSvg(SQUARE, { style: "blocks" }), fromSvg(SQUARE, { style: "braille" }), fromSvg(HEART, { style: "outline", "*": "spin" })]) contract(p);
+  const p = fromSvg(HEART);
+  assert.equal(p.meta.name, "vector");
+  assert.equal(p.meta.category, "shapes");
+  assert.equal(p.meta.fps, 0);
+  assert.equal(p.meta.loop, undefined);
+  assert.equal(fromSvg(`<svg viewBox="0 0 1 1"><title>Red Dot</title><circle cx=".5" cy=".5" r=".5" fill="red"/></svg>`).meta.name, "red dot");
+});
+
+test("a filled square is solid inside its margin, and width, cols and rows, and margin are kept", () => {
+  const p = fromSvg(SQUARE, { width: 24 });
+  assert.equal(p.meta.cols, 24);
+  // 20 columns wide inside the margin, at two columns a row: 10 rows, and one each side.
+  assert.equal(p.meta.rows, 12);
+  const l = lines(snapshot(p).text);
+  assert.equal(l[0].trim(), "");
+  assert.equal(l[11].trim(), "");
+  for (let r = 1; r <= 10; r++) assert.equal(l[r], "  " + "8".repeat(20) + "  ");
+  const q = fromSvg(SQUARE, { cols: 30, rows: 8, margin: 0 });
+  assert.deepEqual([q.meta.cols, q.meta.rows], [30, 8]);
+  // Fitted: 8 rows tall, so 16 columns wide, centred.
+  assert.equal(lines(snapshot(q).text)[3], " ".repeat(7) + "8".repeat(16) + " ".repeat(7));
+  assert.equal(fromSvg(SQUARE, { rows: 7, margin: [1, 1] }).meta.cols, 12);
+  assert.equal(lines(snapshot(fromSvg(SQUARE, { width: 12, fill: "#" })).text)[2], "  " + "#".repeat(8) + "  ");
+});
+
+test("edges take the character whose shape matches them", () => {
+  // A square half a row lower than the cells: its top edge is the bottom half of a row.
+  const p = fromSvg(`<svg viewBox="0 0 10 10.5"><rect y="0.5" width="10" height="10" fill="#000"/></svg>`, { width: 14, margin: [2, 0], fit: "viewBox" });
+  const l = lines(snapshot(p, 0, { mono: true }).text);
+  assert.match(l[0], /^ {2}[_.,qpdb]+ {2}$/);
+  // A diagonal edge reads as slashes and their kin.
+  const tri = lines(snapshot(fromSvg(`<svg viewBox="0 0 20 10"><polygon points="0 10 20 10 20 0" fill="#000"/></svg>`, { width: 24 })).text).join("");
+  assert.match(tri, /[/dqp]/);
+});
+
+test("fill rules: even-odd leaves a hole where nonzero fills it", () => {
+  const ring = (rule: string) =>
+    fromSvg(`<svg viewBox="0 0 20 20"><path fill-rule="${rule}" fill="#000" d="M0 0h20v20H0zM5 5h10v10H5z"/></svg>`, { width: 24 });
+  const hole = lines(snapshot(ring("evenodd")).text), full = lines(snapshot(ring("nonzero")).text);
+  assert.equal(hole[5][12], " ");
+  assert.equal(full[5][12], "8");
+  // Drawn the other way round, the inner square cuts a hole under nonzero too.
+  const back = fromSvg(`<svg viewBox="0 0 20 20"><path fill="#000" d="M0 0h20v20H0zM5 5v10h10V5z"/></svg>`, { width: 24 });
+  assert.equal(lines(snapshot(back).text)[5][12], " ");
+});
+
+test("colours: the drawing's own, lifted on a dark page; the page's colour for currentColor; none when asked", () => {
+  const two = `<svg viewBox="0 0 20 10"><rect width="10" height="10" fill="#000000"/><rect x="10" width="10" height="10" fill="#2563eb"/></svg>`;
+  const p = fromSvg(two, { width: 24, margin: 0 });
+  assert.ok(p.meta.palette!.includes("#000000") && p.meta.palette!.includes("#2563eb"));
+  const dark = snapshot(p, 0), light = snapshot(p, 0, { paper: true });
+  // The black half is drawn in the site's light ink on a dark page and as black on paper.
+  assert.equal(p.meta.palette![dark.color![2]], "#e8ebef");
+  assert.equal(p.meta.palette![light.color![2]], "#000000");
+  assert.equal(p.meta.palette![dark.color![20]], "#2563eb");
+  // One ink: no palette, and colours are not written.
+  assert.equal(fromSvg(two, { color: false }).meta.palette, undefined);
+  assert.equal(fromSvg(`<svg viewBox="0 0 2 2"><rect width="2" height="2" fill="currentColor"/></svg>`).meta.palette, undefined);
+  // currentColor among colours is the page's text colour.
+  const mixed = fromSvg(`<svg viewBox="0 0 20 10"><rect width="10" height="10" fill="currentColor"/><rect x="10" width="10" height="10" fill="#2563eb"/></svg>`, { width: 24, margin: 0 });
+  assert.equal(mixed.meta.palette![snapshot(mixed, 0, { paper: true }).color![2]], "#1f2328");
+  assert.equal(mixed.meta.palette![snapshot(mixed, 0).color![2]], "#f0f6fc");
+  // A part's own colour replaces the shape's.
+  const red = fromSvg(SQUARE, { "#sq": { color: "#ff0000" } });
+  assert.ok(red.meta.palette!.includes("#ff0000") && !red.meta.palette!.includes("#2563eb"));
+});
+
+test("many colours are merged into what a palette holds", () => {
+  const rects = Array.from({ length: 70 }, (_, i) => `<rect x="${i}" width="1" height="4" fill="#${(i * 3).toString(16).padStart(2, "0")}${(255 - i * 3).toString(16).padStart(2, "0")}80"/>`).join("");
+  const p = fromSvg(`<svg viewBox="0 0 70 4">${rects}</svg>`, { width: 74 });
+  assert.ok(p.meta.palette!.length <= 64);
+  contract(p, [0]);
+});
+
+test("in one ink, white among colours is left out, and where two colours meet the edge shows", () => {
+  const logo = fromSvg(`<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#7c3aed"/><rect x="5" y="5" width="10" height="10" fill="#ffffff"/></svg>`, { width: 24 });
+  assert.equal(lines(snapshot(logo, 0, { mono: true }).text)[5][12], " ");
+  assert.equal(lines(snapshot(logo).text)[5][12], "8");
+  // A blue square over a red one, its edge mid cell: in one ink the edge between them is drawn, not solid.
+  const two = fromSvg(`<svg viewBox="0 0 20 10"><rect width="20" height="10" fill="#dc2626"/><rect x="10.5" width="9.5" height="10" fill="#2563eb"/></svg>`, { width: 20, margin: 0 });
+  const row = lines(snapshot(two, 0, { mono: true }).text)[3];
+  assert.notEqual(row[10], "8");
+  assert.equal(row[5], "8");
+  assert.equal(row[15], "8");
+});
+
+test("styles: blocks and braille use their characters, outline draws lines only", () => {
+  const blocks = snapshot(fromSvg(HEART, { style: "blocks" })).text.replace(/[\s\n]/g, "");
+  assert.ok(blocks.length && [...blocks].every((c) => "▘▝▀▖▌▞▛▗▚▐▜▄▙▟█".includes(c)));
+  const braille = snapshot(fromSvg(HEART, { style: "braille" })).text.replace(/[\s\n]/g, "");
+  assert.ok(braille.length && [...braille].every((c) => c.charCodeAt(0) > 0x2800 && c.charCodeAt(0) <= 0x28ff));
+  const outline = snapshot(fromSvg(HEART, { style: "outline", width: 36 })).text;
+  assert.ok([...outline.replace(/[\s\n]/g, "")].every((c) => "-_.'/\\|".includes(c)), outline);
+  // The outline of a circle is round: a line each side on its middle row, nothing inside.
+  const ring = lines(snapshot(fromSvg(`<svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="#000"/></svg>`, { style: "outline", width: 24 })).text);
+  assert.equal(ring[6].trim()[0], "|");
+  assert.equal(ring[6].trim().at(-1), "|");
+  assert.equal(ring[6].trim().slice(1, -1).trim(), "");
+});
+
+test("strokes: hairlines still show, wide ones are solid, round caps reach past the ends", () => {
+  const hair = fromSvg(`<svg viewBox="0 0 20 10"><line x1="0" y1="5" x2="20" y2="5" stroke="#000" stroke-width="0.01"/></svg>`, { width: 24, fit: "viewBox" });
+  const row = lines(snapshot(hair).text).find((l) => l.trim());
+  assert.ok(row && row.trim().length >= 18, `hairline ${JSON.stringify(row)}`);
+  const wide = lines(snapshot(fromSvg(`<svg viewBox="0 0 20 10"><line x1="0" y1="5" x2="20" y2="5" stroke="#000" stroke-width="4"/></svg>`, { width: 24, fit: "viewBox" })).text);
+  assert.ok(wide.some((l) => l.includes("8".repeat(16))));
+  const butt = parseSvg(`<svg viewBox="0 0 20 10"><line x1="5" y1="5" x2="15" y2="5" stroke="#000" stroke-width="2"/></svg>`).shapes[0];
+  const round = parseSvg(`<svg viewBox="0 0 20 10"><line x1="5" y1="5" x2="15" y2="5" stroke="#000" stroke-width="2" stroke-linecap="round"/></svg>`).shapes[0];
+  assert.equal(butt.cap, "butt");
+  assert.equal(round.cap, "round");
+  // The line's row is the middle of 6 rows: how many cells of it are drawn.
+  const lit = (svg: string) => lines(snapshot(fromSvg(svg, { width: 24, fit: "viewBox", margin: 0 })).text).reduce((n, l) => Math.max(n, l.trim().length), 0);
+  assert.ok(lit(`<svg viewBox="0 0 20 10"><line x1="5" y1="5" x2="15" y2="5" stroke="#000" stroke-width="2" stroke-linecap="round"/></svg>`) > lit(`<svg viewBox="0 0 20 10"><line x1="5" y1="5" x2="15" y2="5" stroke="#000" stroke-width="2"/></svg>`));
+});
+
+// --- parts and motion ----------------------------------------------------------------------------
+
+const MOTIONS = ["spin", "flip", "bob", "pulse", "sway", "blink", "glint", "ripple", "rise"] as const;
+
+test("every motion word moves its part, the same frame for the same t, and repeats exactly at its period", () => {
+  const periods: Record<string, number> = { spin: 4, flip: 4, bob: 2, pulse: 1.5, sway: 4, blink: 4, glint: 4, ripple: 2, rise: 4 };
+  for (const m of MOTIONS) {
+    const p = fromSvg(HEART, { width: 32, "#heart": m });
+    assert.equal(p.meta.fps, 30, m);
+    assert.equal(p.meta.loop, periods[m], m);
+    const f = p.default(), g = p.default();
+    const frames = new Set<string>();
+    for (const t of [0, 0.3, 0.7, 1.1, 1.6, 2.2, 2.9, 3.5, 3.97]) frames.add(f(t));
+    assert.ok(frames.size >= 2, `${m} does not move`);
+    // A frame depends only on t: drawn after another t, or by another play, or a loop later, it is the same.
+    for (const t of [0.7, 2.2]) {
+      const a = f(t);
+      f(t + 1.3);
+      assert.equal(f(t), a, `${m} at ${t}`);
+      assert.equal(g(t), a, `${m} at ${t}, another play`);
+      assert.equal(f(t + periods[m]), a, `${m} a period later`);
+    }
+    contract(p, [0, 1.3]);
+  }
+});
+
+test("motions take room: a spinning square never leaves its margin", () => {
+  const p = fromSvg(SQUARE, { width: 30, "#sq": "spin" });
+  const f = p.default();
+  for (let t = 0; t < 4; t += 0.1) {
+    const l = lines(f(t));
+    assert.equal(l[0].trim(), "", `t=${t} top`);
+    assert.equal(l[l.length - 1].trim(), "", `t=${t} bottom`);
+    for (const row of l) assert.equal(row.slice(0, 2) + row.slice(-2), "    ", `t=${t} sides`);
+  }
+  // With fit: "viewBox" the size is the drawing's own, motions or not.
+  assert.equal(fromSvg(SQUARE, { width: 30, fit: "viewBox", "#sq": "spin" }).meta.rows, fromSvg(SQUARE, { width: 30, fit: "viewBox" }).meta.rows);
+});
+
+test("parts by id, class, colour and *: a group moves as one, a class moves each, the more specific wins", () => {
+  const svg = `<svg viewBox="0 0 40 10"><g id="pair"><rect class="b" x="0" width="10" height="10" fill="#ff0000"/><rect class="b" x="30" width="10" height="10" fill="#0000ff"/></g></svg>`;
+  for (const key of ["#pair", ".b", "#ff0000", "#f00", "*"]) {
+    const p = fromSvg(svg, { width: 44, [key]: "bob" } as never);
+    assert.equal(p.meta.fps, 30, key);
+  }
+  // A colour names only what is painted in it: the blue square stays still while the red one bobs.
+  const p = fromSvg(svg, { width: 44, "#ff0000": "bob" }).default();
+  const a = lines(p(0)), b = lines(p(0.5));
+  assert.notEqual(a.map((l) => l.slice(0, 22)).join(""), b.map((l) => l.slice(0, 22)).join(""));
+  assert.equal(a.map((l) => l.slice(22)).join(""), b.map((l) => l.slice(22)).join(""));
+  // Hidden by false or hide: true, a part is left out, and the drawing fits what is left.
+  const hidden = snapshot(fromSvg(svg, { width: 44, "#0000ff": false, fit: "viewBox" })).text;
+  assert.ok(!lines(hidden).some((l) => l.slice(30).includes("8")));
+  assert.deepEqual(lines(snapshot(fromSvg(svg, { width: 44, "#0000ff": { hide: true }, fit: "viewBox" })).text), lines(hidden));
+  // The more specific part wins: an id's fill over a class's.
+  const f = snapshot(fromSvg(`<svg viewBox="0 0 10 10"><rect id="r" class="c" width="10" height="10" fill="#000"/></svg>`, { width: 14, ".c": { fill: "@" }, "#r": { fill: "#" } })).text;
+  assert.ok(f.includes("#") && !f.includes("@"));
+});
+
+test("motions nest: a shape spins about its own centre while the whole drawing carries it", () => {
+  const svg = `<svg viewBox="0 0 40 40"><rect x="5" y="15" width="10" height="10" fill="#000"/><rect id="small" x="22" y="16" width="8" height="8" fill="#2563eb"/></svg>`;
+  const both = lines(snapshot(fromSvg(svg, { width: 44, fit: "viewBox", "*": { motion: "bob", amount: 2 }, "#small": "spin" }), 0.5).text);
+  const spin = lines(snapshot(fromSvg(svg, { width: 44, fit: "viewBox", "#small": "spin" }), 0.5).text);
+  // Bobbing two rows up at a quarter of its period, the spun drawing is the spin alone, two rows higher.
+  for (let r = 0; r + 2 < spin.length; r++) assert.equal(both[r], spin[r + 2], `row ${r}`);
+});
+
+test("several matched by a class can be staggered; rise shares its period out by default", () => {
+  const svg = `<svg viewBox="0 0 30 30"><circle class="o" cx="5" cy="25" r="2" fill="#000"/><circle class="o" cx="15" cy="25" r="2" fill="#000"/><circle class="o" cx="25" cy="25" r="2" fill="#000"/></svg>`;
+  const together = lines(fromSvg(svg, { width: 34, ".o": { motion: "bob", amount: 3 } }).default()(0.5));
+  const apart = lines(fromSvg(svg, { width: 34, ".o": { motion: "bob", amount: 3, stagger: 0.5 } }).default()(0.5));
+  const rowOf = (l: string[], col: number) => l.findIndex((row) => row[col] !== " ");
+  assert.equal(rowOf(together, 4), rowOf(together, 29));
+  assert.notEqual(rowOf(apart, 4), rowOf(apart, 29));
+  const rise = lines(fromSvg(svg, { width: 34, ".o": { motion: "rise", amount: 6 } }).default()(1));
+  assert.notEqual(rowOf(rise, 4), rowOf(rise, 17));
+});
+
+test("a glint changes only its part's cells, only while it crosses, and lights them in the palette's lighter runs", () => {
+  const svg = `<svg viewBox="0 0 40 10"><rect id="a" width="18" height="10" fill="#2563eb"/><rect id="b" x="22" width="18" height="10" fill="#16a34a"/></svg>`;
+  const p = fromSvg(svg, { width: 44, "#a": "glint" });
+  assert.equal(p.meta.loop, 4);
+  // Three runs of each colour for each page: as drawn, then twice lighter.
+  assert.equal(p.meta.palette!.length, 6);
+  const still = snapshot(p, 0).text, mid = snapshot(p, 1.2);
+  assert.equal(snapshot(p, 3).text, still);
+  const a = lines(still), b = lines(mid.text);
+  assert.ok(b.some((l) => l.slice(0, 22).includes("/")));
+  assert.deepEqual(b.map((l) => l.slice(22)), a.map((l) => l.slice(22)));
+  assert.ok([...mid.color!].some((c) => p.meta.palette![c] !== "#2563eb" && p.meta.palette![c] !== "#16a34a"));
+  // In one ink it still shows, by its slashes.
+  assert.ok(snapshot(p, 1.2, { mono: true }).text.includes("/"));
+});
+
+test("a ripple moves a shape's top and keeps its bottom", () => {
+  const p = fromSvg(`<svg viewBox="0 0 40 20"><rect id="w" width="40" height="20" fill="#0284c7"/></svg>`, { width: 44, "#w": { motion: "ripple", amount: 1 } }).default();
+  const a = lines(p(0)), b = lines(p(0.5));
+  const lastInk = (l: string[]) => l.reduce((last, row, i) => (row.trim() ? i : last), -1);
+  assert.notEqual(a.slice(0, 4).join("\n"), b.slice(0, 4).join("\n"));
+  assert.equal(a[lastInk(a)], b[lastInk(b)]);
+});
+
+test("options and parts are checked when the piece is made, with errors that say what to change", () => {
+  assert.throws(() => fromSvg(HEART, { "#hart": "spin" }), /part "#hart" names nothing in this svg: it has "#heart" and "#e11d48"/);
+  assert.throws(() => fromSvg(HEART, { "#heart": "twirl" as never }), /takes a motion, spin, flip, bob, pulse, sway, blink, glint, ripple and rise/);
+  assert.throws(() => fromSvg(HEART, { wdth: 40 } as never), /fromSvg has no option named "wdth": it takes width/);
+  assert.throws(() => fromSvg(HEART, { width: 2 }), /width takes a whole number from 3 to 320, not 2/);
+  assert.throws(() => fromSvg(HEART, { width: 40, cols: 40 }), /width or cols, not both/);
+  assert.throws(() => fromSvg(HEART, { style: "fancy" as never }), /style takes "logo", "outline", "blocks" and "braille"/);
+  assert.throws(() => fromSvg(HEART, { fill: "ab" }), /fill takes one character other than a space/);
+  assert.throws(() => fromSvg(HEART, { margin: -1 }), /margin takes whole numbers of 0 or more/);
+  assert.throws(() => fromSvg(HEART, { color: "yes" as never }), /color takes true/);
+  assert.throws(() => fromSvg(HEART, { fit: "box" as never }), /fit takes "ink" or "viewBox"/);
+  assert.throws(() => fromSvg(HEART, { "#heart": { motion: "glint", period: 2 } }), /comes now and then: give it every/);
+  assert.throws(() => fromSvg(HEART, { "#heart": { motion: "spin", every: 2 } }), /goes round and round: give it period/);
+  assert.throws(() => fromSvg(HEART, { "#heart": { motion: "spin", period: 0 } }), /period takes a number above 0/);
+  assert.throws(() => fromSvg(HEART, { "#heart": { spin: true } as never }), /#heart has no option named "spin"/);
+  assert.throws(() => fromSvg(HEART, { "#heart": { color: "red" } }), /color takes #rrggbb/);
+  assert.throws(() => fromSvg(HEART, { "#heart": { material: 5 as never } }), /material takes a material such as water\(\)/);
+  assert.throws(() => fromSvg(HEART, { "#": "spin" } as never), /a part's name takes an id, a class or a colour/);
+  assert.throws(() => fromSvg(`<svg viewBox="0 0 10 10"><rect width="5" height="5" fill="none"/></svg>`), /found nothing to draw/);
+  assert.throws(() => fromSvg(HEART, { width: 6, margin: 3 }), /margin of 3 columns and 3 rows leaves no room/);
+  assert.throws(() => fromSvg(HEART, { ground: "black" }), /ground takes a colour as #rrggbb/);
+  assert.throws(() => fromSvg(HEART, { fps: 90 }), /fps takes a whole number from 0 to 60/);
+});
+
+// --- materials -------------------------------------------------------------------------------------
+
+test("partCells works out a part's cells, its edge, which way is in and how deep", () => {
+  const cover = new Float32Array(8 * 6);
+  for (let y = 1; y < 5; y++) for (let x = 1; x < 7; x++) cover[y * 8 + x] = 1;
+  cover[1 * 8 + 1] = 0.4;
+  const c = partCells(cover, 8, 6);
+  assert.equal(c.list.length, 6 * 4 - 1);
+  assert.deepEqual([c.x0, c.y0, c.x1, c.y1], [1, 1, 7, 5]);
+  assert.equal(c.inside[1 * 8 + 1], 0);
+  assert.equal(c.border[2 * 8 + 1], 1);
+  assert.equal(c.border[2 * 8 + 3], 0);
+  assert.ok(c.has(2, 2) && !c.has(0, 0) && !c.has(-1, 3));
+  // On the left edge, in is to the right; on the bottom, in is up.
+  assert.ok(c.nx[3 * 8 + 1] > 0.9);
+  assert.ok(c.ny[4 * 8 + 3] < -0.9);
+  assert.equal(c.depth[2 * 8 + 1], 0);
+  assert.ok(c.depth[2 * 8 + 3] > 0);
+  assert.equal(c.top[3], 1);
+  assert.equal(c.bottom[3], 4);
+  assert.equal(c.left[2], 1);
+  assert.equal(c.right[2], 6);
+  assert.equal(c.level, null);
+  assert.ok(c.placed.test(3.5, 2.5));
+  const none = partCells(new Float32Array(6), 3, 2);
+  assert.equal(none.list.length, 0);
+  assert.deepEqual([none.x0, none.x1], [0, 0]);
+});
+
+test("a material fills its part: it is prepared once with the part's cells, draws in its own colours, sees what is under it", () => {
+  let prepared = 0;
+  let seen: PartCells | null = null;
+  const stripes: PartMaterial = {
+    colors: { light: ["#0369a1", "#38bdf8"], dark: ["#38bdf8", "#bae6fd"] },
+    period: 2,
+    prepare(c) {
+      prepared++;
+      seen = c;
+      return (t: number, p: PartPaint) => {
+        for (const k of c.list) p.s.put(k, (Math.floor(k / c.cols + t) % 2 ? "=" : "-").charCodeAt(0), p.color(k % 2));
+        assert.equal(p.under.chars.length, c.cols * c.rows);
+      };
+    },
+  };
+  const svg = `<svg viewBox="0 0 40 20"><rect width="40" height="20" fill="#475569"/><rect id="w" x="10" y="5" width="20" height="10" fill="#0284c7"/></svg>`;
+  const p = fromSvg(svg, { width: 44, "#w": stripes });
+  assert.equal(p.meta.loop, 2);
+  assert.ok(["#0369a1", "#38bdf8", "#bae6fd"].every((c) => p.meta.palette!.includes(c)));
+  const f = p.default();
+  const color = new Uint8Array(p.meta.cols * p.meta.rows);
+  const a = f(0, { color });
+  assert.ok(a.includes("=") && a.includes("-"));
+  assert.ok([...color].some((c) => p.meta.palette![c] === "#bae6fd"));
+  f(1, { color });
+  assert.equal(prepared, 1);
+  assert.ok(seen && (seen as PartCells).list.length > 50);
+  // In one ink and on paper too: each of those four plays prepares it once more.
+  contract(p, [0, 1]);
+  assert.equal(prepared, 5);
+  // The same material object drives several pieces, each prepared for its own.
+  fromSvg(svg, { width: 30, "#w": stripes }).default()(0);
+  assert.equal(prepared, 6);
+});
+
+test("any piece fills a part: it plays inside it, its colours added, and the drawing's loop follows it", () => {
+  const svg = `<svg viewBox="0 0 40 20"><rect width="40" height="20" fill="#475569"/><circle id="window" cx="20" cy="10" r="8" fill="#000"/></svg>`;
+  const p = fromSvg(svg, { width: 44, "#window": donut });
+  assert.equal(p.meta.fps, 30);
+  const frame = snapshot(p, 1).text;
+  // The donut's characters appear inside the window, and the frame still keeps the contract.
+  assert.ok(/[.,\-~:;=!*#$@]/.test(frame));
+  contract(p, [0, 1]);
+  assert.equal(snapshot(p, 1).text, frame);
+  // A grid fills a part as a still.
+  const grid = Surface.from("ab\ncd");
+  const g = snapshot(fromSvg(svg, { width: 44, "#window": grid })).text;
+  assert.ok(g.includes("ab") && g.includes("cd"));
+});
+
+// --- drawSvg and export ------------------------------------------------------------------------------
+
+test("drawSvg draws into a region of a grid you have, its colours the nearest of the grid's", () => {
+  const s = new Surface(30, 10, { palette: new Palette(["#000000", "#ff0000", "#00ff00"]) });
+  s.paper = true;
+  s.mono = false;
+  drawSvg(s, HEART, 0, { region: { x: 10, y: 2, cols: 12, rows: 6 } });
+  for (let y = 0; y < 10; y++)
+    for (let x = 0; x < 30; x++) if (x < 10 || x >= 22 || y < 2 || y >= 8) assert.equal(s.get(x, y), "", `${x},${y}`);
+  assert.ok(s.get(15, 4) !== "");
+  // #e11d48 is nearest red.
+  assert.equal(s.colorAt(15, 4), 1);
+  // Called again, as a drawing does every frame, it draws the same.
+  const once = s.toString();
+  s.clear();
+  drawSvg(s, HEART, 0, { region: { x: 10, y: 2, cols: 12, rows: 6 } });
+  assert.equal(s.toString(), once);
+  // On a grid with no palette, in one ink; in a piece with motion, frame by frame.
+  const plain = new Surface(20, 8);
+  drawSvg(plain, parseSvg(HEART), 0);
+  assert.equal(plain.colorAt(10, 4), NONE);
+  const badge = piece({ name: "badge", cols: 24, rows: 10, palette: ["#e11d48"] }, (t, g) => drawSvg(g, HEART, t, { "#heart": "pulse", margin: 1 }));
+  contract(badge, [0, 0.4, 0.8]);
+  assert.notEqual(snapshot(badge, 0).text, snapshot(badge, 0.4).text);
+  assert.throws(() => drawSvg(null as never, HEART, 0), /drawSvg takes the grid to draw into first/);
+  assert.throws(() => drawSvg(plain, HEART, 0, { width: 3 } as never), /drawSvg has no option named "width"/);
+});
+
+test("fromSvg pieces export to an SVG and leave empty cells EMPTY", () => {
+  const p = fromSvg(HEART, { "#heart": "pulse" });
+  const out = toSvg(p);
+  assert.match(out, /^<svg/);
+  assert.ok(out.length > 1000);
+  const s = new Surface(p.meta.cols, p.meta.rows);
+  assert.equal(s.chars[0], EMPTY);
+  // The same parsed drawing makes several pieces.
+  const doc = parseSvg(HEART);
+  assert.equal(snapshot(fromSvg(doc, { width: 20 })).text, snapshot(fromSvg(HEART, { width: 20 })).text);
+});
