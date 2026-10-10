@@ -250,12 +250,12 @@ Every field of `meta` is in [Fill in its meta](/docs/pieces/#fill-in-its-meta). 
 
 `https://ascii.rest/ascii.js` always serves the newest version, so it can change without you doing anything. To stay on one version, load the same file from npm through jsDelivr, with an integrity hash. The browser then runs the file only if it matches the hash.
 
-1. Pick a version. `npm view ascii.rest version` prints the newest one, and [the package's versions on npm](https://www.npmjs.com/package/ascii.rest?activeTab=versions) lists them all. `<ascii-banner>` needs 0.3.0 or later.
+1. Pick a version. `npm view ascii.rest version` prints the newest one, and [the package's versions on npm](https://www.npmjs.com/package/ascii.rest?activeTab=versions) lists them all. `<ascii-banner>` needs 0.4.0 or later.
 
 2. Make the file's hash. Put your version in the URL:
 
    ```sh
-   curl -s https://cdn.jsdelivr.net/npm/ascii.rest@0.3.0/dist/ascii.js | openssl dgst -sha384 -binary | openssl base64 -A
+   curl -s https://cdn.jsdelivr.net/npm/ascii.rest@0.4.0/dist/ascii.js | openssl dgst -sha384 -binary | openssl base64 -A
    ```
 
 3. Put the same URL in the script tag, and paste the hash after `sha384-`:
@@ -263,7 +263,7 @@ Every field of `meta` is in [Fill in its meta](/docs/pieces/#fill-in-its-meta). 
    ```html
    <script
      type="module"
-     src="https://cdn.jsdelivr.net/npm/ascii.rest@0.3.0/dist/ascii.js"
+     src="https://cdn.jsdelivr.net/npm/ascii.rest@0.4.0/dist/ascii.js"
      integrity="sha384-PASTE-YOUR-HASH-HERE"
      crossorigin="anonymous"
    ></script>

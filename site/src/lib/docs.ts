@@ -36,6 +36,22 @@ export const DOCS = [
     ],
   },
   {
+    label: "make your own",
+    pages: [
+      { href: "/docs/kit/", title: "the kit" },
+      { href: "/docs/kit-field/", title: "fields" },
+      { href: "/docs/kit-draw/", title: "drawing" },
+      { href: "/docs/kit-math/", title: "maths" },
+      { href: "/docs/kit-shapes3d/", title: "3d scenes" },
+      { href: "/docs/kit-particles/", title: "particles" },
+      { href: "/docs/kit-fx/", title: "effects" },
+      { href: "/docs/kit-compose/", title: "layouts" },
+      { href: "/docs/kit-image/", title: "images" },
+      { href: "/docs/kit-materials/", title: "materials" },
+      { href: "/docs/kit-vector/", title: "svg drawings" },
+    ],
+  },
+  {
     label: "reference",
     pages: [
       { href: "/docs/api/", title: "api" },

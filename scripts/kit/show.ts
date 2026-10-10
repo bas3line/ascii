@@ -45,7 +45,8 @@ const run = (times: number[], p: boolean, m: boolean) => {
   });
   return { out, ms };
 };
-const times = [...new Set([...at, 0, 1, 2, 3, 4, 6])].sort((a, b) => a - b);
+// Halves too, so a piece that loops in 1 or 2 seconds is not taken for one that hardly moves.
+const times = [...new Set([...at, 0, 0.5, 1, 1.5, 2, 2.5, 3, 4, 6])].sort((a, b) => a - b);
 const a = run(times, paper, mono), b = run(times, paper, mono);
 a.out.forEach(({ text, color }, i) => {
   const lines = text.split("\n");
@@ -59,8 +60,7 @@ a.out.forEach(({ text, color }, i) => {
   if (!meta.clock && (text !== b.out[i].text || (color && color.some((c, k) => c !== b.out[i].color![k])))) errors.push(`t=${times[i]}: not the same frame twice`);
 });
 const distinct = new Set(a.out.map((o) => o.text)).size;
-if (meta.fps > 0 && distinct < 3) errors.push(`animated (fps ${meta.fps}) but only ${distinct} distinct frames over 6s`);
-if (meta.fps === 0 && distinct > 1 && !meta.clock) errors.push("fps 0 but frames change");
+if (meta.fps > 0 && distinct < 3) errors.push(`animated (fps ${meta.fps}) but only ${distinct} distinct frames over 6s`);if (meta.fps === 0 && distinct > 1 && !meta.clock) errors.push("fps 0 but frames change");
 const avg = a.ms.slice(1).reduce((x, y) => x + y, 0) / Math.max(1, a.ms.length - 1);
 
 console.log(`${errors.length ? "FAIL" : "ok  "} ${file}  ${meta.name}  ${meta.cols}x${meta.rows}  ${meta.fps}fps  ${meta.palette ? `${meta.palette.length} colours  ` : ""}${avg.toFixed(2)}ms a frame`);

@@ -26,7 +26,7 @@
 217 pieces for React, Next.js, Astro or plain HTML.<br>
 The banner above is drawn by ascii.rest: [make your own](https://ascii.rest/banner/).
 
-[ascii.rest](https://ascii.rest) · [docs](https://ascii.rest/docs/) · [install](#install) · [pieces](#pieces) · [contributing](CONTRIBUTING.md)
+[ascii.rest](https://ascii.rest) · [docs](https://ascii.rest/docs/) · [install](#install) · [make your own](#make-your-own) · [pieces](#pieces) · [contributing](CONTRIBUTING.md)
 
 [![by @bas3line](https://img.shields.io/badge/by-%40bas3line-181717?logo=github&logoColor=white)](https://github.com/bas3line)
 [![CI](https://github.com/bas3line/ascii/actions/workflows/ci.yml/badge.svg)](https://github.com/bas3line/ascii/actions/workflows/ci.yml)
@@ -67,6 +67,30 @@ npx ascii.rest add ascii donut
 ```
 
 Every way, with every option, is in [the docs](https://ascii.rest/docs/).
+
+## Make your own
+
+`ascii.rest/kit` turns a few lines into a piece of your own, and does the maths, the shading, the colours and the 3D for you. A sea of rolling waves is a formula of `x`, `y` and `t`:
+
+```ts
+import { TAU, field } from "ascii.rest/kit";
+
+export default field({ name: "sea", cols: 48, rows: 10, ramp: "blocks", colors: ["#0b3d91", "#7fdbff"], period: 2 },
+  (x, y, t, at) => 0.5 + 0.5 * Math.sin(x * 6 + y * 2 + TAU * at.phase));
+```
+
+The donut, lit and spinning, written to an SVG for your README:
+
+```ts
+import { writeFileSync } from "node:fs";
+import { svg } from "ascii.rest/svg";
+import { scene, torus } from "ascii.rest/kit";
+
+const donut = scene({ name: "donut", cols: 40, rows: 22, period: 8 }, torus({ spin: [1.6, 0, 0.8] }));
+writeFileSync("donut.svg", svg(donut));
+```
+
+Everything the kit makes is a normal piece, so it plays in React, on a page, as an SVG and in a terminal. It has [fields](https://ascii.rest/docs/kit-field/), [drawing](https://ascii.rest/docs/kit-draw/), [maths](https://ascii.rest/docs/kit-math/), [3D scenes](https://ascii.rest/docs/kit-shapes3d/), [particles](https://ascii.rest/docs/kit-particles/), [effects](https://ascii.rest/docs/kit-fx/), [layouts](https://ascii.rest/docs/kit-compose/), [images](https://ascii.rest/docs/kit-image/), [materials](https://ascii.rest/docs/kit-materials/) and [SVG drawings](https://ascii.rest/docs/kit-vector/). Start with [the kit](https://ascii.rest/docs/kit/) in the docs, or the [examples](examples/kit/).
 
 ## React and Next.js
 

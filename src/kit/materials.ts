@@ -3093,8 +3093,8 @@ function colorsFor(parts: readonly Part[]): { light: string[]; dark: string[]; s
  * The colours a list of parts draws with, as a palette for piece(): the ink first, then each part's, a list for each
  * page. With it, drawParts() draws every part in its own colours.
  */
-export function paletteOf(parts: readonly Part[]): Duo {
-  const { light, dark } = colorsFor(partsOf("paletteOf", parts));
+export function partsPalette(parts: readonly Part[]): Duo {
+  const { light, dark } = colorsFor(partsOf("partsPalette", parts));
   return { light, dark };
 }
 
@@ -3137,7 +3137,7 @@ const staged = new WeakMap<Surface, WeakMap<readonly Part[], (t: number, s: Surf
  * ink. Make the parts once, outside the drawing: they are set up the first time a grid sees them.
  *
  *   const parts = [shape(cup()), shape(inside(cup()), water())];
- *   export default piece({ name: "label", cols: 64, rows: 24, palette: paletteOf(parts) }, (t, s) => {
+ *   export default piece({ name: "label", cols: 64, rows: 24, palette: partsPalette(parts) }, (t, s) => {
  *     drawParts(s, parts, t);
  *     s.write(2, 1, "fresh water");
  *   });

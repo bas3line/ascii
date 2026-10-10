@@ -1497,12 +1497,12 @@ function checkPeriod(v: unknown, what: string): number {
  * Draws particle systems into a surface you already have, at t seconds: the drawing function, for mixing particles
  * with anything else in one piece(). Systems are drawn in order, each over the last; within one, younger particles
  * over older ones and every particle over the trails. Colours are found in the surface's palette, so give the piece
- * paletteOf(systems) as its palette; on a surface with no palette, or in mono, particles are drawn in the ink. Make
+ * particlesPalette(systems) as its palette; on a surface with no palette, or in mono, particles are drawn in the ink. Make
  * the systems once, outside the drawing: each is checked and read the first time it is drawn, and kept, so changing
  * one after has no effect.
  *
  *   const snow = presets.snow({ cols: 64, rows: 24 });
- *   export default piece({ name: "snow", cols: 64, rows: 24, palette: paletteOf(snow) }, (t, s) => drawParticles(s, snow, t));
+ *   export default piece({ name: "snow", cols: 64, rows: 24, palette: particlesPalette(snow) }, (t, s) => drawParticles(s, snow, t));
  */
 export function drawParticles(s: Surface, systems: Systems, t: number, o: DrawOptions = {}): void {
   if (!s || typeof s !== "object" || typeof s.put !== "function") fail("drawParticles() takes a Surface first: drawParticles(s, systems, t)");
@@ -1569,8 +1569,8 @@ function paletteFor(list: readonly Plan[], own: PaletteSpec | undefined, extra: 
  * don't, and you give none of your own, the kit's INK comes first, so the plain ones are drawn in the page's text
  * colour. Undefined when nothing has a colour. Throws past the 64 colours a piece can have.
  */
-export function paletteOf(systems: Systems, own?: PaletteSpec): PaletteSpec | undefined {
-  return paletteFor(plansOf(systems, "paletteOf()"), own, [], false, "paletteOf()");
+export function particlesPalette(systems: Systems, own?: PaletteSpec): PaletteSpec | undefined {
+  return paletteFor(plansOf(systems, "particlesPalette()"), own, [], false, "particlesPalette()");
 }
 
 // --- scenery ----------------------------------------------------------------------

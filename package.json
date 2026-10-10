@@ -1,7 +1,7 @@
 {
   "name": "ascii.rest",
-  "version": "0.3.0",
-  "description": "Animated ascii art for web pages, READMEs and terminals, in TypeScript: React, Next.js, Astro, one HTML tag, SVG, or copied into your project.",
+  "version": "0.4.0",
+  "description": "Animated ascii art for web pages, READMEs and terminals, in TypeScript: React, Next.js, Astro, one HTML tag, SVG, or copied into your project, and a kit for making your own.",
   "license": "MIT",
   "author": "bas3line (https://github.com/bas3line)",
   "homepage": "https://ascii.rest/docs/",
@@ -9,7 +9,7 @@
     "type": "git",
     "url": "git+https://github.com/bas3line/ascii.git"
   },
-  "keywords": ["ascii", "ascii-art", "animation", "react", "nextjs", "astro", "web-component", "astro-component", "terminal", "cli", "banner", "svg", "readme", "github-readme", "shadcn"],
+  "keywords": ["ascii", "ascii-art", "animation", "react", "nextjs", "astro", "web-component", "astro-component", "terminal", "cli", "banner", "svg", "readme", "github-readme", "shadcn", "generative-art", "creative-coding"],
   "type": "module",
   "bin": {
     "ascii.rest": "dist/cli.js"
@@ -62,6 +62,8 @@
     "check": "node scripts/check.ts",
     "test": "node --test \"src/kit/*.test.ts\"",
     "kit": "node scripts/kit/show.ts",
+    "kit:docs": "node scripts/kit/docs.ts",
+    "kit:examples": "node scripts/kit/examples.ts",
     "gen": "node scripts/gen.ts",
     "prepare": "tsc -p tsconfig.build.json"
   },

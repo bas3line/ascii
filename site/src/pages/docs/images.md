@@ -258,6 +258,7 @@ A message under the art says what went wrong. Each message, and the other things
 
 ## Next
 
+- [images in the kit](/docs/kit-image/): the same drawing in code, with `fromImage()`, in a browser or in Node.
 - [github readme](/docs/readme/): more ways to put art in a README, and banners with your own text.
 - [your own pieces](/docs/pieces/): what a piece is made of, to change the `.ts` file by hand.
 - [html](/docs/html/): the library's tags, for pieces on any web page.

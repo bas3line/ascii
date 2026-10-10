@@ -39,7 +39,7 @@ import {
   moon,
   mug,
   neon,
-  paletteOf,
+  partsPalette,
   palettes,
   pattern,
   patterns,
@@ -731,12 +731,12 @@ test("texture(): any piece as a material, in its own colours, centred or tiled, 
   assert.throws(() => texture(rust, { option: 1 } as never), /texture\(\) has no option "option"/);
 });
 
-test("drawParts() draws parts in a piece of your own: with paletteOf() it is the picture, colour for colour", () => {
+test("drawParts() draws parts in a piece of your own: with partsPalette() it is the picture, colour for colour", () => {
   const tumbler = cup({ rows: 10, at: "center" });
   const drink = inside(tumbler, { fill: "half" });
   const parts = [shape(tumbler, glass()), shape(drink, water()), emit(bubbles(), { inside: drink }), shape(cloud({ rows: 3, at: "top-left" }), { move: "drift" })];
   const pic = picture(parts, { cols: 30, rows: 12 });
-  const own = piece({ name: "own", cols: 30, rows: 12, palette: paletteOf(parts) }, (t, s) => drawParts(s, parts, t));
+  const own = piece({ name: "own", cols: 30, rows: 12, palette: partsPalette(parts) }, (t, s) => drawParts(s, parts, t));
   for (const paper of [false, true])
     for (const t of [0, 1.3, 7]) {
       const a = snapshot(pic, t, { paper }), b = snapshot(own, t, { paper });
@@ -744,7 +744,7 @@ test("drawParts() draws parts in a piece of your own: with paletteOf() it is the
       for (let i = 0; i < 360; i++) assert.equal(own.meta.palette![b.color![i]], pic.meta.palette![a.color![i]]);
     }
   // with drawing of your own over it
-  const label = piece({ name: "label", cols: 30, rows: 12, palette: paletteOf(parts) }, (t, s) => {
+  const label = piece({ name: "label", cols: 30, rows: 12, palette: partsPalette(parts) }, (t, s) => {
     drawParts(s, parts, t);
     s.write(0, 11, "fresh");
   });
@@ -752,7 +752,7 @@ test("drawParts() draws parts in a piece of your own: with paletteOf() it is the
   // on a grid with no palette: the same characters, in its ink
   const plain = piece({ name: "plain", cols: 30, rows: 12 }, (t, s) => drawParts(s, parts, t));
   assert.equal(snapshot(plain, 1.3).text, snapshot(pic, 1.3).text);
-  assert.equal(paletteOf(parts).light[0], INK.light);
+  assert.equal(partsPalette(parts).light[0], INK.light);
   assert.throws(() => drawParts({} as never, parts, 0), /drawParts takes the grid to draw into first/);
   assert.throws(() => drawParts(new Surface(4, 2), [], 0), /drawParts takes a list of one or more parts/);
 });

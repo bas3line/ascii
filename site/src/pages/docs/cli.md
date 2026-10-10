@@ -25,7 +25,7 @@ It plays until you press any key. You need Node 18.3 or newer. There is nothing 
 | `npx ascii.rest --help` | prints every command and flag |
 | `npx ascii.rest --version` | prints the version you ran |
 
-With no command, it prints the help. `banner` and `add` need version 0.3.0 or later. To see which version you have, run `npx ascii.rest --version`.
+With no command, it prints the help. `banner` and `add` need version 0.4.0 or later. To see which version you have, run `npx ascii.rest --version`.
 
 ## Play a piece
 
@@ -265,7 +265,7 @@ npx ascii.rest --help
 npx ascii.rest --version
 ```
 
-`-h` is short for `--help`, and `-v` for `--version`. The help lists every command and flag, with examples. The version is one line, like `0.3.0`. Either flag works after any command, and then the command doesn't run.
+`-h` is short for `--help`, and `-v` for `--version`. The help lists every command and flag, with examples. The version is one line, like `0.4.0`. Either flag works after any command, and then the command doesn't run.
 
 `npx` runs the version installed in your project, if there is one. To run the newest version on npm instead, add `@latest`:
 

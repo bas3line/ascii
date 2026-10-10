@@ -1201,10 +1201,16 @@ function shrink(px: PixelData, side: number): PixelData {
   return { data: out, width: w, height: h };
 }
 
-// Node's file system, reached through process rather than an import, so a bundle for the browser never sees it; null
-// on a page or wherever there is none.
-const files = () =>
-  typeof document === "undefined" && typeof process !== "undefined" && typeof process.getBuiltinModule === "function" ? (process.getBuiltinModule("node:fs/promises") ?? null) : null;
+// Node's file system, reached through process rather than an import, so a bundle for the browser never sees it, and
+// typed here, so a copy of this file needs no Node types in a project for the browser; null on a page or wherever
+// there is none.
+interface Files {
+  readFile(path: string | URL): Promise<Uint8Array>;
+}
+const files = (): Files | null => {
+  const proc = (globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }).process;
+  return typeof document === "undefined" && typeof proc?.getBuiltinModule === "function" ? ((proc.getBuiltinModule("node:fs/promises") as Files | undefined) ?? null) : null;
+};
 
 // A file read from disk, by its path (from the working directory) or a file: URL.
 async function file(path: string | URL): Promise<Blob> {

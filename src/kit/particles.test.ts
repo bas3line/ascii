@@ -6,7 +6,7 @@ import { svg } from "../svg.ts";
 import { play, still } from "../terminal.ts";
 import type { Piece } from "../types.ts";
 import { EMPTY, INK, NONE, Palette, Surface, TAU, sample, snapshot } from "./core.ts";
-import { type Particle, type System, drawParticles, paletteOf, particles, presets, streak } from "./particles.ts";
+import { type Particle, type System, drawParticles, particlesPalette, particles, presets, streak } from "./particles.ts";
 
 const SIZE = { cols: 64, rows: 24 };
 const NAMES = Object.keys(presets) as (keyof typeof presets)[];
@@ -459,22 +459,22 @@ test("a region: the systems live inside it and draw nowhere else", () => {
   assert.equal(off.toString().trim(), "");
 });
 
-test("paletteOf: your colours first, each colour once, INK for the plain ones", () => {
+test("particlesPalette: your colours first, each colour once, INK for the plain ones", () => {
   const red: System = { emitter: { point: [1, 1] }, colors: ["#ff0000", "#000000"], steps: 3 };
   const plain: System = { emitter: { point: [1, 1] } };
-  assert.equal(paletteOf(plain), undefined);
-  assert.deepEqual(paletteOf(red), ["#ff0000", "#800000", "#000000"]);
-  assert.deepEqual(paletteOf([red, red]), ["#ff0000", "#800000", "#000000"]);
-  assert.deepEqual(paletteOf([plain, red]), { light: [INK.light, "#ff0000", "#800000", "#000000"], dark: [INK.dark, "#ff0000", "#800000", "#000000"] });
-  assert.deepEqual(paletteOf(red, ["#123456"]), ["#123456", "#ff0000", "#800000", "#000000"]);
+  assert.equal(particlesPalette(plain), undefined);
+  assert.deepEqual(particlesPalette(red), ["#ff0000", "#800000", "#000000"]);
+  assert.deepEqual(particlesPalette([red, red]), ["#ff0000", "#800000", "#000000"]);
+  assert.deepEqual(particlesPalette([plain, red]), { light: [INK.light, "#ff0000", "#800000", "#000000"], dark: [INK.dark, "#ff0000", "#800000", "#000000"] });
+  assert.deepEqual(particlesPalette(red, ["#123456"]), ["#123456", "#ff0000", "#800000", "#000000"]);
   const many: System = { emitter: { point: [1, 1] }, palettes: Array.from({ length: 9 }, (_, i) => ({ light: [`#0000${(i + 16).toString(16)}`], dark: [`#00${(i + 16).toString(16)}00`] })), steps: 1 };
-  assert.equal((paletteOf(many) as { light: readonly string[] }).light.length, 9);
+  assert.equal((particlesPalette(many) as { light: readonly string[] }).light.length, 9);
   const tooMany: System = { ...many, palettes: Array.from({ length: 40 }, (_, i) => ({ light: [`#0000${(i + 16).toString(16)}`], dark: [`#00${(i + 16).toString(16)}00`] })) };
-  assert.throws(() => paletteOf(tooMany), /ascii\.rest: paletteOf\(\): these particles have 80 colours between them, light and dark, past the 64/);
+  assert.throws(() => particlesPalette(tooMany), /ascii\.rest: particlesPalette\(\): these particles have 80 colours between them, light and dark, past the 64/);
   // A trail's colours are in it too, after the particle's.
-  assert.deepEqual(paletteOf({ ...red, steps: 1, colors: ["#ff0000"], trailColors: ["#00ff00"] }), ["#ff0000", "#00ff00"]);
+  assert.deepEqual(particlesPalette({ ...red, steps: 1, colors: ["#ff0000"], trailColors: ["#00ff00"] }), ["#ff0000", "#00ff00"]);
   // Empty: nothing to colour.
-  assert.equal(paletteOf([]), undefined);
+  assert.equal(particlesPalette([]), undefined);
 });
 
 test("particles(): its meta, a size for the systems, and the players", async () => {

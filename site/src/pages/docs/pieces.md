@@ -519,6 +519,7 @@ The checker checks only these rules. A reviewer also looks at the frames: the pi
 
 ## Next
 
+- [the kit](/docs/kit/): make a piece in a few lines, with `piece()`, `field()`, `scene()` and the rest doing the work on this page for you.
 - [your own copy](/docs/copy/): copy a library piece into your project and change it.
 - [react](/docs/react/): every prop of `<Ascii>`.
 - [svg](/docs/svg/): every option of `svg()`, and serving SVGs.
