@@ -136,4 +136,17 @@ test("headline: says what is wrong, the kit's way", () => {
   assert.throws(() => headline("a".repeat(40)), /headline needs \d+ columns for "a{40}" in block letters, past the 156 it can take: fewer words, or font=slim/);
   assert.throws(() => headline({ words: "" }), /headline's words take words for its big line/);
   assert.throws(() => headline(42 as never), /headline\(\) takes a fence's body/);
+  assert.throws(() => headline('ascii.rest "animated ascii'), /headline's line 1 opens a quote it doesn't close/);
+  assert.throws(() => headline('ascii.rest "art \u{2728}"'), /headline takes characters every monospace face draws one cell wide/);
+  assert.throws(() => headline({ words: "ok", line: 4 as never }), /headline's line takes words, not 4/);
+});
+
+test("headline: every frame of its build and cycle is its size, in the letters' and the line's characters only", () => {
+  const p = headline(SOURCE);
+  for (let t = 0; t < 8; t += 0.11) {
+    const f = p.default()(t, { paper: true }).split("\n");
+    assert.equal(f.length, p.meta.rows);
+    for (const l of f) assert.equal(l.length, p.meta.cols);
+    assert.match(f.slice(0, 6).join(""), /^[ █╔╗╚╝═║]*$/);
+  }
 });
