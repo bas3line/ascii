@@ -15,6 +15,10 @@ import framed from "../../examples/kit/field-window.ts";
 
 const examples = [plasma, pulse, sea, framed, moonlit, storm];
 
+// Wall-clock budgets, as on an idle machine when KIT_PERF=1 (npm run test:perf); ten times as long otherwise, so a
+// busy CI runner running the files side by side fails only on a slowdown of a different order.
+const slack = process.env.KIT_PERF ? 1 : 10;
+
 // The checks scripts/check.ts makes of a frame: rows lines of cols characters, colours inside the palette.
 function contract(p: Piece, times = [0, 0.5, 1, 2.5]) {
   const { meta } = p;
@@ -626,6 +630,6 @@ test("fast: 64 by 24 well under 4 ms a frame, 200 by 100 under 10 ms", () => {
     const n = 60, start = performance.now();
     for (let i = 0; i < n; i++) frame(i / 30, { color });
     const ms = (performance.now() - start) / n;
-    assert.ok(ms < limit, `${cols} by ${rows}: ${ms.toFixed(2)} ms a frame`);
+    assert.ok(ms < limit * slack, `${cols} by ${rows}: ${ms.toFixed(2)} ms a frame`);
   }
 });

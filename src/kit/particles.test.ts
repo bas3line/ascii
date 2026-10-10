@@ -8,6 +8,10 @@ import type { Piece } from "../types.ts";
 import { EMPTY, INK, NONE, Palette, Surface, TAU, sample, snapshot } from "./core.ts";
 import { type Particle, type System, drawParticles, particlesPalette, particles, presets, streak } from "./particles.ts";
 
+// Wall-clock budgets, as on an idle machine when KIT_PERF=1 (npm run test:perf); ten times as long otherwise, so a
+// busy CI runner running the files side by side fails only on a slowdown of a different order.
+const slack = process.env.KIT_PERF ? 1 : 10;
+
 const SIZE = { cols: 64, rows: 24 };
 const NAMES = Object.keys(presets) as (keyof typeof presets)[];
 // A banner in a fade of many colours, for pictures.
@@ -534,7 +538,7 @@ test("a frame is quick: under 4 ms at 64 by 24 for every preset", () => {
     const start = performance.now();
     for (let i = 0; i < 120; i++) frame(1 + i / 30, { color });
     const ms = (performance.now() - start) / 120;
-    assert.ok(ms < 4, `${name}: ${ms.toFixed(2)} ms a frame`);
+    assert.ok(ms < 4 * slack, `${name}: ${ms.toFixed(2)} ms a frame`);
   }
 });
 
@@ -838,7 +842,7 @@ test("the new tools keep a frame to t alone, and quick: bounces with trails, hol
     const start = performance.now();
     for (let i = 0; i < 120; i++) frame(5 + i / 30);
     const ms = (performance.now() - start) / 120;
-    assert.ok(ms < 4, `${p.meta.name}: ${ms.toFixed(2)} ms a frame`);
+    assert.ok(ms < 4 * slack, `${p.meta.name}: ${ms.toFixed(2)} ms a frame`);
   }
 });
 

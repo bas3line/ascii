@@ -65,6 +65,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "check": "node scripts/check.ts",
     "test": "node --test \"src/kit/*.test.ts\" \"src/kit/recipes/*.test.ts\"",
+    "test:perf": "KIT_PERF=1 node --test --test-concurrency=1 \"src/kit/*.test.ts\" \"src/kit/recipes/*.test.ts\"",
     "kit": "node scripts/kit/show.ts",
     "kit:docs": "node scripts/kit/docs.ts",
     "kit:examples": "node scripts/kit/examples.ts",

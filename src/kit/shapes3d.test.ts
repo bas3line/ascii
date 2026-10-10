@@ -7,6 +7,10 @@ import type { Piece } from "../types.ts";
 import { Surface, TAU, piece, snapshot } from "./core.ts";
 import { cone, cube, cylinder, group, lines, mesh, orbit, parametric, plane, points, render3d, scene, scenePalette, sphere, textures, torus, type Shape3d, type Vec3 } from "./shapes3d.ts";
 
+// Wall-clock budgets, as on an idle machine when KIT_PERF=1 (npm run test:perf); ten times as long otherwise, so a
+// busy CI runner running the files side by side fails only on a slowdown of a different order.
+const slack = process.env.KIT_PERF ? 1 : 10;
+
 // The checks scripts/check.ts makes of a frame: rows lines of cols characters, colours inside the palette, the same
 // frame for the same t, on paper and on a dark page, in colour and in one ink.
 function contract(p: Piece, times = [0, 0.5, 1, 2.5, 7]) {
@@ -445,7 +449,7 @@ test("a scene with a huge spinning surface is made quickly: it counts as its bal
   const start = performance.now();
   const p = scene({ period: 60 }, [parametric((u, v) => [Math.cos(u * TAU) * (1 + v), v, Math.sin(u * TAU)], { segments: 512, spin: [1, 0.3, 0] })]);
   const ms = performance.now() - start;
-  assert.ok(ms < 1500, `made in ${ms.toFixed(0)} ms`);
+  assert.ok(ms < 1500 * slack, `made in ${ms.toFixed(0)} ms`);
   const f = p.default();
   for (let i = 0; i < 20; i++) {
     const e = extent(f(i * 3));
@@ -494,7 +498,7 @@ test("render3d measures shapes made anew each frame once when they are made alik
     return (performance.now() - start) / 60;
   };
   const a = time(kept), b = time(anew);
-  assert.ok(b < a * 4 + 0.5, `made anew ${b.toFixed(2)} ms a frame, made once ${a.toFixed(2)} ms`);
+  assert.ok(b < a * 4 + 0.5 * slack, `made anew ${b.toFixed(2)} ms a frame, made once ${a.toFixed(2)} ms`);
   // shapes made differently never share a view: drawn after another, a shape is drawn as it is into a fresh surface
   const pairs: [() => Shape3d, () => Shape3d][] = [
     [() => sphere(), () => sphere({ at: [3, 0, 0] })],
@@ -818,7 +822,7 @@ test("frames are quick: under 4 ms at 64 by 24 and 10 ms at 200 by 100", () => {
     const start = performance.now();
     for (let i = 1; i <= 60; i++) f(i / 30, { color });
     const ms = (performance.now() - start) / 60;
-    assert.ok(ms < budget, `${cols} by ${rows}: ${ms.toFixed(2)} ms a frame`);
+    assert.ok(ms < budget * slack, `${cols} by ${rows}: ${ms.toFixed(2)} ms a frame`);
   }
 });
 

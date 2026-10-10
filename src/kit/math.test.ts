@@ -60,6 +60,10 @@ import easing from "../../examples/kit/math-easing.ts";
 import galaxy from "../../examples/kit/math-galaxy.ts";
 import pool from "../../examples/kit/math-pool.ts";
 
+// Wall-clock budgets, as on an idle machine when KIT_PERF=1 (npm run test:perf); ten times as long otherwise, so a
+// busy CI runner running the files side by side fails only on a slowdown of a different order.
+const slack = process.env.KIT_PERF ? 1 : 10;
+
 const near = (a: number, b: number, eps = 1e-9) => assert.ok(Math.abs(a - b) <= eps, `${a} is not ${b}`);
 
 test("core's maths comes through math, the same functions", () => {
@@ -304,7 +308,7 @@ test("noise: thousands of seeds a frame cost no more than one", () => {
   for (let f = 0; f < 30; f++) for (let i = 0; i < 2000; i++) sum += noise2(f / 30, 0.5, i);
   const ms = (performance.now() - start) / 30;
   assert.ok(Number.isFinite(sum));
-  assert.ok(ms < 1, `2000 seeds take ${ms.toFixed(3)} ms a frame`);
+  assert.ok(ms < 1 * slack, `2000 seeds take ${ms.toFixed(3)} ms a frame`);
 });
 
 test("fractal noise: octaves, gain and lacunarity, checked", () => {
@@ -949,7 +953,7 @@ test("the examples are quick: a frame well under the library's 4 ms", () => {
     const start = performance.now();
     for (let i = 0; i < 60; i++) f(i / 30, { color });
     const ms = (performance.now() - start) / 60;
-    assert.ok(ms < 4, `${name}: ${ms.toFixed(2)} ms a frame`);
+    assert.ok(ms < 4 * slack, `${name}: ${ms.toFixed(2)} ms a frame`);
   }
 });
 

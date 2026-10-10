@@ -10,6 +10,10 @@ import gauge from "../../examples/kit/draw-gauge.ts";
 import sine from "../../examples/kit/draw-sine.ts";
 import sprite from "../../examples/kit/draw-sprite.ts";
 
+// Wall-clock budgets, as on an idle machine when KIT_PERF=1 (npm run test:perf); ten times as long otherwise, so a
+// busy CI runner running the files side by side fails only on a slowdown of a different order.
+const slack = process.env.KIT_PERF ? 1 : 10;
+
 // The grid's rows as text.
 const rows = (s: Surface) => s.toString().split("\n");
 // Every cell drawn, as [x, y].
@@ -88,7 +92,7 @@ test("line: a brush, \"\" to clear, colours, and nothing outside the grid", () =
   const big = new Surface(6, 3);
   const a = performance.now();
   line(big, -1e9, 1, 1e9, 1);
-  assert.ok(performance.now() - a < 50);
+  assert.ok(performance.now() - a < 50 * slack);
   assert.deepEqual(rows(big), ["      ", "------", "      "]);
   line(big, -5, -5, -1, -1);
   line(big, NaN, 0, 3, 0);
@@ -382,7 +386,7 @@ test("rect: a box far bigger than the grid costs no more than the grid", () => {
   rect(wide, 0, 0, 1e9, 3, { fill: ".", title: "x".repeat(100000) });
   const tall = new Surface(4, 6);
   rect(tall, 0, 0, 4, 1e9);
-  assert.ok(performance.now() - a < 50, `${performance.now() - a} ms`);
+  assert.ok(performance.now() - a < 50 * slack, `${performance.now() - a} ms`);
   assert.deepEqual(rows(wide), ["┌─ xxxxxxxxxxxxxxxxx", "│...................", "└───────────────────"]);
   assert.deepEqual(rows(tall), ["┌──┐", "│  │", "│  │", "│  │", "│  │", "│  │"]);
 });

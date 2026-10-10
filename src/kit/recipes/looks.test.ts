@@ -43,6 +43,10 @@ import {
   waves,
 } from "./looks.ts";
 
+// Wall-clock budgets, as on an idle machine when KIT_PERF=1 (npm run test:perf); ten times as long otherwise, so a
+// busy CI runner running the files side by side fails only on a slowdown of a different order.
+const slack = process.env.KIT_PERF ? 1 : 10;
+
 // Every look by name, each made with no options, and its loop at normal speed.
 const all: Record<string, [() => Look, number]> = {
   waves: [waves, 4], sea: [sea, 8], plasma: [plasma, 8], aurora: [aurora, 8], flames: [flames, 4], clouds: [clouds, 16],
@@ -128,7 +132,7 @@ test("a frame takes under 4 ms at 64 by 24", () => {
     const n = 30, start = performance.now();
     for (let i = 0; i < n; i++) f(i * 0.37, { color: new Uint8Array(64 * 24) });
     const ms = (performance.now() - start) / n;
-    assert.ok(ms < 4, `${name}: ${ms.toFixed(2)} ms a frame`);
+    assert.ok(ms < 4 * slack, `${name}: ${ms.toFixed(2)} ms a frame`);
   }
 });
 

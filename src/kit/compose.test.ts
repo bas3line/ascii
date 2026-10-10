@@ -32,6 +32,10 @@ import {
 } from "./compose.ts";
 import { INK, Surface, gradient, hex, piece, rgb, snapshot } from "./core.ts";
 
+// Wall-clock budgets, as on an idle machine when KIT_PERF=1 (npm run test:perf); ten times as long otherwise, so a
+// busy CI runner running the files side by side fails only on a slowdown of a different order.
+const slack = process.env.KIT_PERF ? 1 : 10;
+
 // The checks scripts/check.ts makes of a frame, on paper and a dark page, in colour and as text: rows lines of cols
 // characters, colours inside the palette, and the same frame for the same t from a fresh player.
 function contract(p: Piece, times = [0, 0.5, 1, 2.5, 7], { colourOrder = true } = {}) {
@@ -391,7 +395,7 @@ test("a frame at about 80 by 24 takes well under 4 ms, transitions and moves inc
     const start = performance.now();
     for (let i = 0; i < 300; i++) f(i / 30, { color });
     const ms = (performance.now() - start) / 300;
-    assert.ok(ms < 4, `${p.meta.name}: ${ms.toFixed(3)} ms a frame`);
+    assert.ok(ms < 4 * slack, `${p.meta.name}: ${ms.toFixed(3)} ms a frame`);
   }
 });
 
@@ -585,7 +589,7 @@ test("past 64 colours, a thousand and more fold in well under a second, the firs
   const start = performance.now();
   const wall = grid(parts, { columns: 1, gap: 0 });
   const ms = performance.now() - start;
-  assert.ok(ms < 1000, `${ms.toFixed(0)} ms to make`);
+  assert.ok(ms < 1000 * slack, `${ms.toFixed(0)} ms to make`);
   assert.equal(wall.meta.palette!.length, 64);
   assert.equal(colours(wall).hex[0], colours(parts[0]).hex[0]);
   contract(wall, [0]);
