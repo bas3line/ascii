@@ -436,6 +436,215 @@ test("options and parts are checked when the piece is made, with errors that say
   assert.throws(() => fromSvg(HEART, { fps: 90 }), /fps takes a whole number from 0 to 60/);
 });
 
+// --- origins and motions of your own -------------------------------------------------------------------
+
+// A hand from the middle of a 40 by 40 drawing to its right edge, and a dot that keeps the middle inked.
+const DIAL = `<svg viewBox="0 0 40 40"><rect id="hand" x="20" y="19" width="16" height="2" fill="#000"/><circle cx="20" cy="20" r="1" fill="#000"/></svg>`;
+const inkCols = (text: string) => {
+  const cols = new Set<number>();
+  for (const l of lines(text)) for (let c = 0; c < l.length; c++) if (l[c] !== " ") cols.add(c);
+  return [...cols].sort((a, b) => a - b);
+};
+
+test("origin: a part turns about its centre by default, about a point or a side when given one", () => {
+  const at = (origin?: unknown) =>
+    snapshot(fromSvg(DIAL, { width: 44, fit: "viewBox", "#hand": { motion: "spin", ...(origin ? { origin } : {}) } } as never), 2).text;
+  // Half a turn about its own centre, the hand lies where it was drawn, right of the middle (column 22).
+  assert.ok(inkCols(at()).at(-1)! >= 36, at());
+  // Half a turn about the middle of the dial, a clock hand's pivot, it points left.
+  const pivot = inkCols(at([20, 20]));
+  assert.ok(pivot[0] <= 8 && pivot.at(-1)! <= 24, at([20, 20]));
+  assert.deepEqual(inkCols(at("left")), pivot);
+  // Sway leans from the bottom by default; from the top it is a pendulum, its top held.
+  const bar = `<svg viewBox="0 0 20 40"><rect id="p" x="9" y="0" width="2" height="40" fill="#000"/></svg>`;
+  const lean = (o: object) => lines(snapshot(fromSvg(bar, { cols: 30, rows: 20, fit: "viewBox", "#p": { motion: "sway", amount: 0.3, ...o } }), 1).text);
+  const plant = lean({}), pendulum = lean({ origin: "top" });
+  // Where a row's ink sits, by its middle column: the bar stands at column 15.
+  const mid = (l: string) => {
+    const c = [...l].flatMap((ch, i) => (ch === " " ? [] : [i]));
+    return (c[0] + c.at(-1)!) / 2;
+  };
+  assert.ok(Math.abs(mid(plant[18]) - 15) <= 1.5 && Math.abs(mid(plant[1]) - 15) >= 5, plant.join("\n"));
+  assert.ok(Math.abs(mid(pendulum[1]) - 15) <= 1.5 && Math.abs(mid(pendulum[18]) - 15) >= 5, pendulum.join("\n"));
+});
+
+test("a function of t moves a part: x in columns, y in rows, turned and grown about its origin", () => {
+  const svg = `<svg viewBox="0 0 40 20"><rect id="b" x="15" y="5" width="10" height="10" fill="#000"/></svg>`;
+  const o = { width: 44, fit: "viewBox" } as const;
+  const base = lines(snapshot(fromSvg(svg, o)).text);
+  const moved = lines(snapshot(fromSvg(svg, { ...o, "#b": () => ({ x: 3, y: 2 }) })).text);
+  // Exactly 3 columns right and 2 rows down.
+  for (let r = 0; r + 2 < base.length; r++) assert.equal(moved[r + 2], " ".repeat(3) + base[r].slice(0, -3), `row ${r}`);
+  // A quarter turn of a square is the square; scale 0 leaves nothing.
+  assert.deepEqual(lines(snapshot(fromSvg(svg, { ...o, "#b": () => ({ rotate: Math.PI / 2 }) })).text), base);
+  assert.equal(snapshot(fromSvg(svg, { ...o, "#b": () => ({ scale: 0 }) })).text.trim(), "");
+  // Grown 1.5 times across only, about its left side, it reaches 5 columns further right.
+  const wide = inkCols(snapshot(fromSvg(svg, { ...o, "#b": { motion: () => ({ scale: [1.5, 1] }), origin: "left" } })).text);
+  assert.deepEqual([wide[0], wide.at(-1)], [inkCols(base.join("\n"))[0], inkCols(base.join("\n")).at(-1)! + 5]);
+});
+
+test("a function's period sets the loop, without one there is none, and its frames depend only on t", () => {
+  const bounce = (t: number) => ({ y: -3 * Math.abs(Math.sin((Math.PI * t) / 1.5)) });
+  const p = fromSvg(SQUARE, { width: 30, "#sq": { motion: bounce, period: 1.5 } });
+  assert.equal(p.meta.loop, 1.5);
+  assert.equal(p.meta.fps, 30);
+  const q = fromSvg(SQUARE, { width: 30, "#sq": bounce });
+  assert.equal(q.meta.loop, undefined);
+  assert.equal(q.meta.fps, 30);
+  // With a word that has a period, a function with none still leaves the loop unknown.
+  assert.equal(fromSvg(HEART, { "#heart": "pulse", "*": (t: number) => ({ x: Math.sin(t) }) }).meta.loop, undefined);
+  const f = p.default(), g = p.default();
+  const a = f(0.4);
+  f(1.1);
+  assert.equal(f(0.4), a);
+  assert.equal(g(0.4), a);
+  assert.equal(f(0.4 + 1.5), a);
+  assert.notEqual(f(0.75), f(0));
+  contract(p, [0, 0.3, 0.75]);
+  // The room it takes is measured: a bounce of 3 rows stays inside the frame.
+  for (let t = 0; t < 1.5; t += 0.05) assert.equal(lines(f(t))[0].trim(), "", `t=${t}`);
+});
+
+test("a motion in rows moves that many rows when the drawing is fitted to the room it takes", () => {
+  // In a fixed size the room for the bob shrinks the square, which makes a row more of the svg's units: the scale is
+  // found that fits its own room, so 3 rows are 3 rows, not 2.975 (a sliver over a cell edge).
+  for (const size of [{ width: 30 }, { cols: 30, rows: 14 }, { cols: 40, rows: 9 }]) {
+    const p = fromSvg(SQUARE, { ...size, "#sq": { motion: "bob", amount: 3 } }).default();
+    const top = (t: number) => lines(p(t)).findIndex((l) => l.trim());
+    // Bob's peak is a quarter of its 2 s period in: 3 rows above where it rests at t = 0, and 3 below at three quarters.
+    assert.equal(top(0) - top(0.5), 3, JSON.stringify(size));
+    assert.equal(top(1.5) - top(0), 3, `${JSON.stringify(size)}\n${p(1.5)}`);
+    assert.equal(lines(p(1.5)).at(-1)!.trim(), "");
+    assert.equal(lines(p(0.5))[0].trim(), "");
+  }
+});
+
+test("origins and motion functions are checked when the piece is made", () => {
+  assert.throws(() => fromSvg(HEART, { "#heart": () => 5 as never }), /#heart's motion function returns a pose, \{ x, y, rotate, scale \}/);
+  assert.throws(() => fromSvg(HEART, { "#heart": () => ({ x: "1" }) as never }), /returns a pose/);
+  assert.throws(() => fromSvg(HEART, { "#heart": () => ({ spin: 1 }) as never }), /returns a pose/);
+  assert.throws(() => fromSvg(HEART, { "#heart": () => ({ scale: [1] }) as never }), /returns a pose/);
+  assert.throws(() => fromSvg(HEART, { "#heart": { motion: () => ({}), amount: 2 } }), /amount is for motion words/);
+  assert.throws(() => fromSvg(HEART, { "#heart": { motion: () => ({}), every: 2 } }), /every is for blink and glint/);
+  assert.throws(() => fromSvg(HEART, { "#heart": { motion: "spin", origin: "middle" as never } }), /origin takes "center", "top"/);
+  assert.throws(() => fromSvg(HEART, { "#heart": { motion: "spin", origin: [1] as never } }), /or a point \[x, y\]/);
+  assert.throws(() => fromSvg(HEART, { "#heart": () => ({ y: 1e308 }) }), /out to infinity|names nothing|found nothing/);
+  // A pose that turns to nonsense later is drawn as no move rather than breaking the frame.
+  const p = fromSvg(HEART, { "#heart": { motion: (t: number) => (t > 1 ? { x: NaN } : {}), period: 2 } });
+  contract(p, [0, 1.5]);
+});
+
+test("a glint that comes more often than its sweep still repeats exactly", () => {
+  const p = fromSvg(SQUARE, { width: 30, "#sq": { motion: "glint", every: 1 } });
+  assert.equal(p.meta.loop, 1);
+  const f = p.default();
+  let glinted = 0;
+  for (let t = 0; t < 1; t += 0.1) {
+    assert.equal(f(t + 1), f(t), `t=${t}`);
+    assert.equal(f(t + 3), f(t), `t=${t}`);
+    if (f(t).includes("/")) glinted++;
+  }
+  assert.ok(glinted > 2 && glinted < 10, `glinting in ${glinted} of 10 frames`);
+});
+
+// --- hostile and awkward markup ---------------------------------------------------------------------
+
+test("markup nested however deep, uses of their own ancestors and uses that multiply out are handled", () => {
+  // Deeper than any editor exports: read without overflowing the stack; past 256 groups, left out.
+  assert.equal(parseSvg(`<svg viewBox="0 0 10 10">${"<g>".repeat(100000)}<rect width="5" height="5"/>${"</g>".repeat(100000)}</svg>`).shapes.length, 0);
+  assert.equal(parseSvg(`${"<div>".repeat(100000)}<svg viewBox="0 0 10 10"><rect width="5" height="5"/></svg>`).shapes.length, 1);
+  assert.equal(parseSvg(`<svg viewBox="0 0 10 10">${"<g>".repeat(200)}<rect width="5" height="5"/>${"</g>".repeat(200)}</svg>`).shapes.length, 1);
+  // A <use> of a group it is inside is not followed, as SVG says.
+  assert.equal(parseSvg(`<svg viewBox="0 0 10 10"><g id="a"><rect width="1" height="1"/><use href="#a"/><use href="#a"/></g></svg>`).shapes.length, 1);
+  assert.equal(parseSvg(`<svg viewBox="0 0 10 10"><symbol id="s"><rect width="1" height="1"/><use href="#s"/></symbol><use href="#s"/></svg>`).shapes.length, 1);
+  // Uses of uses ten wide and nine deep, a billion rects: refused at once, saying why.
+  let defs = `<g id="a0"><rect width="1" height="1"/></g>`;
+  for (let i = 1; i < 10; i++) defs += `<g id="a${i}">${`<use href="#a${i - 1}"/>`.repeat(10)}</g>`;
+  const t0 = performance.now();
+  assert.throws(() => parseSvg(`<svg viewBox="0 0 10 10"><defs>${defs}</defs><use href="#a9"/></svg>`), /up to 200000 elements, each <use> counting what it draws again/);
+  assert.ok(performance.now() - t0 < 2000);
+});
+
+test("non-finite coordinates, paint servers that are not there, and text are left out, and say so", () => {
+  const s = parseSvg(`<svg viewBox="0 0 10 10"><path fill="#000" d="M0 0L1e400 5L0 10z"/><rect width="1" height="1" fill="url(#nothing)"/>
+    <linearGradient id="empty"/><rect width="1" height="1" fill="url(#empty)"/><rect id="ok" width="2" height="2" fill="#f00"/></svg>`);
+  assert.deepEqual(s.shapes.map((x) => x.id), ["ok"]);
+  const words = `<svg viewBox="0 0 100 20"><text x="0" y="15">Hello</text><image href="a.png" width="10" height="10"/></svg>`;
+  assert.deepEqual(parseSvg(words).skipped, ["text", "image"]);
+  assert.throws(() => fromSvg(words), /found nothing to draw in this svg.*it has text and image, which fromSvg leaves out: turn text to outlines/);
+  assert.deepEqual(parseSvg(HEART).skipped, []);
+});
+
+test("rows crossed by many edges fill by their rule", () => {
+  // Thirty teeth, 60 crossings a row; drawn twice over, nonzero fills them and even-odd cancels them out.
+  const comb = Array.from({ length: 30 }, (_, i) => `M${i * 4} 0h2v10h-2z`).join("");
+  const teeth = (rule: string, d: string) => lines(snapshot(fromSvg(`<svg viewBox="0 0 120 10"><path fill="#000" fill-rule="${rule}" d="${d}"/></svg>`, { width: 124, fit: "viewBox" })).text)[3];
+  assert.equal(teeth("nonzero", comb), "  " + "88  ".repeat(30).trimEnd() + "    ");
+  assert.equal(teeth("nonzero", comb + comb), teeth("nonzero", comb));
+  assert.equal(teeth("evenodd", comb + comb).trim(), "");
+  // And the frame stays quick for a scribble of 20,000 points.
+  const pts = Array.from({ length: 20000 }, (_, i) => `${(5 + 4 * Math.cos(i)).toFixed(3)} ${(5 + 4 * Math.sin(i * 1.0001)).toFixed(3)}`).join(" ");
+  const p = fromSvg(`<svg viewBox="0 0 10 10"><polygon fill="#000" points="${pts}"/></svg>`, { width: 80 });
+  const t0 = performance.now();
+  snapshot(p);
+  assert.ok(performance.now() - t0 < 2000, `${performance.now() - t0} ms`);
+});
+
+test("thousands of colours are merged quickly into what a palette holds", () => {
+  const rects = Array.from({ length: 3000 }, (_, i) => `<rect x="${i % 60}" y="${Math.floor(i / 60)}" width="1" height="1" fill="#${((i * 2654435761) >>> 8).toString(16).padStart(6, "0").slice(-6)}"/>`).join("");
+  const t0 = performance.now();
+  const p = fromSvg(`<svg viewBox="0 0 60 50">${rects}</svg>`, { width: 64 });
+  assert.ok(performance.now() - t0 < 2000, `${performance.now() - t0} ms`);
+  assert.ok(p.meta.palette!.length <= 64);
+  contract(p, [0]);
+});
+
+test("sizes: given none, a tall drawing is kept to 24 rows; given a width, it follows its shape", () => {
+  const tall = `<svg viewBox="0 0 10 40"><rect width="10" height="40" fill="#000"/></svg>`;
+  const p = fromSvg(tall);
+  assert.equal(p.meta.rows, 24);
+  // 22 rows inside the margin at two columns a row is 11 columns wide, and one each side twice.
+  assert.equal(p.meta.cols, 15);
+  assert.equal(fromSvg(tall, { width: 24 }).meta.rows, 42);
+  // A wide drawing keeps the 48 columns.
+  assert.deepEqual([fromSvg(SQUARE).meta.cols, fromSvg(SQUARE).meta.rows], [48, 24]);
+});
+
+test("on paper a colour too pale to read is darkened; white and colours that read are left as drawn", () => {
+  const svg = `<svg viewBox="0 0 30 10"><rect width="10" height="10" fill="#cbd5e1"/><rect x="10" width="10" height="10" fill="#ffffff"/><rect x="20" width="10" height="10" fill="#2563eb"/></svg>`;
+  const p = fromSvg(svg, { width: 34, margin: 0 });
+  const paper = snapshot(p, 0, { paper: true }).color!;
+  const lum = (h: string) => {
+    const f = (v: number) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const grey = p.meta.palette![paper[5 * 34 + 5]];
+  assert.notEqual(grey, "#cbd5e1");
+  assert.ok(1.05 / (lum(grey) + 0.05) >= 2, grey);
+  assert.equal(p.meta.palette![paper[5 * 34 + 15]], "#ffffff");
+  assert.equal(p.meta.palette![paper[5 * 34 + 28]], "#2563eb");
+  // On a dark page the grey reads as drawn.
+  assert.equal(p.meta.palette![snapshot(p).color![5 * 34 + 5]], "#cbd5e1");
+});
+
+test("a moving piece with no loop of its own takes the drawing's period, as the kit's time rule says", () => {
+  const svg = `<svg viewBox="0 0 40 20"><rect width="40" height="20" fill="#475569"/><circle id="window" cx="20" cy="10" r="8" fill="#000"/></svg>`;
+  assert.equal((donut.meta as { loop?: number }).loop, undefined);
+  assert.equal(fromSvg(svg, { width: 44, "#window": donut }).meta.loop, undefined);
+  assert.equal(fromSvg(svg, { width: 44, "#window": donut, "*": "pulse" }).meta.loop, 1.6);
+});
+
+test("drawSvg tells motion functions apart, and a material can't fill the outline style", () => {
+  const s = new Surface(30, 12);
+  drawSvg(s, SQUARE, 0, { "#sq": () => ({ x: -4 }), margin: [6, 1] });
+  const left = s.toString();
+  s.clear();
+  drawSvg(s, SQUARE, 0, { "#sq": () => ({ x: 4 }), margin: [6, 1] });
+  assert.notEqual(s.toString(), left);
+  assert.throws(() => fromSvg(SQUARE, { style: "outline", "#sq": Surface.from("ab") }), /material has nothing to fill in the "outline" style/);
+});
+
 // --- materials -------------------------------------------------------------------------------------
 
 test("partCells works out a part's cells, its edge, which way is in and how deep", () => {

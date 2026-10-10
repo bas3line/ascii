@@ -14,8 +14,9 @@
  *
  * Every element is a part you can name by its id, its class or its colour, to
  * set it moving with a word (spin, flip, bob, pulse, sway, blink, glint,
- * ripple, rise) or fill it with a material such as water() or glass(), or with
- * any piece, so a still drawing comes alive with no code beyond a map.
+ * ripple, rise) or a function of time of your own, about its centre or any
+ * origin, or fill it with a material such as water() or glass(), or with any
+ * piece, so a still drawing comes alive with no code beyond a map.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
  *   import { fromSvg } from "ascii.rest/kit";
@@ -99,6 +100,8 @@ export interface Svg {
   readonly title: string | null;
   /** Every part it can be addressed by: "#id", ".class" and each colour it paints, as #rrggbb. */
   readonly parts: readonly string[];
+  /** The elements it has that fromSvg can't draw and leaves out, such as "text" and "image": none for most drawings. */
+  readonly skipped: readonly string[];
 }
 
 // --- reading the markup --------------------------------------------------------------
@@ -698,6 +701,12 @@ interface Inherited {
 // text, image and the rest) is not drawn where it stands; what <defs> and <symbol> hold is drawn through <use>.
 const SHAPES = new Set(["path", "rect", "circle", "ellipse", "line", "polyline", "polygon"]);
 const GROUPS = new Set(["g", "a", "switch", "svg"]);
+// What a browser would draw that fromSvg leaves out, named in Svg.skipped and in the error for a drawing of nothing else.
+const LEFT_OUT = new Set(["text", "image", "foreignobject"]);
+// The most elements a drawing is walked through, each <use> counting what it draws again: a guard against markup whose
+// uses multiply out to millions.
+const MOST = 200000;
+const DEEP = 256;
 
 /**
  * Reads SVG markup into shapes, once, with no DOM: what fromSvg() and drawSvg() take, so one drawing can make several
@@ -706,16 +715,20 @@ const GROUPS = new Set(["g", "a", "switch", "svg"]);
 export function parseSvg(markup: string): Svg {
   if (typeof markup !== "string") fail(`fromSvg takes SVG markup as a string, such as "<svg viewBox=\\"0 0 24 24\\">...</svg>", not ${markup === null ? "null" : typeof markup}`);
   const doc = xml(markup);
-  const find = (n: XNode): XNode | null => {
-    for (const k of n.kids) {
-      if (k.name === "svg") return k;
-      const f = find(k);
-      if (f) return f;
+  // Elements in document order, walked with a stack of our own rather than by recursion, so markup nested however deep
+  // can't overflow the call stack.
+  const each = (from: XNode, visit: (n: XNode) => boolean | void) => {
+    const stack = [...from.kids].reverse();
+    while (stack.length) {
+      const n = stack.pop()!;
+      if (visit(n) === true) return;
+      for (let k = n.kids.length - 1; k >= 0; k--) stack.push(n.kids[k]);
     }
-    return null;
   };
-  const root = find(doc);
+  let root: XNode | null = null;
+  each(doc, (n) => n.name === "svg" && !!(root = n));
   if (!root) fail('fromSvg takes SVG markup, an <svg> element with shapes inside it, such as <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>');
+  const svgRoot: XNode = root;
 
   // Everything with an id, for <use> and url(#...) to find, and every <style>'s rules.
   const ids = new Map<string, XNode>();
@@ -725,18 +738,21 @@ export function parseSvg(markup: string): Svg {
     if (n.attrs.id !== undefined && !ids.has(n.attrs.id)) ids.set(n.attrs.id, n);
     if (n.name === "style") stylesheet(n.text, rules);
     if (n.name === "title" && title === null && n.text.trim()) title = entities(n.text.trim());
-    n.kids.forEach(index);
   };
-  index(root);
+  index(svgRoot);
+  each(svgRoot, index);
   rules.sort((a, b) => a.rank - b.rank);
 
-  const vb0 = numbers(root.attrs.viewBox);
-  const rw = len(root.attrs.width, 0, NaN), rh = len(root.attrs.height, 0, NaN);
+  const vb0 = numbers(svgRoot.attrs.viewBox);
+  const rw = len(svgRoot.attrs.width, 0, NaN), rh = len(svgRoot.attrs.height, 0, NaN);
   let viewBox: [number, number, number, number] | null =
     vb0.length === 4 && vb0[2] > 0 && vb0[3] > 0 ? [vb0[0], vb0[1], vb0[2], vb0[3]] : rw > 0 && rh > 0 ? [0, 0, rw, rh] : null;
   const vw = viewBox?.[2] ?? 100, vh = viewBox?.[3] ?? 100;
 
   const shapes: SvgShape[] = [];
+  const skipped = new Set<string>();
+  // The elements being walked, so a <use> of one of its own ancestors, which SVG leaves undrawn, is not followed.
+  const open = new Set<XNode>();
   let count = 0;
 
   // An element's own properties: attributes, then the <style>'s rules by how specific they are, then style="".
@@ -754,7 +770,8 @@ export function parseSvg(markup: string): Svg {
   const paint = (v: string, st: Inherited, depth = 0): Read => {
     const url = /^url\(\s*['"]?#([^'")\s]+)['"]?\s*\)\s*(.*)$/i.exec(v.trim());
     if (url) {
-      let g = ids.get(url[1]);
+      const target = ids.get(url[1]);
+      let g = target;
       // A gradient may take its stops from another by href.
       for (let k = 0; g && !g.kids.some((s) => s.name === "stop") && k < 8; k++) g = ids.get((g.attrs.href ?? g.attrs["xlink:href"] ?? "").slice(1));
       const stops = g ? g.kids.filter((s) => s.name === "stop") : [];
@@ -771,8 +788,9 @@ export function parseSvg(markup: string): Svg {
         return { c: hex([0, 1, 2].map((i) => rgbs.reduce((s, c) => s + c[i], 0) / rgbs.length)), a: alpha / stops.length };
       }
       if (url[2]) return depth < 2 ? paint(url[2], st, depth + 1) : { c: null, a: 0 };
-      // A pattern, or a gradient with no stops: drawn in the page's colour.
-      return { c: "currentColor", a: 1 };
+      // A pattern is drawn in the page's colour; a gradient with no stops, or a url to nothing, paints nothing, as in a
+      // browser.
+      return target?.name === "pattern" ? { c: "currentColor", a: 1 } : { c: null, a: 0 };
     }
     const c = color(v);
     if (!c) return { c: "#000000", a: 1 };
@@ -783,8 +801,19 @@ export function parseSvg(markup: string): Svg {
     return c;
   };
 
+  // Groups deeper than DEEP are left out, which no drawing an editor exports comes near, so the walk can't overflow.
   const walk = (n: XNode, ctm: Mat, parent: Inherited, chain: SvgNode[], depth: number, vbw: number, vbh: number) => {
-    if (depth > 32) return;
+    if (depth > DEEP) return;
+    if (count >= MOST) fail(`fromSvg can read up to ${MOST} elements, each <use> counting what it draws again, and this svg has more: simplify it, or flatten its <use> elements in your editor`);
+    open.add(n);
+    try {
+      visit(n, ctm, parent, chain, depth, vbw, vbh);
+    } finally {
+      open.delete(n);
+    }
+  };
+
+  const visit = (n: XNode, ctm: Mat, parent: Inherited, chain: SvgNode[], depth: number, vbw: number, vbh: number) => {
     const p = own(n);
     if (p.display?.trim() === "none") return;
     const pick = (v: string | undefined, inherited: string) => (v === undefined || v === "inherit" ? inherited : v);
@@ -807,10 +836,15 @@ export function parseSvg(markup: string): Svg {
 
     if (n.name === "use") {
       const ref = ids.get((n.attrs.href ?? n.attrs["xlink:href"] ?? "").replace(/^#/, ""));
-      if (!ref || depth > 16) return;
+      if (!ref || open.has(ref)) return;
       m = mul(m, [1, 0, 0, 1, len(n.attrs.x, vbw), len(n.attrs.y, vbh)]);
-      if (ref.name === "symbol" || ref.name === "svg") nested(ref, m, st, path, depth, n.attrs.width, n.attrs.height, vbw, vbh);
-      else walk(ref, m, st, path, depth + 1, vbw, vbh);
+      open.add(ref);
+      try {
+        if (ref.name === "symbol" || ref.name === "svg") nested(ref, m, st, path, depth, n.attrs.width, n.attrs.height, vbw, vbh);
+        else walk(ref, m, st, path, depth + 1, vbw, vbh);
+      } finally {
+        open.delete(ref);
+      }
       return;
     }
     if (n.name === "svg" && depth > 0) {
@@ -821,6 +855,7 @@ export function parseSvg(markup: string): Svg {
       for (const k of n.kids) walk(k, m, st, path, depth + 1, vbw, vbh);
       return;
     }
+    if (LEFT_OUT.has(n.name) && st.visible) skipped.add(n.name === "foreignobject" ? "foreignObject" : n.name);
     if (!SHAPES.has(n.name) || !st.visible) return;
     const ops = shapeOps(n.name, n.attrs, vbw, vbh);
     if (!ops) return;
@@ -832,9 +867,11 @@ export function parseSvg(markup: string): Svg {
     const stroke = s.c && sw > 0 && s.a * st.strokeOpacity * st.opacity > 0 ? s.c : null;
     if (!fill && !stroke) return;
     const all = moved(ops, m);
+    // A coordinate too large for a number (1e400) leaves the shape out, as a browser does.
+    if (!all.every(Number.isFinite)) return;
     const subs = flatten(all, IDENTITY, Math.max(vw, vh) / 4000);
     const b = bounds(subs, stroke ? sw / 2 : 0);
-    if (!b) return;
+    if (!b || !Number.isFinite(b[2] - b[0]) || !Number.isFinite(b[3] - b[1])) return;
     shapes.push({
       tag: n.name,
       id: node.id,
@@ -869,7 +906,7 @@ export function parseSvg(markup: string): Svg {
   };
 
   const start: Inherited = { fill: "black", stroke: "none", strokeWidth: "1", fillOpacity: 1, strokeOpacity: 1, fillRule: "nonzero", cap: "butt", visible: true, color: "currentColor", opacity: 1 };
-  walk(root, IDENTITY, start, [], 0, vw, vh);
+  walk(svgRoot, IDENTITY, start, [], 0, vw, vh);
 
   if (!viewBox) {
     const b = shapes.length ? shapes.reduce((a, s) => [Math.min(a[0], s.box[0]), Math.min(a[1], s.box[1]), Math.max(a[2], s.box[0] + s.box[2]), Math.max(a[3], s.box[1] + s.box[3])], [Infinity, Infinity, -Infinity, -Infinity]) : [0, 0, 1, 1];
@@ -883,24 +920,53 @@ export function parseSvg(markup: string): Svg {
     }
     for (const c of [s.fill, s.stroke]) if (c && c !== "currentColor") parts.add(c);
   }
-  return { viewBox, shapes, title, parts: [...parts] };
+  return { viewBox, shapes, title, parts: [...parts], skipped: [...skipped] };
 }
 
 // --- motion ----------------------------------------------------------------------------------
 
 /**
- * A word that sets a part moving, each on a loop:
- * - spin: turns round its centre, once a period (4 s).
+ * A word that sets a part moving, each on a loop. Spin, flip, pulse, sway and blink turn, grow or shut about the part's
+ * origin: its centre, or for sway its bottom, unless `origin` says otherwise.
+ * - spin: turns round, once a period (4 s); `amount` turns a period (1), negative the other way.
  * - flip: turns round its upright axis like a coin, once a period (4 s).
  * - bob: rises and falls `amount` rows (1), once a period (2 s).
  * - pulse: grows by `amount` (0.15) and back, once a period (1.6 s).
- * - sway: leans `amount` radians (0.15) each way from its bottom, once a period (4 s).
+ * - sway: leans `amount` radians (0.15) each way, once a period (4 s): from the bottom a plant, from the top a pendulum.
  * - blink: shuts, `amount` of the way (0.9), for a fifth of a second, every `every` seconds (4).
  * - glint: a light crosses it every `every` seconds (4), as the library's logos glint.
  * - ripple: its top ripples like water's surface, `amount` rows high (0.4), a wave every period (2 s).
  * - rise: rises `amount` rows (4) over a period (4 s) and starts again, as a bubble does; several share the period out.
  */
 export type Motion = "spin" | "flip" | "bob" | "pulse" | "sway" | "blink" | "glint" | "ripple" | "rise";
+
+/**
+ * Where a part turns, grows and shuts about: its centre, a side or a corner of its box, or a point [x, y] in the svg's
+ * own units (a clock hand's pivot, a door's hinge).
+ */
+export type Origin = "center" | "top" | "bottom" | "left" | "right" | "top-left" | "top-right" | "bottom-left" | "bottom-right" | readonly [number, number];
+
+/**
+ * A part's place at t, from where it is drawn, for a motion of your own: moved `x` columns right and `y` rows down,
+ * turned `rotate` radians clockwise and grown `scale` times (or [across, down]) about its origin. Each is optional.
+ */
+export interface Pose {
+  x?: number;
+  y?: number;
+  rotate?: number;
+  scale?: number | readonly [number, number];
+}
+
+/**
+ * A motion of your own: the part's pose at t seconds. It should depend only on t, as every frame does. Give the part a
+ * `period` if it repeats, for the piece's loop.
+ *
+ *   "#ball": (t) => ({ y: -4 * Math.abs(Math.sin(t * 3)) })                      // a bounce
+ *   "#hand": { motion: (t) => ({ rotate: (t * Math.PI) / 30 }), origin: [12, 12], period: 60 }
+ */
+export type PoseFn = (t: number) => Pose;
+
+const ORIGINS = ["center", "top", "bottom", "left", "right", "top-left", "top-right", "bottom-left", "bottom-right"];
 
 const MOTIONS: Record<Motion, { period: number; amount: number; every?: boolean }> = {
   spin: { period: 4, amount: 1 },
@@ -1003,14 +1069,19 @@ type Piece = import("../types.ts").Piece;
 
 /** How a part looks and moves: a motion, a material, its own character or colour, or hidden. */
 export interface PartOptions {
-  /** How it moves: a word, or several. */
-  motion?: Motion | readonly Motion[];
-  /** Seconds a loop of its motion: spin 4, flip 4, bob 2, pulse 1.6, sway 4, ripple 2, rise 4. */
+  /** How it moves: a word, several, or a function of t giving its pose, for any motion the words don't have. */
+  motion?: Motion | readonly Motion[] | PoseFn;
+  /**
+   * Seconds a loop of its motion: spin 4, flip 4, bob 2, pulse 1.6, sway 4, ripple 2, rise 4. For a function, the
+   * seconds before it repeats, if it does: without, the piece has no loop.
+   */
   period?: number;
   /** Seconds between blinks or glints: 4. */
   every?: number;
   /** How far it moves, as each word says (see Motion): turns for spin and flip, rows for bob, ripple and rise. */
   amount?: number;
+  /** What it turns, grows and shuts about: "center", or for sway "bottom". */
+  origin?: Origin;
   /** Seconds added to its time, to set it apart from others: 0. */
   offset?: number;
   /**
@@ -1032,8 +1103,8 @@ export interface PartOptions {
   hide?: boolean;
 }
 
-/** What a part is given: a motion word or several, a material, its options, or false to leave it out. */
-export type Part = Motion | readonly Motion[] | Material | PartOptions | false;
+/** What a part is given: a motion word or several, a function of t giving its pose, a material, its options, or false to leave it out. */
+export type Part = Motion | readonly Motion[] | PoseFn | Material | PartOptions | false;
 
 /** How the cells are chosen. */
 export type VectorStyle = "logo" | "outline" | "blocks" | "braille";
@@ -1042,7 +1113,8 @@ export type VectorStyle = "logo" | "outline" | "blocks" | "braille";
 export interface VectorOptions {
   /**
    * Columns, the margin included: 48. The rows follow from the drawing's shape, at two columns a row, up to the 120
-   * rows a piece may have (fewer columns then).
+   * rows a piece may have (fewer columns then). Given no size at all, a tall drawing is kept to 24 rows, a terminal's
+   * height, with fewer columns.
    */
   width?: number;
   /** A fixed size instead, in columns and rows: the drawing is fitted inside its margin and centred. One of them alone keeps its shape. */
@@ -1061,7 +1133,7 @@ export interface VectorOptions {
    * / and \ on steep ones, | upright. "blocks": quarter blocks, ▘ ▀ ▙ █ and the rest. "braille": 2 by 4 dots a cell.
    */
   style?: VectorStyle;
-  /** The character for solid cells in the "logo" style: "8", as the library's logos. */
+  /** The character for solid cells in the "logo" style: "8", as the library's logos. The other styles have their own. */
   fill?: string;
   /** The drawing's own colours: true. false draws it in the page's own colour. */
   color?: boolean;
@@ -1094,7 +1166,7 @@ export type DrawSvgOptions = Omit<VectorOptions, "width" | "cols" | "rows" | "na
 };
 
 const OPTIONS = ["width", "cols", "rows", "margin", "fit", "style", "fill", "color", "line", "name", "note", "category", "fps", "still", "ground", "region"];
-const PART_KEYS = new Set(["motion", "period", "every", "amount", "offset", "stagger", "material", "fill", "color", "hide"]);
+const PART_KEYS = new Set(["motion", "period", "every", "amount", "origin", "offset", "stagger", "material", "fill", "color", "hide"]);
 const STYLES: readonly VectorStyle[] = ["logo", "outline", "blocks", "braille"];
 
 const whole = (v: unknown, name: string, lo: number, hi: number) =>
@@ -1114,7 +1186,9 @@ const oneChar = (v: unknown, name: string) => {
 /** A part as worked out: what its selector named, how it moves and what fills it. */
 interface PartPlan {
   key: string;
-  motions: { motion: Motion; period: number; amount: number; offset: number; stagger: number }[];
+  // A word's motion, or "pose" for a function's; a function with no period has NaN, so the piece has no loop.
+  motions: { motion: Motion | "pose"; fn: PoseFn | null; period: number; amount: number; offset: number; stagger: number }[];
+  origin: Origin | null;
   material: Material | null;
   fill: string | null;
   color: string | null;
@@ -1124,17 +1198,20 @@ interface PartPlan {
 
 // One moving thing: a part's motion, about the box of what it names.
 interface Mover {
-  motion: Motion;
+  motion: Motion | "pose";
+  fn: PoseFn | null;
   period: number;
   amount: number;
   offset: number;
   // how deep the element it is on lies, -1 for the whole drawing
   depth: number;
-  // its box in the viewBox's units
+  // its box in the viewBox's units, and the point it turns about
   x0: number;
   y0: number;
   x1: number;
   y1: number;
+  ox: number;
+  oy: number;
 }
 
 // One paint: a shape's fill or its stroke, as polygons in samples, or in the outline style as lines.
@@ -1209,7 +1286,7 @@ const SLASH = "/".charCodeAt(0);
 // The quarter blocks by which quarters are set: top left 1, top right 2, bottom left 4, bottom right 8.
 const QUARTERS = " ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█";
 
-// --- colours on a dark page, as /make/ lifts them ---------------------------------------------------
+// --- colours on a dark page, as /make/ lifts them, and on paper ----------------------------------------
 
 const PAGE = [19, 21, 24]; // the site's dark page
 const LIGHT = [232, 235, 239]; // a black is drawn in this on a dark page
@@ -1240,11 +1317,20 @@ const white = (c: string) => {
   const v = rgb(c);
   return v[0] > 215 && v[1] > 215 && v[2] > 215;
 };
+const PAPER = [255, 255, 255];
+/**
+ * On paper a colour too pale to read as thin characters (a light grey glass, a pale yellow sun) is darkened until it
+ * does, to 2 against white. A white is left as it is: on paper it reads as a cut-out, as the logos' white does.
+ */
+function sink(c: string): string {
+  const v = rgb(c);
+  if (white(c) || contrast(v, PAPER) >= 2) return c;
+  const [h, s, l] = toHsl(v);
+  let k = l, out = v;
+  while (contrast(out, PAPER) < 2 && k > 0.15) out = hslToRgb(h, s, (k -= 0.01)).map(Math.round) as [number, number, number];
+  return hex(out);
+}
 const tint = (c: string, k: number) => hex(rgb(c).map((v) => v + (255 - v) * k));
-const dist2 = (a: string, b: string) => {
-  const x = rgb(a), y = rgb(b);
-  return 0.3 * (x[0] - y[0]) ** 2 + 0.59 * (x[1] - y[1]) ** 2 + 0.11 * (x[2] - y[2]) ** 2;
-};
 
 // --- the rasteriser -------------------------------------------------------------------------------
 
@@ -1263,8 +1349,8 @@ class Raster {
   #dir = new Int8Array(64);
   #order = new Uint32Array(64);
   #act = new Int32Array(64);
-  #xs = new Float64Array(64);
-  #ws = new Int8Array(64);
+  #up = new Float64Array(64);
+  #down = new Float64Array(64);
 
   constructor(W: number, H: number) {
     this.W = W;
@@ -1282,8 +1368,8 @@ class Raster {
     this.#dir = new Int8Array(k);
     this.#order = new Uint32Array(k);
     this.#act = new Int32Array(k);
-    this.#xs = new Float64Array(k);
-    this.#ws = new Int8Array(k);
+    this.#up = new Float64Array(k);
+    this.#down = new Float64Array(k);
   }
 
   /** Fills closed polygons with a paint's id, by the nonzero or even-odd rule. */
@@ -1314,14 +1400,14 @@ class Raster {
     const order = this.#order.subarray(0, e);
     for (let i = 0; i < e; i++) order[i] = i;
     order.sort((a, b) => ya[a] - ya[b]);
-    const act = this.#act, xs = this.#xs, ws = this.#ws, ids = this.ids, W = this.W;
+    const act = this.#act, up = this.#up, down = this.#down, ids = this.ids, W = this.W;
     let na = 0, next = 0;
     const r0 = Math.max(0, Math.ceil(lo - 0.5)), r1 = Math.min(this.H - 1, Math.ceil(hi - 0.5) - 1);
     for (let row = r0; row <= r1; row++) {
       const yc = row + 0.5;
       while (next < e && ya[order[next]] <= yc) act[na++] = order[next++];
-      // Crossings of this row's centre, sorted along it.
-      let nx = 0;
+      // Crossings of this row's centre, the edges going down and those going up apart, each sorted along the row.
+      let nu = 0, nd = 0;
       for (let k = 0; k < na; k++) {
         const i = act[k];
         if (yb[i] <= yc) {
@@ -1330,23 +1416,39 @@ class Raster {
         }
         if (ya[i] > yc) continue;
         const x = xa[i] + (yc - ya[i]) * dx[i];
-        let p = nx++;
-        while (p > 0 && xs[p - 1] > x) {
-          xs[p] = xs[p - 1];
-          ws[p] = ws[p - 1];
-          p--;
-        }
-        xs[p] = x;
-        ws[p] = dir[i];
+        if (dir[i] > 0) down[nd++] = x;
+        else up[nu++] = x;
       }
-      let wind = 0;
-      for (let k = 0; k < nx - 1; k++) {
-        wind += ws[k];
-        if (evenodd ? (k + 1) % 2 === 0 : wind === 0) continue;
-        const c0 = Math.max(0, Math.ceil(xs[k] - 0.5)), c1 = Math.min(W, Math.ceil(xs[k + 1] - 0.5));
-        if (c1 > c0) ids.fill(id, row * W + c0, row * W + c1);
+      sortFirst(down, nd);
+      sortFirst(up, nu);
+      // Walked in order, the two merged: the span after each crossing is inside by the winding so far.
+      let wind = 0, crossed = 0, a = 0, b = 0, prev = 0;
+      while (a < nd || b < nu) {
+        const isDown = b >= nu || (a < nd && down[a] <= up[b]);
+        const x = isDown ? down[a++] : up[b++];
+        if (crossed && (evenodd ? crossed & 1 : wind !== 0)) {
+          const c0 = Math.max(0, Math.ceil(prev - 0.5)), c1 = Math.min(W, Math.ceil(x - 0.5));
+          if (c1 > c0) ids.fill(id, row * W + c0, row * W + c1);
+        }
+        wind += isDown ? 1 : -1;
+        crossed++;
+        prev = x;
       }
     }
+  }
+}
+
+// Sorts the first n numbers of a list: by insertion for the few a row of most drawings crosses, natively for many.
+function sortFirst(a: Float64Array, n: number) {
+  if (n > 24) {
+    a.subarray(0, n).sort();
+    return;
+  }
+  for (let i = 1; i < n; i++) {
+    const v = a[i];
+    let j = i;
+    for (; j > 0 && a[j - 1] > v; j--) a[j] = a[j - 1];
+    a[j] = v;
   }
 }
 
@@ -1448,11 +1550,13 @@ function lineChar(slope: number, rising: boolean, at: number): number {
   return 124;
 }
 
-// The least common multiple of some periods, on hundredths of a second, if it is 60 s or less.
+// The least common multiple of some periods, on hundredths of a second, if it is 60 s or less; none when one of them
+// is not known (NaN, a motion function's with no period).
 function loopOf(periods: readonly number[]): number | undefined {
   const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
   let l = 1;
   for (const p of periods) {
+    if (Number.isNaN(p)) return undefined;
     const h = Math.round(p * 100);
     if (h <= 0) continue;
     l = (l / gcd(l, h)) * h;
@@ -1461,38 +1565,50 @@ function loopOf(periods: readonly number[]): number | undefined {
   return periods.length ? l / 100 : undefined;
 }
 
-/** A motion's transform at t, in the viewBox's units. */
-function motionAt(m: Mover, t: number, rowUnits: number): Mat {
+// A number from a pose, or its default when the function gave none or something that is not a finite number.
+const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
+
+/** A motion's transform at t, in the viewBox's units: `rowUnits` and `colUnits` of them make a row and a column. */
+function motionAt(m: Mover, t: number, rowUnits: number, colUnits: number): Mat {
   const u = (t + m.offset) / m.period;
-  const cx = (m.x0 + m.x1) / 2, cy = (m.y0 + m.y1) / 2;
+  const { ox, oy } = m;
   switch (m.motion) {
     case "spin": {
       const a = TAU * m.amount * u;
-      return about(cx, cy, Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a));
+      return about(ox, oy, Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a));
     }
     case "flip": {
       // Edge on, a coin still shows a sliver.
       const k = Math.cos(TAU * m.amount * u);
-      return about(cx, cy, Math.abs(k) < 0.08 ? (k < 0 ? -0.08 : 0.08) : k, 0, 0, 1);
+      return about(ox, oy, Math.abs(k) < 0.08 ? (k < 0 ? -0.08 : 0.08) : k, 0, 0, 1);
     }
     case "bob":
       return [1, 0, 0, 1, 0, -m.amount * rowUnits * Math.sin(TAU * u)];
     case "pulse": {
       const k = 1 + m.amount * (0.5 - 0.5 * Math.cos(TAU * u));
-      return about(cx, cy, k, 0, 0, k);
+      return about(ox, oy, k, 0, 0, k);
     }
     case "sway": {
       const a = m.amount * Math.sin(TAU * u);
-      return about(cx, m.y1, Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a));
+      return about(ox, oy, Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a));
     }
     case "blink": {
       // Shut for a fifth of a second at the end of each wait, so it is open at the start.
       const w = m.period * (u - Math.floor(u)), shut = 0.2;
       const k = w > m.period - shut ? 1 - m.amount * Math.sin((Math.PI * (w - (m.period - shut))) / shut) : 1;
-      return about(cx, cy, 1, 0, 0, k);
+      return about(ox, oy, 1, 0, 0, k);
     }
     case "rise":
       return [1, 0, 0, 1, 0, -m.amount * rowUnits * (u - Math.floor(u))];
+    case "pose": {
+      // Scaled, then turned, about the origin, then moved.
+      const p = m.fn!(t + m.offset) ?? {};
+      const a = num(p.rotate, 0), sc = p.scale;
+      const sx = num(Array.isArray(sc) ? sc[0] : sc, 1), sy = num(Array.isArray(sc) ? sc[1] : sc, 1);
+      const c = Math.cos(a), s = Math.sin(a);
+      const r = about(ox, oy, c * sx, s * sx, -s * sy, c * sy);
+      return [r[0], r[1], r[2], r[3], r[4] + num(p.x, 0) * colUnits, r[5] + num(p.y, 0) * rowUnits];
+    }
     default:
       return IDENTITY;
   }
@@ -1550,12 +1666,11 @@ interface Drawer {
 
 // Normalises what a part was given.
 function partOf(key: string, v: unknown, rank: number): PartPlan {
-  const plan: PartPlan = { key, motions: [], material: null, fill: null, color: null, hide: false, rank };
+  const plan: PartPlan = { key, motions: [], origin: null, material: null, fill: null, color: null, hide: false, rank };
+  const takes = `${key} takes a motion, ${and(Object.keys(MOTIONS))}, a function of t giving its pose, a material, or { motion, origin, material, fill, color, hide }`;
   const words = (w: unknown) => {
-    const list = typeof w === "string" ? [w] : Array.isArray(w) ? w : fail(`${key}'s motion takes a word, ${and(Object.keys(MOTIONS))}, or a list of them, not ${JSON.stringify(w)}`);
-    for (const m of list)
-      if (typeof m !== "string" || !Object.hasOwn(MOTIONS, m))
-        fail(`${key} takes a motion, ${and(Object.keys(MOTIONS))}, a material, or { motion, material, fill, color, hide }, not ${JSON.stringify(m)}`);
+    const list = typeof w === "string" ? [w] : Array.isArray(w) ? w : fail(`${key}'s motion takes a word, ${and(Object.keys(MOTIONS))}, a list of them, or a function of t, not ${JSON.stringify(w)}`);
+    for (const m of list) if (typeof m !== "string" || !Object.hasOwn(MOTIONS, m)) fail(`${takes}, not ${JSON.stringify(m)}`);
     return list as Motion[];
   };
   if (v === false) {
@@ -1563,14 +1678,16 @@ function partOf(key: string, v: unknown, rank: number): PartPlan {
     return plan;
   }
   let o: PartOptions;
-  if (typeof v === "string" || Array.isArray(v)) o = { motion: words(v) };
+  if (typeof v === "function") o = { motion: v as PoseFn };
+  else if (typeof v === "string" || Array.isArray(v)) o = { motion: words(v) };
   else if (isSource(v) || isPartMaterial(v)) o = { material: v as Material };
   else if (v && typeof v === "object") {
     for (const k of Object.keys(v))
       if (!PART_KEYS.has(k)) fail(`${key} has no option named ${JSON.stringify(k)}: a part takes ${and([...PART_KEYS])}`);
     o = v as PartOptions;
-  } else return fail(`${key} takes a motion, ${and(Object.keys(MOTIONS))}, a material, or { motion, material, fill, color, hide }, not ${String(v)}`);
-  const list = o.motion === undefined ? [] : words(o.motion);
+  } else return fail(`${takes}, not ${String(v)}`);
+  const fn = typeof o.motion === "function" ? o.motion : null;
+  const list = o.motion === undefined || fn ? [] : words(o.motion);
   const period = above0(o.period, `${key}'s period`), every = above0(o.every, `${key}'s every`);
   const amount = finite(o.amount, `${key}'s amount`), offset = finite(o.offset, `${key}'s offset`) ?? 0;
   const stagger = finite(o.stagger, `${key}'s stagger`);
@@ -1579,7 +1696,23 @@ function partOf(key: string, v: unknown, rank: number): PartPlan {
   for (const m of list) {
     const d = MOTIONS[m];
     const p = (d.every ? every : period) ?? d.period;
-    plan.motions.push({ motion: m, period: p, amount: amount ?? d.amount, offset, stagger: stagger ?? (m === "rise" ? NaN : 0) });
+    plan.motions.push({ motion: m, fn: null, period: p, amount: amount ?? d.amount, offset, stagger: stagger ?? (m === "rise" ? NaN : 0) });
+  }
+  if (fn) {
+    if (every !== undefined) fail(`${key}'s every is for blink and glint: give a function period, the seconds before it repeats`);
+    if (amount !== undefined) fail(`${key}'s amount is for motion words: a function says how far it moves itself`);
+    // Called once now, so a function that gives something other than a pose fails here, not on the first frame.
+    const pose: unknown = fn(0);
+    const ok = (k: string, x: unknown) => x === undefined || (typeof x === "number" && Number.isFinite(x)) || (k === "scale" && Array.isArray(x) && x.length === 2 && x.every((y) => typeof y === "number" && Number.isFinite(y)));
+    if (!pose || typeof pose !== "object" || Object.entries(pose).some(([k, x]) => !["x", "y", "rotate", "scale"].includes(k) || !ok(k, x)))
+      fail(`${key}'s motion function returns a pose, { x, y, rotate, scale } of numbers (columns, rows, radians, times), not ${JSON.stringify(pose) ?? String(pose)}`);
+    plan.motions.push({ motion: "pose", fn, period: period ?? NaN, amount: 0, offset, stagger: stagger ?? 0 });
+  }
+  if (o.origin !== undefined) {
+    const g = o.origin;
+    if (!(typeof g === "string" ? ORIGINS.includes(g) : Array.isArray(g) && g.length === 2 && g.every((x) => typeof x === "number" && Number.isFinite(x))))
+      fail(`${key}'s origin takes ${and(ORIGINS.map((w) => JSON.stringify(w)))}, or a point [x, y] in the svg's units, not ${JSON.stringify(g)}`);
+    plan.origin = g;
   }
   if (o.material !== undefined) {
     if (!isSource(o.material) && !isPartMaterial(o.material))
@@ -1655,9 +1788,15 @@ function plan(svg: Svg, o: PlanOptions): Plan {
     }
     return { x0, y0, x1, y1 };
   };
+  // The point a part turns about: its origin as a point, or a side or corner of its box, its centre by default.
+  const pivot = (b: { x0: number; y0: number; x1: number; y1: number }, g: Origin) =>
+    typeof g === "string"
+      ? { ox: g.includes("left") ? b.x0 : g.includes("right") ? b.x1 : (b.x0 + b.x1) / 2, oy: g.includes("top") ? b.y0 : g.includes("bottom") ? b.y1 : (b.y0 + b.y1) / 2 }
+      : { ox: g[0], oy: g[1] };
   const movers = shapes.map(() => [] as Mover[]);
   const ripples: (Mover | null)[] = shapes.map(() => null);
   const glints = new Map<number, { every: number; offset: number }>();
+  // The periods of the motions, NaN for a function's that has none.
   const periods: number[] = [];
   for (const [, ow] of owners) {
     const p = o.parts[ow.part];
@@ -1665,7 +1804,8 @@ function plan(svg: Svg, o: PlanOptions): Plan {
     for (const m of p.motions) {
       periods.push(m.period);
       const stagger = Number.isNaN(m.stagger) ? m.period / ow.count : m.stagger;
-      const mover: Mover = { motion: m.motion, period: m.period, amount: m.amount, offset: m.offset + stagger * ow.index, depth: ow.depth, ...box };
+      const at = pivot(box, p.origin ?? (m.motion === "sway" ? "bottom" : "center"));
+      const mover: Mover = { motion: m.motion, fn: m.fn, period: m.period, amount: m.amount, offset: m.offset + stagger * ow.index, depth: ow.depth, ...box, ...at };
       if (m.motion === "glint") {
         glints.set(ow.part, { every: m.period, offset: m.offset });
         continue;
@@ -1696,7 +1836,10 @@ function plan(svg: Svg, o: PlanOptions): Plan {
   if (o.fit === "viewBox") box = [vb[0], vb[1], vb[2], vb[3]];
   else {
     const b = ink();
-    if (!b) fail("fromSvg found nothing to draw in this svg: no path, rect, circle, ellipse, line, polyline or polygon with a fill or a stroke");
+    if (!b) {
+      const left = svg.skipped?.length ? ` (it has ${and(svg.skipped)}, which fromSvg leaves out: turn text to outlines in your editor before you export)` : "";
+      fail(`fromSvg found nothing to draw in this svg: no path, rect, circle, ellipse, line, polyline or polygon with a fill or a stroke${left}`);
+    }
     box = b;
   }
 
@@ -1712,6 +1855,11 @@ function plan(svg: Svg, o: PlanOptions): Plan {
     } else {
       cols = o.cols ?? o.width ?? 48;
       rows = Math.max(1, Math.round((cols - 2 * mx) * (h / w) / aspect)) + 2 * my;
+      // Given no size, a tall drawing is kept to a terminal's 24 rows, with fewer columns.
+      if (o.cols === undefined && o.width === undefined && rows > 24) {
+        rows = 24;
+        cols = Math.max(1, Math.round(((rows - 2 * my) * aspect * w) / h)) + 2 * mx;
+      }
     }
     // Kept within the largest a piece may be, the drawing's shape kept.
     if (rows > MAX.rows && o.rows === undefined) {
@@ -1730,31 +1878,52 @@ function plan(svg: Svg, o: PlanOptions): Plan {
   };
   let size = sizeFor(box);
   let fit = fitTo(box, size.cols, size.rows);
-  // How far each moving shape reaches over its loops, measured once at this scale, then fitted again.
-  const rowUnits0 = aspect / fit.k;
+  // A row and a column in the viewBox's units, at the scale the motions' room was measured at.
+  let rowUnits = aspect / fit.k;
   if (o.fit === "ink" && (movers.some((m) => m.length) || ripples.some(Boolean))) {
-    const loop = loopOf(periods) ?? 12;
-    let x0 = box[0], y0 = box[1], x1 = box[0] + box[2], y1 = box[1] + box[3];
-    shapes.forEach((s, i) => {
-      if (hidden[i] || (!movers[i].length && !ripples[i])) return;
-      const b = s.box, grow = ripples[i] ? ripples[i]!.amount * rowUnits0 : 0;
-      const corners = [b[0], b[1] - grow, b[0] + b[2], b[1] - grow, b[0], b[1] + b[3], b[0] + b[2], b[1] + b[3]];
-      for (let n = 0; n < 96; n++) {
-        let m = IDENTITY;
-        for (const mv of movers[i]) m = mul(motionAt(mv, (loop * n) / 96, rowUnits0), m);
-        for (let c = 0; c < 8; c += 2) {
-          const x = m[0] * corners[c] + m[2] * corners[c + 1] + m[4], y = m[1] * corners[c] + m[3] * corners[c + 1] + m[5];
-          x0 = Math.min(x0, x);
-          x1 = Math.max(x1, x);
-          y0 = Math.min(y0, y);
-          y1 = Math.max(y1, y);
+    // How far each moving shape reaches: its box's corners through its motions, over the loop (or 12 s for a
+    // function with no period, more finely), at the scale k. Fitted with that room the drawing is smaller, so a motion
+    // given in rows reaches further: the scale that fits its own room is found by the secant method, so a bob of 3
+    // rows is drawn 3 rows, and the room is always measured at the scale the motions are drawn at, so nothing clips.
+    const unknown = periods.some(Number.isNaN), known = loopOf(periods.filter((p) => !Number.isNaN(p)));
+    const loop = unknown ? Math.max(12, known ?? 0) : (known ?? 12), steps = unknown ? 240 : 96;
+    const ink0 = box;
+    const measure = (k: number) => {
+      rowUnits = aspect / k;
+      let x0 = ink0[0], y0 = ink0[1], x1 = ink0[0] + ink0[2], y1 = ink0[1] + ink0[3];
+      shapes.forEach((s, i) => {
+        if (hidden[i] || (!movers[i].length && !ripples[i])) return;
+        const b = s.box, grow = ripples[i] ? ripples[i]!.amount * rowUnits : 0;
+        const corners = [b[0], b[1] - grow, b[0] + b[2], b[1] - grow, b[0], b[1] + b[3], b[0] + b[2], b[1] + b[3]];
+        for (let n = 0; n < steps; n++) {
+          let m = IDENTITY;
+          for (const mv of movers[i]) m = mul(motionAt(mv, (loop * n) / steps, rowUnits, rowUnits / aspect), m);
+          for (let c = 0; c < 8; c += 2) {
+            const x = m[0] * corners[c] + m[2] * corners[c + 1] + m[4], y = m[1] * corners[c] + m[3] * corners[c + 1] + m[5];
+            x0 = Math.min(x0, x);
+            x1 = Math.max(x1, x);
+            y0 = Math.min(y0, y);
+            y1 = Math.max(y1, y);
+          }
         }
-      }
-    });
-    box = [x0, y0, x1 - x0, y1 - y0];
-    size = sizeFor(box);
-    fit = fitTo(box, size.cols, size.rows);
+      });
+      if (![x0, y0, x1, y1].every(Number.isFinite)) fail("fromSvg's motions move a part out to infinity: give a motion function numbers it can draw");
+      box = [x0, y0, x1 - x0, y1 - y0];
+      size = sizeFor(box);
+      return fitTo(box, size.cols, size.rows);
+    };
+    let k0 = fit.k, f0 = measure(k0), k1 = f0.k, f1 = measure(k1);
+    for (let pass = 0; pass < 12 && Math.abs(f1.k - k1) > k1 * 1e-5; pass++) {
+      const g0 = f0.k - k0, g1 = f1.k - k1;
+      const k2 = g1 !== g0 ? k1 - (g1 * (k1 - k0)) / (g1 - g0) : f1.k;
+      (k0 = k1), (f0 = f1);
+      k1 = Number.isFinite(k2) && k2 > 0 ? k2 : f1.k;
+      f1 = measure(k1);
+    }
+    // The last measure leaves rowUnits at k1 and the room and size it gave: draw at that.
+    fit = f1;
   }
+  const colUnits = rowUnits / aspect;
   const { cols, rows } = size;
   // Samples a column: finer for small drawings, coarser for big ones, so a frame stays quick.
   const sx = cols * rows <= 4096 ? 8 : 4;
@@ -1802,19 +1971,46 @@ function plan(svg: Svg, o: PlanOptions): Plan {
   let colours = [...counts.keys()];
   const room = Math.max(1, Math.floor((48 - (hasInk ? runs * 2 : 0)) / (2 * runs)));
   const merged = new Map<string, string>();
+  const into = (drop: string, keep: string) => {
+    merged.set(drop, keep);
+    counts.set(keep, counts.get(keep)! + counts.get(drop)!);
+  };
+  // Hundreds of colours, as an illustration's shading has, are first cut down by boxes of the colour cube, an eighth of
+  // each channel, then a quarter: the most used colour of each box takes the rest of it.
+  for (const shift of [5, 6]) {
+    if (colours.length <= 96) break;
+    const best = new Map<number, string>();
+    const box = (c: string) => {
+      const v = rgb(c);
+      return ((v[0] >> shift) << 6) | ((v[1] >> shift) << 3) | (v[2] >> shift);
+    };
+    for (const c of colours) {
+      const b = best.get(box(c));
+      if (!b || counts.get(c)! > counts.get(b)!) best.set(box(c), c);
+    }
+    for (const c of colours) if (best.get(box(c)) !== c) into(c, best.get(box(c))!);
+    colours = [...best.values()];
+  }
+  // Then the nearest two at a time, the less used into the more.
+  const rgbs = colours.map(rgb);
   while (colours.length > room) {
     let bi = 0, bj = 1, bd = Infinity;
     for (let i = 0; i < colours.length; i++)
       for (let j = i + 1; j < colours.length; j++) {
-        const d = dist2(colours[i], colours[j]);
+        const x = rgbs[i], y = rgbs[j];
+        const d = 0.3 * (x[0] - y[0]) ** 2 + 0.59 * (x[1] - y[1]) ** 2 + 0.11 * (x[2] - y[2]) ** 2;
         if (d < bd) (bd = d), (bi = i), (bj = j);
       }
-    const [keep, drop] = (counts.get(colours[bi]) ?? 0) >= (counts.get(colours[bj]) ?? 0) ? [bi, bj] : [bj, bi];
-    merged.set(colours[drop], colours[keep]);
-    for (const [k, v] of merged) if (v === colours[drop]) merged.set(k, colours[keep]);
-    counts.set(colours[keep], (counts.get(colours[keep]) ?? 0) + (counts.get(colours[drop]) ?? 0));
-    colours = colours.filter((_, i) => i !== drop);
+    const [keep, drop] = counts.get(colours[bi])! >= counts.get(colours[bj])! ? [bi, bj] : [bj, bi];
+    into(colours[drop], colours[keep]);
+    colours.splice(drop, 1);
+    rgbs.splice(drop, 1);
   }
+  // A colour merged into one that was merged in turn ends at the last.
+  const final = (c: string) => {
+    for (let k = 0; merged.has(c) && k < 1024; k++) c = merged.get(c)!;
+    return c;
+  };
   const coloured = o.color && colours.length > 0;
   const knockable = coloured && colours.some(white) && !colours.every(white);
   for (const c of colours) want(c);
@@ -1823,7 +2019,7 @@ function plan(svg: Svg, o: PlanOptions): Plan {
   if (coloured) {
     for (let run = 0; run < runs; run++)
       for (const c of used) {
-        const l = c === "currentcolor" ? INK.light : c, d = c === "currentcolor" ? INK.dark : lift(c);
+        const l = c === "currentcolor" ? INK.light : sink(c), d = c === "currentcolor" ? INK.dark : lift(c);
         light.push(run ? tint(l, run * 0.35) : l);
         dark.push(run ? tint(d, run * 0.35) : d);
       }
@@ -1835,7 +2031,7 @@ function plan(svg: Svg, o: PlanOptions): Plan {
   const groups: string[] = [];
   const groupSlot: number[] = [];
   for (const r of raw) {
-    const c = r.c === "currentColor" ? "currentcolor" : (merged.get(r.c) ?? r.c);
+    const c = r.c === "currentColor" ? "currentcolor" : final(r.c);
     const slot = coloured ? seen.get(c)! : -1;
     let group = groups.indexOf(c);
     if (group < 0) {
@@ -1856,7 +2052,7 @@ function plan(svg: Svg, o: PlanOptions): Plan {
       slot,
       group,
       alpha: r.alpha,
-      knock: !!knockable && r.c !== "currentColor" && white(merged.get(r.c) ?? r.c),
+      knock: !!knockable && r.c !== "currentColor" && white(final(r.c)),
       movers: ms,
       ripple: rp,
       part,
@@ -1865,9 +2061,7 @@ function plan(svg: Svg, o: PlanOptions): Plan {
   }
   if (paints.length > 65534) fail(`fromSvg can draw up to 65534 fills and strokes, not ${paints.length}: simplify the svg`);
   const moving = paints.some((p) => p.moved) || glints.size > 0;
-  for (const g of glints.values()) if (!periods.includes(g.every)) periods.push(g.every);
   const firstMoving = paints.findIndex((p) => p.moved);
-  const rowUnits = rowUnits0;
 
   // The parts a material or a piece fills, the backmost first, and whether each moves.
   const textured: { part: number; material: Material; moves: boolean; first: number }[] = [];
@@ -1920,7 +2114,7 @@ function plan(svg: Svg, o: PlanOptions): Plan {
     // A moving paint's points at t, into its own copy: its motions, outer last, and a ripple along its top.
     const place = (p: Paint, t: number) => {
       let m = IDENTITY;
-      for (const mv of p.movers) m = mul(motionAt(mv, t, rowUnits), m);
+      for (const mv of p.movers) m = mul(motionAt(mv, t, rowUnits, colUnits), m);
       const s = mul(toSamples, mul(m, fromSamples));
       const rp = p.ripple;
       // A ripple: the top of the shape rises and falls in two waves along it, the bottom held still.
@@ -2138,12 +2332,13 @@ function plan(svg: Svg, o: PlanOptions): Plan {
           for (const [pi, g] of glints) {
             const b = partBox.get(pi);
             if (!b) continue;
-            // As the library's logos glint: first at half a second, two seconds across, leaning like a slash.
-            const half = clamp(b.cols / 8, 2, 5), lean = 0.9, sweep = 2, first = 0.5;
+            // As the library's logos glint: first at half a second, two seconds across (less when it comes more often
+            // than every 2.5 s, so it rests between), leaning like a slash.
+            const half = clamp(b.cols / 8, 2, 5), lean = 0.9, sweep = Math.min(2, g.every * 0.8), first = 0.5;
             const lo = b.x - half, span = b.cols + lean * b.rows + 2 * half;
             const since = t + g.offset - first;
-            const u = since >= 0 ? (since % g.every) / sweep : Infinity;
-            if (u >= 1) continue;
+            const u = (((since % g.every) + g.every) % g.every) / sweep;
+            if (!(u < 1)) continue;
             const at = lo + span * u;
             for (let y = Math.max(0, b.y); y < Math.min(rows, b.y + b.rows); y++)
               for (let x = Math.max(0, b.x); x < Math.min(cols, b.x + b.cols); x++) {
@@ -2226,6 +2421,8 @@ function planOptions(o: Record<string, unknown>, drawing: boolean, aspect: numbe
   for (const v of margin) if (!Number.isInteger(v) || v < 0) fail(`margin takes whole numbers of 0 or more, not ${JSON.stringify(m)}`);
   const style = (o.style ?? "logo") as VectorStyle;
   if (!STYLES.includes(style)) fail(`style takes ${and(STYLES.map((s) => JSON.stringify(s)))}, not ${JSON.stringify(o.style)}`);
+  for (const p of parts)
+    if (p.material && style === "outline") fail(`${p.key}'s material has nothing to fill in the "outline" style, which draws only edges: use "logo", "blocks" or "braille"`);
   const fit = o.fit ?? "ink";
   if (fit !== "ink" && fit !== "viewBox") fail(`fit takes "ink" or "viewBox", not ${JSON.stringify(o.fit)}`);
   if (o.color !== undefined && typeof o.color !== "boolean") fail(`color takes true (the drawing's own colours) or false (the page's), not ${JSON.stringify(o.color)}`);
@@ -2377,20 +2574,24 @@ function fillParts(s: Surface, ox: number, oy: number, cols: number, rows: numbe
  * its edge, and plays wherever a piece does.
  *
  * Any key of the options that starts "#" or "." names a part, by an element's id, its class, or a colour it is
- * painted in ("#e11d48"); "*" names the whole drawing. Give a part a motion word, several in a list, a material
- * (water(), glass() and the rest from ascii.rest/kit's materials, or any piece, which plays inside it), false to
- * leave it out, or { motion, period, every, amount, offset, stagger, material, fill, color, hide }. A name on a group
- * moves the group as one; a class on several elements moves each about its own centre; a group's motion carries the
- * motions of what is inside it. `parseSvg(markup).parts` lists the names a drawing answers to.
+ * painted in ("#e11d48"); "*" names the whole drawing. Give a part a motion word, several in a list, a function of t
+ * giving its pose (moved, turned, grown) for any motion of your own, a material (water(), glass() and the rest from
+ * ascii.rest/kit's materials, or any piece, which plays inside it), false to leave it out, or { motion, period, every,
+ * amount, origin, offset, stagger, material, fill, color, hide }. A name on a group moves the group as one; a class on
+ * several elements moves each about its own centre; a group's motion carries the motions of what is inside it.
+ * `origin` sets what a part turns about: a clock hand's pivot, a pendulum's top. `parseSvg(markup).parts` lists the
+ * names a drawing answers to.
  *
- * Its loop is the least common multiple of its motions' and materials' periods when that is 60 seconds or less. It
- * is 30 frames a second when anything moves, else a still.
+ * Its loop is the least common multiple of its motions' and materials' periods when that is 60 seconds or less, and
+ * none when a motion function has no period. It is 30 frames a second when anything moves, else a still.
  *
  * Throws, saying what to change, for markup it can't read, a drawing with nothing to draw, a part that names nothing
  * (with the parts the drawing has), and any option it can't take.
  *
  *   export default fromSvg(star, { width: 32, "#star": ["spin", "glint"] });
  *   export default fromSvg(drawingOfACup, { "#water": water(), "#cup": glass(), ".bubble": "rise" });
+ *   export default fromSvg(pendulum, { "#bob": { motion: "sway", amount: 0.4, origin: "top" } });
+ *   export default fromSvg(ball, { "#ball": (t) => ({ y: -6 * Math.abs(Math.sin(t * 3)) }) });
  */
 export function fromSvg(svg: string | Svg, options: VectorOptions = {}): KitPiece {
   const doc = svgOf(svg);
@@ -2427,13 +2628,14 @@ export function fromSvg(svg: string | Svg, options: VectorOptions = {}): KitPiec
     return i === NONE ? inkIndex(paper) : (map[i] ?? NONE);
   };
 
-  // The loop: the motions' periods and each fill's own; a moving piece with no loop of its own leaves it unknown.
+  // The loop: the motions' periods and each fill's own, by the kit's time rule: a moving piece with no loop of its own
+  // counts as having the drawing's periods, and leaves the loop unknown when the drawing has none.
   const loops = [...p.periods];
   let unknown = false;
   for (const f of sources) {
     const l = f.material ? f.material.period : f.src!.meta.loop;
     if (l !== undefined && l > 0) loops.push(l);
-    else if (f.src && f.src.meta.fps > 0) unknown = true;
+    else if (f.src && f.src.meta.fps > 0 && !p.periods.length) unknown = true;
   }
   const moving = p.moving || sources.some((f) => (f.src ? f.src.meta.fps > 0 : f.material!.period !== undefined));
   const loop = moving && !unknown ? loopOf(loops) : undefined;
@@ -2489,9 +2691,12 @@ const parsed = new Map<string, Svg>();
 const plans = new WeakMap<Svg, Map<string, Entry>>();
 const identities = new WeakMap<object, number>();
 let identity = 0;
+// Options as a key: pieces, materials and motion functions, which JSON can't write, by a number for each.
 const keyOf = (o: Record<string, unknown>, s: Surface, region: Region) =>
   JSON.stringify([s.cols, s.rows, s.aspect, region, o], (_, v) =>
-    v && typeof v === "object" && !Array.isArray(v) && (isSource(v) || isPartMaterial(v)) ? `#${identities.get(v) ?? (identities.set(v, ++identity), identity)}` : v,
+    typeof v === "function" || (v && typeof v === "object" && !Array.isArray(v) && (isSource(v) || isPartMaterial(v)))
+      ? `#${identities.get(v) ?? (identities.set(v, ++identity), identity)}`
+      : v,
   );
 
 /**
