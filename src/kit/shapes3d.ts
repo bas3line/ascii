@@ -59,6 +59,7 @@ import {
   smoothstep,
   specOf,
   spread,
+  suggest,
   type Color,
   type KitPiece,
   type MakerSpec,
@@ -109,6 +110,44 @@ function vec3(v: unknown, what: string, def?: Vec3): Vec3 {
     fail(`${what} takes [x, y, z], three numbers, not ${shown(v)}`);
   return [v[0], v[1], v[2]];
 }
+
+/** A turn by name, for a shape's rotate: "upside-down", "on-its-side", "tipped" (towards you), "facing-left", "facing-right" or "turned-round". */
+export type TurnName = "upside-down" | "on-its-side" | "tipped" | "facing-left" | "facing-right" | "turned-round";
+
+// What each turn's name stands for, in radians about x, y and z.
+const TURNS: Readonly<Record<TurnName, Vec3>> = {
+  "upside-down": [Math.PI, 0, 0],
+  "on-its-side": [0, 0, Math.PI / 2],
+  tipped: [0.45, 0, 0],
+  "facing-left": [0, -Math.PI / 2, 0],
+  "facing-right": [0, Math.PI / 2, 0],
+  "turned-round": [0, Math.PI, 0],
+};
+
+/** Angles in turns or degrees, for those who think in them: { turns: [0.5, 0, 0] } is upside down, as is { degrees: [180, 0, 0] }. */
+export type Angles = { readonly turns: Vec3 } | { readonly degrees: Vec3 };
+
+// Angles about x, y and z in radians from what rotate takes: [x, y, z] in radians, a turn's name, or { turns } or
+// { degrees }.
+function anglesOf(v: unknown, what: string, def: Vec3): Vec3 {
+  if (typeof v === "string") {
+    if (Object.hasOwn(TURNS, v)) return [...TURNS[v as TurnName]];
+    fail(`${what} takes a turn's name, ${or(Object.keys(TURNS).map((n) => JSON.stringify(n)))}, [x, y, z] in radians, { turns: [x, y, z] } or { degrees: [x, y, z] }, not ${shown(v)}${suggest(v, Object.keys(TURNS))}`);
+  }
+  if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+    const o = v as { turns?: unknown; degrees?: unknown };
+    if (o.turns !== undefined) return vec3(o.turns, `${what}'s turns`).map((k) => k * TAU) as Vec3;
+    if (o.degrees !== undefined) return vec3(o.degrees, `${what}'s degrees`).map((k) => (k * Math.PI) / 180) as Vec3;
+    fail(`${what} takes [x, y, z] in radians, { turns: [x, y, z] }, { degrees: [x, y, z] } or a turn's name such as "upside-down", not ${shown(v)}`);
+  }
+  return vec3(v, what, def);
+}
+
+// Spins by name: a turn about y, as on a turntable, in 12, 6 or 3 seconds.
+const SPINS: Readonly<Record<"slow" | "normal" | "fast", number>> = { slow: TAU / 12, normal: TAU / 6, fast: TAU / 3 };
+
+// Words as a sentence offers them: "a, b or c".
+const or = (words: readonly string[]) => (words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : (words[0] ?? ""));
 
 // Names people write for an option, and the options they likely mean, the first one the options object takes winning.
 const MEANT: Record<string, readonly string[]> = {
@@ -238,17 +277,19 @@ export interface ShapeOptions {
   /** Where its centre is, or a function of t that moves it (orbit() makes one): [0, 0, 0], the middle of the scene. */
   at?: Animated<Vec3>;
   /**
-   * Its angles about x, then y, then z, in radians, or a function of t that gives them: [0, 0, 0]. With spin, these
-   * are its angles at t = 0, and the spin turns it from there. The turn about z comes last, so [0, 0, 0.3] with a spin
-   * about y tips the axis it spins on, as a planet's is.
+   * Its angles about x, then y, then z: a turn's name ("upside-down", "on-its-side", "tipped", "facing-left",
+   * "facing-right" or "turned-round"), { turns: [x, y, z] } or { degrees: [x, y, z] }, [x, y, z] in radians, or a
+   * function of t that gives radians: [0, 0, 0]. With spin, these are its angles at t = 0, and the spin turns it from
+   * there. The turn about z comes last, so [0, 0, 0.3] with a spin about y tips the axis it spins on, as a planet's is.
    */
-  rotate?: Animated<Vec3>;
+  rotate?: Animated<Vec3> | TurnName | Angles;
   /**
-   * How fast it turns about x, y and z, in radians a second: [0, 0, 0], still. [0, 1, 0] turns it like a record on a
-   * turntable, once in 6.3 seconds, and a number alone is that turn about y: spin: 1 is [0, 1, 0]. A scene's `period`
+   * How fast it turns: "slow", "normal" or "fast", once round about y in 12, 6 or 3 seconds, as on a turntable; or
+   * about x, y and z in radians a second, [x, y, z], or { turns: [x, y, z] } a second: [0, 0, 0], still. [0, 1, 0]
+   * turns it once in 6.3 seconds, and a number alone is that turn about y: spin: 1 is [0, 1, 0]. A scene's `period`
    * rounds it to whole turns so the scene loops.
    */
-  spin?: Vec3 | number;
+  spin?: Vec3 | number | "slow" | "normal" | "fast" | Angles;
   /** Its size, times: 1. */
   scale?: number;
   /**
@@ -373,17 +414,21 @@ function base(kind: string, o: unknown, extra: readonly string[], surface = true
     fail(`${kind}'s texture takes ${and(TEXTURES.map((n) => `"${n}"`))}, or a function (u, v, t) => brightness 0 to 1, not ${shown(p.texture)}`);
   else texture = p.texture;
   if (p.edges !== undefined && typeof p.edges !== "boolean") fail(`${kind}'s edges takes true or false, not ${shown(p.edges)}`);
-  // a number alone is a spin about y, as the camera's spin is
+  // a number alone is a spin about y, as the camera's spin is, and so is a word: a turn in 12, 6 or 3 seconds
   const spin: Vec3 =
     typeof p.spin === "number"
       ? Number.isFinite(p.spin)
         ? [0, p.spin, 0]
         : fail(`${kind}'s spin takes radians a second about y, or [x, y, z] about each, not ${shown(p.spin)}`)
-      : vec3(p.spin, `${kind}'s spin`, ORIGIN);
+      : typeof p.spin === "string"
+        ? Object.hasOwn(SPINS, p.spin)
+          ? [0, SPINS[p.spin as keyof typeof SPINS], 0]
+          : fail(`${kind}'s spin takes "slow", "normal" or "fast", radians a second about y, [x, y, z] about each, or { turns: [x, y, z] } a second, not ${shown(p.spin)}${suggest(p.spin, Object.keys(SPINS))}`)
+        : anglesOf(p.spin, `${kind}'s spin`, ORIGIN);
   return {
     kind,
     at: animated(p.at, `${kind}'s at`),
-    rotate: animated(p.rotate, `${kind}'s rotate`),
+    rotate: typeof p.rotate === "function" ? animated(p.rotate, `${kind}'s rotate`) : anglesOf(p.rotate, `${kind}'s rotate`, ORIGIN),
     spin,
     scale: positive(p.scale, `${kind}'s scale`, 1),
     color: color?.toLowerCase(),
@@ -922,19 +967,23 @@ export function lines(list: Animated<readonly Point3[] | readonly (readonly Poin
  * Shapes that move as one: placed, turned, spun and sized together about the group's centre, each still moving as it
  * does on its own inside it. A moon's orbit round a planet that goes round a sun, a ringed planet on a tipped axis, a
  * molecule turning whole. A group's `color` is the colour of the shapes in it that have none of their own. Groups go
- * inside groups.
+ * inside groups. `center: true` moves its shapes together so the middle of the box they fill is the group's centre:
+ * an ice cream's scoop on its cone then turns about the middle of the whole and fits its scene.
  *
  *   group([sphere({ color: "#3b82f6" }), sphere({ radius: 0.3, at: orbit({ radius: 2, period: 3 }) })],
  *     { at: orbit({ radius: 5, period: 12 }) })
+ *   group([cone({ rotate: "upside-down" }), sphere({ at: [0, 1.2, 0] })], { center: true })
  */
-export function group(shapes: readonly Shape3d[], o: ShapeOptions = {}): Shape3d {
-  const b = base("group", o, [], false);
+export function group(shapes: readonly Shape3d[], o: ShapeOptions & { center?: boolean } = {}): Shape3d {
+  const b = base("group", o, ["center"], false);
   if (!Array.isArray(shapes)) fail(`group() takes a list of shapes, such as [sphere(), cube({ at: [2, 0, 0] })], not ${shown(shapes)}`);
+  if (o.center !== undefined && typeof o.center !== "boolean") fail(`group's center takes true or false, not ${shown(o.center)}`);
   // a shape with no colour of its own takes the group's, on a copy, so the shape stays as it was elsewhere
-  const children = shapes.map((s) => {
+  let children = shapes.map((s) => {
     const c = body(s, "group()");
     return b.color && !c.color ? paint(c, b.color) : c;
   });
+  if (o.center) children = centred(children);
   const reach = (t: number) => {
     let r = 0;
     for (const c of children) {
@@ -944,6 +993,33 @@ export function group(shapes: readonly Shape3d[], o: ShapeOptions = {}): Shape3d
     return r;
   };
   return shape({ ...b, ...PLAIN, reach, children, timed: children.some((c) => c.timed), form: "" });
+}
+
+// Bodies moved together so the middle of the box they fill at t = 0 is the origin: a group built round a point that is
+// not its middle, a scoop on a cone, then turns about its middle and fits its scene. An orbit stays an orbit, its
+// period known, so the scene still loops.
+function centred(children: Body[]): Body[] {
+  const pts = corners({ children } as unknown as Body, 0, undefined, undefined);
+  if (!pts.length) return children;
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < pts.length; i += 3)
+    for (let k = 0; k < 3; k++) {
+      const v = pts[i + k];
+      if (Number.isFinite(v)) (lo[k] = Math.min(lo[k], v)), (hi[k] = Math.max(hi[k], v));
+    }
+  const c = lo.map((v, k) => (Number.isFinite(v) ? (v + hi[k]) / 2 : 0));
+  if (c.every((v) => Math.abs(v) < 1e-9)) return children;
+  return children.map((ch) => {
+    const at = ch.at;
+    if (typeof at !== "function") return { ...ch, at: [at[0] - c[0], at[1] - c[1], at[2] - c[2]] as Vec3, sig: undefined };
+    const moved = (t: number): Vec3 => {
+      const p = at(t);
+      return [p[0] - c[0], p[1] - c[1], p[2] - c[2]];
+    };
+    const known = ORBITS.get(at);
+    if (known) ORBITS.set(moved, { period: known.period, sig: `${known.sig} less ${c.map((v) => v.toFixed(6)).join(" ")}` });
+    return { ...ch, at: moved, sig: undefined };
+  });
 }
 
 // A body, and the bodies inside it, in a colour where they have none.
@@ -1104,15 +1180,16 @@ export type ColorBy = "shape" | "depth" | "light";
 export interface SceneOptions {
   /**
    * The camera. `distance`: units from the camera to the middle of the scene, 6; nearer makes the perspective
-   * stronger. `zoom`: columns a unit spans at the middle of the scene; fitted by default (see fit). `tilt`: radians it
-   * looks down on the scene from above, 0; negative looks up from below. `spin`: radians a second the whole scene turns
-   * about its middle, as on a turntable, seen by a camera and a light that stay put: 0.
+   * stronger. `zoom`: columns a unit spans at the middle of the scene; fitted by default (see fit). `tilt`: how it looks
+   * down on the scene, "level" (the default), "above" (a little), "high" or "below", or radians, negative looking up
+   * from below. `spin`: radians a second the whole scene turns about its middle, as on a turntable, seen by a camera and
+   * a light that stay put: 0.
    */
-  camera?: { distance?: number; zoom?: number; tilt?: number; spin?: number };
+  camera?: { distance?: number; zoom?: number; tilt?: number | "level" | "above" | "high" | "below"; spin?: number };
   /** Towards the light, as the camera sees it: [-0.4, 1, -1], from the upper left and in front, as donut.c. Its length doesn't matter. */
   light?: Vec3;
-  /** Light everywhere, 0 to 1, so the side away from the light still shows: 0. */
-  ambient?: number;
+  /** Light everywhere, so the side away from the light still shows: "none" (the default), "soft" (0.15) or "bright" (0.35), or 0 to 1. */
+  ambient?: number | "none" | "soft" | "bright";
   /**
    * Characters from unlit to lit: ".,-~:;=!*#$@", donut.c's, with no space so every surface shows. A name from ramps,
    * or two or more characters of your own. A cell whose character is a space is not drawn: it is empty in the frame,
@@ -1154,6 +1231,9 @@ export interface SceneOptions {
 }
 
 const DONUT = ".,-~:;=!*#$@";
+// Light everywhere by name, and the camera's tilt: looking level, down from a little above or high above, or up.
+const AMBIENT = { none: 0, soft: 0.15, bright: 0.35 } as const;
+const TILTS = { level: 0, above: 0.45, high: 0.9, below: -0.45 } as const;
 const NEAR = 0.05;
 const COLOR_BY: readonly ColorBy[] = ["shape", "depth", "light"];
 // What a scene's options and a piece's spec take, and a camera's.
@@ -1186,8 +1266,9 @@ function settings(o: SceneOptions, who: string): Settings {
   const light = vec3(o.light, "light", [-0.4, 1, -1]);
   const len = Math.hypot(...light);
   if (!len) fail("light takes a direction towards the light, not [0, 0, 0]: [-0.4, 1, -1] is from the upper left");
-  const ambient = finite(o.ambient, "ambient", 0);
+  const ambient = typeof o.ambient === "string" ? (Object.hasOwn(AMBIENT, o.ambient) ? AMBIENT[o.ambient as keyof typeof AMBIENT] : fail(`ambient takes "none", "soft" or "bright", or a number from 0 to 1, not ${shown(o.ambient)}${suggest(o.ambient, Object.keys(AMBIENT))}`)) : finite(o.ambient, "ambient", 0);
   if (ambient < 0 || ambient > 1) fail(`ambient takes a number from 0 to 1, not ${ambient}`);
+  const tilt = typeof cam.tilt === "string" ? (Object.hasOwn(TILTS, cam.tilt) ? TILTS[cam.tilt as keyof typeof TILTS] : fail(`camera's tilt takes "level", "above", "high" or "below", or radians, not ${shown(cam.tilt)}${suggest(cam.tilt, Object.keys(TILTS))}`)) : finite(cam.tilt, "camera's tilt", 0);
   const chars = o.ramp === undefined ? DONUT : rampOf(o.ramp);
   if (o.invert !== undefined && o.invert !== true && o.invert !== false && o.invert !== "auto") fail(`invert takes true, false or "auto", not ${shown(o.invert)}`);
   if (o.colorBy !== undefined && !COLOR_BY.includes(o.colorBy)) fail(`colorBy takes ${and(COLOR_BY.map((c) => `"${c}"`))}, not ${shown(o.colorBy)}`);
@@ -1200,7 +1281,7 @@ function settings(o: SceneOptions, who: string): Settings {
   return {
     distance: positive(cam.distance, "camera's distance", 6),
     zoom: cam.zoom === undefined ? undefined : positive(cam.zoom, "camera's zoom"),
-    tilt: finite(cam.tilt, "camera's tilt", 0),
+    tilt,
     spin: finite(cam.spin, "camera's spin", 0),
     light: [light[0] / len, light[1] / len, light[2] / len],
     ambient,

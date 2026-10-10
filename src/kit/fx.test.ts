@@ -568,9 +568,9 @@ test("effects play through svg() and the terminal", async () => {
 });
 
 test("a misspelt option throws, naming the options there are, rather than being left out", () => {
-  assert.throws(() => glint("x", { evry: 2 } as never), /^Error: ascii\.rest: glint\(\) has no option "evry": it takes every, sweep, first, width, slant, chars, color, name, note or options$/);
-  assert.throws(() => dissolve("x", { sed: 2 } as never), /dissolve\(\) has no option "sed": it takes period, mode, blob, edge, seed/);
-  assert.throws(() => rainbow("x", { step: 2 } as never), /rainbow\(\) has no option "step": it takes colors, steps, period, cycles, direction/);
+  assert.throws(() => glint("x", { evry: 2 } as never), /^Error: ascii\.rest: glint\(\) has no option "evry" \(did you mean "every"\?\): it takes every, sweep, speed, first, width, slant, chars, color, name, note or options$/);
+  assert.throws(() => dissolve("x", { sed: 2 } as never), /dissolve\(\) has no option "sed" \(did you mean "seed"\?\): it takes period, mode, blob, edge, seed/);
+  assert.throws(() => rainbow("x", { step: 2 } as never), /rainbow\(\) has no option "step" \(did you mean "steps"\?\): it takes colors, steps, period, cycles, direction/);
   // The names the spec first gave say what to write now.
   assert.throws(() => dissolve("x", { scale: 0.15 } as never), /dissolve\(\) has no option "scale": write blob, the patches' size in cells across, which is 1 \/ scale: 7 for 0\.15$/);
   assert.throws(() => rainbow("x", { spread: 0.03 } as never), /rainbow\(\) has no option "spread": write cycles, the times the colours fit across the piece/);
@@ -725,7 +725,7 @@ test("effect(): an effect of your own, sized, coloured, timed and checked as the
   // What it checks.
   assert.throws(() => effect("x", 5 as never), /^Error: ascii\.rest: effect\(\) takes a drawing, \(t, s, src, ctx\) => \{ \.\.\. \}, or \{ setup: \(\) => drawing \}/);
   assert.throws(() => effect("x", { period: 1 }, null as never), /effect\(\) takes a drawing/);
-  assert.throws(() => effect("x", { perod: 1 } as never, () => {}), /effect\(\) has no option "perod": it takes period, moves, still, pad, colors, name, note or options/);
+  assert.throws(() => effect("x", { perod: 1 } as never, () => {}), /effect\(\) has no option "perod" \(did you mean "period"\?\): it takes period, moves, still, pad, colors, name, note or options/);
   assert.throws(() => effect("x", { period: 0 }, () => {}), /effect\.period takes a number of seconds above 0, not 0/);
   assert.throws(() => effect("x", { pad: -1 }, () => {}), /effect\.pad takes a whole number of cells, 0 or more, not -1/);
   assert.throws(() => effect("x", { pad: { up: 1 } as never }, () => {}), /effect\.pad takes a whole number of cells, 0 or more, \[columns, rows\], or \{ top, right, bottom, left \}/);
@@ -766,6 +766,29 @@ test("loops: an effect's piece keeps to its own loop, not a logo's shine, in a c
   const typed = banner("hi", { effect: "type" });
   assert.deepEqual(loopOf(outline(typed)), loopOf(typed));
   assert.deepEqual(loopOf(shadow(banner("hi"))), loopOf(banner("hi")));
+});
+
+test("effects take the recipes' words: speed, amount and how often, besides their numbers", () => {
+  assert.equal(glint("hello", { every: "often" }).meta.loop, 2);
+  assert.equal(glint("hello", { every: "rarely" }).meta.loop, 8);
+  assert.equal(glitch("hello", { every: "often" }).meta.loop, 1.25);
+  assert.equal(shake("hello", { every: "rarely" }).meta.loop, 4);
+  assert.equal(shake("hello", { amount: "strong" }).meta.cols, 5 + 2 * 3);
+  // a slow glint crosses for longer: more of its loop has the band in it
+  const bar = "@".repeat(30) + "\n" + "@".repeat(30);
+  const lit = (p: Piece) => [...Array(80)].filter((_, i) => look(p, (i / 80) * 4).text !== bar).length;
+  assert.ok(lit(glint(bar, { speed: "slow" })) > lit(glint(bar)), `a slow glint is lit for longer: ${lit(glint(bar, { speed: "slow" }))} against ${lit(glint(bar))}`);
+  // typed out at twice and half the pace
+  const ink = (p: Piece, t: number) => look(p, t).text.replace(/[\s▌]/g, "").length;
+  const words = "type this out slowly, then quickly";
+  assert.ok(ink(typeIn(words, { speed: "fast" }), 0.3) > ink(typeIn(words), 0.3));
+  assert.ok(ink(typeIn(words, { speed: "slow" }), 0.3) < ink(typeIn(words), 0.3));
+  assert.equal(wave("hi", { amount: "strong" }).meta.cols, 2 + 2 * 4);
+  assert.equal(wave("hi", { speed: "fast" }).meta.loop, 1);
+  assert.equal(glitch("hello", { amount: "subtle" }).meta.name, glitch("hello").meta.name);
+  assert.throws(() => typeIn("hi", { speed: "quick" as never }), /typeIn\.speed takes "slow", "normal" or "fast", or a number above 0, not "quick" \(did you mean "fast"\?\)/);
+  assert.throws(() => glint("hi", { every: "always" as never }), /glint\.every takes "often", "sometimes" or "rarely", or a number of seconds above 0, not "always"/);
+  assert.throws(() => wave("hi", { amount: "strong", amplitude: 2 }), /wave takes amplitude or amount/);
 });
 
 test("shake and glitch repeat exactly on the loop they claim: every burst is the same", () => {

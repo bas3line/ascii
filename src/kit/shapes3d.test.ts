@@ -95,7 +95,12 @@ test("shapes check what they are given, saying what to change", () => {
     [() => sphere({ scale: 0 }), /sphere's scale takes a number above 0/],
     [() => sphere({ at: [0, 0] as unknown as Vec3 }), /sphere's at takes \[x, y, z\], three numbers, not \[0,0\]/],
     [() => sphere({ at: () => [0, Number.NaN, 0] }), /sphere's at, a function of t, at t = 0, takes \[x, y, z\]/],
-    [() => sphere({ rotate: "x" as unknown as Vec3 }), /sphere's rotate takes \[x, y, z\]/],
+    [() => sphere({ rotate: "x" as unknown as Vec3 }), /sphere's rotate takes a turn's name, "upside-down", .* or "turned-round", \[x, y, z\] in radians, \{ turns: \[x, y, z\] \} or \{ degrees: \[x, y, z\] \}, not "x"/],
+    [() => sphere({ rotate: "upsidedown" as never }), /not "upsidedown" \(did you mean "upside-down"\?\)/],
+    [() => sphere({ rotate: { turn: [0.5, 0, 0] } as never }), /sphere's rotate takes \[x, y, z\] in radians, \{ turns: \[x, y, z\] \}/],
+    [() => sphere({ spin: "quick" as never }), /sphere's spin takes "slow", "normal" or "fast", .* not "quick" \(did you mean "fast"\?\)/],
+    [() => scene({ ambient: "dim" as never }, sphere()), /ambient takes "none", "soft" or "bright", or a number from 0 to 1, not "dim"/],
+    [() => scene({ camera: { tilt: "up" as never } }, sphere()), /camera's tilt takes "level", "above", "high" or "below", or radians, not "up"/],
     [() => sphere({ spin: [1, 2, Infinity] }), /sphere's spin takes \[x, y, z\]/],
     [() => sphere({ texture: "marble" as "bands" }), /sphere's texture takes "bands", "stripes", "checker", "grid" and "spots", or a function/],
     [() => sphere(null as unknown as {}), /sphere\(\) takes an options object/],
@@ -833,4 +838,37 @@ test("the examples are pieces that pass the contract", async () => {
     assert.ok(p.meta.loop, `${name} loops`);
     contract(p);
   }
+});
+
+test("angles in words, turns or degrees: the same shape as in radians, with no Math.PI", () => {
+  const frame = (o: object) => snapshot(scene({ cols: 30, rows: 14 }, cone(o)), 0).text;
+  assert.equal(frame({ rotate: "upside-down" }), frame({ rotate: [Math.PI, 0, 0] }));
+  assert.equal(frame({ rotate: { turns: [0.5, 0, 0] } }), frame({ rotate: [Math.PI, 0, 0] }));
+  assert.equal(frame({ rotate: { degrees: [180, 0, 0] } }), frame({ rotate: [Math.PI, 0, 0] }));
+  assert.equal(frame({ rotate: "on-its-side" }), frame({ rotate: [0, 0, Math.PI / 2] }));
+  // a spin by word, once round about y in 12, 6 or 3 seconds, so a scene of it loops on that
+  for (const [word, loop] of [["slow", 12], ["normal", 6], ["fast", 3]] as const) assert.equal(scene({}, torus({ spin: word })).meta.loop, loop, word);
+  assert.equal(scene({}, torus({ spin: { turns: [0, 0.25, 0] } })).meta.loop, 4);
+  // light and tilt in words
+  const soft = snapshot(scene({ ambient: "soft" }, sphere()), 0).text, none = snapshot(scene({}, sphere()), 0).text;
+  assert.notEqual(soft, none);
+  assert.equal(snapshot(scene({ camera: { tilt: "above" } }, cube({ spin: 1 })), 1).text, snapshot(scene({ camera: { tilt: 0.45 } }, cube({ spin: 1 })), 1).text);
+});
+
+test("a group can turn about the middle of what it holds: an ice cream fills its frame", async () => {
+  const { spinning } = await import("./recipes/motion.ts");
+  const parts = () => [cone({ rotate: "upside-down" }), sphere({ at: [0, 1.2, 0] })];
+  const inkRows = (p: Piece) => {
+    const rows = snapshot(p, 1, { mono: true }).text.split("\n");
+    const ink = rows.map((l, i) => (l.trim() ? i : -1)).filter((i) => i >= 0);
+    return [ink[0], ink.at(-1)!];
+  };
+  const [top, bottom] = inkRows(spinning(group(parts()), { way: "turntable" }));
+  // it was rows 2 to 13 of 22, its origin at the cone's middle; centred on what it holds, it reaches far lower
+  assert.ok(bottom - top >= 14, `rows ${top} to ${bottom}`);
+  assert.ok(top <= 3 && bottom >= 16, `rows ${top} to ${bottom}`);
+  // centred, an orbit still loops
+  const orbiting = scene({}, group([sphere(), sphere({ radius: 0.2, at: orbit({ radius: 2, period: 4 }) })], { center: true }));
+  assert.equal(orbiting.meta.loop, 4);
+  assert.throws(() => group([sphere()], { center: "yes" as never }), /group's center takes true or false/);
 });

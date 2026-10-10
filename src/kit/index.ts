@@ -307,6 +307,7 @@ export {
   sphere,
   textures,
   torus,
+  type Angles,
   type Animated,
   type CloudName,
   type ColorBy,
@@ -317,6 +318,7 @@ export {
   type Shapes,
   type Texture,
   type TextureName,
+  type TurnName,
 } from "./shapes3d.ts";
 
 // Particle systems: snow, rain, sparks, fireworks and systems of your own.

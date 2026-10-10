@@ -121,9 +121,11 @@ export function spinning(thing: Thing, o?: SpinOptions): KitPiece {
     const spin = { tumble: [turn, 0, turn / 2], turntable: [0, turn, 0], wheel: [0, 0, turn], flip: [turn, 0, 0] }[way] as [number, number, number];
     const size = { cols: p.cols ?? 44, rows: p.rows ?? 22 };
     const name = p.name ?? "spinning";
-    // On a turntable it is seen from a little above, so its top shows as it turns.
-    const camera = way === "turntable" ? { tilt: 0.45 } : {};
-    return scene({ name, note: p.note ?? `${name}, ${way === "tumble" ? "tumbling" : "spinning"}`, ...size, camera, period: way === "tumble" ? 2 * period : period }, group(shapes(thing), { spin }));
+    // On a turntable it is seen from a little above, so its top shows as it turns. Its shapes turn about the middle of
+    // what they fill, so a scoop on a cone fills the frame, and a soft light everywhere keeps the side away from the
+    // lamp showing.
+    const camera = way === "turntable" ? { tilt: "above" as const } : {};
+    return scene({ name, note: p.note ?? `${name}, ${way === "tumble" ? "tumbling" : "spinning"}`, ...size, camera, ambient: "soft", period: way === "tumble" ? 2 * period : period }, group(shapes(thing), { spin, center: true }));
   }
   if (p.way !== undefined && p.way !== "turntable")
     fail(`spinning's way ${show(p.way)} is for a 3D shape such as torus(): a flat thing turns like a coin, way "turntable"`);

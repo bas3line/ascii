@@ -45,6 +45,7 @@ import {
   sample,
   smoothstep,
   snapshot,
+  suggest,
   valueNoise,
   type Context,
   type KitPiece,
@@ -102,6 +103,19 @@ function num(v: unknown, name: string, fallback: number, rule: keyof typeof RULE
   return v;
 }
 
+// A number as a word, as the recipes take them: "often" or "strong", what each word stands for in `words`, or the number
+// itself, held to `rule`.
+function wordy(v: unknown, name: string, words: Readonly<Record<string, number>>, fallback: number, rule: keyof typeof RULES): number {
+  if (typeof v !== "string") return num(v, name, fallback, rule);
+  if (Object.hasOwn(words, v)) return words[v];
+  return fail(`${name} takes ${or(Object.keys(words).map((w) => JSON.stringify(w)))}, or ${RULES[rule][1]}, not ${show(v)}${suggest(v, Object.keys(words))}`);
+}
+
+// How often something happens, as words: "often" twice as often as the effect's own, "rarely" half as often.
+const often = (every: number) => ({ often: every / 2, sometimes: every, rarely: every * 2 });
+// How fast, as words: times as fast as the effect's own.
+const SPEED = { slow: 0.5, normal: 1, fast: 2 } as const;
+
 function choice<T extends string>(v: unknown, name: string, choices: readonly T[], fallback: T): T {
   if (v === undefined) return fallback;
   if (!choices.includes(v as T)) fail(`${name} takes ${or(choices.map((c) => JSON.stringify(c)))}, not ${show(v)}`);
@@ -152,7 +166,7 @@ function optionsOf<T extends object>(o: T | undefined, fx: string, keys: readonl
   if (o === null || typeof o !== "object" || Array.isArray(o)) fail(`${fx}() takes its options as an object, such as { period: 4 }, not ${show(o)}`);
   const known: readonly string[] = [...keys, ...COMMON];
   for (const [k, v] of Object.entries(o))
-    if (v !== undefined && !known.includes(k)) fail(`${fx}() has no option ${JSON.stringify(k)}: ${RENAMED[`${fx}.${k}`] ?? `it takes ${or(known)}`}`);
+    if (v !== undefined && !known.includes(k)) fail(`${fx}() has no option ${JSON.stringify(k)}${RENAMED[`${fx}.${k}`] ? "" : suggest(k, known)}: ${RENAMED[`${fx}.${k}`] ?? `it takes ${or(known)}`}`);
   return o;
 }
 
@@ -487,13 +501,15 @@ const isSolid = (c: number) => !(c >= 0x2500 && c <= 0x257f) && !(c >= 0x2800 &&
 // --- glint ---------------------------------------------------------------------------
 
 export interface GlintOptions extends FxOptions {
-  /** Seconds from one glint to the next: 4. */
-  every?: number;
+  /** Seconds from one glint to the next, or "often" (2), "sometimes" (4, the default) or "rarely" (8). */
+  every?: number | "often" | "sometimes" | "rarely";
   /**
    * Seconds a glint takes to cross the piece: 1.2, or longer across a wide piece, so the band moves at most 40 cells a
    * second and reads as a sweep rather than a flicker, up to 3 seconds and three quarters of `every`.
    */
   sweep?: number;
+  /** How fast the band crosses, over its own sweep: "slow" (twice as long), "normal" or "fast" (half as long), or times as fast. */
+  speed?: "slow" | "normal" | "fast" | number;
   /** Seconds before the first glint: 0.5. */
   first?: number;
   /** The band's bright core, in cells across: 3. A cell of softer edge runs along each side of it. */
@@ -523,9 +539,11 @@ export interface GlintOptions extends FxOptions {
  *   export default glint(banner("hello", { effect: "still" }), { every: 3 });
  */
 export function glint(src: Source, options?: GlintOptions): KitPiece {
-  const o = optionsOf(options, "glint", ["every", "sweep", "first", "width", "slant", "chars", "color"]);
-  const every = num(o.every, "glint.every", 4, "seconds");
+  const o = optionsOf(options, "glint", ["every", "sweep", "speed", "first", "width", "slant", "chars", "color"]);
+  const every = wordy(o.every, "glint.every", often(4), 4, "seconds");
   const asked = o.sweep === undefined ? undefined : num(o.sweep, "glint.sweep", 1.2, "seconds");
+  if (o.sweep !== undefined && o.speed !== undefined) fail("glint takes sweep or speed, which both set how fast the band crosses, not both");
+  const pace = wordy(o.speed, "glint.speed", SPEED, 1, "positive");
   const first = num(o.first, "glint.first", 0.5, "number");
   const width = num(o.width, "glint.width", 3, "positive");
   const slant = num(o.slant, "glint.slant", 1, "number");
@@ -550,7 +568,7 @@ export function glint(src: Source, options?: GlintOptions): KitPiece {
     const reach = width / 2 + 1;
     const lo = Math.min(0, slant * (m.rows - 1)) - reach, hi = m.cols - 1 + Math.max(0, slant * (m.rows - 1)) + reach;
     // Quick enough to be a glint, slow enough that at 24 frames a second it moves a cell or two a frame, not skips past.
-    const sweep = asked ?? Math.min(Math.max(1.2, (hi - lo) / 40), 3, 0.75 * every);
+    const sweep = asked ?? Math.min(Math.min(Math.max(1.2, (hi - lo) / 40), 3) / pace, 0.75 * every);
     const busy = (t: number) => mod(t - first, every) < sweep;
     return {
       moves: true,
@@ -595,8 +613,11 @@ export function glint(src: Source, options?: GlintOptions): KitPiece {
 // --- typeIn --------------------------------------------------------------------------
 
 export interface TypeInOptions extends FxOptions {
-  /** Characters a second: 40, or quicker for a big piece, so that more than 120 characters are all in within 3 seconds. */
-  speed?: number;
+  /**
+   * Characters a second: 40, or quicker for a big piece, so that more than 120 characters are all in within 3 seconds.
+   * Or "slow" (half that), "normal" or "fast" (twice).
+   */
+  speed?: number | "slow" | "normal" | "fast";
   /** Seconds before the first character, the cursor blinking where it will start: 0. */
   start?: number;
   /**
@@ -626,7 +647,10 @@ export function typeIn(src: Source, options?: TypeInOptions): KitPiece {
   const cursor = o.cursor === false ? "" : chars(o.cursor, "typeIn.cursor", order === "random" ? "" : "▌", 1, 1);
   const hold = o.hold === undefined ? undefined : num(o.hold, "typeIn.hold", 0, "time");
   const seed = num(o.seed, "typeIn.seed", 1, "whole");
-  if (o.speed !== undefined) num(o.speed, "typeIn.speed", 40, "positive");
+  // A word is times as fast as its own pace; a number is characters a second.
+  const pace = typeof o.speed === "string" ? wordy(o.speed, "typeIn.speed", SPEED, 1, "positive") : 1;
+  const own = typeof o.speed === "number" || o.speed === undefined ? (o.speed === undefined ? undefined : num(o.speed, "typeIn.speed", 40, "positive")) : undefined;
+  if (o.speed !== undefined && typeof o.speed !== "string" && typeof o.speed !== "number") num(o.speed, "typeIn.speed", 40, "positive");
   // Text gets a column after its longest line, for the cursor to blink in once it is all typed.
   const text = typeof src === "string" && cursor ? textOf(src).split("\n").map((l) => l + " ").join("\n") : src;
   return build("typeIn", text, o, ({ meta: m, piece: p, options: opts }) => {
@@ -634,7 +658,7 @@ export function typeIn(src: Source, options?: TypeInOptions): KitPiece {
     // The characters to type: as many as its frame has at the moment it names to be held, its first by default, so a
     // source that starts empty, a dissolve say, still counts whole.
     const total = snapshot(p, m.still ?? 0, { options: opts }).text.replace(/\s/g, "").length;
-    const speed = o.speed ?? Math.max(40, total / 3);
+    const speed = own ?? Math.max(40, total / 3) * pace;
     const typing = total / speed;
     const cycle = hold === undefined ? 0 : start + typing + hold;
     // The cells in the order they are typed in; reading order needs no list.
@@ -908,14 +932,17 @@ export function scan(src: Source, options?: ScanOptions): KitPiece {
 // --- glitch --------------------------------------------------------------------------
 
 export interface GlitchOptions extends FxOptions {
-  /** Seconds from one burst to the next: 2.5. */
-  every?: number;
+  /** Seconds from one burst to the next, or "often" (1.25), "sometimes" (2.5, the default) or "rarely" (5). */
+  every?: number | "often" | "sometimes" | "rarely";
   /** Seconds a burst lasts: 0.35. Within it the damage changes about 16 times a second. */
   length?: number;
   /** Seconds before the first burst: 0.5. */
   first?: number;
-  /** How hard a burst hits, 0 to 1: 0.5. More bands of rows slide, further, and more cells turn to junk. */
-  amount?: number;
+  /**
+   * How hard a burst hits: "subtle" (0.25), "medium" (0.5, the default) or "strong" (0.85), or 0 to 1. More bands of
+   * rows slide, further, and more cells turn to junk.
+   */
+  amount?: number | "subtle" | "medium" | "strong";
   /** The junk cells turn to: "#%&@$/\|<>". */
   chars?: string;
   /** 1. Another seed, other bursts. Every burst is worked out from t and the seed, so any frame can be drawn first. */
@@ -930,10 +957,10 @@ export interface GlitchOptions extends FxOptions {
  */
 export function glitch(src: Source, options?: GlitchOptions): KitPiece {
   const o = optionsOf(options, "glitch", ["every", "length", "first", "amount", "chars", "seed"]);
-  const every = num(o.every, "glitch.every", 2.5, "seconds");
+  const every = wordy(o.every, "glitch.every", often(2.5), 2.5, "seconds");
   const length = num(o.length, "glitch.length", 0.35, "seconds");
   const first = num(o.first, "glitch.first", 0.5, "number");
-  const amount = num(o.amount, "glitch.amount", 0.5, "share");
+  const amount = wordy(o.amount, "glitch.amount", { subtle: 0.25, medium: 0.5, strong: 0.85 }, 0.5, "share");
   const junk = [...chars(o.chars, "glitch.chars", "#%&@$/\\|<>", 1)].map((c) => c.charCodeAt(0));
   const seed = num(o.seed, "glitch.seed", 1, "whole");
   return build("glitch", src, o, ({ meta: m }) => {
@@ -975,10 +1002,14 @@ export function glitch(src: Source, options?: GlitchOptions): KitPiece {
 export interface WaveOptions extends FxOptions {
   /** Cells each row sways each way: 2 for rows, 1 for columns. The piece grows by twice this so nothing is cut off. */
   amplitude?: number;
+  /** Or how much it sways in words, over its amplitude: "subtle" (half), "medium" or "strong" (twice). */
+  amount?: "subtle" | "medium" | "strong";
   /** Rows (or columns) from one crest to the next: 12 rows, so a banner's six bend rather than tear, or 16 columns. */
   wavelength?: number;
   /** Seconds for a crest to travel one wavelength: 2. */
   period?: number;
+  /** Or how fast in words, over its period: "slow" (twice as long), "normal" or "fast" (half as long). */
+  speed?: "slow" | "normal" | "fast";
   /** "rows" (the default): rows sway from side to side. "columns": columns bob up and down. */
   axis?: "rows" | "columns";
 }
@@ -990,12 +1021,16 @@ export interface WaveOptions extends FxOptions {
  *   export default wave(banner("hello", { effect: "still" }));
  */
 export function wave(src: Source, options?: WaveOptions): KitPiece {
-  const o = optionsOf(options, "wave", ["amplitude", "wavelength", "period", "axis"]);
+  const o = optionsOf(options, "wave", ["amplitude", "amount", "wavelength", "period", "speed", "axis"]);
   const axis = choice(o.axis, "wave.axis", ["rows", "columns"], "rows");
   const rows = axis === "rows";
-  const amplitude = num(o.amplitude, "wave.amplitude", rows ? 2 : 1, "positive");
+  if (o.amplitude !== undefined && o.amount !== undefined) fail("wave takes amplitude or amount, which both say how far it sways, not both");
+  if (o.period !== undefined && o.speed !== undefined) fail("wave takes period or speed, which both say how fast it runs, not both");
+  const much = o.amount === undefined ? 1 : choice(o.amount, "wave.amount", ["subtle", "medium", "strong"], "medium") === "subtle" ? 0.5 : o.amount === "strong" ? 2 : 1;
+  const pace = o.speed === undefined ? 1 : SPEED[choice(o.speed, "wave.speed", ["slow", "normal", "fast"], "normal")];
+  const amplitude = num(o.amplitude, "wave.amplitude", (rows ? 2 : 1) * much, "positive");
   const wavelength = num(o.wavelength, "wave.wavelength", rows ? 12 : 16, "positive");
-  const period = num(o.period, "wave.period", 2, "seconds");
+  const period = num(o.period, "wave.period", 2 / pace, "seconds");
   const room = Math.ceil(amplitude);
   return build("wave", src, o, ({ meta: m }) => ({
     cols: m.cols + (rows ? 2 * room : 0),
@@ -1113,10 +1148,10 @@ export const hueCycle: typeof rainbow = (src, options) => rainbowOf("hueCycle", 
 // --- shake ---------------------------------------------------------------------------
 
 export interface ShakeOptions extends FxOptions {
-  /** Cells it jolts by, each way: 1. The piece grows by this on every side so nothing is cut off. */
-  amount?: number;
-  /** Seconds from one shake to the next: 2. */
-  every?: number;
+  /** Cells it jolts by, each way: "subtle" (1, the default), "medium" (2) or "strong" (3), or cells. The piece grows by this on every side so nothing is cut off. */
+  amount?: number | "subtle" | "medium" | "strong";
+  /** Seconds from one shake to the next, or "often" (1), "sometimes" (2, the default) or "rarely" (4). */
+  every?: number | "often" | "sometimes" | "rarely";
   /** Seconds a shake lasts: 0.3. It jolts to a new place 20 times a second. */
   length?: number;
   /** Seconds before the first shake: 0.5. */
@@ -1133,8 +1168,8 @@ export interface ShakeOptions extends FxOptions {
  */
 export function shake(src: Source, options?: ShakeOptions): KitPiece {
   const o = optionsOf(options, "shake", ["amount", "every", "length", "first", "seed"]);
-  const amount = num(o.amount, "shake.amount", 1, "cells");
-  const every = num(o.every, "shake.every", 2, "seconds");
+  const amount = wordy(o.amount, "shake.amount", { subtle: 1, medium: 2, strong: 3 }, 1, "cells");
+  const every = wordy(o.every, "shake.every", often(2), 2, "seconds");
   const length = num(o.length, "shake.length", 0.3, "seconds");
   const first = num(o.first, "shake.first", 0.5, "number");
   const seed = num(o.seed, "shake.seed", 1, "whole");
