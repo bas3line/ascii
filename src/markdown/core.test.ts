@@ -83,7 +83,9 @@ test("blocks: lines grouped by blank lines, their shared indent left out and the
 });
 
 test("clean: typographic marks fold to plain ones; arrows, checks and what can't be drawn throw", () => {
-  assert.equal(clean("it’s “fine” — really…"), `it's "fine" - really...`);
+  // an em dash and an en dash, by their code points
+  const em = String.fromCharCode(0x2014), en = String.fromCharCode(0x2013);
+  assert.equal(clean(`it’s “fine” ${em} really… 1${en}2`), `it's "fine" - really... 1-2`);
   for (const ch of ["→", "←", "✓", "✔", "✗", "é", "\u{1F600}"]) assert.throws(() => clean(`a ${ch}`), /ascii\.rest: .*one cell wide/, ch);
   assert.ok(drawable("─") && drawable("·") && drawable("●") && !drawable("✓") && !drawable("→"));
 });

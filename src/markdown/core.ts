@@ -113,9 +113,10 @@ export const drawable = (ch: string) => {
   return ch.length === 1 && ((c >= 32 && c < 127) || c === 0xb7 || c === 0xb0 || c === 0x2022 || c === 0x25cf || (c >= 0x2500 && c <= 0x259f));
 };
 
-// Characters a source may hold that draw as others: typographic quotes and dashes, an ellipsis, a no-break space, a tab.
+// Characters a source may hold that draw as others: typographic quotes and dashes (the en and em dash, by their code
+// points), an ellipsis, a no-break space, a tab.
 const FOLD: Readonly<Record<string, string>> = {
-  "‘": "'", "’": "'", "“": '"', "”": '"', "–": "-", "—": "-", "…": "...", " ": " ", "\t": "  ",
+  "‘": "'", "’": "'", "“": '"', "”": '"', [String.fromCharCode(0x2013)]: "-", [String.fromCharCode(0x2014)]: "-", "…": "...", " ": " ", "\t": "  ",
 };
 
 /**

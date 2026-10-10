@@ -185,11 +185,13 @@ test("remark: a fence becomes its figure, a typo fails the build with the fence 
 
 test("the catalog: every figure described once, in group order, its fence as a reader writes it", () => {
   assert.deepEqual(catalog.map((c) => c.kind), KINDS);
+  // the en and em dash, by their code points
+  const dashes = new RegExp(`[${String.fromCharCode(0x2013, 0x2014)}]`);
   for (const c of catalog) {
     assert.ok((GROUPS[c.group] as readonly string[]).includes(c.kind));
     assert.ok(c.about.length <= 72, `${c.kind}'s about is ${c.about.length} characters`);
     assert.ok(c.for.length >= 1 && c.moves.length <= 80, c.kind);
-    assert.doesNotMatch(c.about + c.moves + c.source + JSON.stringify(c.options), /[–—]/);
+    assert.doesNotMatch(c.about + c.moves + c.source + JSON.stringify(c.options), dashes);
   }
   assert.equal(fenceOf(catalog.find((c) => c.kind === "flame")!).split("\n")[0], '```ascii flame title="render, 48 ms" unit=ms');
   // every figure built so far draws its catalog example
