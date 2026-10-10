@@ -261,9 +261,13 @@ test("an image all one colour is all background, and blank, unless the backgroun
   const d = drawing(solid, 8, 8);
   assert.equal(d.ground, "#0ac85a");
   assert.equal(d.art.join("").trim(), "");
-  const one = drawing(image(1, 1, () => [10, 200, 90, 255]), 1, 1, { background: "keep", width: 10 });
+  const one = drawing(image(1, 1, () => [10, 200, 90, 255]), 1, 1, { background: "keep", width: 10, style: "logo" });
   assert.deepEqual([one.cols, one.rows], [10, 5]);
   for (let y = 1; y < 4; y++) assert.equal(one.art[y], "  888888  ");
+  // a pixel with hard edges is pixel art by default: made six times as big to fill the 6 columns inside the margin
+  const pixel = drawing(image(1, 1, () => [10, 200, 90, 255]), 1, 1, { background: "keep", width: 10 });
+  assert.equal(pixel.style, "pixels");
+  assert.deepEqual(pixel.art.map((l) => l.trim()).filter(Boolean), ["██████", "██████", "██████"]);
 });
 
 test("an image with no plain ground is a photo, shaded by brightness; the ramp turns round on paper", () => {
@@ -724,7 +728,7 @@ test("every option is checked when the piece is made, with what to change", () =
     [{ width: 321 }, /width takes .* not 321/],
     [{ width: 40.5 }, /width takes .* not 40\.5/],
     [{ height: 2 }, /height takes a whole number of rows from 3 to 120, not 2/],
-    [{ style: "photo" }, /style takes "logo" or "shade", not "photo"/],
+    [{ style: "photo" }, /style takes "logo", "shade" or "pixels", not "photo"/],
     [{ background: "drop" }, /background takes "remove" or "keep", not "drop"/],
     [{ color: "yes" }, /color takes true .* or false .*, not "yes"/],
     [{ glint: "yes" }, /glint takes true, false or \{ every: seconds \}, not "yes"/],
@@ -766,7 +770,7 @@ test("a drawing of your own is checked", () => {
   assert.doesNotThrow(() => fromDrawing(ok));
   const bad: [Partial<Drawing>, RegExp][] = [
     [{ cols: 0 }, /whole numbers of columns/],
-    [{ style: "x" as never }, /style takes "logo" or "shade"/],
+    [{ style: "x" as never }, /style takes "logo", "shade" or "pixels"/],
     [{ colors: [] }, /colors take 1 to 10 colours/],
     [{ colors: [[0, 0, 256]] }, /colors take 1 to 10 colours/],
     [{ art: ["888"] }, /art takes rows of 2 characters: row 0 is 3/],
@@ -849,6 +853,47 @@ const claiming = (width: number, height: number, idat: Uint8Array) => {
   ihdr.set([8, 6, 0, 0, 0], 8);
   return concat([Uint8Array.from(SIGNATURE), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(idat)), chunk("IEND", new Uint8Array(0))]);
 };
+
+test("pixel art typed as text is drawn crisp, a pixel to a half cell, scaled by whole numbers", () => {
+  const invader = [
+    "..g.....g..",
+    "...g...g...",
+    "..ggggggg..",
+    ".gg.ggg.gg.",
+    "ggggggggggg",
+    "g.ggggggg.g",
+    "g.g.....g.g",
+    "...gg.gg...",
+  ];
+  const p = fromPixels(invader, { g: "#3fb950" }, { width: 40 });
+  assert.equal(p.drawing.style, "pixels");
+  // 11 pixels at three times their size, and the margin of 2 each side: 37 wide; 8 rows of pixels times 3 in half cells
+  assert.deepEqual([p.meta.cols, p.meta.rows], [11 * 3 + 4, (8 * 3) / 2 + 2]);
+  const text = snapshot(p, 0, { mono: true }).text;
+  assert.match(text, /^[ ▀▄█\n]+$/, "half blocks only, nothing smoothed");
+  // the invader's top row: pixels 2 and 8, three columns each, 15 apart, in full blocks then a half for the third row of 3
+  const rows = text.split("\n").filter((l) => l.trim());
+  assert.equal(rows[0].trim(), "███" + " ".repeat(15) + "███");
+  // its one colour, in colour
+  const { color } = snapshot(p, 0);
+  assert.ok([...color!].some((c) => p.meta.palette![c] === "#3fb950"));
+  // a palette's name, a template literal, and an error for a character with no colour
+  const heart = fromPixels(`
+    .rr.rr.
+    rrrrrrr
+    .rrrrr.
+    ..rrr..
+    ...r...
+  `, { r: "fire" });
+  assert.equal(heart.drawing.art.filter((l) => l.trim()).length > 0, true);
+  assert.throws(() => fromPixels(["ab"], { a: "#ff0000" }), /fromPixels' colors has no colour for "b", in row 0: give it one, such as \{ "b": "#3fb950" \}, or type "\." for a clear pixel/);
+  assert.throws(() => fromPixels(["a"], { a: 5 } as never), /fromPixels' colors\["a"\] takes #rrggbb or a palette's name, not 5/);
+  // RGBA pixels with hard edges and a few colours, smaller than the piece: pixel art too
+  const rgba = new Uint8ClampedArray(11 * 8 * 4);
+  invader.forEach((l, y) => [...l].forEach((ch, x) => ch === "g" && rgba.set([63, 185, 80, 255], (y * 11 + x) * 4)));
+  assert.equal(fromPixels(rgba, 11, 8, { width: 40 }).drawing.style, "pixels");
+  assert.equal(snapshot(fromPixels(rgba, 11, 8, { width: 40 }), 0, { mono: true }).text, text);
+});
 
 test("readPng turns away a header claiming a huge image before it inflates or makes anything, and fast", async () => {
   for (const [w, h] of [[100000, 100000], [16385, 1], [1, 16385], [8000, 5001]]) {

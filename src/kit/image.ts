@@ -18,11 +18,11 @@
  *   mount(canvas, await fromImage("/logo.svg", { width: 40, glint: true }));
  */
 import type { Category } from "../types.ts";
-import { MAX, NONE, and, checkMeta, colorsOf, fail, hex, isHex, piece, ramp as rampOf, type ColorName, type KitPiece, type Palette, type PaletteSpec, type RampName, type Surface } from "./core.ts";
+import { MAX, NONE, and, checkMeta, colorOf, colorsOf, fail, hex, isHex, piece, ramp as rampOf, type ColorName, type KitPiece, type Palette, type PaletteSpec, type RampName, type Surface } from "./core.ts";
 import { CH, CW, FILL, GLYPHS, GX, GY } from "./glyphs.ts";
 
-/** How cells are chosen: by the shape of the image's edge through them, or by how bright it is there. */
-export type ImageStyle = "logo" | "shade";
+/** How cells are chosen: by the shape of the image's edge through them, by how bright it is there, or a pixel to a half cell. */
+export type ImageStyle = "logo" | "shade" | "pixels";
 
 /** What fromPixels(), fromImage() and drawing() take. Every option is checked when the piece is made. */
 export interface ImageOptions {
@@ -36,7 +36,9 @@ export interface ImageOptions {
   /**
    * "logo": each cell the character whose shape best matches the image's edge through it, 8 where it is solid, as the
    * library's logos are drawn. "shade": each cell a character of `ramp` as dense as the image is bright there, which
-   * suits a photo. By default "shade" for a photo, "logo" for anything else: a photo is an image with no transparency
+   * suits a photo. "pixels": pixel art kept crisp, one image pixel to a half cell (▀ ▄ █), each in its own colour, made
+   * bigger by whole numbers to fill the width and never smoothed. By default "pixels" for an image smaller than the
+   * piece (a sprite, an icon), "shade" for a photo, "logo" for anything else: a photo is an image with no transparency
    * and no plain background, as /make/ takes one, or one whose tones change all through it, such as the Moon on a black
    * sky or a cut-out on a clear ground, which would otherwise be a block of 8s.
    */
@@ -209,7 +211,7 @@ function settings(o: ImageOptions | undefined): Settings {
   const { width = 48, height = MAX.rows, style, background = "remove", color = true, glint = false, ramp = RAMP, invert = "auto", name = "image", note, category = "logos" } = o;
   if (!whole(width, 8, MAX.cols)) fail(`width takes a whole number of columns from 8 to ${MAX.cols}, not ${String(width)}`);
   if (!whole(height, 3, MAX.rows)) fail(`height takes a whole number of rows from 3 to ${MAX.rows}, not ${String(height)}`);
-  if (style !== undefined && style !== "logo" && style !== "shade") fail(`style takes "logo" or "shade", not ${JSON.stringify(style)}`);
+  if (style !== undefined && style !== "logo" && style !== "shade" && style !== "pixels") fail(`style takes "logo", "shade" or "pixels", not ${JSON.stringify(style)}`);
   if (background !== "remove" && background !== "keep") fail(`background takes "remove" or "keep", not ${JSON.stringify(background)}`);
   if (typeof color !== "boolean") fail(`color takes true (the image's colours) or false (one ink), not ${JSON.stringify(color)}`);
   const every = glintEvery(glint);
@@ -250,8 +252,12 @@ function draw(rgba: PixelArray, W: number, H: number, set: Settings): Drawing {
   const found = clearGround(rgba, W, H, !set.keep);
   const data = found.data;
   const box = trim(data, W, H);
-  const style: ImageStyle = set.style ?? (box && photo(rgba, W, H, found, box) ? "shade" : "logo");
+  // Pixel art: an image small enough to be drawn at twice its size or more, a pixel to a half cell, with hard edges (each
+  // pixel clear or solid) and a few colours, a sprite or an icon. It is drawn crisp, not smoothed into 8s.
+  const sprite = !!box && 2 * box.w <= set.width - 2 * MARGIN.x && box.h <= set.height - 2 * MARGIN.y && crisp(data, W, box);
+  const style: ImageStyle = set.style ?? (sprite ? "pixels" : box && photo(rgba, W, H, found, box) ? "shade" : "logo");
   const ground = found.ground ?? null;
+  if (box && style === "pixels") return pixelArt(data, W, box, set, ground);
   if (!box) {
     const { cols, rows } = size(W / H, set.width, set.height);
     const blank = Array.from({ length: rows }, () => " ".repeat(cols));
@@ -381,6 +387,75 @@ function draw(rgba: PixelArray, W: number, H: number, set: Settings): Drawing {
     mono.push(m);
   }
   return { style, cols, rows, colors, art, ink, mono, knocked, ground, ramp: shades };
+}
+
+// True for pixels with hard edges and a few colours, as pixel art has: every pixel clear or solid, 16 colours at most.
+function crisp(data: PixelArray, W: number, box: Box): boolean {
+  const seen = new Set<number>();
+  for (let y = box.y; y < box.y + box.h; y++)
+    for (let x = box.x; x < box.x + box.w; x++) {
+      const o = (y * W + x) * 4, a = data[o + 3];
+      if (a !== 0 && a !== 255) return false;
+      if (a && seen.add((data[o] << 16) | (data[o + 1] << 8) | data[o + 2]).size > 16) return false;
+    }
+  return true;
+}
+
+// Pixel art drawn a pixel to a half cell, nearest neighbour, as draw's pixels() draws: ▀ for a top pixel, ▄ for a
+// bottom one, █ for both. Made bigger by whole numbers to fill the room it has, or every so many pixels taken when it
+// is too big; never smoothed. Up to 8 colours, the commonest kept and the rest drawn in the nearest of them; where a
+// cell's two pixels differ, it takes the top one's.
+function pixelArt(data: PixelArray, W: number, box: Box, set: Settings, ground: string | null): Drawing {
+  const roomC = Math.max(1, set.width - 2 * MARGIN.x), roomR = Math.max(1, set.height - 2 * MARGIN.y);
+  const up = Math.max(1, Math.floor(Math.min(roomC / box.w, (2 * roomR) / box.h)));
+  const down = Math.max(1, Math.ceil(Math.max(box.w / roomC, box.h / (2 * roomR))));
+  const w = down > 1 ? Math.ceil(box.w / down) : box.w * up, h = down > 1 ? Math.ceil(box.h / down) : box.h * up;
+  const from = (i: number, n: number) => (down > 1 ? Math.min(n - 1, i * down) : Math.floor(i / up));
+  const opaque = (x: number, y: number) => data[(y * W + x) * 4 + 3] >= 128;
+  const key = (x: number, y: number) => {
+    const o = (y * W + x) * 4;
+    return (data[o] << 16) | (data[o + 1] << 8) | data[o + 2];
+  };
+  const counts = new Map<number, number>();
+  for (let y = box.y; y < box.y + box.h; y++) for (let x = box.x; x < box.x + box.w; x++) if (opaque(x, y)) counts.set(key(x, y), (counts.get(key(x, y)) ?? 0) + 1);
+  const kept = [...counts].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k]) => [(k >> 16) & 255, (k >> 8) & 255, k & 255] as RGB);
+  const colors: RGB[] = kept.length ? kept : [[0, 0, 0]];
+  const near = new Map<number, number>();
+  const index = (k: number) => {
+    let q = near.get(k);
+    if (q === undefined) {
+      const r = (k >> 16) & 255, g = (k >> 8) & 255, b = k & 255;
+      let bd = Infinity;
+      q = 0;
+      colors.forEach((c, j) => {
+        const d = 0.3 * (c[0] - r) ** 2 + 0.59 * (c[1] - g) ** 2 + 0.11 * (c[2] - b) ** 2;
+        if (d < bd) (bd = d), (q = j);
+      });
+      near.set(k, q);
+    }
+    return q;
+  };
+  // The colour of the pixel drawn at (px, py) of the scaled image, or -1 for none.
+  const at = (px: number, py: number) => {
+    if (px < 0 || px >= w || py < 0 || py >= h) return -1;
+    const x = box.x + from(px, box.w), y = box.y + from(py, box.h);
+    return opaque(x, y) ? index(key(x, y)) : -1;
+  };
+  const cols = w + 2 * MARGIN.x, rows = Math.ceil(h / 2) + 2 * MARGIN.y;
+  const art: string[] = [], ink: string[] = [];
+  for (let y = 0; y < rows; y++) {
+    let a = "", i = "";
+    for (let x = 0; x < cols; x++) {
+      const px = x - MARGIN.x, py = 2 * (y - MARGIN.y);
+      const top = at(px, py), bottom = at(px, py + 1);
+      const ch = top >= 0 ? (bottom >= 0 ? "█" : "▀") : bottom >= 0 ? "▄" : " ";
+      a += ch;
+      i += ch === " " ? " " : (top >= 0 ? top : bottom).toString(36);
+    }
+    art.push(a);
+    ink.push(i);
+  }
+  return { style: "pixels", cols, rows, colors, art, ink, mono: art.slice(), knocked: false, ground };
 }
 
 /**
@@ -736,7 +811,7 @@ function checkDrawing(d: Drawing, fn: string): void {
   const { cols, rows, colors, art, ink, mono } = d;
   if (d.ramp !== undefined) rampOf(d.ramp);
   if (!whole(cols, 1, MAX.cols) || !whole(rows, 1, MAX.rows)) fail(`a drawing takes whole numbers of columns from 1 to ${MAX.cols} and rows from 1 to ${MAX.rows}, not ${String(cols)} by ${String(rows)}`);
-  if (d.style !== "logo" && d.style !== "shade") fail(`a drawing's style takes "logo" or "shade", not ${JSON.stringify(d.style)}`);
+  if (d.style !== "logo" && d.style !== "shade" && d.style !== "pixels") fail(`a drawing's style takes "logo", "shade" or "pixels", not ${JSON.stringify(d.style)}`);
   if (!Array.isArray(colors) || !colors.length || colors.length > 10 || !colors.every((c) => Array.isArray(c) && c.length === 3 && c.every((v) => whole(v, 0, 255))))
     fail("a drawing's colors take 1 to 10 colours, each [r, g, b] of whole numbers 0 to 255");
   for (const [what, lines] of [["art", art], ["ink", ink], ["mono", mono]] as const) {
@@ -968,15 +1043,59 @@ export function imagePalette(img: Drawing | ImagePiece, given?: PaletteSpec | Co
 
 /**
  * RGBA pixels as a piece: drawing() and fromDrawing() in one call. Pure, so it works in Node (decode a PNG or JPEG
- * with sharp, say) and in browsers (ImageData.data) alike. Throws, saying what to change, for pixels or options it
- * can't take.
+ * with sharp, say) and in browsers (ImageData.data) alike. Or pixel art typed as text, as draw's sprite() takes it:
+ * rows of characters, one a pixel, and a colour for each character, "." and " " clear; drawn crisp, a pixel to a half
+ * cell ("pixels" style). Throws, saying what to change, for pixels or options it can't take.
  *
  *   const { data, info } = await sharp("logo.png").ensureAlpha().raw().toBuffer({ resolveWithObject: true });
  *   export default fromPixels(data, info.width, info.height, { name: "my logo", glint: true });
+ *
+ *   export const invader = fromPixels(["..g.....g..", "...g...g...", "..ggggggg..", ".gg.ggg.gg."], { g: "#3fb950" });
  */
-export function fromPixels(rgba: PixelArray, width: number, height: number, o?: ImageOptions): ImagePiece {
-  const set = settings(o);
-  return pieceOf(draw(rgba, width, height, set), set, "fromPixels");
+export function fromPixels(rows: string | readonly string[], colors: Readonly<Record<string, string>>, o?: ImageOptions): ImagePiece;
+export function fromPixels(rgba: PixelArray, width: number, height: number, o?: ImageOptions): ImagePiece;
+export function fromPixels(a: PixelArray | string | readonly string[], b: number | Readonly<Record<string, string>>, c?: number | ImageOptions, d?: ImageOptions): ImagePiece {
+  if (typeof a === "string" || Array.isArray(a)) {
+    const set = settings(c as ImageOptions | undefined);
+    const { rgba, width, height } = pixelsFromText(a as string | readonly string[], b);
+    return pieceOf(draw(rgba, width, height, { ...set, style: set.style ?? "pixels" }), set, "fromPixels");
+  }
+  const set = settings(d);
+  return pieceOf(draw(a as PixelArray, b as number, c as number, set), set, "fromPixels");
+}
+
+// Pixel art typed as text as RGBA: one character a pixel, "." and " " clear, every other its colour from `colors`, #rrggbb
+// or a palette's name (its strong colour). Art in a template literal is read as stamp() reads it.
+function pixelsFromText(art: string | readonly string[], colors: unknown): { rgba: Uint8ClampedArray; width: number; height: number } {
+  let lines = typeof art === "string" ? art.replace(/\r\n?/g, "\n").split("\n") : [...art];
+  if (!lines.every((l) => typeof l === "string")) fail(`fromPixels takes rows of characters, one a pixel, not ${shown(art)}`);
+  if (typeof art === "string" && lines.length > 1 && lines[0] === "") {
+    while (lines.length && !lines[0].trim()) lines.shift();
+    while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+    const indent = lines.reduce((n, l) => (l.trim() ? Math.min(n, l.length - l.trimStart().length) : n), Infinity);
+    if (Number.isFinite(indent)) lines = lines.map((l) => l.slice(indent));
+  }
+  const width = Math.max(0, ...lines.map((l) => l.length)), height = lines.length;
+  if (!width || !height) fail("fromPixels takes rows of characters with at least one pixel in them");
+  if (width > 4096 || height > 4096) fail(`fromPixels' rows of text can be up to 4096 pixels a side, not ${width} by ${height}`);
+  if (!colors || typeof colors !== "object" || Array.isArray(colors)) fail(`fromPixels takes a colour for each character second, such as { g: "#3fb950" }, not ${shown(colors)}`);
+  const rgb = new Map<string, [number, number, number]>();
+  for (const [ch, c] of Object.entries(colors as Record<string, unknown>)) {
+    if (ch.length !== 1) fail(`fromPixels' colors take one character a key, not ${JSON.stringify(ch)}`);
+    const given = isHex(c) ? c : typeof c === "string" ? colorOf(c, `fromPixels' colors["${ch}"]`).dark : fail(`fromPixels' colors["${ch}"] takes #rrggbb or a palette's name, not ${shown(c)}`);
+    rgb.set(ch, [parseInt(given.slice(1, 3), 16), parseInt(given.slice(3, 5), 16), parseInt(given.slice(5, 7), 16)]);
+  }
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  lines.forEach((l, y) => {
+    for (let x = 0; x < l.length; x++) {
+      const ch = l[x];
+      if (ch === "." || ch === " ") continue;
+      const c = rgb.get(ch);
+      if (!c) fail(`fromPixels' colors has no colour for ${JSON.stringify(ch)}, in row ${y}: give it one, such as { ${JSON.stringify(ch)}: "#3fb950" }, or type "." for a clear pixel`);
+      rgba.set([...c, 255], (y * width + x) * 4);
+    }
+  });
+  return { rgba, width, height };
 }
 
 // --- reading an image ---------------------------------------------------------------------
