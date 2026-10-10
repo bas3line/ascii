@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { svg } from "../svg.ts";
 import { still } from "../terminal.ts";
 import type { Piece } from "../types.ts";
-import { EMPTY, NONE, Palette, Surface, gradient, ramps, sample, snapshot } from "./core.ts";
+import { EMPTY, NONE, Palette, Surface, TAU, gradient, ramps, sample, snapshot } from "./core.ts";
 import { drawField, field, type FieldCell, type FieldFn, type FieldOptions } from "./field.ts";
 import moonlit from "../../examples/kit/field-moonlit.ts";
 import plasma from "../../examples/kit/field-plasma.ts";
@@ -35,7 +35,7 @@ type Seen = { x: number; y: number } & Omit<FieldCell, "options" | "char" | "col
 // Every cell's x, y and cell, as drawField hands them to the function.
 function seen(s: Surface, o?: FieldOptions): Seen[] {
   const out: Seen[] = [];
-  drawField(s, (x, y, _t, at) => (out.push({ x, y, col: at.col, row: at.row, u: at.u, v: at.v, r: at.r, a: at.a, cols: at.cols, rows: at.rows, width: at.width, height: at.height }), 1), 0, o);
+  drawField(s, (x, y, _t, at) => (out.push({ x, y, col: at.col, row: at.row, u: at.u, v: at.v, r: at.r, a: at.a, cols: at.cols, rows: at.rows, width: at.width, height: at.height, phase: at.phase }), 1), 0, o);
   return out;
 }
 const near = (a: number, b: number, msg?: string) => assert.ok(Math.abs(a - b) < 1e-9, msg ?? `${a} is not ${b}`);
@@ -256,6 +256,11 @@ test("a region is drawn into and nothing else, its coordinates its own", () => {
   const p = field({ cols: 8, rows: 4, ramp: "ab", region }, () => 1);
   region.x = 0;
   assert.equal(snapshot(p).text, s.toString());
+
+  // field() tries its function once when it is made, at the region's centre, with the region's size.
+  let first: number[] | undefined;
+  field({ cols: 20, rows: 10, region: { x: 2, y: 2, cols: 6, rows: 4 } }, (x, y, t, at) => ((first ??= [at.cols, at.rows, at.col, at.row]), 1));
+  assert.deepEqual(first, [6, 4, 3, 2]);
 });
 
 test("a region over the edge is cut there, keeping its shape", () => {
@@ -325,6 +330,27 @@ test("period sets meta.loop, and the examples loop exactly", () => {
         assert.deepEqual(a.color, b.color, `${p.meta.name}'s colours at ${t} and ${t + L}`);
       }
   }
+});
+
+test("at.phase runs 0 to 1 through the period, the same for every cell, and 0 without one", () => {
+  const phases = (o: FieldOptions, t: number) => {
+    const seen = new Set<number>();
+    drawField(new Surface(4, 2), (x, y, _t, at) => (seen.add(at.phase), 1), t, o);
+    return [...seen];
+  };
+  assert.deepEqual(phases({}, 3.7), [0]);
+  assert.deepEqual(phases({ period: 2 }, 0), [0]);
+  assert.deepEqual(phases({ period: 2 }, 0.5), [0.25]);
+  assert.deepEqual(phases({ period: 2 }, 5), [0.5]);
+  // Before 0 too, still 0 up to 1.
+  assert.deepEqual(phases({ period: 4 }, -1), [0.75]);
+  // field() hands it on, and a function of TAU * at.phase repeats exactly at meta.loop.
+  const p = field({ cols: 16, rows: 4, period: 3, range: [-1, 1] }, (x, y, t, at) => Math.sin(x * 5 - TAU * at.phase));
+  assert.equal(p.meta.loop, 3);
+  for (const t of [0, 0.5, 1.25, 2.9]) assert.equal(snapshot(p, t).text, snapshot(p, t + 3).text, `t=${t}`);
+  assert.notEqual(snapshot(p, 0).text, snapshot(p, 1).text, "it moves");
+  // The period is checked for drawField too.
+  assert.throws(() => drawField(new Surface(1, 1), () => 1, 0, { period: 0 }), /period takes the field's loop in seconds, a number above 0, not 0/);
 });
 
 test("a field is a normal piece: its meta, svg(), a terminal and sample()", async () => {
@@ -530,11 +556,23 @@ test("every option is checked when the piece is made, with what to change", () =
     [{ region: 4 }, /region takes/],
     [{ period: 0 }, /period takes the field's loop in seconds, a number above 0, not 0/],
     [{ period: -2 }, /period takes/],
+    [{ period: Infinity }, /period takes/],
+    // Without the wipe a frame would show the one before wherever the field draws nothing.
+    [{ clear: false }, /field\(\) starts every frame empty, so a frame depends only on t.*not false/],
+    [{ clear: 0 }, /field\(\) starts every frame empty/],
     [{ cols: 0 }, /cols takes a whole number from 1 to 320, not 0/],
     [{ fps: 61 }, /fps takes a whole number/],
     [null, /field\(\) takes a spec object/],
   ];
   for (const [spec, message] of bad) assert.throws(() => field(spec as never, fn), message, JSON.stringify(spec));
+  assert.doesNotThrow(() => field({ clear: true }, fn));
+  // A value JSON can't write is still named in the message, not a TypeError of its own.
+  const loop: Record<string, unknown> = {};
+  loop.self = loop;
+  assert.throws(() => field({ region: loop as never }, fn), /ascii\.rest: region takes \{ x, y, cols, rows \} in cells, all numbers, not an object that contains itself/);
+  assert.throws(() => field({ gamma: 2n as never }, fn), /ascii\.rest: gamma takes a number above 0, such as 1\.5, not 2n/);
+  assert.throws(() => field({}, () => 1n as never), /ascii\.rest: a field's function returns a brightness.*not 1n/);
+  assert.throws(() => field({}, () => loop as never), /ascii\.rest: a field's function returns a brightness.*not an object that contains itself/);
   assert.throws(() => field({}, 5 as never), /field\(\) takes a function of x, y and t that returns a brightness 0 to 1, after a spec/);
   assert.throws(() => field({} as never), /field\(\) takes a function of x, y and t/);
   assert.throws(() => field(5 as never), /field\(\) takes a function of x, y and t/);
@@ -567,6 +605,9 @@ test("a wrong return anywhere in the frame throws, not only at the centre", () =
 test("drawField checks what it is given", () => {
   const s = new Surface(2, 2);
   assert.throws(() => drawField({} as never, () => 1, 0), /drawField\(\) takes the Surface to draw into first/);
+  // Shaped like a grid but with no way to find a colour: refused up front, not a TypeError mid-frame.
+  const shaped = { cols: 2, rows: 1, chars: new Uint16Array(2), colors: new Uint8Array(2), aspect: 2, paper: false, mono: false, palette: null };
+  assert.throws(() => drawField(shaped as never, () => 1, 0), /drawField\(\) takes the Surface to draw into first/);
   assert.throws(() => drawField(s, 5 as never, 0), /drawField\(\) takes a function of x, y and t/);
   assert.throws(() => drawField(s, (() => undefined) as never, 0), /not undefined: does every path through it return a value\?/);
   assert.throws(() => drawField(s, (x, y, t, at) => ((at.char = [] as never), 1), 0), /at\.char takes one character as a string/);

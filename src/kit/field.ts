@@ -10,12 +10,19 @@
  * so one function draws a whole scene, sky, sun and sea, each in its own
  * colour. A field is a piece in one call, field(), or is drawn into a grid
  * you are drawing already, all of it or a region, with drawField().
+ * With a `period`, at.phase runs 0 to 1 through it, so a function of
+ * TAU * at.phase loops exactly. A number is light by default, and a light
+ * page turns the ramp round; for a glow or anything else on an empty ground,
+ * where the number means how much ink, give `invert: false`, or svg()'s
+ * light page draws the ground as solid ink.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
- *   import { field } from "ascii.rest/kit";
+ *   import { TAU, field } from "ascii.rest/kit";
  *
  *   export default field({ name: "sea", ramp: "blocks", colors: ["#0b3d91", "#7fdbff"], period: 2 },
- *     (x, y, t) => 0.5 + 0.5 * Math.sin(x * 6 + y * 2 + Math.PI * t));
+ *     (x, y, t, at) => 0.5 + 0.5 * Math.sin(x * 6 + y * 2 + TAU * at.phase));
+ *
+ *   export const glow = field({ invert: false, period: 2 }, (x, y, t, at) => Math.exp(-at.r * (3 + Math.sin(TAU * at.phase))));
  */
 import type { Options } from "../types.ts";
 import {
@@ -25,6 +32,7 @@ import {
   bayer,
   code,
   fail,
+  fract,
   piece,
   ramp as rampOf,
   specOf,
@@ -63,6 +71,11 @@ export interface FieldCell<O extends Options = Options> {
   width: number;
   /** The region's height in the units of y: y runs from -height / 2 at its top edge to height / 2 at its bottom. */
   height: number;
+  /**
+   * How far through `period` the frame is, 0 up to 1, the same for every cell: Math.sin(x * 6 - TAU * at.phase) moves
+   * and repeats exactly with the field, so the loop never needs its length written twice. 0 without a period.
+   */
+  phase: number;
   /** The piece's options, for field(): its defaults with the caller's on top. drawField() gives {}: your drawing has ctx.options. */
   options: O;
   /**
@@ -148,17 +161,18 @@ export interface FieldOptions<O extends Options = Options> {
   range?: readonly [number, number];
   /** Where in the surface to draw, in cells: all of it by default. Cells outside the surface are left out, the field keeping its shape. */
   region?: Region;
+  /**
+   * The field's loop in seconds: at.phase runs 0 to 1 through it, and field() sets meta.loop from it, the loop svg()
+   * plays, so write the function in TAU * at.phase and it repeats exactly. None by default, at.phase then 0.
+   */
+  period?: number;
 }
 
 /**
- * What field() takes: a piece's spec (all optional, 64 by 24 by default), the field's options, and its period. Its
- * `palette` is colours for at.color and `color` to pick from; with `colors` as well, they come after the spread ones.
+ * What field() takes: a piece's spec (all optional, 64 by 24 by default) and the field's options, `period` among them.
+ * Its `palette` is colours for at.color and `color` to pick from; with `colors` as well, they come after the spread ones.
  */
-export type FieldSpec<O extends Options = Options> = MakerSpec<O> &
-  FieldOptions<O> & {
-    /** Its loop in seconds, when the function repeats exactly: it sets meta.loop, the loop svg() plays. None by default. */
-    period?: number;
-  };
+export type FieldSpec<O extends Options = Options> = MakerSpec<O> & FieldOptions<O>;
 
 // --- the plan: options checked and worked out once -------------------------------
 
@@ -171,6 +185,7 @@ interface Plan<O extends Options> {
   lo: number; // value = (returned - lo) * scale
   scale: number;
   region: Region | undefined;
+  period: number; // 0 for none
   steps: number;
   palette: PaletteSpec | null; // `colors` spread to `steps`, as a piece's palette takes it
   light: readonly string[] | null; // the spread colours for each page
@@ -182,7 +197,17 @@ interface Plan<O extends Options> {
 }
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-const show = (v: unknown) => (typeof v === "function" ? "a function" : typeof v === "string" ? JSON.stringify(v) : (JSON.stringify(v) ?? String(v)));
+// A value as an error message shows it. JSON can't write a bigint or an object that contains itself, so those are
+// named by their kind instead of the message itself throwing.
+const show = (v: unknown): string => {
+  if (typeof v === "function") return "a function";
+  if (typeof v === "bigint") return `${v}n`;
+  try {
+    return JSON.stringify(v) ?? String(v);
+  } catch {
+    return Array.isArray(v) ? "a list that contains itself" : "an object that contains itself";
+  }
+};
 
 // Checks every option a field takes, throwing for the first one it can't, and works out what each frame needs.
 function plan<O extends Options>(o: FieldOptions<O> | undefined, who: string): Plan<O> {
@@ -216,6 +241,8 @@ function plan<O extends Options>(o: FieldOptions<O> | undefined, who: string): P
   const region = o.region;
   if (region !== undefined && (region === null || typeof region !== "object" || ![region.x, region.y, region.cols, region.rows].every(finite)))
     fail(`region takes { x, y, cols, rows } in cells, all numbers, not ${show(region)}`);
+  const period = o.period;
+  if (period !== undefined && !(finite(period) && period > 0)) fail(`period takes the field's loop in seconds, a number above 0, not ${show(period)}`);
 
   return {
     codes,
@@ -227,6 +254,7 @@ function plan<O extends Options>(o: FieldOptions<O> | undefined, who: string): P
     scale: 1 / (range[1] - range[0]),
     // A copy: changing the object afterwards doesn't move a piece already made.
     region: region && { x: region.x, y: region.y, cols: region.cols, rows: region.rows },
+    period: period ?? 0,
     steps,
     palette,
     light,
@@ -339,6 +367,7 @@ function paint<O extends Options>(s: Surface, fn: FieldFn<O>, t: number, p: Plan
   at.rows = rows;
   at.width = g.width;
   at.height = g.height;
+  at.phase = p.period ? fract(t / p.period) : 0;
   at.char = at.color = undefined;
 
   for (let r = g.r0; r < g.r1; r++) {
@@ -398,11 +427,12 @@ const charOf = (ch: unknown) =>
   typeof ch === "string" ? code(ch) : fail(`at.char takes one character as a string, such as "*", or "" for nothing, not ${show(ch)}`);
 
 const cell = <O extends Options>(options: O): FieldCell<O> =>
-  ({ col: 0, row: 0, u: 0, v: 0, r: 0, a: 0, cols: 0, rows: 0, width: 2, height: 2, options, char: undefined, color: undefined });
+  ({ col: 0, row: 0, u: 0, v: 0, r: 0, a: 0, cols: 0, rows: 0, width: 2, height: 2, phase: 0, options, char: undefined, color: undefined });
 
 // A surface is anything shaped like one: duck-typed, so a Surface from another copy of the kit still works.
 const isSurface = (s: unknown): s is Surface =>
-  !!s && typeof s === "object" && (s as Surface).chars instanceof Uint16Array && (s as Surface).colors instanceof Uint8Array && Number.isInteger((s as Surface).cols);
+  !!s && typeof s === "object" && (s as Surface).chars instanceof Uint16Array && (s as Surface).colors instanceof Uint8Array &&
+  Number.isInteger((s as Surface).cols) && typeof (s as Surface).resolve === "function";
 
 /**
  * Draws a field into a surface you are drawing already, all of it or `region`: for a field behind text, inside a
@@ -439,12 +469,13 @@ function join(spread: PaletteSpec, own: PaletteSpec): PaletteSpec {
  * A piece from a field in one call: a spec (a name, its size, 64 by 24 by default, and the field's options), which may
  * be left out, and a function of x, y and t that says what each cell is. With `colors` the piece is coloured by value;
  * with `palette` and a `color` function or at.color, by your own rule; with both, the palette's colours come after the
- * spread ones; with none it is text in the page's own colour. `period` sets meta.loop when the function repeats
- * exactly, so svg() plays one seamless loop. Throws, saying what to change, for anything it can't take, when it is
- * called rather than on the first frame.
+ * spread ones; with none it is text in the page's own colour. `period` sets meta.loop and at.phase, so a function of
+ * TAU * at.phase repeats exactly and svg() plays one seamless loop. Every frame starts empty: a frame depends only on
+ * t, as svg() and reduced motion need. Throws, saying what to change, for anything it can't take, when it is called
+ * rather than on the first frame.
  *
  *   export default field((x, y, t, at) => at.r < 0.5 + 0.1 * Math.sin(t * 3));
- *   export const pulse = field({ name: "pulse", ramp: "dots", period: 2 }, (x, y, t, at) => Math.cos(at.r * 9 - Math.PI * t));
+ *   export const rings = field({ name: "rings", ramp: "dots", range: [-1, 1], period: 2 }, (x, y, t, at) => Math.cos(at.r * 9 - TAU * at.phase));
  */
 export function field<O extends Options = Options>(fn: FieldFn<O>): KitPiece<O>;
 export function field<O extends Options = Options>(spec: FieldSpec<O>, fn: FieldFn<O>): KitPiece<O>;
@@ -455,14 +486,15 @@ export function field<O extends Options = Options>(first: FieldSpec<O> | FieldFn
     fail(`field() takes a function of x, y and t that returns a brightness 0 to 1, after a spec if you give one, such as field({ name: "sea" }, (x, y, t) => 0.5 + 0.5 * Math.sin(x * 6 + t)), not ${show(fn)}`);
   const base = specOf<O>(spec, "field");
   const p = plan<O>(spec, "field()");
-  const { period } = spec;
-  if (period !== undefined && !(finite(period) && period > 0)) fail(`period takes the field's loop in seconds, a number above 0, not ${show(period)}`);
+  // Without the wipe, a cell left empty would show the frame before, so a frame would depend on the ones played first.
+  if (spec.clear !== undefined && spec.clear !== true)
+    fail(`field() starts every frame empty, so a frame depends only on t, as svg() and reduced motion need: leave clear out, not ${show(spec.clear)}. For trails, draw with drawField() in a piece() of your own`);
   if (p.color && !p.palette && spec.palette === undefined)
     fail('field()\'s color function picks from the piece\'s colours: give the spec a palette, such as palette: ["#f97316", "#38bdf8"], or colors');
   const palette = p.palette && spec.palette !== undefined ? join(p.palette, spec.palette) : (p.palette ?? spec.palette);
 
   const made = piece<O>(
-    { ...base, palette, loop: period ?? spec.loop },
+    { ...base, palette, loop: p.period || spec.loop },
     {
       setup: (options) => {
         const at = cell(options);
@@ -472,8 +504,9 @@ export function field<O extends Options = Options>(first: FieldSpec<O> | FieldFn
   );
   // Called once now, at the centre at t = 0, so a function that returns the wrong thing fails here and not on a page.
   const probe = cell<O>({ ...made.meta.options } as O);
-  const [width, height] = extent(base.cols, base.rows, base.cell ?? 2, p.aspect);
-  Object.assign(probe, { col: base.cols >> 1, row: base.rows >> 1, u: 0.5, v: 0.5, cols: base.cols, rows: base.rows, width, height });
+  const cols = p.region ? Math.max(1, Math.floor(p.region.cols)) : base.cols, rows = p.region ? Math.max(1, Math.floor(p.region.rows)) : base.rows;
+  const [width, height] = extent(cols, rows, base.cell ?? 2, p.aspect);
+  Object.assign(probe, { col: cols >> 1, row: rows >> 1, u: 0.5, v: 0.5, cols, rows, width, height });
   const v = fn(0, 0, 0, probe);
   if (v !== null && typeof v !== "number" && typeof v !== "boolean") fail(wrong(v));
   if (probe.char !== undefined) charOf(probe.char);
