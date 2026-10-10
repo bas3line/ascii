@@ -257,6 +257,10 @@ test("barChart: a bar for each value, growing in, values and names", () => {
   assert.equal(still.meta.fps, 0);
   const h = barChart({ go: 1, rust: 2 }, { horizontal: true, size: 8, seconds: 0 });
   assert.deepEqual(rows(h, 0), ["  go ████ 1    ", "rust ████████ 2"], "names lined up at their column's right, each value at its bar's end");
+  // Lying down, the longest bar's overshoot as it grows stops at its full length, as standing up, so its value stays in
+  // sight: it pushed the value past the right edge, "100" cut to "1".
+  const long = barChart({ a: 100 }, { horizontal: true });
+  for (const t of [0.5, 0.6, 0.7, 2]) assert.match(rows(long, t)[0], /^a █+ 100$/, `at ${t}`);
   assert.throws(() => barChart({ a: -1 }), /barChart\(\) takes names and values/);
   assert.throws(() => barChart([]), /barChart\(\) takes names and values/);
 });

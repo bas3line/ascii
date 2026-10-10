@@ -658,7 +658,8 @@ export function barChart(data: Readonly<Record<string, number>> | readonly numbe
     return piece({ ...spec, cols: nameW + 1 + size + valueW, rows: entries.length }, (t, s) => {
       entries.forEach((_, i) => {
         s.write(nameW - names[i].length, i, names[i]);
-        const eighths = Math.round(lengthAt(i, t) * size * 8);
+        // the overshoot stops at the full length, as standing up, so the value after it stays in the piece
+        const eighths = Math.min(size * 8, Math.round(lengthAt(i, t) * size * 8));
         for (let x = 0; x * 8 < eighths; x++) s.set(nameW + 1 + x, i, eighths - x * 8 >= 8 ? "█" : EIGHTHS[eighths - x * 8 - 1], colorOf(i));
         if (values) s.write(nameW + 2 + Math.ceil(eighths / 8), i, shown[i], MUTED);
       });
