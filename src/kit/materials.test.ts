@@ -814,6 +814,32 @@ test("texture(): any piece as a material, in its own colours, centred or tiled, 
   assert.throws(() => texture(rust, { option: 1 } as never), /texture\(\) has no option "option"/);
 });
 
+test("texture(): a piece in colours for each page brings each page its own, so 20 a page fit a picture", () => {
+  // 20 colours for paper and 20 others for a dark page
+  const hex = (i: number) => `#${(0x102030 + i * 0x050505).toString(16)}`;
+  const light = Array.from({ length: 20 }, (_, i) => hex(i)), dark = Array.from({ length: 20 }, (_, i) => hex(20 + i));
+  const many = piece({ name: "many", cols: 20, rows: 1, fps: 0, palette: { light, dark } }, (_t, s) => {
+    for (let i = 0; i < 20; i++) s.set(i, 0, "#", i);
+  });
+  // Both pages' colours were on each page, 40, so this threw at the 32 a picture can have.
+  const tex = picture([shape(area.all(), texture(many))], { cols: 20, rows: 1 });
+  assert.equal(tex.meta.palette!.length, 2 * 21, "the ink and 20, for each page");
+  for (const paper of [false, true]) {
+    const a = snapshot(tex, 0, { paper }), b = snapshot(many, 0, { paper });
+    assert.equal(a.text, b.text);
+    for (let i = 0; i < 20; i++) assert.equal(tex.meta.palette![a.color![i]], many.meta.palette![b.color![i]], `cell ${i} on ${paper ? "paper" : "a dark page"}`);
+  }
+  // a palette that is the same on both pages keeps every colour on each
+  const scene = piece({ name: "scene", cols: 4, rows: 1, fps: 0, palette: [hex(0), hex(1), hex(2), hex(3)] }, (_t, s) => {
+    for (let i = 0; i < 4; i++) s.set(i, 0, "#", i);
+  });
+  const flat = picture([shape(area.all(), texture(scene))], { cols: 4, rows: 1 });
+  for (const paper of [false, true]) {
+    const a = snapshot(flat, 0, { paper });
+    assert.deepEqual([...a.color!].map((c) => flat.meta.palette![c]), [hex(0), hex(1), hex(2), hex(3)]);
+  }
+});
+
 test("drawParts() draws parts in a piece of your own: with partsPalette() it is the picture, colour for colour", () => {
   const tumbler = cup({ rows: 10, at: "center" });
   const drink = inside(tumbler, { fill: "half" });

@@ -24,7 +24,7 @@
  *   const drink = inside(tumbler, { fill: "half" });
  *   export default picture([shape(tumbler, glass()), shape(drink, water()), emit(bubbles(), { inside: drink })]);
  */
-import type { Options } from "../types.ts";
+import type { Meta, Options } from "../types.ts";
 import {
   EMPTY,
   INK,
@@ -2885,6 +2885,27 @@ export interface TextureOptions {
   opaque?: boolean;
 }
 
+// A palette's half that each page draws in, for a piece in colours for each page, laid out as the kit lays them: the
+// light page's, then the dark page's. Read off a few of its frames: on paper only the first half, on a dark page only
+// the second. 0 for a palette whose colours are the same on both pages, or a piece that shows none of them.
+function pageHalf(src: Source, options: Options | undefined, meta: Meta): number {
+  const n = (meta.palette?.length ?? 0) / 2;
+  if (!Number.isInteger(n) || n < 1) return 0;
+  const player = sample(src, options);
+  let dark = false;
+  for (const t of new Set([0, meta.still ?? 0, ...(meta.fps ? [1, 2.5] : [])]))
+    for (const paper of [true, false]) {
+      const { chars, colors } = player.at(t, { paper });
+      for (let i = 0; i < chars.length; i++) {
+        const c = colors[i];
+        if (chars[i] === EMPTY || c === NONE) continue;
+        if (paper ? c >= n : c < n) return 0;
+        dark ||= !paper;
+      }
+    }
+  return dark ? n : 0;
+}
+
 /**
  * Any piece as a material: one of the library's, one of your own, a banner() or a block of text, playing inside the
  * area in its own colours. A screen showing the donut: shape(area.rounded(4, 2, 42, 22), texture(donut)).
@@ -2900,8 +2921,11 @@ export function texture(src: Source, o?: TextureOptions): Material {
   // played once now, so a piece it cannot play says so here and not on the first frame
   const meta = sample(src, p.options).meta;
   const own = meta.palette;
-  // its colours as they are: a cell keeps the index the piece gave it, on either page
-  const colors: Duo = own ? { light: own, dark: own } : { light: [INK.light], dark: [INK.dark] };
+  // Its colours as they are. Colours for each page are split, each page its half, so 20 a page are 20 of a picture's 32,
+  // not 40, and a cell takes the same colour's place in its page's half; any other palette is the same list on both
+  // pages, and a cell keeps the index the piece gave it.
+  const half = own ? pageHalf(src, p.options, meta) : 0;
+  const colors: Duo = !own ? { light: [INK.light], dark: [INK.dark] } : half ? { light: own.slice(0, half), dark: own.slice(half) } : { light: own, dark: own };
   const period = meta.fps === 0 ? undefined : meta.loop ? meta.loop / speed : Infinity;
   return makeMaterial(`texture of ${meta.name}`, colors, period, (c) => {
     const { cols } = c;
@@ -2924,7 +2948,7 @@ export function texture(src: Source, o?: TextureOptions): Material {
           continue;
         }
         const col = g.colors[k];
-        pt.s.put(i, ch, col === NONE ? pt.color(0) : pt.color(col));
+        pt.s.put(i, ch, col === NONE ? pt.color(0) : pt.color(half ? col % half : col));
       }
     };
   });
