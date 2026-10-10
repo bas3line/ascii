@@ -18,6 +18,7 @@ import {
   asPiece,
   bayer,
   checkMeta,
+  fnv1a32,
   gradient,
   hash,
   mergePalettes,
@@ -177,6 +178,21 @@ test("the maths is seeded and the same every time", () => {
   }
   // continuous: a small step moves it a little
   assert.ok(Math.abs(valueNoise(3.5, 2.25) - valueNoise(3.501, 2.25)) < 0.01);
+});
+
+test("fnv1a32: a text's FNV-1a hash, the standard's own values for ASCII, a seed for mulberry32", () => {
+  assert.equal(fnv1a32(""), 0x811c9dc5);
+  assert.equal(fnv1a32("a"), 0xe40c292c);
+  assert.equal(fnv1a32("foobar"), 0xbf9cf968);
+  assert.equal(fnv1a32("bas3line"), fnv1a32("bas3line"));
+  assert.notEqual(fnv1a32("bas3line"), fnv1a32("bas3lime"));
+  // a whole number 0 to 2^32 - 1, for any text, a character past ASCII too
+  for (const text of ["", "·", "a fence in, a figure out", "x".repeat(500)]) {
+    const h = fnv1a32(text);
+    assert.ok(Number.isInteger(h) && h >= 0 && h < 2 ** 32, text);
+  }
+  const a = mulberry32(fnv1a32("bas3line")), b = mulberry32(fnv1a32("bas3line"));
+  for (let i = 0; i < 5; i++) assert.equal(a(), b());
 });
 
 test("piece() fills in the meta and checks it as check.ts does", () => {
