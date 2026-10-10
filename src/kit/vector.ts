@@ -24,7 +24,7 @@
  *   export default fromSvg(`<svg viewBox="0 0 24 24"><circle id="sun" cx="12" cy="12" r="9" fill="#f59e0b"/></svg>`,
  *     { "#sun": "pulse" });
  */
-import type { Category } from "../types.ts";
+import type { Category, Piece } from "../types.ts";
 import {
   EMPTY,
   INK,
@@ -1063,7 +1063,6 @@ const isPartMaterial = (v: unknown): v is PartMaterial => {
   return !!m && typeof m === "object" && typeof m.prepare === "function" && !!m.colors && Array.isArray(m.colors.light) && Array.isArray(m.colors.dark);
 };
 const isSource = (v: unknown): v is Piece | Surface => v instanceof Surface || (!!v && typeof v === "object" && "meta" in (v as object) && typeof (v as Piece).default === "function");
-type Piece = import("../types.ts").Piece;
 
 // --- options ----------------------------------------------------------------------------------
 
