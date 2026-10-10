@@ -27,22 +27,22 @@ import { group, orbit, scene, sphere, torus, type Shape3d } from "../shapes3d.ts
 import {
   NAMING,
   boolOf,
+  colorOf,
   easeOf,
   is3d,
-  loopFor,
   numberOf,
   optionsOf,
-  pieceOf,
   secondsOf,
   show,
   sizeOf,
   titled,
-  withLoop,
   wordOf,
   type Easing,
   type Speed,
-  type Thing,
-} from "./words.ts";
+  type Toward,
+} from "./checks.ts";
+import { loopFor, pieceOf, withLoop, type Thing } from "./words.ts";
+import type { ColorLike } from "./palettes.ts";
 
 /** What every motion takes. */
 export interface MotionOptions {
@@ -263,8 +263,8 @@ export function floating(thing: Thing, o?: FloatOptions): KitPiece {
 }
 
 export interface SwayOptions extends MotionOptions {
-  /** How far it leans: "small" (1 column), "medium" (2, the default) or "large" (4), or columns. */
-  amount?: "small" | "medium" | "large" | number;
+  /** How far it leans: "subtle" (1 column), "medium" (2, the default) or "strong" (4), or columns. */
+  amount?: "subtle" | "medium" | "strong" | number;
   /** Where it is held still: "bottom" (the default), so its top sways as a tree does, or "top", so it swings as a sign hangs. */
   from?: "bottom" | "top";
 }
@@ -279,7 +279,7 @@ export interface SwayOptions extends MotionOptions {
 export function swaying(thing: Thing, o?: SwayOptions): KitPiece {
   const p = optionsOf("swaying()", o, [...MOTION, "amount", "from"]);
   const period = secondsOf("swaying()", p, 3);
-  const amount = Math.round(sizeOf("swaying's amount", p.amount, { small: 1, medium: 2, large: 4 }, "medium", 1, 50));
+  const amount = Math.round(sizeOf("swaying's amount", p.amount, { subtle: 1, medium: 2, strong: 4 }, "medium", 1, 50));
   const fromTop = wordOf("swaying's from", p.from, ["bottom", "top"] as const, "bottom") === "top";
   const src = pieceOf(thing, "swaying()");
   return effect(src, { period, pad: [amount, 0], ...named(src, p, "swaying") }, (t, s, g, ctx) => {
@@ -351,8 +351,8 @@ export function blinking(thing: Thing, o?: BlinkOptions): KitPiece {
 }
 
 export interface ShakingOptions extends MotionOptions {
-  /** How far it jolts: "small" (1 cell, the default) or "big" (2), or cells. */
-  amount?: "small" | "big" | number;
+  /** How far it jolts: "subtle" (1 cell, the default), "medium" (2) or "strong" (3), or cells. */
+  amount?: "subtle" | "medium" | "strong" | number;
   /** Shake all the time rather than now and then: false. Now and then is every 2 seconds at normal speed. */
   nonstop?: boolean;
 }
@@ -366,16 +366,13 @@ export interface ShakingOptions extends MotionOptions {
 export function shaking(thing: Thing, o?: ShakingOptions): KitPiece {
   const p = optionsOf("shaking()", o, [...MOTION, "amount", "nonstop"]);
   const every = secondsOf("shaking()", p, 2);
-  const amount = Math.round(sizeOf("shaking's amount", p.amount, { small: 1, big: 2 }, "small", 1, 20));
+  const amount = Math.round(sizeOf("shaking's amount", p.amount, { subtle: 1, medium: 2, strong: 3 }, "subtle", 1, 20));
   const nonstop = boolOf("shaking's nonstop", p.nonstop, false);
   const src = pieceOf(thing, "shaking()");
   return shake(src, { amount, every: nonstop ? 0.25 : every, length: nonstop ? 0.25 : 0.3, ...named(src, p, nonstop ? "shaking" : "shaking now and then") });
 }
 
 // --- drifting ------------------------------------------------------------------------------------
-
-/** Which way a thing drifts. */
-export type Toward = "left" | "right" | "up" | "down";
 
 export interface DriftOptions extends MotionOptions {
   /** Which way it goes: "right" (the default), "left", "up" or "down". Off one edge, it comes back in at the other. */
@@ -522,8 +519,8 @@ export interface PlanetOptions extends MotionOptions {
   moon?: boolean;
   /** A ring round it, tipped toward you: false. */
   rings?: boolean;
-  /** Its colour as #rrggbb, over the type's own. */
-  color?: string;
+  /** Its colour, over the type's own: #rrggbb, or a palette's name such as "ocean". The scene shades it for each page. */
+  color?: ColorLike;
   /** Its size: 64 by 24. */
   cols?: number;
   rows?: number;
@@ -549,8 +546,10 @@ export function planet(o?: PlanetOptions): KitPiece {
   const world = WORLDS[wordOf("planet's type", p.type, ["gas", "earth", "mars", "ice"] as const, "gas")];
   const moon = boolOf("planet's moon", p.moon, false), rings = boolOf("planet's rings", p.rings, false);
   const tilt = [0, 0, 0.25] as [number, number, number];
+  // A palette's name gives its strong colour; the scene makes the shades for paper and a dark page from one colour.
+  const color = colorOf("planet's color", p.color)?.dark ?? world.color;
   const parts = [
-    sphere({ radius: 1.5, rotate: tilt, spin: [0, TAU / period, 0], color: p.color ?? world.color, texture: world.texture }),
+    sphere({ radius: 1.5, rotate: tilt, spin: [0, TAU / period, 0], color, texture: world.texture }),
     ...(rings ? [torus({ radius: 2.4, tube: 0.12, rotate: [1.25, 0, 0.25], color: "#d6c7a1" })] : []),
     ...(moon ? [sphere({ radius: 0.3, color: "#d1d5db", at: orbit({ radius: rings ? 3.3 : 2.6, period: period / 2, tilt: 0.3 }) })] : []),
   ];

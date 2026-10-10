@@ -255,7 +255,15 @@ test("typewriter, marquee and countdown: words that move", () => {
 
 test("widgets check their options and say what to change", () => {
   assert.throws(() => progressBar({ colour: "#ff0000" } as never), /progressBar\(\) has no option "colour": it takes value, label, width, style, percent, seconds, color, name and note/);
-  assert.throws(() => gauge({ color: "red" }), /gauge's color takes a colour as #rrggbb, or \{ light, dark \}, not "red"/);
+  assert.throws(() => gauge({ color: "red" }), /gauge's color takes a colour as #rrggbb, \{ light, dark \}, or a palette's name such as "ocean", not "red"/);
   assert.throws(() => typewriter(""), /typewriter\(\) takes words to type/);
   assert.equal(panel(asPiece("x"), { color: { light: "#000000", dark: "#ffffff" } }).meta.palette!.length >= 2, true);
+});
+
+test("a widget's color takes a palette's name, as a look's palette does: its strong colour on each page", () => {
+  // ocean's light list is 6 long, so its strong colour is the fourth on each page.
+  const bar = progressBar({ value: 0.5, color: "ocean" });
+  assert.ok(bar.meta.palette!.includes("#025a8c") && bar.meta.palette!.includes("#00b4d8"), String(bar.meta.palette));
+  assert.ok(frame(countdown({ from: 2, color: "sunset" }), 0.5).trim().length > 0);
+  assert.throws(() => countdown({ color: "oceans" }), /palette\(\) takes a palette's name/);
 });

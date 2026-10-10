@@ -2,7 +2,9 @@
 
 Pieces made with [ascii.rest/kit](https://ascii.rest/docs/kit/), one a file. Each file's default export is a normal piece, so it plays in React, on a page, as an SVG and in a terminal. Each starts with a comment saying how it is made.
 
-They import the kit from `../../src/kit/`, the source in this repo. In your own project, import the same names from `ascii.rest/kit`.
+They import the kit from `../../src/kit/index.ts`, the source in this repo. In your own project, import the same names from `ascii.rest/kit`.
+
+The `recipe-` files come first: each is one line, by name, with no maths. The rest go deeper, one part of the kit each, and show the maths for when you want it.
 
 Play one, with its frames printed and its SVG written:
 
@@ -15,6 +17,57 @@ Check every example on a dark page, on paper and in one ink:
 ```sh
 npm run kit:examples
 ```
+
+## looks
+
+| file | what it is |
+| --- | --- |
+| [recipe-looks-sea.ts](recipe-looks-sea.ts) | `sea({ palette: "ocean" })`: the open sea to the horizon |
+| [recipe-looks-plasma.ts](recipe-looks-plasma.ts) | `plasma({ palette: "neon", speed: "slow" })` |
+| [recipe-looks-aurora.ts](recipe-looks-aurora.ts) | northern lights over a sparse sky: `aurora().add(stars())` |
+| [recipe-looks-sunset.ts](recipe-looks-sunset.ts) | a sun over waves, each kept to its share with `above()` and `below()` |
+| [recipe-looks-heart.ts](recipe-looks-heart.ts) | plasma masked by the materials' `heart()` |
+| [recipe-looks-hot.ts](recipe-looks-hot.ts) | plasma in fire colours masked by a word: `.mask("HOT")` |
+| [recipe-looks-galaxy.ts](recipe-looks-galaxy.ts) | a spiral galaxy turning, with stars |
+| [recipe-looks-matrix.ts](recipe-looks-matrix.ts) | the digital rain behind a banner: `matrix().behind(banner(...))` |
+| [recipe-looks-storm.ts](recipe-looks-storm.ts) | clouds with rain blown across them |
+| [recipe-looks-tunnel.ts](recipe-looks-tunnel.ts) | an endless tunnel, slowly turning: `tunnel().rotate("slow")` |
+| [recipe-looks-contributions.ts](recipe-looks-contributions.ts) | cells of noise in GitHub's greens, posterized |
+| [recipe-looks-lava.ts](recipe-looks-lava.ts) | a lava lamp in neon through a heat-haze warp |
+| [recipe-looks-snow.ts](recipe-looks-snow.ts) | snow falling behind a banner |
+
+## motion
+
+| file | what it is |
+| --- | --- |
+| [recipe-motion-donut.ts](recipe-motion-donut.ts) | `spinning(torus())`: the spinning donut |
+| [recipe-motion-coin.ts](recipe-motion-coin.ts) | a banner turning like a coin |
+| [recipe-motion-bounce.ts](recipe-motion-bounce.ts) | a banner bouncing, its shadow on the ground |
+| [recipe-motion-heartbeat.ts](recipe-motion-heartbeat.ts) | `pulsing(heart(), { beat: "heart" })` |
+| [recipe-motion-earth.ts](recipe-motion-earth.ts) | `planet({ type: "earth", moon: true })` |
+| [recipe-motion-saturn.ts](recipe-motion-saturn.ts) | a ringed planet turning |
+| [recipe-motion-orbit.ts](recipe-motion-orbit.ts) | a star going round a banner, in front and behind |
+| [recipe-motion-cloud.ts](recipe-motion-cloud.ts) | a cloud drifting across a night sky |
+| [recipe-motion-candle.ts](recipe-motion-candle.ts) | `swaying(flame())` |
+| [recipe-motion-boom.ts](recipe-motion-boom.ts) | a banner shaking now and then |
+| [recipe-motion-hello.ts](recipe-motion-hello.ts) | a banner sliding in with a bounce |
+| [recipe-motion-star.ts](recipe-motion-star.ts) | a star springing up from nothing |
+| [recipe-motion-hover.ts](recipe-motion-hover.ts) | motions wrapped: a cube turning as it floats |
+| [recipe-motion-rec.ts](recipe-motion-rec.ts) | `blinking("● REC")` |
+
+## widgets
+
+| file | what it is |
+| --- | --- |
+| [recipe-widget-clock.ts](recipe-widget-clock.ts) | `clockFace()` |
+| [recipe-widget-progress.ts](recipe-widget-progress.ts) | `progressBar({ label: "downloading" })` |
+| [recipe-widget-bars.ts](recipe-widget-bars.ts) | a bar chart from names and values |
+| [recipe-widget-card.ts](recipe-widget-card.ts) | a card, floating |
+| [recipe-widget-typewriter.ts](recipe-widget-typewriter.ts) | words typed out behind a cursor |
+| [recipe-widget-marquee.ts](recipe-widget-marquee.ts) | words in block letters scrolling across |
+| [recipe-widget-countdown.ts](recipe-widget-countdown.ts) | a countdown, then "liftoff" |
+| [recipe-widget-dashboard.ts](recipe-widget-dashboard.ts) | gauges, a sparkline and a spinner in a `column()` |
+| [recipe-widget-compass.ts](recipe-widget-compass.ts) | placing by words in a drawing of your own: `ring()` and `at()` |
 
 ## core
 
@@ -37,7 +90,7 @@ npm run kit:examples
 
 | file | what it is |
 | --- | --- |
-| [draw-clock.ts](draw-clock.ts) | a clock face with `circle()`, `around()`, `label()` and `ray()` |
+| [draw-clock.ts](draw-clock.ts) | a clock face by hand with `circle()`, `ring()`, `label()` and `ray()` |
 | [draw-sine.ts](draw-sine.ts) | a sine and a cosine scrolling on the braille canvas |
 | [draw-sprite.ts](draw-sprite.ts) | a pixel-art figure walking under a sun, on the half-block canvas |
 | [draw-gauge.ts](draw-gauge.ts) | a dial and a braille plot of the last 8 seconds, in joined boxes |

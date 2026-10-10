@@ -1,7 +1,9 @@
 /*
  * orbit: a moon going round a planet, drawn with piece() and nothing else:
  * one write and one set a frame. It loops every 4 seconds, so svg() plays
- * exactly one turn.
+ * exactly one turn. This is the long way, angles and all, to show piece();
+ * with no maths it is orbiting("@", { around: planet }), as in
+ * recipe-motion-orbit.ts.
  */
 import { piece, TAU } from "../../src/kit/index.ts";
 

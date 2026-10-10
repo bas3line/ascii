@@ -52,6 +52,10 @@
       "types": "./dist/kit/index.d.ts",
       "default": "./dist/kit/index.js"
     },
+    "./kit/recipes": {
+      "types": "./dist/kit/recipes/index.d.ts",
+      "default": "./dist/kit/recipes/index.js"
+    },
     "./astro": "./src/astro/Ascii.astro",
     "./astro/banner": "./src/astro/Banner.astro"
   },
@@ -60,7 +64,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "check": "node scripts/check.ts",
-    "test": "node --test \"src/kit/*.test.ts\"",
+    "test": "node --test \"src/kit/*.test.ts\" \"src/kit/recipes/*.test.ts\"",
     "kit": "node scripts/kit/show.ts",
     "kit:docs": "node scripts/kit/docs.ts",
     "kit:examples": "node scripts/kit/examples.ts",

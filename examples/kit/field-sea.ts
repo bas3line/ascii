@@ -5,7 +5,8 @@
  * with depth, shaded through a ramp of wave characters and dithered. Above
  * the water it returns null, so nothing is drawn there on any page. invert
  * is off, so on a light page the foam is dark ink, as an ink drawing of
- * waves would have it.
+ * waves would have it. The formula is the point here; a sea with no maths is
+ * sea() or waves(), as in recipe-looks-sea.ts.
  */
 import { TAU } from "../../src/kit/core.ts";
 import { field } from "../../src/kit/field.ts";

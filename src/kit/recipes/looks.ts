@@ -20,83 +20,45 @@
  */
 import type { Meta } from "../../types.ts";
 import { over as overOf } from "../compose.ts";
-import { EMPTY, Surface, TAU, and, clamp, fail, fract, hash, ramp as rampOf, sample, smoothstep, type KitPiece, type Sampler, type Source } from "../core.ts";
+import { EMPTY, Surface, TAU, clamp, fail, fract, hash, ramp as rampOf, sample, smoothstep, type KitPiece, type Sampler, type Source } from "../core.ts";
 import { field, type FieldCell } from "../field.ts";
 import { area, type Area } from "../materials.ts";
 import { lcm, noise, twinkle, type NoiseOptions } from "../math.ts";
+import {
+  AMOUNTS,
+  DENSITIES,
+  HEADINGS,
+  SCALES,
+  isArea,
+  isPiece,
+  numberOf,
+  optionsOf,
+  seedOf,
+  show,
+  sizeOf as wordsOr,
+  speedOf as speedIn,
+  wordOf,
+  type Amount,
+  type Density,
+  type Heading,
+  type Scale,
+  type Speed,
+} from "./checks.ts";
 import { schemeOf, type PaletteLike, type Scheme } from "./palettes.ts";
 
-// --- words for amounts ---------------------------------------------------------------
+// A word from a table, or a number from lo to hi: an amount, a level, a share.
+const wordOr = <W extends string>(what: string, v: unknown, words: Readonly<Record<W, number>>, def: NoInfer<W> | number, lo: number, hi: number) =>
+  wordsOr(what, v, words, def, lo, hi);
 
-/** How fast a look moves: "slow", "normal" (the default), "fast", "still", or a number, 1 being normal and 2 twice as fast. */
-export type Speed = "still" | "slow" | "normal" | "fast" | number;
-/** How big its features are: "small", "medium" (the default), "large", "huge", or a number, 1 being medium and 2 twice as big. */
-export type Scale = "small" | "medium" | "large" | "huge" | number;
-/** How much: "subtle", "medium", "strong", or a number, 1 being medium. */
-export type Amount = "subtle" | "medium" | "strong" | number;
-/** How many: "sparse", "normal", "dense", or a number, 1 being normal and 2 twice as many. */
-export type Density = "sparse" | "normal" | "dense" | number;
-/** A way across the picture. */
-export type Heading = "left" | "right" | "up" | "down" | "up-left" | "up-right" | "down-left" | "down-right";
-
-const SPEEDS = { still: 0, slow: 0.5, normal: 1, fast: 2 } as const;
-const SCALES = { small: 0.6, medium: 1, large: 1.6, huge: 2.5 } as const;
-const AMOUNTS = { subtle: 0.5, medium: 1, strong: 1.8 } as const;
-const DENSITIES = { sparse: 0.45, normal: 1, dense: 2 } as const;
-const DIRECTIONS: Record<Heading,readonly [number, number]> = {
-  left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1],
-  "up-left": [-Math.SQRT1_2, -Math.SQRT1_2], "up-right": [Math.SQRT1_2, -Math.SQRT1_2],
-  "down-left": [-Math.SQRT1_2, Math.SQRT1_2], "down-right": [Math.SQRT1_2, Math.SQRT1_2],
-};
-
-// A value as an error shows it.
-function show(v: unknown): string {
-  if (typeof v === "function") return v.name ? `${v.name}, a function: call it, ${v.name}()` : "a function";
-  if (typeof v === "string") return JSON.stringify(v);
-  try {
-    return JSON.stringify(v) ?? String(v);
-  } catch {
-    return String(v);
-  }
-}
-
-const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
-
-// An options object, checked for keys it does not know, so a typo says so instead of doing nothing.
-function optionsOf<T extends object>(what: string, o: T | undefined, keys: readonly string[]): T {
-  if (o === undefined) return {} as T;
-  if (!isObject(o)) fail(`${what} takes an options object, such as { ${keys[0]}: ... }, not ${show(o)}`);
-  for (const k of Object.keys(o)) if (!keys.includes(k)) fail(`${what} has no option ${JSON.stringify(k)}: it takes ${and(keys.map((x) => JSON.stringify(x)))}`);
-  return o;
-}
-
-// A word from a table, or a number from lo to hi.
-function wordOr<W extends string>(what: string, v: unknown, words: Record<W, number>, def: NoInfer<W> | number, lo: number, hi: number): number {
-  if (v === undefined) v = def;
-  if (typeof v === "string" && Object.hasOwn(words, v)) return words[v as W];
-  if (typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi) return v;
-  return fail(`${what} takes ${and(Object.keys(words).map((w) => JSON.stringify(w)))}, or a number from ${lo} to ${hi}, not ${show(v)}`);
-}
-
-const speedOf = (what: string, v: unknown, def: Speed = "normal") => wordOr(`${what}'s speed`, v, SPEEDS, def, 0, 10);
+// A look's speed: "still" too, as 0.
+const speedOf = (what: string, v: unknown) => speedIn(what, v, { still: true });
 const scaleOf = (what: string, v: unknown) => {
   const s = wordOr(`${what}'s scale`, v, SCALES, "medium", 0, 10);
   if (s <= 0) fail(`${what}'s scale takes a number above 0, not ${s}`);
   return s;
 };
 const densityOf = (what: string, v: unknown) => wordOr(`${what}'s density`, v, DENSITIES, "normal", 0, 10);
-
-function wordOf<W extends string>(what: string, v: unknown, words: readonly W[], def: W): W {
-  if (v === undefined) return def;
-  if (!words.includes(v as W)) fail(`${what} takes ${and(words.map((w) => JSON.stringify(w)))}, not ${show(v)}`);
-  return v as W;
-}
-
-function seedOf(what: string, v: unknown): number {
-  if (v === undefined) return 1;
-  if (!Number.isInteger(v)) fail(`${what}'s seed takes a whole number, such as 7, not ${show(v)}`);
-  return v as number;
-}
+const DIRECTIONS = HEADINGS;
 
 // --- a look ----------------------------------------------------------------------------------
 
@@ -246,8 +208,8 @@ export class Look implements KitPiece {
    * The look sliding one way: "left" (the default), "right", "up", "down" or a diagonal such as "up-left", at `speed`
    * ("normal": about a picture's height every 8 seconds). It comes round seamlessly, so it loops.
    */
-  move(direction: Heading = "left", speed: Speed = "normal"): Look {
-    if (!Object.hasOwn(DIRECTIONS, direction)) fail(`move() takes ${and(Object.keys(DIRECTIONS).map((w) => JSON.stringify(w)))}, not ${show(direction)}`);
+  move(direction: Heading = "left", speed: Speed | "still" = "normal"): Look {
+    wordOf("move()", direction, Object.keys(DIRECTIONS) as Heading[], "left");
     const s = speedOf("move()", speed);
     if (s === 0) return this;
     const [dx, dy] = DIRECTIONS[direction];
@@ -416,8 +378,7 @@ export interface Mask {
 /** Anything mask() takes: a Mask, a material's shape (an Area), a piece, a word, or a function that returns true where to draw. */
 export type MaskLike = Mask | Area | Source | ((x: number, y: number, t: number, at: FieldCell) => boolean);
 
-const isMask = (v: unknown): v is Mask => isObject(v) && v.kind === "mask" && typeof v.test === "function";
-const isArea = (v: unknown): v is Area => isObject(v) && v.kind === "area" && typeof v.place === "function";
+const isMask = (v: unknown): v is Mask => v !== null && typeof v === "object" && (v as Mask).kind === "mask" && typeof (v as Mask).test === "function";
 
 // A mask's test worked out once for each picture size.
 function perSize<T>(make: (cols: number, rows: number) => T): (at: FieldCell) => T {
@@ -437,7 +398,7 @@ function maskOf(what: string, v: unknown): Mask {
     return { kind: "mask", periods: [], test: (_x, _y, _t, at) => placed(at).test(at.col + 0.5, at.row + 0.5) };
   }
   if (typeof v === "function") return { kind: "mask", periods: [], test: (x, y, t, at) => !!(v as (x: number, y: number, t: number, at: FieldCell) => boolean)(x, y, t, at) };
-  if (v instanceof Surface || (isObject(v) && isObject(v.meta) && typeof v.default === "function")) {
+  if (v instanceof Surface || isPiece(v)) {
     const player: Sampler = sample(v as Source);
     const loop = player.meta.fps > 0 ? player.meta.loop : undefined;
     let when = NaN, grid: Surface | null = null;
@@ -504,8 +465,10 @@ export function letters(text: string, o?: { big?: number }): Mask {
 export interface LookOptions {
   /** Its colours: a palette's name ("ocean", "sunset", "neon" and the rest), one #rrggbb, colours faint to strong, or { light, dark }. Each look has its own default. */
   palette?: PaletteLike;
-  /** How fast it moves: "slow", "normal" (the default), "fast", "still", or a number, 1 being normal. */
-  speed?: Speed;
+  /** How fast it moves: "slow", "normal" (the default), "fast", "still", or a number, 1 being normal and 2 twice as fast. */
+  speed?: Speed | "still";
+  /** Seconds for one loop, over speed: each look says its own at normal speed. */
+  period?: number;
   /** How big its features are: "small", "medium" (the default), "large", "huge", or a number, 1 being medium. */
   scale?: Scale;
   /** Its characters, faint to strong: a ramp's name ("standard", "blocks", "dots" and the rest) or two or more of your own. Each look has its own default. */
@@ -520,7 +483,7 @@ export interface LookOptions {
   note?: string;
 }
 
-const COMMON = ["palette", "speed", "scale", "ramp", "dither", "cols", "rows", "name", "note"] as const;
+const COMMON = ["palette", "speed", "period", "scale", "ramp", "dither", "cols", "rows", "name", "note"] as const;
 
 function sizeOf(what: string, o: { cols?: unknown; rows?: unknown }, def: { cols: number; rows: number }): { cols: number; rows: number } {
   const cols = o.cols ?? def.cols, rows = o.rows ?? def.rows;
@@ -595,11 +558,13 @@ export function look<O extends LookOptions>(name: string, o: O | undefined, how:
   if (typeof body !== "function") fail(`look() takes a body last: (k, options) => (x, y, t) => a value 0 to 1, not ${show(body)}`);
   const what = `${name}()`;
   const opts = optionsOf(what, o, [...COMMON, ...(how.options ?? [])]);
-  const speed = speedOf(what, opts.speed);
   const scale = scaleOf(what, opts.scale);
   const base = how.period ?? 8;
   if (!(typeof base === "number" && Number.isFinite(base) && base > 0 && base <= 60)) fail(`look()'s period takes seconds above 0, up to 60, not ${show(base)}`);
-  const period = speed > 0 ? base / speed : 0;
+  // A period of the user's own wins over speed, as in every recipe; the speed is then what that period makes it.
+  const own = opts.period === undefined ? undefined : numberOf(`${what}'s period`, opts.period, base, 0.05, 60);
+  const speed = own === undefined ? speedOf(what, opts.speed) : base / own;
+  const period = own ?? (speed > 0 ? base / speed : 0);
   if (period > 600) fail(`${what}'s speed is too slow to loop: use ${+(base / 600).toFixed(3)} or more, or "still"`);
   if (opts.dither !== undefined && typeof opts.dither !== "boolean") fail(`${what}'s dither takes true or false, not ${show(opts.dither)}`);
   if (opts.name !== undefined && (typeof opts.name !== "string" || !opts.name.trim())) fail(`${what}'s name takes a line of text, not ${show(opts.name)}`);
@@ -635,10 +600,10 @@ export function look<O extends LookOptions>(name: string, o: O | undefined, how:
 
 // --- the looks ---------------------------------------------------------------------------------
 
-/** Rolling bands of water, crests wandering as they travel. `direction` "right" (the default) or "left". Ocean blues, " .-~=" by default. */
-export function waves(o?: LookOptions & { direction?: "left" | "right" }): Look {
-  return look("waves", o, { options: ["direction"], note: "rolling rows of waves", palette: "ocean", ramp: " .-~≈", light: false, period: 4 }, (k, opts) => {
-    const d = wordOf("waves()'s direction", opts.direction, ["left", "right"], "right") === "right" ? 1 : -1;
+/** Rolling bands of water, crests wandering as they travel `to` "right" (the default) or "left". Ocean blues, " .-~≈" by default. */
+export function waves(o?: LookOptions & { to?: "left" | "right" }): Look {
+  return look("waves", o, { options: ["to"], note: "rolling rows of waves", palette: "ocean", ramp: " .-~≈", light: false, period: 4 }, (k, opts) => {
+    const d = wordOf("waves()'s to", opts.to, ["left", "right"], "right") === "right" ? 1 : -1;
     return (x, y, t) => {
       const a = TAU * k.phase(t), X = x / k.scale, Y = y / k.scale;
       // Rows of crests rolling down the picture, each bent by two sines travelling across it.
@@ -708,10 +673,10 @@ export function flames(o?: LookOptions): Look {
   });
 }
 
-/** Clouds drifting across, soft edged, in an empty sky. `direction` "right" (the default) or "left". Mono greys by default. */
-export function clouds(o?: LookOptions & { direction?: "left" | "right" }): Look {
-  return look("clouds", o, { options: ["direction"], note: "clouds drifting across", palette: "mono", ramp: " .:-=+*#", light: false, period: 16 }, (k, opts) => {
-    const d = wordOf("clouds()'s direction", opts.direction, ["left", "right"], "right") === "right" ? 1 : -1;
+/** Clouds drifting across, soft edged, in an empty sky, `to` "right" (the default) or "left". Mono greys by default. */
+export function clouds(o?: LookOptions & { to?: "left" | "right" }): Look {
+  return look("clouds", o, { options: ["to"], note: "clouds drifting across", palette: "mono", ramp: " .:-=+*#", light: false, period: 16 }, (k, opts) => {
+    const d = wordOf("clouds()'s to", opts.to, ["left", "right"], "right") === "right" ? 1 : -1;
     const n = k.noise({size: [1.1 * k.scale, 0.75 * k.scale], detail: 3, travel: [3 * d, 0] });
     return (x, y, t) => smoothstep(0.5, 0.88, n(x, y, t));
   });
@@ -753,10 +718,10 @@ export function ripple(o?: LookOptions & { drops?: number; seed?: number }): Loo
   });
 }
 
-/** Rings flowing out from the middle without end. `direction` "out" (the default) or "in". Candy colours by default. */
-export function rings(o?: LookOptions & { direction?: "in" | "out" }): Look {
-  return look("rings", o, { options: ["direction"], note: "rings flowing out from the middle", palette: "candy", ramp: "standard", light: true, period: 4 }, (k, opts) => {
-    const d = wordOf("rings()'s direction", opts.direction, ["in", "out"], "out") === "out" ? 1 : -1;
+/** Rings flowing from the middle without end, `to` "out" (the default) or "in". Candy colours by default. */
+export function rings(o?: LookOptions & { to?: "in" | "out" }): Look {
+  return look("rings", o, { options: ["to"], note: "rings flowing out from the middle", palette: "candy", ramp: "standard", light: true, period: 4 }, (k, opts) => {
+    const d = wordOf("rings()'s to", opts.to, ["in", "out"], "out") === "out" ? 1 : -1;
     return (x, y, t) => 0.5 + 0.5 * Math.sin((Math.hypot(x, y) / k.scale) * 12 - d * 2 * TAU * k.phase(t));
   });
 }
@@ -794,10 +759,10 @@ export function vortex(o?: LookOptions): Look {
   });
 }
 
-/** Stripes sliding one way: `direction` "right" (the default), "left", "up", "down" or a diagonal. Neon colours by default. */
-export function stripes(o?: LookOptions & { direction?: Heading }): Look {
-  return look("stripes", o, { options: ["direction"], note: "stripes sliding along", palette: "neon", ramp: " ░▒▓█", light: true, period: 2 }, (k, opts) => {
-    const [dx, dy] = DIRECTIONS[wordOf("stripes()'s direction", opts.direction, Object.keys(DIRECTIONS) as Heading[], "right")];
+/** Stripes sliding `to` "right" (the default), "left", "up", "down" or a diagonal such as "up-left". Neon colours by default. */
+export function stripes(o?: LookOptions & { to?: Heading }): Look {
+  return look("stripes", o, { options: ["to"], note: "stripes sliding along", palette: "neon", ramp: " ░▒▓█", light: true, period: 2 }, (k, opts) => {
+    const [dx, dy] = DIRECTIONS[wordOf("stripes()'s to", opts.to, Object.keys(DIRECTIONS) as Heading[], "right")];
     return (x, y, t) => smoothstep(-0.35, 0.35, Math.sin(((x * dx + y * dy * 2) / k.scale) * 6 - TAU * k.phase(t)));
   });
 }
@@ -810,10 +775,10 @@ export function checker(o?: LookOptions): Look {
   });
 }
 
-/** The palette from one side to the other, sweeping slowly back and forth. `direction` "across" (the default), "down", "diagonal" or "round". Sunset colours by default. */
-export function sweep(o?: LookOptions & { direction?: "across" | "down" | "diagonal" | "round" }): Look {
-  return look("sweep", o, { options: ["direction"], note: "colours sweeping across", palette: "sunset", ramp: " ░▒▓█", light: true, period: 8, dither: true }, (k, opts) => {
-    const dir = wordOf("sweep()'s direction", opts.direction, ["across", "down", "diagonal", "round"], "across");
+/** The palette from one side to the other, sweeping slowly back and forth. `way` "across" (the default), "down", "diagonal" or "round". Sunset colours by default. */
+export function sweep(o?: LookOptions & { way?: "across" | "down" | "diagonal" | "round" }): Look {
+  return look("sweep", o, { options: ["way"], note: "colours sweeping across", palette: "sunset", ramp: " ░▒▓█", light: true, period: 8, dither: true }, (k, opts) => {
+    const dir = wordOf("sweep()'s way", opts.way, ["across", "down", "diagonal", "round"], "across");
     return (x, y, t, at) => {
       const p = dir === "across" ? x / at.width + 0.5 : dir === "down" ? y / at.height + 0.5 : dir === "diagonal" ? (x / at.width + y / at.height) / 2 + 0.5 : Math.hypot(x, y) / Math.hypot(at.width, at.height) * 2;
       return 0.5 - 0.5 * Math.cos(Math.PI * (p / k.scale) - TAU * k.phase(t));

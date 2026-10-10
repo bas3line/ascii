@@ -6,6 +6,8 @@ description: field() makes ascii art from a formula of x, y and t, the way a sha
 
 A **field** is a picture from a formula. You write a function of a cell's place, `x` and `y`, and the time `t`. It returns how bright that cell is. `field()` does the rest: the characters, the colours, round circles on tall cells, and a light page.
 
+This is the maths under every [look](/docs/kit-looks/). For a sea, a plasma or a sky of stars, ask for it by name, `sea({ palette: "ocean" })`, and skip the formula. Write a field when you want a picture no look makes.
+
 This draws a disc:
 
 ```ts

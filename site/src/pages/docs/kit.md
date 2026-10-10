@@ -1,39 +1,144 @@
 ---
 layout: ../../layouts/Docs.astro
 title: the kit
-description: Make your own animated ascii art in a few lines with ascii.rest/kit, as pieces that play everywhere the library's do.
+description: Make your own animated ascii art with ascii.rest/kit. Start with recipes, whole things in one line with no maths, then go deeper when you want to.
 ---
 
-The kit is the part of ascii.rest for making your own ascii art. It does the work every piece used to do by hand: the maths, the shading, the colours, the 3D, the string building. You say what you want, and get a **piece** back.
-
-Here is a whole piece, a sea of rolling waves in two blues:
+The kit is the part of ascii.rest for making your own ascii art. Start with a **recipe**: a whole thing in one line, asked for by name, with options in plain words and no maths.
 
 ```ts
 // sea.ts
-import { TAU, field } from "ascii.rest/kit";
+import { sea } from "ascii.rest/kit";
 
-export default field({ name: "sea", cols: 48, rows: 10, ramp: "blocks", colors: ["#0b3d91", "#7fdbff"], period: 2 },
-  (x, y, t, at) => 0.5 + 0.5 * Math.sin(x * 6 + y * 2 + TAU * at.phase));
+export default sea({ palette: "ocean" });
 ```
 
-`field()` calls your function once for each cell, and the number it returns picks the character. Its frame at 1 second, in one ink:
+That is the whole piece: the open sea to the horizon, swell coming in, in ocean blues that read on a light page and a dark one. More, each one line:
+
+```ts
+// one-liners.ts
+import { banner } from "ascii.rest/banner";
+import { clockFace, gauge, plasma, spinning, stars, torus } from "ascii.rest/kit";
+
+export const donut = spinning(torus(), { speed: "slow" });
+export const hot = plasma({ palette: "fire", ramp: ".:-=+*#%@" }).mask("HOT");
+export const night = stars({ density: "sparse" }).behind(banner("hello", { effect: "still" }));
+export const clock = clockFace();
+export const cpu = gauge({ label: "cpu" });
+```
+
+The donut at 1 second, in one ink:
 
 ```text
-▒▓███▓░   ░▒███▓▒░   ▒▓███▓░   ░▒███▓▒░   ▒▓███▓
-▓███▓▒    ▒▓███▓░   ░▓███▓▒   ░▒▓███▒░   ░▓███▓▒
-▓███▒░   ░▓███▓▒   ░▒▓███▒░   ░▓███▓░   ░▒████▒░
-███▓░   ░▒███▓▒░   ▒▓███▓░   ░▒███▓▒░   ▒▓███▓░
-██▓▒    ▒▓███▓░   ░▓███▓▒   ░▒▓███▒░   ░▓███▓▒
-██▒░   ░▓███▓▒   ░▒▓███▒░   ░▓███▓░   ░▒████▒░
-█▓░   ░▒███▓▒░   ▒▓███▓░   ░▒███▓▒░   ▒▓███▓░
-▓▒    ▒▓███▓░   ░▓███▓▒   ░▒▓███▒░   ░▓███▓▒   ░
-▒░   ░▓███▓▒   ░▒▓███▒░   ░▓███▓░   ░▒████▒░   ░
-░   ░▒███▓▒░   ▒▓███▓░   ░▒███▓▒░   ▒▓███▓░   ░▒
+                  @@@@@@@@@@$
+             @@@@$$$$##$$$$@@@@@$*
+           @@@$##*!!!!!!!*##$$@@@@$#
+         @@@$#*!=;:~~~~~:;=*##$@@@@$#!
+       @@@$$#*=;~-.......-:=!#$$@@@@$#!
+      $@@@$#*!;~,...      .~!*$@@@@@$#*=
+     #@@@@$#*!;-..          !#$@@@@@$#*!
+     $@@@@$$#*=~.           #$@@@@@@$#*=~
+     #$@@@@$$#*!;         !$@@@@@@@$##!=~
+     #$$@@@@@@$$$#**! *#$@@@@@@@@$$##*=:
+     !#$$@@@@@@@@@@@@@@@@@@@@@@@$$#*!=;-
+      !*#$$$@@@@@@@@@@@@@@@@@$$$#**!=:-
+       =!*##$$$$$@@@@@@$$$$$###**!=;~,
+        :=!**##############**!!=;:~-.
+          ~;==!!!******!!!!==;:~-,.
+             -~::;;;;;;;;::~-,..
+                 ....,.....
 ```
 
-It repeats every 2 seconds, so an SVG of it loops without a jump. In colour, each cell takes one of 16 blues between the two you gave.
+Everything the kit makes is a normal **piece**, the same shape as `donut` or `rust` in the library. So it plays everywhere a piece plays: in React, on any web page, as an SVG for a README, and in a terminal.
 
-Everything the kit makes is a normal piece, the same shape as `donut` or `rust`. So it plays everywhere a piece plays: in React, on any web page, as an SVG for a README, and in a terminal.
+## Words, not numbers
+
+Every recipe takes the same words for the same things:
+
+| option | what it takes | in |
+| --- | --- | --- |
+| `speed` | `"slow"`, `"normal"` or `"fast"`, or times as fast: `2` is twice, `0.5` half. A look can also be `"still"`. | every recipe that moves |
+| `period` | the seconds of one loop, exactly, over `speed` | every recipe that moves |
+| `amount` | `"subtle"`, `"medium"` or `"strong"`, or a number | swaying, pulsing, shaking, a look's `warp()` and `add()` |
+| `palette` | a palette's name, one `#rrggbb`, colours faint to strong, or `{ light, dark }` | looks |
+| `color` | `#rrggbb`, `{ light, dark }`, or a palette's name for its strong colour | widgets, `planet()`, `countdown()` |
+| `to` | which way it goes: `"left"`, `"right"`, `"up"`, `"down"` | `drifting()`, `marquee()`, `waves()`, `clouds()`, `stripes()`, `rings()` |
+| `name`, `note` | its name, and one line saying what you see | every recipe |
+
+The palettes are `ocean`, `sunset`, `neon`, `fire`, `aurora`, `forest`, `candy`, `mono`, `ink`, `paper`, `github`, `ice`, `gold`, `lava`, `matrix`, `night` and `space`. Each is made twice, for a light page and a dark one, so one name reads on both. `palette("ocean")` hands you the colours themselves, which any part of the kit that takes colours takes.
+
+A word it doesn't know throws an error that lists the ones it does: `ascii.rest: plasma()'s speed takes "still", "slow", "normal" or "fast", or a number from 0 to 100, not "quick"`.
+
+## Build your own object
+
+Recipes are shortcuts, not the whole kit. When you want a thing no recipe makes, say what it is made of. A glass of water is a cup, made of glass, with water inside and bubbles rising through it:
+
+```ts
+// glass.ts
+import { bubbles, cup, emit, glass, inside, picture, shape, water } from "ascii.rest/kit";
+
+const tumbler = cup();
+const drink = inside(tumbler, { fill: "half" });
+
+export default picture(
+  [shape(tumbler, glass()), shape(drink, water()), emit(bubbles(), { inside: drink })],
+  { name: "glass of water", cols: 32, rows: 16 },
+);
+```
+
+```text
+        .---------------.
+        |'--.._____..--'|
+        |  !            |
+        |  !            |
+        |  |            |
+        |-~~O--~__~~~~-‾|
+        |~~|~O~~-.---~~||
+        |~~|≈~≈≈~~~-~~°~|
+        |≈≈|≈o≈≈~~≈~≈≈≈||
+        |≈≈|≈≈≈≈≈≈≈°≈≈≈≈|
+        |===============|
+        \_______________/
+```
+
+There are no coordinates and no maths. `cup()` stands at the bottom at a size that looks right, `inside()` knows its walls and base, the glass shows the water through it, and the bubbles rise inside the water and nowhere else. Swap `water()` for `water({ colors: "cola" })`, add `ice()` and a `straw()`, and it is a cola. [materials](/docs/kit-materials/) has every shape, material and emission.
+
+Then set it moving with a motion, which takes any thing the kit draws, a piece, text, a shape or a 3D shape:
+
+```ts
+// floating-glass.ts
+import { floating } from "ascii.rest/kit";
+import glass from "./glass.ts";
+
+export default floating(glass, { height: "medium" });
+```
+
+Each recipe is itself a few lines over these same parts, `field()`, `scene()`, `layer()`, `effect()` and the drawing functions, so its source is a template for one of your own. `look()` is the maker every look uses, open to you:
+
+```ts
+// embers.ts
+import { look, type LookOptions } from "ascii.rest/kit";
+
+export const embers = (o?: LookOptions) =>
+  look("embers", o, { palette: "fire", period: 4 }, (k) => {
+    const rising = k.noise({ size: [0.3, 0.3], travel: [0, -3] });
+    return (x, y, t) => rising(x, y, t);
+  });
+
+export default embers({ speed: "slow" });
+```
+
+Your `embers()` takes `speed`, `period`, `scale`, `palette` and the rest, checked, and chains like any look.
+
+## The recipes
+
+| recipes | what they make | one line | page |
+| --- | --- | --- | --- |
+| looks | moving pictures by name: a sea, a plasma, aurora, flames, rain, a galaxy, a sun | `sea({ palette: "ocean" })` | [looks](/docs/kit-looks/) |
+| motion | anything set moving: spinning, orbiting, bouncing, floating, pulsing, sliding in | `spinning(torus())` | [motion](/docs/kit-motion/) |
+| widgets | whole things in one call: a clock face, a progress bar, a gauge, a chart, a card | `clockFace()` | [widgets](/docs/kit-widgets/) |
+
+Looks chain: `plasma().mask("HI")`, `sun().add(waves())`, `tunnel().rotate("slow")`. Motions wrap each other: `floating(spinning(cube()))`. All of it lays over anything else with `over()` and `behind()`.
 
 ## Install
 
@@ -43,7 +148,7 @@ The kit is in the npm package, from version 0.4.0:
 npm install ascii.rest
 ```
 
-Import it from `ascii.rest/kit`. It has no dependencies, and runs in browsers and in Node.
+Import it from `ascii.rest/kit`. The recipes alone are also at `ascii.rest/kit/recipes`. It has no dependencies, and runs in browsers and in Node.
 
 To copy its source into your project instead, to keep and change:
 
@@ -96,16 +201,16 @@ await play(sea, { seconds: 3 });
 
 With `mount()` on any page: `mount(canvas, sea)`. More on [react](/docs/react/), [svg](/docs/svg/), [terminal](/docs/terminal/) and [typescript](/docs/typescript/).
 
-## Pick a tool
+## Go deeper
 
-Each tool makes a piece in one call. Each also has a drawing function, for mixing it with other drawing in one piece.
+The recipes are made of these parts, and so is anything you make that no recipe does. Each makes a piece in one call, and each also has a drawing function, for mixing it with other drawing in one piece. Here is where the maths lives, for when you want it.
 
-| tool | what it makes | one call | page |
+| part | what it makes | one call | page |
 | --- | --- | --- | --- |
 | fields | art from a formula of x, y and t, like a shader | `field(fn)` | [fields](/docs/kit-field/) |
 | drawing | text, lines, boxes, circles, plots and pixel art on the grid | `piece(spec, draw)` | [drawing](/docs/kit-draw/) |
 | maths | noise, seeded randomness, easing, loops and 3D points | `noise()`, `random()` | [maths](/docs/kit-math/) |
-| 3d scenes | lit, spinning shapes: a donut, a planet, a cube | `scene(torus())` | [3d scenes](/docs/kit-shapes3d/) |
+| 3d scenes | lit shapes in a scene: a donut, a planet, a cube | `scene(torus())` | [3d scenes](/docs/kit-shapes3d/) |
 | particles | snow, rain, sparks, fireworks and systems of your own | `particles(spec, "snow")` | [particles](/docs/kit-particles/) |
 | effects | a glint, a glitch, a wave or a typing on any piece or text | `glint(rust)` | [effects](/docs/kit-fx/) |
 | layouts | pieces side by side, in a grid, over each other, in turn | `grid([a, b, c])` | [layouts](/docs/kit-compose/) |
@@ -117,15 +222,32 @@ They all come from one import, `ascii.rest/kit`, and they work together: a field
 
 ## piece(): draw your own
 
-`piece()` is what every tool is built on. Give it a name, a size, and a function that draws the frame at `t` seconds into a grid:
+`piece()` is what every tool is built on. Give it a name, a size, and a function that draws the frame at `t` seconds into a grid. Place things by words, with `at()` for a point and `ring()` for points round a circle:
 
 ```ts
-// pulse.ts
-import { piece } from "ascii.rest/kit";
+// compass.ts
+import { at, label, phase, piece, ray, ring } from "ascii.rest/kit";
 
-export default piece({ name: "pulse", cols: 32, rows: 3 }, (t, s) => {
-  s.write(12, 1, Math.sin(t * 3) > 0 ? "* beat *" : "  beat  ");
+export default piece({ name: "compass", cols: 31, rows: 15, loop: 8 }, (t, s) => {
+  ring(s, 8).forEach((point, i) => label(s, ...point, ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][i]));
+  ray(s, ...at(s), 9, phase(t, 8));
 });
+```
+
+```text
+               N
+     NW                 NE
+
+                    __
+                  _/
+                _/
+  W            /            E
+
+
+
+
+     SW                 SE
+               S
 ```
 
 The grid `s` starts empty every frame. Write into it, and the kit turns it into the frame and its colours. The third argument, `ctx`, holds the piece's `options`, `paper` (true on a light page), `mono` (true when drawn in one ink), and `cols` and `rows`.
@@ -185,6 +307,8 @@ The grid, a `Surface`, is `cols` by `rows` cells. Column 0, row 0 is the top lef
 
 `s.paper` and `s.mono` say how this frame is drawn. A region is `{ x, y, cols, rows }`.
 
+To place by words instead of counting cells: `at(s, "top-right", { margin: 1 })` is a point, `textAt(s, "score 3", "top-right")` puts text against an edge, `slot(s, "bottom", { cols: 12, rows: 3 })` is a box at an anchor, and `across(s, [1, 2])`, `down(s, 3)` and `tiles(s, { columns: 3 })` cut the grid into regions. See [widgets](/docs/kit-widgets/#placing-by-words).
+
 Use characters that are one cell wide: ASCII, box drawing and blocks. `s.set` throws for a tab, a newline, or an emoji.
 
 ## Colours
@@ -196,7 +320,7 @@ A colour, where the kit takes one, is either:
 - a number: an index into the palette, `0` for the first colour;
 - `"#rrggbb"`: found in the palette, the nearest if it isn't one of them.
 
-A palette can be one list for both pages, or `{ light, dark }` with a list for each, the same length. Index `1` is then the light list's second colour on a light page and the dark list's on a dark one, so one drawing reads on both:
+A palette can be one list for both pages, or `{ light, dark }` with a list for each, the same length. Index `1` is then the light list's second colour on a light page and the dark list's on a dark one, so one drawing reads on both. `palette("ocean")` is one of the named palettes in that form:
 
 ```ts
 // two-pages.ts
@@ -240,6 +364,8 @@ A frame should depend only on `t`. Players draw frames when they need them: `mou
 - Give `loop` (or a tool's `period`) when the piece repeats, so the SVG plays one seamless loop.
 - When two loops combine, as in a layout or an effect, the kit finds the time after which both come round together, up to 60 seconds.
 
+Every recipe loops by itself, and works out the loop of whatever it is given.
+
 ## Small helpers
 
 Besides the tools, `ascii.rest/kit` has the maths every piece needs:
@@ -257,11 +383,14 @@ Besides the tools, `ascii.rest/kit` has the maths every piece needs:
 | `sample(piece).at(t)` | any piece's frame at `t` as a grid, to read or lay over |
 | `snapshot(piece, t)` | any piece's frame at `t` as text and colours, for tests |
 | `asPiece(text)` | text or a grid as a still piece |
+| `pieceOf(thing)` | any thing a recipe takes, a shape, a 3D shape, text, as a piece |
 
 [maths](/docs/kit-math/) has much more: simplex noise, easing, tweens, a camera.
 
 ## Next
 
-- [fields](/docs/kit-field/): a picture from a formula, the shortest way in.
-- [3d scenes](/docs/kit-shapes3d/): the donut in one line.
+- [looks](/docs/kit-looks/): every look, its options and how they chain.
+- [motion](/docs/kit-motion/): set anything moving in words.
+- [widgets](/docs/kit-widgets/): clocks, bars, gauges and charts in one call.
+- [fields](/docs/kit-field/): a picture from a formula, when you want the maths.
 - [your own pieces](/docs/pieces/): the piece contract the kit builds on.

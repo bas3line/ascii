@@ -70,27 +70,30 @@ Every way, with every option, is in [the docs](https://ascii.rest/docs/).
 
 ## Make your own
 
-`ascii.rest/kit` turns a few lines into a piece of your own, and does the maths, the shading, the colours and the 3D for you. A sea of rolling waves is a formula of `x`, `y` and `t`:
+`ascii.rest/kit` makes a piece of your own in one line, by name, with options in words and no maths:
 
 ```ts
-import { TAU, field } from "ascii.rest/kit";
+import { clockFace, plasma, sea, spinning, torus } from "ascii.rest/kit";
 
-export default field({ name: "sea", cols: 48, rows: 10, ramp: "blocks", colors: ["#0b3d91", "#7fdbff"], period: 2 },
-  (x, y, t, at) => 0.5 + 0.5 * Math.sin(x * 6 + y * 2 + TAU * at.phase));
+export const ocean = sea({ palette: "ocean" });
+export const donut = spinning(torus(), { speed: "slow" });
+export const hot = plasma({ palette: "fire", ramp: ".:-=+*#%@" }).mask("HOT");
+export default clockFace();
 ```
 
-The donut, lit and spinning, written to an SVG for your README:
+There are [looks](https://ascii.rest/docs/kit-looks/) (a sea, a plasma, aurora, flames, rain, a galaxy), [motions](https://ascii.rest/docs/kit-motion/) that set anything spinning, bouncing or floating, and [widgets](https://ascii.rest/docs/kit-widgets/) (a clock, a progress bar, a gauge, a chart). When no recipe makes your thing, say what it is made of. A glass of water is a cup, made of glass, with water inside and bubbles rising, written to an SVG for your README:
 
 ```ts
 import { writeFileSync } from "node:fs";
 import { svg } from "ascii.rest/svg";
-import { scene, torus } from "ascii.rest/kit";
+import { bubbles, cup, emit, glass, inside, picture, shape, water } from "ascii.rest/kit";
 
-const donut = scene({ name: "donut", cols: 40, rows: 22, period: 8 }, torus({ spin: [1.6, 0, 0.8] }));
-writeFileSync("donut.svg", svg(donut));
+const drink = inside(cup(), { fill: "half" });
+const glassOfWater = picture([shape(cup(), glass()), shape(drink, water()), emit(bubbles(), { inside: drink })], { name: "glass of water", cols: 32, rows: 16 });
+writeFileSync("glass.svg", svg(glassOfWater));
 ```
 
-Everything the kit makes is a normal piece, so it plays in React, on a page, as an SVG and in a terminal. It has [fields](https://ascii.rest/docs/kit-field/), [drawing](https://ascii.rest/docs/kit-draw/), [maths](https://ascii.rest/docs/kit-math/), [3D scenes](https://ascii.rest/docs/kit-shapes3d/), [particles](https://ascii.rest/docs/kit-particles/), [effects](https://ascii.rest/docs/kit-fx/), [layouts](https://ascii.rest/docs/kit-compose/), [images](https://ascii.rest/docs/kit-image/), [materials](https://ascii.rest/docs/kit-materials/) and [SVG drawings](https://ascii.rest/docs/kit-vector/). Start with [the kit](https://ascii.rest/docs/kit/) in the docs, or the [examples](examples/kit/).
+Everything the kit makes is a normal piece, so it plays in React, on a page, as an SVG and in a terminal. The recipes are made of parts you can use yourself, all the way down to the maths: [fields](https://ascii.rest/docs/kit-field/), [drawing](https://ascii.rest/docs/kit-draw/), [maths](https://ascii.rest/docs/kit-math/), [3D scenes](https://ascii.rest/docs/kit-shapes3d/), [particles](https://ascii.rest/docs/kit-particles/), [effects](https://ascii.rest/docs/kit-fx/), [layouts](https://ascii.rest/docs/kit-compose/), [images](https://ascii.rest/docs/kit-image/), [materials](https://ascii.rest/docs/kit-materials/) and [SVG drawings](https://ascii.rest/docs/kit-vector/). Start with [the kit](https://ascii.rest/docs/kit/) in the docs, or the [examples](examples/kit/).
 
 ## React and Next.js
 

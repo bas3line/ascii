@@ -3,6 +3,6 @@
  * top, its shadow narrowing as it rises.
  */
 import { banner } from "../../src/banner.ts";
-import { bouncing } from "../../src/kit/recipes/motion.ts";
+import { bouncing } from "../../src/kit/index.ts";
 
 export default bouncing(banner("boing", { effect: "still", color: "#f778ba" }));

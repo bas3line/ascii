@@ -3,6 +3,8 @@
  * rings round a wandering centre, summed and folded through one more sine,
  * coloured by value from indigo up to amber in 8 steps. Every term turns a
  * whole number of times over at.phase, so it loops exactly every 8 seconds.
+ * The same plasma by name, with no maths, is plasma(), as in
+ * recipe-looks-plasma.ts.
  */
 import { TAU } from "../../src/kit/core.ts";
 import { field } from "../../src/kit/field.ts";

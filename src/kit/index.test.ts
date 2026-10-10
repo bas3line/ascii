@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as kit from "./index.ts";
 
-// Every module's values, so a new export can't be left out of ascii.rest/kit. glyphs.ts is image's data, not API.
-const modules = ["core", "math", "draw", "field", "shapes3d", "particles", "fx", "compose", "image", "materials", "vector"];
+// Every module's values, so a new export can't be left out of ascii.rest/kit. glyphs.ts is image's data, not API, and
+// recipes/checks.ts is the recipes' own checking.
+const recipes = ["recipes/palettes", "recipes/words", "recipes/looks", "recipes/motion", "recipes/widgets"];
+const modules = ["core", "math", "draw", "field", "shapes3d", "particles", "fx", "compose", "image", "materials", "vector", ...recipes];
 
 test("ascii.rest/kit exports every value of every module, each the module's own", async () => {
   for (const name of modules) {
@@ -27,6 +29,20 @@ test("no two modules export a value under one name", async () => {
       seen.set(key, name);
     }
   }
+});
+
+test("ascii.rest/kit/recipes is the recipes and nothing else, each the kit's own", async () => {
+  const sub = (await import("./recipes/index.ts")) as Record<string, unknown>;
+  const all = new Set<string>();
+  for (const name of recipes) for (const key of Object.keys(await import(`./${name}.ts`))) all.add(key);
+  assert.deepEqual(Object.keys(sub).sort(), [...all].sort());
+  for (const [key, value] of Object.entries(sub)) assert.equal((kit as Record<string, unknown>)[key], value, `recipes' ${key} is not the kit's`);
+});
+
+test("a recipe made through the index plays: a sea in one line", () => {
+  const sea = kit.sea({ palette: "ocean" });
+  assert.equal(kit.snapshot(sea, 1).text, kit.snapshot(sea, 1 + sea.meta.loop!).text);
+  assert.equal(kit.snapshot(sea, 1).text.split("\n").length, sea.meta.rows);
 });
 
 test("a piece made through the index plays: the three-line field", () => {

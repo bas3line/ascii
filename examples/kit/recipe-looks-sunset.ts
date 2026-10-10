@@ -3,7 +3,7 @@
  * to the bottom by below(), the two added into one look in sunset colours.
  * Shapes by share of the picture, not by coordinates.
  */
-import { above, below, sun, waves } from "../../src/kit/recipes/looks.ts";
+import { above, below, sun, waves } from "../../src/kit/index.ts";
 
 export default sun({ palette: "sunset" })
   .mask(above(0.55))

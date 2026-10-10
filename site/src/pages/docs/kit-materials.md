@@ -26,21 +26,21 @@ export default picture(
 
 
 
-        .               .
-        |               |
-        | |             |
-        | '             |
-        | '             |
-        \_~~O--~__~~~~-~/
-         |'  O         |
-         |      ~~~   °|
-         |   o         |
-         | ~~      °   |
-         \_____________/
-          \___________/
+        .---------------.
+        |'--.._____..--'|
+        |  !            |
+        |  !            |
+        |  |            |
+        |-~~O--~__~~~~-‾|
+        |~~|~O~~-.---~~||
+        |~~|≈~≈≈~~~-~~°~|
+        |≈≈|≈o≈≈~~≈~≈≈≈||
+        |≈≈|≈≈≈≈≈≈≈°≈≈≈≈|
+        |===============|
+        \_______________/
 ```
 
-There are no coordinates. `cup()` stands at the bottom of the picture at a size that looks right, `inside()` knows the cup's walls and base, and the water's waves slosh against them.
+There are no coordinates. `cup()` stands at the bottom of the picture at a size that looks right, `inside()` knows the cup's walls and base, and the water fills it to the line, denser and darker toward the bottom, its surface curling up at the walls. The glass's rim, its streak of light and its far wall show through the water, bent a little.
 
 ## Shapes
 
@@ -48,7 +48,7 @@ Each shape is placed and sized by words, with a default that looks right:
 
 | shape | what it is | made of, by default |
 | --- | --- | --- |
-| `cup()` | a tumbler, wider at the rim. A vessel. | glass |
+| `cup()` | a tumbler with straight sides; `taper` widens its rim. A vessel. | glass |
 | `mug()` | a mug with a handle. A vessel. | ceramic |
 | `bottle()` | a bottle with a neck. A vessel. | glass |
 | `straw()` | a straw leaning in a vessel, given as `within` | red stripes |
@@ -81,8 +81,8 @@ When no shape fits, `area` has primitives in cells: `area.rect()`, `area.rounded
 
 | material | what it draws | moves |
 | --- | --- | --- |
-| `water()` | waves, darker with depth, bending what is behind it | `waves`: `"still"`, `"gentle"`, `"slosh"`, `"rough"` |
-| `glass()` | see-through, an outline and a highlight with a glint | the glint |
+| `water()` | fills its area, denser and darker with depth, ripples through it, bending what is behind it | `waves`: `"still"`, `"gentle"`, `"slosh"`, `"rough"` |
+| `glass()` | see-through: a rim, walls, a base and a streak of light with a glint | the glint |
 | `fire()` | flames, hottest at the base, licking up | flickers. `heat`, `glow`. |
 | `smoke()` | drifting smoke | drifts |
 | `metal()` | shaded round, with a sheen | the sheen sweeps |

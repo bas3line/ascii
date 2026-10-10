@@ -1,13 +1,142 @@
 /*
  * ascii.rest/kit: tools for making ascii art of your own, as pieces that play
- * wherever the library's do. Part of ascii.rest by @bas3line
- * (https://github.com/bas3line), MIT licensed.
+ * wherever the library's do. Recipes first, whole things in one line with no
+ * maths; then the parts they are made of, for anything a recipe doesn't do.
+ * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
- *   import { TAU, field } from "ascii.rest/kit";
+ *   import { sea, spinning, torus } from "ascii.rest/kit";
  *
- *   export default field({ name: "sea", ramp: "blocks", colors: ["#0b3d91", "#7fdbff"], period: 2 },
- *     (x, y, t, at) => 0.5 + 0.5 * Math.sin(x * 6 + y * 2 + TAU * at.phase));
+ *   export default sea({ palette: "ocean" });
+ *   export const donut = spinning(torus(), { speed: "slow" });
  */
+
+// Recipes: looks by name, motions in words, widgets in one call, placing by words, and palettes.
+export {
+  schemes,
+  palette,
+  schemeOf,
+  type ColorLike,
+  type PaletteLike,
+  type Scheme,
+  type SchemeName,
+} from "./recipes/palettes.ts";
+export {
+  easings,
+  loopFor,
+  pieceOf,
+  withLoop,
+  type Amount,
+  type Density,
+  type Easing,
+  type Heading,
+  type Scale,
+  type Speed,
+  type Thing,
+  type Toward,
+} from "./recipes/words.ts";
+export {
+  Look,
+  above,
+  aurora,
+  below,
+  checker,
+  clouds,
+  flames,
+  galaxy,
+  lavaLamp,
+  letters,
+  look,
+  marble,
+  matrix,
+  outside,
+  plasma,
+  plume,
+  rainfall,
+  rings,
+  ripple,
+  sea,
+  snowfall,
+  spiral,
+  stars,
+  stripes,
+  sun,
+  sweep,
+  tunnel,
+  turbulence,
+  vortex,
+  waves,
+  type LookFn,
+  type LookKit,
+  type LookOptions,
+  type LookRecipe,
+  type Mask,
+  type MaskLike,
+} from "./recipes/looks.ts";
+export {
+  blinking,
+  bouncing,
+  drifting,
+  floating,
+  growIn,
+  orbiting,
+  planet,
+  pulsing,
+  shaking,
+  slideIn,
+  slideOut,
+  spinning,
+  swaying,
+  type BlinkOptions,
+  type BounceOptions,
+  type DriftOptions,
+  type EntranceOptions,
+  type FloatOptions,
+  type MotionOptions,
+  type Offstage,
+  type OrbitOptions,
+  type PlanetOptions,
+  type PulseOptions,
+  type ShakingOptions,
+  type SpinOptions,
+  type SwayOptions,
+  type Way,
+  type World,
+} from "./recipes/motion.ts";
+export {
+  across,
+  at,
+  barChart,
+  card,
+  clockFace,
+  countdown,
+  down,
+  gauge,
+  inset,
+  marquee,
+  panel,
+  progressBar,
+  ring,
+  slot,
+  sparkline,
+  spinner,
+  spinners,
+  textAt,
+  tiles,
+  typewriter,
+  type BarChartOptions,
+  type CardOptions,
+  type ClockFaceOptions,
+  type CountdownOptions,
+  type GaugeOptions,
+  type MarqueeOptions,
+  type PanelOptions,
+  type ProgressBarOptions,
+  type Room,
+  type SparklineOptions,
+  type SpinnerName,
+  type SpinnerOptions,
+  type TypewriterOptions,
+} from "./recipes/widgets.ts";
 
 // The grid, the piece() builder, colours, ramps and the maths every module shares.
 export {

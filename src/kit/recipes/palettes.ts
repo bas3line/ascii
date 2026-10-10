@@ -110,6 +110,12 @@ export type SchemeName = keyof typeof schemes;
 export type PaletteLike = SchemeName | (string & {}) | readonly string[] | Scheme;
 
 /**
+ * What a recipe takes as one colour, its `color`: #rrggbb, { light, dark } with one for each page, or a palette's name,
+ * which is that palette's strong colour on each page.
+ */
+export type ColorLike = SchemeName | (string & {}) | { readonly light: string; readonly dark: string };
+
+/**
  * The colours of a named palette for a light page and a dark one, faint to strong: { light, dark }. Anything in the kit
  * that takes colours takes it, so one name colours a field, a material, a particle system or a banner. Throws for a
  * name it does not know, listing the ones it does.

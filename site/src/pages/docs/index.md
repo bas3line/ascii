@@ -6,7 +6,7 @@ description: What ascii.rest is, five ways to use it, and what its 217 pieces ar
 
 ascii.rest is a free, open-source library of animated ascii art: 217 small animations, called pieces, and block-letter banners for any text. You can play them on a web page, in a GitHub README or in a terminal.
 
-To make your own, [the kit](/docs/kit/) turns a few lines of code into a piece: a formula, a 3D scene, snow, an SVG, an effect on any piece.
+To make your own, [the kit](/docs/kit/) turns one line into a piece, with no maths: `sea({ palette: "ocean" })`, `spinning(torus())`, `clockFace()`. When you want more, its parts go all the way down: a formula, a 3D scene, snow, an SVG, an effect on any piece.
 
 ascii.rest is MIT licensed. You can use and change it in any project, free or paid.
 
@@ -70,7 +70,7 @@ Pick the row that fits your project. Each page has a full example.
 | an SVG | a GitHub README, or anywhere scripts can't run | [github readme](/docs/readme/), [svg](/docs/svg/) |
 | the terminal | a splash screen or a banner for your CLI | [terminal](/docs/terminal/) |
 | your own image | your logo or a photo as animated ascii, made in your browser, for a page or a README | [image to ascii](/docs/images/) |
-| the kit | your own ascii art in a few lines of code: fields, 3D scenes, particles, effects, layouts, images and SVGs | [the kit](/docs/kit/) |
+| the kit | your own ascii art in one line: looks, motions and widgets by name, then fields, 3D scenes, particles, effects, layouts, images and SVGs | [the kit](/docs/kit/) |
 
 ## Browse the pieces
 

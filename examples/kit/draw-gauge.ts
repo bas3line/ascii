@@ -5,7 +5,9 @@
  * as a label() in its middle; and the last 8 seconds of the same reading as a
  * braille plot in the panel beside it: plot() is given the function and the
  * span of time, t - 8 to t, and does the sampling and scaling. The reading is
- * two sines, 8 and 2 seconds round, so it loops every 8 seconds.
+ * two sines, 8 and 2 seconds round, so it loops every 8 seconds. A gauge and
+ * a sparkline in one call each are gauge() and sparkline(), as in
+ * recipe-widget-dashboard.ts.
  */
 import { piece, TAU } from "../../src/kit/index.ts";
 import { arc, braille, label, line, rect } from "../../src/kit/draw.ts";

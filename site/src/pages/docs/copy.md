@@ -198,7 +198,7 @@ Each item brings the items it needs. Adding `ascii-banner` also adds `ascii`, `b
 | `banner` | `banner.ts`: `banner()`, which turns any text into a piece in block letters | `core` |
 | `ascii-banner` | `ascii-banner.tsx`: the `<Banner>` component for React and Next.js | `ascii`, `banner`, `core` |
 | `svg` | `svg.ts`: `svg()` and `bannerSvg()`, which turn a piece or a banner into an animated SVG | `banner`, `core` |
-| `kit` | `kit/`: the tools for making your own pieces, from `field()` to `scene()`, imported from `kit/index`. See [make your own](/docs/kit/). | `core` |
+| `kit` | `kit/`: the tools for making your own pieces, from the recipes in `kit/recipes/` to `field()` and `scene()`, imported from `kit/index`. See [make your own](/docs/kit/). | `banner`, `core` |
 | a piece's name, like `donut` | `pieces/donut.ts`: that one piece | `core` |
 | `all` | every file above and every piece | everything |
 
@@ -218,7 +218,7 @@ components/ascii/
 ├── banner.ts           banner(): any text in block letters (banner)
 ├── ascii-banner.tsx    <Banner> (ascii-banner)
 ├── svg.ts              svg() and bannerSvg() (svg)
-├── kit/                the kit: index.ts and its modules (kit)
+├── kit/                the kit: index.ts, its modules and recipes/ (kit)
 └── pieces/
     ├── donut.ts
     └── night-coast.ts

@@ -3,6 +3,6 @@
  * half speed. On a light page the ramp and the colours turn round by
  * themselves, so bright still reads as bright.
  */
-import { plasma } from "../../src/kit/recipes/looks.ts";
+import { plasma } from "../../src/kit/index.ts";
 
 export default plasma({ palette: "neon", speed: "slow" });

@@ -2,7 +2,8 @@
  * galaxy: two thousand seeded stars in two spiral arms, scattered with
  * random().normal(), and a camera() that turns them once every 16 seconds,
  * tips them toward you and fits them to the grid in perspective. Each cell
- * shades by how much starlight lands in it.
+ * shades by how much starlight lands in it. A galaxy with no maths is
+ * galaxy(), as in recipe-looks-galaxy.ts.
  */
 import { piece, ramps, shadeChar } from "../../src/kit/index.ts";
 import { camera, random, type Vec3 } from "../../src/kit/math.ts";

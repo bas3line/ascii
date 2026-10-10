@@ -3,6 +3,6 @@
  * the night palette. add() lays one look's light on another's, and the rain
  * keeps its own streaks.
  */
-import { clouds, rainfall } from "../../src/kit/recipes/looks.ts";
+import { clouds, rainfall } from "../../src/kit/index.ts";
 
 export default clouds({ palette: "night" }).add(rainfall({ wind: "left" }));

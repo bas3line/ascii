@@ -20,13 +20,15 @@
  */
 import type { Piece } from "../../types.ts";
 import { banner, type FontName } from "../../banner.ts";
-import { INK, Palette, Surface, TAU, fail, piece, type Color, type KitPiece, type PaletteSpec, type Region, type Themed } from "../core.ts";
+import { INK, Palette, Surface, TAU, fail, piece, type Color, type KitPiece, type PaletteSpec, type Region } from "../core.ts";
 import { arc, braille, circle, label, line, ray, rect, text, type BoxStyle, type Point } from "../draw.ts";
 import { border, layer, sequence, type Anchor } from "../compose.ts";
 import { typeIn } from "../fx.ts";
 import { ease, loopNoise } from "../math.ts";
+import { NAMING, boolOf, colorOf, numberOf, optionsOf, secondsOf, show, speedOf, titled, wholeOf, wordOf, type Speed } from "./checks.ts";
 import { drifting } from "./motion.ts";
-import { NAMING, boolOf, numberOf, optionsOf, pieceOf, secondsOf, show, speedOf, titled, wholeOf, wordOf, type Speed, type Thing } from "./words.ts";
+import { palette, type ColorLike, type PaletteLike } from "./palettes.ts";
+import { pieceOf, type Thing } from "./words.ts";
 
 // --- placing by words ------------------------------------------------------------------------
 
@@ -190,15 +192,8 @@ const TONES = {
 // A widget's colours as palette indices, the ink being 0 and the default: draw with these.
 const ACCENT = 1, MUTED = 2, GOOD = 3, WARN = 4, BAD = 5;
 
-// One colour for both pages, or one for each, checked.
-function themed(what: string, v: unknown): { light: string; dark: string } | undefined {
-  if (v === undefined) return undefined;
-  const hex = (c: unknown) => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c);
-  if (hex(v)) return { light: v as string, dark: v as string };
-  const o = v as { light?: unknown; dark?: unknown };
-  if (v && typeof v === "object" && hex(o.light) && hex(o.dark)) return { light: o.light as string, dark: o.dark as string };
-  return fail(`${what} takes a colour as #rrggbb, or { light, dark }, not ${show(v)}`);
-}
+// One colour for both pages, one for each, or a palette's strong colour on each, checked.
+const themed = colorOf;
 
 // The widgets' palette, its accent the colour given, and any colours of the widget's own after it.
 function tones(accent?: { light: string; dark: string }, more: readonly { light: string; dark: string }[] = []): PaletteSpec {
@@ -236,8 +231,8 @@ export interface ClockFaceOptions {
   frame?: boolean;
   /** Words on the frame's top edge: none. */
   title?: string;
-  /** The second hand's colour, as #rrggbb or { light, dark }: red. */
-  color?: Themed<string>;
+  /** The second hand's colour, as #rrggbb, { light, dark } or a palette's name: red. */
+  color?: ColorLike;
   name?: string;
   note?: string;
 }
@@ -298,8 +293,8 @@ export interface ProgressBarOptions {
   percent?: boolean;
   /** Seconds it takes to fill when it has no value: 4. */
   seconds?: number;
-  /** The bar's colour, as #rrggbb or { light, dark }: blue, and green once full. */
-  color?: Themed<string>;
+  /** The bar's colour, as #rrggbb, { light, dark } or a palette's name: blue, and green once full. */
+  color?: ColorLike;
   name?: string;
   note?: string;
 }
@@ -373,8 +368,8 @@ export interface SpinnerOptions {
   label?: string;
   /** How fast: "slow", "normal" (a frame every tenth of a second) or "fast", or times as fast. */
   speed?: Speed;
-  /** Its colour, as #rrggbb or { light, dark }: blue. */
-  color?: Themed<string>;
+  /** Its colour, as #rrggbb, { light, dark } or a palette's name: blue. */
+  color?: ColorLike;
   name?: string;
   note?: string;
 }
@@ -412,8 +407,8 @@ export interface GaugeOptions {
   max?: number;
   /** After the number: "%". */
   unit?: string;
-  /** The dial's colour, as #rrggbb or { light, dark }: by the reading, green, then yellow past 60%, then red past 85%. */
-  color?: Themed<string>;
+  /** The dial's colour, as #rrggbb, { light, dark } or a palette's name: by the reading, green, then yellow past 60%, then red past 85%. */
+  color?: ColorLike;
   name?: string;
   note?: string;
 }
@@ -457,8 +452,8 @@ export interface SparklineOptions {
   height?: number;
   /** Shades the area under the line: true. */
   fill?: boolean;
-  /** Its colour, as #rrggbb or { light, dark }: blue. */
-  color?: Themed<string>;
+  /** Its colour, as #rrggbb, { light, dark } or a palette's name: blue. */
+  color?: ColorLike;
   name?: string;
   note?: string;
 }
@@ -518,8 +513,8 @@ export interface BarChartOptions {
   max?: number;
   /** Each bar's value at its end: true. */
   values?: boolean;
-  /** One colour for every bar, as #rrggbb or { light, dark }: by default each bar its own. */
-  color?: Themed<string>;
+  /** One colour for every bar, as #rrggbb, { light, dark } or a palette's name: by default each bar its own. */
+  color?: ColorLike;
   /** Seconds the bars take to grow in, one just after another: 0.8. 0 draws them grown, a still. */
   seconds?: number;
   /** Seconds they stay before growing again: 3. */
@@ -610,8 +605,8 @@ export interface PanelOptions {
   /** Its size, border included: the thing's own and the border. Bigger, the thing sits in its middle. */
   cols?: number;
   rows?: number;
-  /** Its lines' colour, as #rrggbb or { light, dark }: the ink. */
-  color?: Themed<string>;
+  /** Its lines' colour, as #rrggbb, { light, dark } or a palette's name: the ink. */
+  color?: ColorLike;
   name?: string;
   note?: string;
 }
@@ -632,7 +627,8 @@ export function panel(content?: Thing, o?: PanelOptions): KitPiece {
   // The room inside the lines and a column of padding each side, the thing in its middle.
   const room = new Surface(Math.max(1, cols - 4), Math.max(1, rows - 2));
   const filled = inner ? layer(room, { src: inner, anchor: "center" }) : room;
-  const boxed = border(filled, { style, pad: [0, 1], ...(p.title ? { title: p.title } : {}), ...(p.color ? { color: p.color } : {}) });
+  const color = themed("panel's color", p.color);
+  const boxed = border(filled, { style, pad: [0, 1], ...(p.title ? { title: p.title } : {}), ...(color ? { color } : {}) });
   const name = p.name ?? p.title ?? inner?.meta.name ?? "panel";
   return titled(boxed, name, p.note ?? `${name}, in a box`);
 }
@@ -648,8 +644,8 @@ export interface CardOptions {
   width?: number;
   /** Its lines: "rounded" (the default), "single", "double", "heavy" or "ascii". */
   style?: BoxStyle;
-  /** The heading's colour, as #rrggbb or { light, dark }: blue. */
-  color?: Themed<string>;
+  /** The heading's colour, as #rrggbb, { light, dark } or a palette's name: blue. */
+  color?: ColorLike;
   name?: string;
   note?: string;
 }
@@ -696,8 +692,8 @@ export interface TypewriterOptions {
   cursor?: boolean;
   /** Seconds it stays typed before typing again: 3. "forever" types it once and stays. */
   hold?: number | "forever";
-  /** Its colour, as #rrggbb or { light, dark }: the page's ink. */
-  color?: Themed<string>;
+  /** Its colour, as #rrggbb, { light, dark } or a palette's name: the page's ink. */
+  color?: ColorLike;
   name?: string;
   note?: string;
 }
@@ -732,8 +728,8 @@ export interface MarqueeOptions {
   to?: "left" | "right";
   /** In big block letters, a banner(): false. */
   big?: boolean;
-  /** Its colour, as #rrggbb or { light, dark }: the page's ink. */
-  color?: Themed<string>;
+  /** Its colour, as #rrggbb, { light, dark } or a palette's name: the page's ink. */
+  color?: ColorLike;
   name?: string;
   note?: string;
 }
@@ -770,8 +766,8 @@ export interface CountdownOptions {
   seconds?: number;
   /** banner()'s font: "block". */
   font?: FontName;
-  /** The numbers' colour, or a fade along them, as #rrggbb: the page's ink. */
-  color?: string | readonly string[];
+  /** The numbers' colour as #rrggbb, a fade along them as a list, or a palette's name for its fade on each page: the page's ink. */
+  color?: PaletteLike;
   /** How one number turns into the next: "cut" (the default), "fade", "dissolve" or "wipe". */
   transition?: "cut" | "fade" | "dissolve" | "wipe";
   name?: string;
@@ -792,7 +788,9 @@ export function countdown(o?: CountdownOptions): KitPiece {
   if (then !== false && (typeof then !== "string" || !then.trim())) fail(`countdown's then takes words, or false for none, not ${show(then)}`);
   const seconds = numberOf("countdown's seconds", p.seconds, 1, 0.2, 60);
   const transition = wordOf("countdown's transition", p.transition, ["cut", "fade", "dissolve", "wipe"] as const, "cut");
-  const look = { effect: "still" as const, ...(p.font ? { font: p.font } : {}), ...(p.color !== undefined ? { color: p.color } : {}) };
+  // A palette's name is its fade for each page, as banner() takes { light, dark }; anything else goes to banner() as it is.
+  const color = typeof p.color === "string" && !p.color.startsWith("#") ? palette(p.color) : p.color;
+  const look = { effect: "still" as const, ...(p.font ? { font: p.font } : {}), ...(color !== undefined ? { color } : {}) };
   const steps = Array.from({ length: from - to + 1 }, (_, i) => ({ src: banner(String(from - i), look), seconds }));
   const all = then === false ? steps : [...steps, { src: banner(then, look), seconds: Math.max(2, seconds) }];
   const counted = sequence(all, { transition, overlap: transition === "cut" ? 0 : Math.min(0.3, seconds / 2) });

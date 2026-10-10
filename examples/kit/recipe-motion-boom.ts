@@ -3,6 +3,6 @@
  * numbers put in words.
  */
 import { banner } from "../../src/banner.ts";
-import { shaking } from "../../src/kit/recipes/motion.ts";
+import { shaking } from "../../src/kit/index.ts";
 
-export default shaking(banner("boom", { effect: "still", color: "#f85149" }), { amount: "big", speed: "fast" });
+export default shaking(banner("boom", { effect: "still", color: "#f85149" }), { amount: "strong", speed: "fast" });

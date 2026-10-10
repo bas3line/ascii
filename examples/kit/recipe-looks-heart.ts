@@ -4,7 +4,6 @@
  * cup(), house(), or one of your own from area.fit(). The ramp has no space,
  * so the whole heart is drawn.
  */
-import { heart } from "../../src/kit/materials.ts";
-import { plasma } from "../../src/kit/recipes/looks.ts";
+import { heart, plasma } from "../../src/kit/index.ts";
 
 export default plasma({ palette: "candy", ramp: ".:-=+*#%@" }).mask(heart({ size: "large" }));

@@ -9,7 +9,8 @@ import { flip } from "../compose.ts";
 import { cloud, heart, shape, sky, starfield } from "../materials.ts";
 import { cube, sphere, torus } from "../shapes3d.ts";
 import { blinking, bouncing, drifting, floating, growIn, orbiting, planet, pulsing, shaking, slideIn, slideOut, spinning, swaying } from "./motion.ts";
-import { easeOf, easings, loopFor, pieceOf, secondsOf, speedOf, withLoop } from "./words.ts";
+import { easeOf, secondsOf, speedOf } from "./checks.ts";
+import { easings, loopFor, pieceOf, withLoop } from "./words.ts";
 
 // A frame as text.
 const at = (p: Piece, t: number, o: { paper?: boolean; mono?: boolean } = {}) => {
@@ -183,12 +184,12 @@ test("floating rises and sinks; swaying leans from the end held still", () => {
   assert.equal(top(lines(f, 3)), 4, "three quarters round it is 2 rows down");
 
   const tall = asPiece("#\n#\n#\n#\n#");
-  const s = swaying(tall, { amount: "large", period: 4 });
+  const s = swaying(tall, { amount: "strong", period: 4 });
   const col = (rows: string[], y: number) => rows[y].indexOf("#");
   const still = lines(s, 0), leaning = lines(s, 1);
   assert.equal(col(leaning, 4), col(still, 4), "the bottom stays put");
   assert.equal(col(leaning, 0) - col(still, 0), 4, "the top leans the whole amount");
-  const hung = lines(swaying(tall, { amount: "large", period: 4, from: "top" }), 1);
+  const hung = lines(swaying(tall, { amount: "strong", period: 4, from: "top" }), 1);
   assert.equal(col(hung, 0), col(still, 0), "hung from the top, the top stays put");
 });
 
@@ -205,7 +206,7 @@ test("pulsing swells about its middle; blinking goes off; shaking jolts", () => 
   assert.equal(at(b, 1.25), "· ···", "a ghost of itself as it goes out");
   assert.throws(() => blinking("x", { on: 1 }), /blinking's on takes a number from 0.05 to 0.9/);
 
-  const s = shaking(block, { amount: "big" });
+  const s = shaking(block, { amount: "medium" });
   assert.equal(s.meta.cols, block.meta.cols + 4);
   const all = new Set([0.55, 0.6, 0.65, 0.7, 0.75].map((t) => at(s, t)));
   assert.ok(all.size > 1, "it jolts about during a shake");

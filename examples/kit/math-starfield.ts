@@ -3,7 +3,8 @@
  * each on its own beat, out of step with the rest, and every 4 seconds a
  * shooting star eases across with progress(): its head along one of two paths
  * that random(cycle()) picks each time round, its tail a cell apart behind it,
- * shortening as it slows. Everything comes round in 8 seconds.
+ * shortening as it slows. Everything comes round in 8 seconds. A twinkling
+ * sky with no maths is stars({ density: "sparse" }).
  */
 import { piece, ramps, shadeChar } from "../../src/kit/index.ts";
 import { cycle, progress, random, scatter, twinkle } from "../../src/kit/math.ts";

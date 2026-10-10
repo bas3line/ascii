@@ -4,6 +4,6 @@
  * with no space in it draws every cell, so the letters stay whole where the
  * plasma is dark.
  */
-import { plasma } from "../../src/kit/recipes/looks.ts";
+import { plasma } from "../../src/kit/index.ts";
 
 export default plasma({ palette: "fire", ramp: ".:-=+*#%@" }).mask("HOT");

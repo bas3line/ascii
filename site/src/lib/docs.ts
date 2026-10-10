@@ -39,6 +39,9 @@ export const DOCS = [
     label: "make your own",
     pages: [
       { href: "/docs/kit/", title: "the kit" },
+      { href: "/docs/kit-looks/", title: "looks" },
+      { href: "/docs/kit-motion/", title: "motion" },
+      { href: "/docs/kit-widgets/", title: "widgets" },
       { href: "/docs/kit-field/", title: "fields" },
       { href: "/docs/kit-draw/", title: "drawing" },
       { href: "/docs/kit-math/", title: "maths" },

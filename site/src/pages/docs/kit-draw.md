@@ -73,22 +73,22 @@ A line's `char` is `"auto"` by default: it picks `-`, `|`, `/`, `\` and runs of 
 
 Their options: `char` for the outline (`"*"`, or `"auto"` for slope characters), `fill` for the inside, `color` and `fillColor`.
 
-Angles in the drawing functions are **turns**, as a clock's hand goes: 0 is the top, 0.25 the right, 0.5 the bottom. So `h / 12` is the hour `h` on a dial, and `t / 60` goes round once a minute.
+Angles in the drawing functions are **turns**, as a clock's hand goes: 0 is the top, 0.25 the right, 0.5 the bottom. `phase(t, 60)` goes round once a minute. To place things round a circle with no angles at all, `ring(s, 12)` gives twelve points from the top, clockwise, and `at(s)` the middle. A whole clock is one call, `clockFace()`, on [widgets](/docs/kit-widgets/); this is the same drawn by hand:
 
 ```ts
 // clock.ts
-import { around, circle, label, piece, ray, rect } from "ascii.rest/kit";
+import { at, circle, label, phase, piece, ray, rect, ring } from "ascii.rest/kit";
 
 const palette = { light: ["#1f2328", "#cf222e", "#8c959f"], dark: ["#f0f6fc", "#ff7b72", "#6e7681"] };
 
 export default piece({ name: "clock", cols: 41, rows: 21, fps: 4, loop: 60, palette }, (t, s) => {
-  const x = s.cols / 2, y = s.rows / 2;
+  const [x, y] = at(s);
   rect(s, 0, 0, s.cols, s.rows, { style: "rounded", title: "clock", color: 2 });
   circle(s, x, y, 18, { char: "auto", color: 2 });
-  for (let h = 1; h <= 12; h++) label(s, ...around(s, x, y, 15, h / 12), h);
-  ray(s, x, y, 7, 10 / 12);
-  ray(s, x, y, 11, 2 / 12);
-  ray(s, x, y, 13, t / 60, { color: 1 });
+  ring(s, 12, { radius: 15 }).forEach((point, hour) => label(s, ...point, hour || 12));
+  ray(s, x, y, 7, 10 / 12); // the hour hand, at ten
+  ray(s, x, y, 11, 2 / 12); // the minute hand, ten past
+  ray(s, x, y, 13, phase(t, 60), { color: 1 });
   s.set(x, y, "o", 1);
 });
 ```
@@ -97,7 +97,7 @@ export default piece({ name: "clock", cols: 41, rows: 21, fps: 4, loop: 60, pale
 ╭─ clock ───────────────────────────────╮
 │              ___________              │
 │          ___/           \___          │
-│       __/        12         \__       │
+│       __/         12        \__       │
 │     _/    11       |     1     \_     │
 │    /               |             \    │
 │   /  10            |           2  \   │
@@ -123,7 +123,7 @@ export default piece({ name: "clock", cols: 41, rows: 21, fps: 4, loop: 60, pale
 
 ```ts
 // cat.ts
-import { piece, stamp } from "ascii.rest/kit";
+import { at, piece, stamp } from "ascii.rest/kit";
 
 const cat = `
    /\\_/\\
@@ -131,7 +131,7 @@ const cat = `
    > ^ <`;
 
 export default piece({ name: "cat", cols: 20, rows: 5, fps: 0 }, (t, s) => {
-  stamp(s, cat, s.cols / 2, s.rows / 2, { align: "center", valign: "middle" });
+  stamp(s, cat, ...at(s), { align: "center", valign: "middle" });
 });
 ```
 
@@ -163,7 +163,7 @@ export default piece({ name: "wave", cols: 40, rows: 8, loop: 2 }, (t, s) => {
 
 A braille canvas has `set`, `unset`, `toggle`, `get`, `line`, `ray`, `circle`, `arc`, `rect`, `plot` and `clear`, in dots from its top left. `b.width` and `b.height` are its size in dots.
 
-`plot()` takes a function, `y = f(x)` for `x` from `x0` to `x1` (0 to `TAU`), or a list of numbers, scaled to fit. `fill: true` fills under it, for an area chart. This dashboard plots the last 8 seconds of a reading beside a dial:
+`plot()` takes a function, `y = f(x)` for `x` from `x0` to `x1` (0 to `TAU`), or a list of numbers, scaled to fit. `fill: true` fills under it, for an area chart. For a chart in one call, `sparkline([3, 5, 2, 8])` and `gauge({ label: "cpu" })` are on [widgets](/docs/kit-widgets/). This dashboard draws its own, a dial beside a plot of the last 8 seconds of a reading:
 
 ```ts
 // gauge.ts

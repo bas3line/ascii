@@ -145,6 +145,14 @@ test("speed words: slow doubles the loop, fast halves it, still is a still", () 
   assert.equal(text(c, 0), text(c, 5));
 });
 
+test("period sets a look's loop in seconds, over speed, as it does every recipe's", () => {
+  assert.equal(plasma({ period: 4 }).meta.loop, 4);
+  assert.equal(plasma({ period: 4, speed: "slow" }).meta.loop, 4);
+  assert.equal(plasma({ speed: "slow" }).meta.loop, 16);
+  const p = plasma({ period: 4 });
+  assert.equal(text(p, 0.5), text(p, 4.5));
+});
+
 test("scale, palette, ramp, size and name are options every look takes", () => {
   const big = rings({ scale: "large" }), small = rings({ scale: "small" });
   assert.notEqual(text(big, 1), text(small, 1));
@@ -161,8 +169,9 @@ test("scale, palette, ramp, size and name are options every look takes", () => {
 });
 
 test("options are checked when the look is made, saying what to change", () => {
-  assert.throws(() => sea({ colour: "ocean" } as never), /sea\(\) has no option "colour": it takes "palette", "speed"/);
-  assert.throws(() => plasma({ speed: "quick" as never }), /plasma\(\)'s speed takes "still", "slow", "normal" and "fast", or a number from 0 to 10, not "quick"/);
+  assert.throws(() => sea({ colour: "ocean" } as never), /sea\(\) has no option "colour": it takes palette, speed, period/);
+  assert.throws(() => plasma({ speed: "quick" as never }), /plasma\(\)'s speed takes "still", "slow", "normal" or "fast", or a number from 0 to 100, not "quick"/);
+  assert.throws(() => plasma({ period: 0 }), /plasma\(\)'s period takes a number from 0.05 to 60, not 0/);
   assert.throws(() => plasma({ scale: 0 }), /scale takes a number above 0/);
   assert.throws(() => plasma({ palette: "oceanic" }), /plasma\(\)'s palette takes a palette's name/);
   assert.throws(() => plasma({ ramp: "x" }), /a ramp takes a name/);
@@ -170,15 +179,15 @@ test("options are checked when the look is made, saying what to change", () => {
   assert.throws(() => plasma({ rows: 1.5 }), /rows as a whole number from 1 to 120/);
   assert.throws(() => plasma({ dither: "yes" as never }), /dither takes true or false/);
   assert.throws(() => plasma({ note: "x".repeat(80) }), /note takes one line of 1 to 72/);
-  assert.throws(() => waves({ direction: "up" as never }), /waves\(\)'s direction takes "left" and "right"/);
-  assert.throws(() => sea({ horizon: "top" as never }), /horizon takes "high", "middle" and "low"/);
+  assert.throws(() => waves({ to: "up" as never }), /waves\(\)'s to takes "left" or "right"/);
+  assert.throws(() => sea({ horizon: "top" as never }), /horizon takes "high", "middle" or "low"/);
   assert.throws(() => ripple({ drops: 0 }), /drops takes a whole number from 1 to 8/);
   assert.throws(() => spiral({ arms: 1.5 }), /arms takes a whole number from 1 to 12/);
   assert.throws(() => lavaLamp({ blobs: 40 }), /blobs takes a whole number from 1 to 16/);
-  assert.throws(() => stars({ density: "lots" as never }), /density takes "sparse", "normal" and "dense"/);
+  assert.throws(() => stars({ density: "lots" as never }), /density takes "sparse", "normal" or "dense"/);
   assert.throws(() => stars({ seed: 1.5 }), /seed takes a whole number/);
-  assert.throws(() => rainfall({ wind: "up" as never }), /wind takes "none", "left" and "right"/);
-  assert.throws(() => turbulence({ kind: "soft" as never }), /kind takes "smooth", "ridged" and "cells"/);
+  assert.throws(() => rainfall({ wind: "up" as never }), /wind takes "none", "left" or "right"/);
+  assert.throws(() => turbulence({ kind: "soft" as never }), /kind takes "smooth", "ridged" or "cells"/);
   assert.throws(() => sun({ rays: -1 }), /rays takes a whole number from 0 to 48/);
   assert.throws(() => galaxy({ arms: 9 }), /arms takes a whole number from 1 to 8/);
   assert.throws(() => plasma({ speed: 0.001 }), /too slow to loop/);
@@ -200,7 +209,7 @@ test("threshold() leaves only the ends of the ramp, posterize() only as many ste
   assert.ok(new Set(digits(base.posterize(3))).size <= 3);
   assert.deepEqual([...new Set(digits(base.posterize(2)))].sort(), ["0", "9"]);
   assert.throws(() => base.posterize(1), /posterize\(\) takes a whole number of levels from 2 to 16, not 1/);
-  assert.throws(() => base.threshold(2), /threshold\(\) takes "low", "half" and "high", or a number from 0 to 1, not 2/);
+  assert.throws(() => base.threshold(2), /threshold\(\) takes "low", "half" or "high", or a number from 0 to 1, not 2/);
 });
 
 test("mix(), add() and multiply(): nothing of the other at 0, and the loop of both", () => {
@@ -216,7 +225,7 @@ test("mix(), add() and multiply(): nothing of the other at 0, and the loop of bo
   for (let i = 0; i < z.length; i++) assert.ok(Number(z[i]) <= Math.min(Number(x[i]), Number(y[i])) + 1, `cell ${i}`);
   assert.throws(() => a.mix(banner("hi") as never), /mix\(\) takes another look, such as waves\(\) or clouds\(\)/);
   assert.throws(() => a.add(plasma as never, 1),/plasma, a function: call it, plasma\(\)/);
-  assert.throws(() => a.mix(b, 2), /mix\(\)'s amount takes "a little", "half" and "mostly", or a number from 0 to 1/);
+  assert.throws(() => a.mix(b, 2), /mix\(\)'s amount takes "a little", "half" or "mostly", or a number from 0 to 1/);
 });
 
 test("a look added to another keeps its own glyphs: stars stay stars, rain stays rain", () => {
@@ -237,7 +246,7 @@ test("mask(): below and above keep a share of the picture, and nothing is drawn 
   const top = text(plasma({ ramp: ".:-=+*#%@" }).mask(above("third")), 1).split("\n");
   assert.ok(top.slice(0, 8).every((l) => !l.includes(" ")));
   assert.ok(top.slice(8).every((l) => l.trim() === ""));
-  assert.throws(() => below(2), /below\(\) takes "third" and "half", or a number from 0 to 1, not 2/);
+  assert.throws(() => below(2), /below\(\) takes "third" or "half", or a number from 0 to 1, not 2/);
 });
 
 test("mask(): a material's shape, its outside, a word, a piece and a function", () => {
@@ -308,9 +317,9 @@ test("move(), zoom(), rotate(), warp() and blur() change the frame and keep it l
   assert.ok(chars(text(checker().blur(), 1)).size > chars(text(checker(), 1)).size);
   for (const p of [moved, rings().zoom("in"), stripes().rotate("quarter"), base.warp(), checker().blur()]) contract(p);
   assert.throws(() => base.move("sideways" as never), /move\(\) takes "left", "right", "up", "down"/);
-  assert.throws(() => base.zoom(0), /zoom\(\) takes "in" and "out", or a number from 0.05 to 20, not 0/);
-  assert.throws(() => base.rotate("lots" as never), /rotate\(\) takes "slow", "normal" and "fast"/);
-  assert.throws(() => base.warp("huge" as never), /warp\(\) takes "subtle", "medium" and "strong"/);
+  assert.throws(() => base.zoom(0), /zoom\(\) takes "in" or "out", or a number from 0.05 to 20, not 0/);
+  assert.throws(() => base.rotate("lots" as never), /rotate\(\) takes "slow", "normal" or "fast"/);
+  assert.throws(() => base.warp("huge" as never), /warp\(\) takes "subtle", "medium" or "strong"/);
 });
 
 test("chaining never changes the look it starts from", () => {
