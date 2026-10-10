@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { svg } from "../svg.ts";
 import { entryOf } from "./catalog.ts";
 import { ACCENT, INK, QUIET, SOFT, drawable, fence, plain, type MarkdownPiece } from "./core.ts";
-import { fromFence, kinds } from "./index.ts";
+import { fromFence } from "./index.ts";
 import { orbit } from "./orbit.ts";
 
 const STILL = [
@@ -52,7 +52,7 @@ test("orbit: the catalog's example draws its still, two dotted rings round the h
   assert.equal(p.says, "orbit: around ascii.rest, react, mdx, svg; then readme, terminal.");
 });
 
-test("orbit: through fromFence(), once index.ts has it", { skip: !Object.hasOwn(kinds, "orbit") && "index.ts does not list orbit yet" }, () => {
+test("orbit: through fromFence()", () => {
   assert.equal(plain(fromFence("ascii orbit", SOURCE)), STILL);
 });
 

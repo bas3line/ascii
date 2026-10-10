@@ -6,12 +6,12 @@ import { fnv1a32 } from "../kit/core.ts";
 import { svg } from "../svg.ts";
 import { entryOf } from "./catalog.ts";
 import { ACCENT, BAD, GOOD, QUIET, VIOLET, WARN, drawable, fence, plain, type MarkdownPiece } from "./core.ts";
-import { fromFence, kinds } from "./index.ts";
-import { stamp, type StampOptions } from "./stamp.ts";
+import { fromFence } from "./index.ts";
+import { stamp } from "./stamp.ts";
 
 const SOURCE = entryOf("stamp").source;
-// A fence's figure: through fromFence() once stamp is one of index.ts's kinds, and through fence() and stamp() until then.
-const viaFence = (info: string, body: string): MarkdownPiece => (Object.hasOwn(kinds, "stamp") ? fromFence(info, body) : stamp(body, fence(info).options as StampOptions));
+// A fence's figure.
+const viaFence = (info: string, body: string): MarkdownPiece => fromFence(info, body);
 
 const STILL = [
   "╔═════════════════════════════════╗",

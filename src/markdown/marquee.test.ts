@@ -4,8 +4,8 @@ import { test } from "node:test";
 import { svg } from "../svg.ts";
 import { entryOf } from "./catalog.ts";
 import { ACCENT, INK, fence, plain, type MarkdownPiece } from "./core.ts";
-import { fromFence, kinds } from "./index.ts";
-import { marquee, type MarqueeOptions } from "./marquee.ts";
+import { fromFence } from "./index.ts";
+import { marquee } from "./marquee.ts";
 
 const SOURCE = entryOf("marquee").source;
 const STILL = [
@@ -13,8 +13,8 @@ const STILL = [
   "│ markdown figures · a fence in, a picture out │",
   "╰──────────────────────────────────────────────╯",
 ].join("\n");
-// What a fence draws: through fromFence() once index.ts lists marquee, and through fence()'s options until then.
-const drawn = (info: string, body: string) => (Object.hasOwn(kinds, "marquee") ? fromFence(info, body) : marquee(body, fence(info).options as MarqueeOptions));
+// What a fence draws.
+const drawn = (info: string, body: string) => fromFence(info, body);
 const toned = (p: MarkdownPiece, t: number) => {
   const color = new Uint8Array(p.meta.cols * p.meta.rows);
   const text = p.default()(t, { paper: true, color });

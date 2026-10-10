@@ -155,8 +155,6 @@ export function linesOf(source: string): string[];           // \r\n, blank ends
 export interface Statement { line; words; texts; attrs; tokens; raw }
 export function statements(source: string, what?: string): Statement[];
 export function blocks(source: string, what?: string): string[][];
-export function num(word: string): number;                    // 12,400 1.5k -6; NaN otherwise
-export function amount(word: string): { value: number; unit: string; text: string } | null;   // "820 ms"
 export function wrap(words: string, width: number): string[];
 export function commas(n: number, places?: number): string;
 export function fence(info: string): { lang: string; kind: string; options: FenceOptions };

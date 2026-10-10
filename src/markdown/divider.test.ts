@@ -5,7 +5,7 @@ import { svg } from "../svg.ts";
 import { entryOf } from "./catalog.ts";
 import { ACCENT, QUIET, SOFT, drawable, fence, plain, type MarkdownPiece } from "./core.ts";
 import { DIVIDER_STYLES, divider } from "./divider.ts";
-import { fromFence, kinds } from "./index.ts";
+import { fromFence } from "./index.ts";
 
 const STILL = "_.-'~'-._.-'~'-._.  part two  -._.-'~'-._.-'~'-.";
 const SOURCE = entryOf("divider").source;
@@ -42,7 +42,7 @@ test("divider: the catalog's example draws its still, waves round part two, thro
   assert.equal(p.says, "divider: waves, part two.");
 });
 
-test("divider: through fromFence(), once index.ts has it", { skip: !Object.hasOwn(kinds, "divider") && "index.ts does not list divider yet" }, () => {
+test("divider: through fromFence()", () => {
   assert.equal(plain(fromFence("ascii divider", SOURCE)), STILL);
 });
 

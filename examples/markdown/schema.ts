@@ -3,7 +3,7 @@
  * columns typing, then the reference rides in from users.id to posts.user_id,
  * a bar at its one end and a crow's foot at its many end. Then it holds.
  */
-import { schema } from "../../src/markdown/schema.ts";
+import { schema } from "../../src/markdown/index.ts";
 
 export default schema(
   `users(id*, name, email)

@@ -6,7 +6,7 @@ import { svg } from "../svg.ts";
 import { entryOf } from "./catalog.ts";
 import { ACCENT, GLINT, GOOD, INK, VIOLET, WARN, drawable, fence, plain, type MarkdownPiece } from "./core.ts";
 import { confetti } from "./confetti.ts";
-import { fromFence, kinds } from "./index.ts";
+import { fromFence } from "./index.ts";
 
 const STILL = [
   "         *      ·              +          *",
@@ -45,7 +45,7 @@ test("confetti: the catalog's example lands on its seeded still, through plain()
   assert.equal(p.says, "confetti: v1.0 is out, 1,000 stars.");
 });
 
-test("confetti: through fromFence(), once index.ts has it", { skip: !Object.hasOwn(kinds, "confetti") && "index.ts does not list confetti yet" }, () => {
+test("confetti: through fromFence()", () => {
   assert.equal(plain(fromFence("ascii confetti", SOURCE)), STILL);
 });
 

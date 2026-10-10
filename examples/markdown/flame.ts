@@ -3,7 +3,7 @@
  * then each level rises on it, its blocks widening; paint, the hottest leaf,
  * is marked and named on the bottom edge. Then it holds.
  */
-import { flame } from "../../src/markdown/flame.ts";
+import { flame } from "../../src/markdown/index.ts";
 
 export default flame(
   `main;parse;lex 4

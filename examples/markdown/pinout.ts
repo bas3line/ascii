@@ -3,7 +3,7 @@
  * then a pulse runs out along the out pin's wire every 1.2 seconds while it is
  * in view.
  */
-import { pinout } from "../../src/markdown/pinout.ts";
+import { pinout } from "../../src/markdown/index.ts";
 
 export default pinout(
   `gnd vcc

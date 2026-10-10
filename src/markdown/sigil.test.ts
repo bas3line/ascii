@@ -5,12 +5,12 @@ import { fnv1a32, mulberry32 } from "../kit/core.ts";
 import { svg } from "../svg.ts";
 import { entryOf } from "./catalog.ts";
 import { ACCENT, BAD, GOOD, INK, SOFT, drawable, fence, plain, type MarkdownPiece } from "./core.ts";
-import { fromFence, kinds } from "./index.ts";
-import { SIGIL_FIELD, sigil, walkOf, type SigilOptions } from "./sigil.ts";
+import { fromFence } from "./index.ts";
+import { SIGIL_FIELD, sigil, walkOf } from "./sigil.ts";
 
 const SOURCE = entryOf("sigil").source;
-// A fence's figure: through fromFence() once sigil is one of index.ts's kinds, and through fence() and sigil() until then.
-const viaFence = (info: string, body: string): MarkdownPiece => (Object.hasOwn(kinds, "sigil") ? fromFence(info, body) : sigil(body, fence(info).options as SigilOptions));
+// A fence's figure.
+const viaFence = (info: string, body: string): MarkdownPiece => fromFence(info, body);
 
 const STILL = [
   "╭─ bas3line ────────╮",

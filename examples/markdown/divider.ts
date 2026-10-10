@@ -3,6 +3,6 @@
  * from the middle to both ends, then the waves keep travelling while it is in
  * view.
  */
-import { divider } from "../../src/markdown/divider.ts";
+import { divider } from "../../src/markdown/index.ts";
 
 export default divider(`waves "part two"`);

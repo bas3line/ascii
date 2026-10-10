@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { svg } from "../svg.ts";
 import { entryOf } from "./catalog.ts";
 import { ACCENT, INK, QUIET, SOFT, drawable, fence, plain, type MarkdownPiece } from "./core.ts";
-import { fromFence, kinds } from "./index.ts";
+import { fromFence } from "./index.ts";
 import { CREATURES, say } from "./say.ts";
 
 const STILL = [
@@ -61,7 +61,7 @@ test("say: the catalog's example draws its still, a cat under a balloon, through
   assert.equal(owl.says, "say: an owl thinks where did i put that fence?");
 });
 
-test("say: through fromFence(), once index.ts has it", { skip: !Object.hasOwn(kinds, "say") && "index.ts does not list say yet" }, () => {
+test("say: through fromFence()", () => {
   assert.equal(plain(fromFence("ascii say", SOURCE)), STILL);
 });
 

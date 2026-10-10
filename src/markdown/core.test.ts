@@ -10,7 +10,6 @@ import {
   MARK,
   QUIET,
   SOFT,
-  amount,
   asciiOf,
   blocks,
   clean,
@@ -19,7 +18,6 @@ import {
   drawable,
   fence,
   linesOf,
-  num,
   plain,
   statements,
   wrap,
@@ -35,7 +33,7 @@ test("the family: 25 figures in seven groups, each named once", () => {
 });
 
 test("the core reads no list, table or heading, and no mark gives a word a meaning", () => {
-  for (const gone of ["inline", "list", "prose", "noteOf", "pairOf", "tableOf", "sections", "numbers", "runs", "share", "big", "STATUS", "isStatus"]) assert.ok(!(gone in core), gone);
+  for (const gone of ["inline", "list", "prose", "noteOf", "pairOf", "tableOf", "sections", "numbers", "num", "amount", "runs", "share", "big", "STATUS", "isStatus"]) assert.ok(!(gone in core), gone);
 });
 
 test("linesOf: an indented template literal reads as written", () => {
@@ -90,15 +88,9 @@ test("clean: typographic marks fold to plain ones; arrows, checks and what can't
   assert.ok(drawable("─") && drawable("·") && drawable("●") && !drawable("✓") && !drawable("→"));
 });
 
-test("num, amount and commas read and write numbers as people do", () => {
-  assert.equal(num("12,400"), 12400);
-  assert.equal(num("1.5k"), 1500);
-  assert.equal(num("-6"), -6);
-  assert.ok(Number.isNaN(num("1,2")));
-  assert.deepEqual(amount("820 ms"), { value: 820, unit: "ms", text: "820" });
-  assert.deepEqual(amount("820ms"), { value: 820, unit: "ms", text: "820" });
-  assert.deepEqual(amount("+31 kb"), { value: 31, unit: "kb", text: "+31" });
+test("commas writes a number as people do", () => {
   assert.equal(commas(343303), "343,303");
+  assert.equal(commas(2.5), "2.5");
 });
 
 test("wrap: words to a width, long words broken, newlines kept", () => {

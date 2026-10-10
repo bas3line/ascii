@@ -3,7 +3,7 @@
  * written as git's own commands. The log prints in from the top as a pager
  * scrolls it, each fork and merge swinging out; then it holds.
  */
-import { git } from "../../src/markdown/git.ts";
+import { git } from "../../src/markdown/index.ts";
 
 export default git(
   `commit "init"

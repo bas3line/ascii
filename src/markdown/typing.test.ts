@@ -4,13 +4,13 @@ import { test } from "node:test";
 import { svg } from "../svg.ts";
 import { entryOf } from "./catalog.ts";
 import { ACCENT, GLINT, INK, fence, plain, type MarkdownPiece } from "./core.ts";
-import { fromFence, kinds } from "./index.ts";
-import { typing, type TypingOptions } from "./typing.ts";
+import { fromFence } from "./index.ts";
+import { typing } from "./typing.ts";
 
 const SOURCE = entryOf("typing").source;
 const STILL = "ascii.rest draws scenes";
-// What a fence draws: through fromFence() once index.ts lists typing, and through fence()'s options until then.
-const drawn = (info: string, body: string) => (Object.hasOwn(kinds, "typing") ? fromFence(info, body) : typing(body, fence(info).options as TypingOptions));
+// What a fence draws.
+const drawn = (info: string, body: string) => fromFence(info, body);
 const toned = (p: MarkdownPiece, t: number) => {
   const color = new Uint8Array(p.meta.cols * p.meta.rows);
   const text = p.default()(t, { paper: true, color });

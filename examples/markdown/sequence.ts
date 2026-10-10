@@ -3,7 +3,7 @@
  * PlantUML's arrows. Heads and lifelines draw down, a dot runs each message
  * as its words type; then a dot runs the messages again while it is in view.
  */
-import { sequence } from "../../src/markdown/sequence.ts";
+import { sequence } from "../../src/markdown/index.ts";
 
 export default sequence(
   `browser -> api "GET /users"

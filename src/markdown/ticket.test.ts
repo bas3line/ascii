@@ -6,12 +6,12 @@ import { fnv1a32 } from "../kit/core.ts";
 import { svg } from "../svg.ts";
 import { entryOf } from "./catalog.ts";
 import { ACCENT, INK, QUIET, SOFT, drawable, fence, plain, type MarkdownPiece } from "./core.ts";
-import { fromFence, kinds } from "./index.ts";
-import { ticket, type TicketOptions } from "./ticket.ts";
+import { fromFence } from "./index.ts";
+import { ticket } from "./ticket.ts";
 
 const SOURCE = entryOf("ticket").source;
-// A fence's figure: through fromFence() once ticket is one of index.ts's kinds, and through fence() and ticket() until then.
-const viaFence = (info: string, body: string): MarkdownPiece => (Object.hasOwn(kinds, "ticket") ? fromFence(info, body) : ticket(body, fence(info).options as TicketOptions));
+// A fence's figure.
+const viaFence = (info: string, body: string): MarkdownPiece => fromFence(info, body);
 
 const STILL = [
   "╭─ boarding pass ─────────────────────────────╮",

@@ -252,29 +252,6 @@ export function blocks(source: string, what = "this"): string[][] {
 }
 
 /**
- * A number as people write one: 12400, 12,400, 1.5k, 2m, 3b, -6, +31. NaN for anything else. A value with a unit
- * after it, "820 ms", is amount().
- */
-export function num(word: string): number {
-  const m = /^\s*([+-]?)((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)\s*([kmb])?\s*$/i.exec(String(word));
-  if (!m) return NaN;
-  const v = parseFloat(m[2].replace(/,/g, "")) * (m[3] ? { k: 1e3, m: 1e6, b: 1e9 }[m[3].toLowerCase() as "k" | "m" | "b"] : 1);
-  return m[1] === "-" ? -v : v;
-}
-
-/**
- * A value and the unit after it: "820 ms" is { value: 820, unit: "ms", text: "820" }, "+31 kb" keeps its sign, and
- * "1.5k visits" is 1500. A k, m or b right after the number is a multiple only when no letter follows it, so "820ms"
- * is 820 of ms. Null when it doesn't start with a number.
- */
-export function amount(word: string): { value: number; unit: string; text: string } | null {
-  const m = /^\s*([+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)(?:[kmb](?![a-z]))?)\s*(.*?)\s*$/i.exec(String(word));
-  if (!m) return null;
-  const value = num(m[1]);
-  return Number.isNaN(value) ? null : { value, unit: m[2], text: m[1] };
-}
-
-/**
  * Words wrapped at spaces to `width` columns, a word longer than a line broken across lines; "\n" starts a new line.
  * An empty string is no lines.
  */
@@ -304,7 +281,7 @@ export function wrap(words: string, width: number): string[] {
   return out;
 }
 
-/** A number with commas between its thousands: 12400 as "12,400". Fractions keep up to `places` (2). */
+/** A number with commas between its thousands: 343303 as "343,303". Fractions keep up to `places` (2). */
 export function commas(n: number, places = 2): string {
   const [whole, frac] = String(+n.toFixed(places)).split(".");
   return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (frac ? `.${frac}` : "");

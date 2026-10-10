@@ -5,7 +5,7 @@ import type { Piece } from "../types.ts";
 import { svg } from "../svg.ts";
 import { entryOf } from "./catalog.ts";
 import { ACCENT, INK, MARK, QUIET, SOFT, drawable, fence, plain } from "./core.ts";
-import { fromFence, kinds } from "./index.ts";
+import { fromFence } from "./index.ts";
 import { AIRPORTS, world } from "./world.ts";
 
 const STILL = [
@@ -52,11 +52,11 @@ test("world: the catalog's example draws its still, the earth piece's map in qua
   assert.deepEqual(ENTRY.options, { title: "regions", here: "sfo" });
   const p = world(SOURCE, { title: "regions", here: "sfo" });
   assert.equal(plain(p), STILL);
-  // the fence's info string read as a fence reads it, and through fromFence() once index.ts names the figure
+  // the fence's info string read as a fence reads it, and through fromFence()
   const { kind, options } = fence(FENCE);
   assert.equal(kind, "world");
   assert.equal(plain(world(SOURCE, options as never)), STILL);
-  if (Object.hasOwn(kinds, "world")) assert.equal(plain(fromFence(FENCE, SOURCE)), STILL);
+  assert.equal(plain(fromFence(FENCE, SOURCE)), STILL);
   // 44 by 11 inside a 48 column frame, a blank row and a line for each place
   assert.equal(p.meta.cols, 48);
   assert.equal(p.meta.rows, 18);

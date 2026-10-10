@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { svg } from "../svg.ts";
 import { entryOf, fenceOf } from "./catalog.ts";
-import { ACCENT, INK, QUIET, SOFT, drawable, fence, plain, type MarkdownPiece } from "./core.ts";
-import { fromFence, kinds } from "./index.ts";
+import { ACCENT, INK, QUIET, SOFT, drawable, plain, type MarkdownPiece } from "./core.ts";
+import { fromFence } from "./index.ts";
 import { sequence } from "./sequence.ts";
 
 const STILL = [
@@ -25,9 +25,8 @@ const STILL = [
 
 const ENTRY = entryOf("sequence");
 const INFO = fenceOf(ENTRY).split("\n")[0].slice(3);
-// What a ```ascii sequence fence draws: through fromFence() once index.ts lists sequence, and the fence's own options
-// read the same way until then.
-const fenced = (info: string, body: string) => (kinds.sequence ? fromFence(info, body) : sequence(body, fence(info).options));
+// What a ```ascii sequence fence draws.
+const fenced = (info: string, body: string) => fromFence(info, body);
 
 // Every frame of a figure the same size, rows as wide as it says, every character one a figure may draw.
 function sane(p: MarkdownPiece, times: readonly number[] = [0, 0.1, 0.5, 1, 2, 5, 9]) {

@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { svg } from "../svg.ts";
 import { entryOf, fenceOf } from "./catalog.ts";
-import { ACCENT, GLINT, INK, MARK, QUIET, SOFT, drawable, fence, plain, type MarkdownPiece } from "./core.ts";
-import { fromFence, kinds } from "./index.ts";
+import { ACCENT, GLINT, INK, MARK, QUIET, SOFT, drawable, plain, type MarkdownPiece } from "./core.ts";
+import { fromFence } from "./index.ts";
 import { pinout } from "./pinout.ts";
 
 const STILL = [
@@ -21,9 +21,8 @@ const STILL = [
 const entry = entryOf("pinout");
 const SOURCE = entry.source;
 const INFO = fenceOf(entry).split("\n")[0].slice(3);
-// What the fence draws: through fromFence() once index.ts names the figure, until then its options read as a fence
-// reads them.
-const fenced = (info: string, body: string) => (Object.hasOwn(kinds, "pinout") ? fromFence(info, body) : pinout(body, fence(info).options));
+// What the fence draws.
+const fenced = (info: string, body: string) => fromFence(info, body);
 
 // Every frame at these times is its full size, a row of cols characters each, every one drawable.
 function wellDrawn(p: MarkdownPiece, times: number[]) {

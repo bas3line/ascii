@@ -91,7 +91,7 @@ export function Markdown(props: MarkdownProps) {
   );
 }
 
-// A component for one figure: <Headline> is <Markdown kind="headline">. One is added here as each figure is built.
+// A component for one figure: <Headline> is <Markdown kind="headline">.
 function named(kind: Kind, name: string) {
   const Named = (props: FigureProps) => <Markdown {...props} kind={kind} />;
   Named.displayName = name;
@@ -100,5 +100,41 @@ function named(kind: Kind, name: string) {
 
 // lettering
 export const Headline = named("headline", "Headline");
+export const Typing = named("typing", "Typing");
+export const Flap = named("flap", "Flap");
+export const Marquee = named("marquee", "Marquee");
+
+// ornaments
+export const Divider = named("divider", "Divider");
+export const Confetti = named("confetti", "Confetti");
+export const Solid = named("solid", "Solid");
+export const Say = named("say", "Say");
+export const Orbit = named("orbit", "Orbit");
+
+// machines
+export const Sequence = named("sequence", "Sequence");
+export const Git = named("git", "Git");
+export const Railroad = named("railroad", "Railroad");
+export const Logic = named("logic", "Logic");
+
+// inside a system
+export const Flame = named("flame", "Flame");
+export const Bits = named("bits", "Bits");
+export const Pinout = named("pinout", "Pinout");
+export const Schema = named("schema", "Schema");
+
+// tokens
+export const Qr = named("qr", "Qr");
+export const Sigil = named("sigil", "Sigil");
+export const Stamp = named("stamp", "Stamp");
+export const Ticket = named("ticket", "Ticket");
+
+// games
+export const Chess = named("chess", "Chess");
+export const Bracket = named("bracket", "Bracket");
+export const Sprite = named("sprite", "Sprite");
+
+// places
+export const World = named("world", "World");
 
 export type { Common, FenceOptions, Kind };

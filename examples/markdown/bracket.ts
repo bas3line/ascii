@@ -3,7 +3,7 @@
  * draws on to the next names, the winners' lines heavy; then a glint runs the
  * champion's line every 6 seconds while it is in view.
  */
-import { bracket } from "../../src/markdown/bracket.ts";
+import { bracket } from "../../src/markdown/index.ts";
 
 export default bracket(
   `block slim round bold

@@ -4,8 +4,8 @@ import { test } from "node:test";
 import { svg } from "../svg.ts";
 import { entryOf } from "./catalog.ts";
 import { ACCENT, INK, QUIET, SOFT, fence, plain, type MarkdownPiece } from "./core.ts";
-import { FLAPS, flap, type FlapOptions } from "./flap.ts";
-import { fromFence, kinds } from "./index.ts";
+import { FLAPS, flap } from "./flap.ts";
+import { fromFence } from "./index.ts";
 
 const SOURCE = entryOf("flap").source;
 const STILL = [
@@ -15,8 +15,8 @@ const STILL = [
   "│V│0│.│5│ │G│A│T│E│ │N│P│M│",
   "└─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘",
 ].join("\n");
-// What a fence draws: through fromFence() once index.ts lists flap, and through fence()'s options until then.
-const drawn = (info: string, body: string) => (Object.hasOwn(kinds, "flap") ? fromFence(info, body) : flap(body, fence(info).options as FlapOptions));
+// What a fence draws.
+const drawn = (info: string, body: string) => fromFence(info, body);
 const toned = (p: MarkdownPiece, t: number) => {
   const color = new Uint8Array(p.meta.cols * p.meta.rows);
   const text = p.default()(t, { paper: true, color });

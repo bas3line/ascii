@@ -2,7 +2,7 @@
  * stamp: "approved" in slim banner letters in a double border, who and when
  * under it. Its shadow darkens, it lands with a jolt and its wear settles in.
  */
-import { stamp } from "../../src/markdown/stamp.ts";
+import { stamp } from "../../src/markdown/index.ts";
 
 export default stamp(`
   approved

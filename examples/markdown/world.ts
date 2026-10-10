@@ -5,7 +5,7 @@
  * sfo to sin and from iad to fra, and sfo beacons, every 2 seconds while it
  * is in view.
  */
-import { world } from "../../src/markdown/world.ts";
+import { world } from "../../src/markdown/index.ts";
 
 export default world(
   `

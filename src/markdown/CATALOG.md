@@ -1217,8 +1217,8 @@ And for drawing one:
   figure picks for lanes, pieces and inks (git's lanes, confetti, sprite
   letters, the stamp's `tone`), never a verdict. Tones' colours, frames,
   `box()`, `clean()`, `drawable()`, `linesOf()`, `wrap()`, `commas()`,
-  `num()`, `amount()`, `fence()`, `progress()`, `shown()`, `GLINT_SECONDS`,
-  `plain()` and `asciiOf()` are there for every figure.
+  `fence()`, `progress()`, `shown()`, `GLINT_SECONDS`, `plain()` and
+  `asciiOf()` are there for every figure.
 - A body that sizes itself past `WIDEST` (160) fails, naming the columns it
   needs, rather than losing what is past them.
 

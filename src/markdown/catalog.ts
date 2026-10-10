@@ -272,7 +272,7 @@ const entries: Omit<Entry, "group">[] = [
     kind: "world",
     about: "a world map with pins and routes",
     for: ["readme", "docs"],
-    moves: "the land resolves, the pins drop in, then the here pin pulses",
+    moves: "the land resolves, pins drop in, the here pin pulses and a dot flies each route",
     options: { title: "regions", here: "sfo" },
     source: 'sfo "us west"\niad "us east"\nfra "eu central"\nsin "asia"',
   },

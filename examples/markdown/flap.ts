@@ -3,7 +3,7 @@
  * letter, left to right and row after row, clacking down in the accent, then
  * the sign holds.
  */
-import { flap } from "../../src/markdown/flap.ts";
+import { flap } from "../../src/markdown/index.ts";
 
 export default flap(`
   now boarding

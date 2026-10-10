@@ -4,12 +4,12 @@ import { test } from "node:test";
 import { svg } from "../svg.ts";
 import { entryOf } from "./catalog.ts";
 import { ACCENT, INK, SOFT, drawable, fence, plain, type MarkdownPiece } from "./core.ts";
-import { fromFence, kinds } from "./index.ts";
-import { QR_VERSIONS, encodeQr, qr, qrCapacity, qrEcc, qrFormatBits, qrVersionBits, type QrLevel, type QrOptions } from "./qr.ts";
+import { fromFence } from "./index.ts";
+import { QR_VERSIONS, encodeQr, qr, qrCapacity, qrEcc, qrFormatBits, qrVersionBits, type QrLevel } from "./qr.ts";
 
 const SOURCE = entryOf("qr").source;
-// A fence's figure: through fromFence() once qr is one of index.ts's kinds, and through fence() and qr() until then.
-const viaFence = (info: string, body: string): MarkdownPiece => (Object.hasOwn(kinds, "qr") ? fromFence(info, body) : qr(body, fence(info).options as QrOptions));
+// A fence's figure.
+const viaFence = (info: string, body: string): MarkdownPiece => fromFence(info, body);
 
 // The catalog's example, as Apple's Core Image reader decoded it from the SVG's light, dark and inverted renders.
 const STILL = [

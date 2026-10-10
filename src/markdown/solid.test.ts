@@ -6,7 +6,7 @@ import { group, render3d, torus } from "../kit/shapes3d.ts";
 import { svg } from "../svg.ts";
 import { entryOf } from "./catalog.ts";
 import { ACCENT, INK, SOFT, drawable, fence, plain, type MarkdownPiece } from "./core.ts";
-import { fromFence, kinds } from "./index.ts";
+import { fromFence } from "./index.ts";
 import { SOLID_SHAPES, solid } from "./solid.ts";
 
 // What the kit's renderer draws for a turntable torus at its rest angle, 32 by 11, its unreached rows cut, and the
@@ -54,7 +54,7 @@ test("solid: the catalog's example draws the kit's torus at rest over its captio
   assert.equal(p.says, "solid: a torus turning, ascii.rest.");
 });
 
-test("solid: through fromFence(), once index.ts has it", { skip: !Object.hasOwn(kinds, "solid") && "index.ts does not list solid yet" }, () => {
+test("solid: through fromFence()", () => {
   assert.equal(plain(fromFence("ascii solid", SOURCE)), STILL);
 });
 

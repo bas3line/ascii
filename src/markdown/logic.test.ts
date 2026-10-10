@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { svg } from "../svg.ts";
 import { entryOf, fenceOf } from "./catalog.ts";
-import { ACCENT, INK, QUIET, SOFT, drawable, fence, plain, type MarkdownPiece } from "./core.ts";
-import { fromFence, kinds } from "./index.ts";
+import { ACCENT, INK, QUIET, SOFT, drawable, plain, type MarkdownPiece } from "./core.ts";
+import { fromFence } from "./index.ts";
 import { logic } from "./logic.ts";
 
 const STILL = [
@@ -23,7 +23,7 @@ const STILL = [
 
 const ENTRY = entryOf("logic");
 const INFO = fenceOf(ENTRY).split("\n")[0].slice(3);
-const fenced = (info: string, body: string) => (kinds.logic ? fromFence(info, body) : logic(body, fence(info).options));
+const fenced = (info: string, body: string) => fromFence(info, body);
 const bare = (source: string, options = {}) => plain(logic(source, { frame: "none", ...options }));
 
 function sane(p: MarkdownPiece, times: readonly number[] = [0, 0.2, 0.7, 1.2, 2.5, 2.65, 2.7, 4.1, 9.9]) {

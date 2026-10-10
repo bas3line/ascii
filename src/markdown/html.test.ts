@@ -194,7 +194,8 @@ test("the catalog: every figure described once, in group order, its fence as a r
     assert.doesNotMatch(c.about + c.moves + c.source + JSON.stringify(c.options), dashes);
   }
   assert.equal(fenceOf(catalog.find((c) => c.kind === "flame")!).split("\n")[0], '```ascii flame title="render, 48 ms" unit=ms');
-  // every figure built so far draws its catalog example
+  // every figure draws its catalog example
+  assert.deepEqual(Object.keys(kinds), [...KINDS]);
   for (const kind of Object.keys(kinds)) {
     const e = catalog.find((c) => c.kind === kind)!;
     assert.doesNotThrow(() => make(kind, e.source, e.options), kind);

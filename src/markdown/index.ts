@@ -19,6 +19,30 @@ import { show } from "../kit/recipes/checks.ts";
 import { KINDS, fence, plain, type Common, type FenceOptions, type Kind, type MarkdownPiece } from "./core.ts";
 import { figure, paint, type PaintOptions } from "./html.ts";
 import { headline } from "./headline.ts";
+import { typing } from "./typing.ts";
+import { flap } from "./flap.ts";
+import { marquee } from "./marquee.ts";
+import { divider } from "./divider.ts";
+import { confetti } from "./confetti.ts";
+import { solid } from "./solid.ts";
+import { say } from "./say.ts";
+import { orbit } from "./orbit.ts";
+import { sequence } from "./sequence.ts";
+import { git } from "./git.ts";
+import { railroad } from "./railroad.ts";
+import { logic } from "./logic.ts";
+import { flame } from "./flame.ts";
+import { bits } from "./bits.ts";
+import { pinout } from "./pinout.ts";
+import { schema } from "./schema.ts";
+import { qr } from "./qr.ts";
+import { sigil } from "./sigil.ts";
+import { stamp } from "./stamp.ts";
+import { ticket } from "./ticket.ts";
+import { chess } from "./chess.ts";
+import { bracket } from "./bracket.ts";
+import { sprite } from "./sprite.ts";
+import { world } from "./world.ts";
 
 export * from "./core.ts";
 export { GROUP_TITLES, catalog, entryOf, fenceOf, type Entry, type Place } from "./catalog.ts";
@@ -26,16 +50,73 @@ export { STYLE, addStyle, figure, html, paint, spans, type PaintOptions } from "
 
 // lettering
 export { headline, type HeadlineData, type HeadlineOptions } from "./headline.ts";
+export { typing, type TypingData, type TypingOptions } from "./typing.ts";
+export { FLAPS, flap, type FlapData, type FlapOptions } from "./flap.ts";
+export { marquee, type MarqueeData, type MarqueeOptions } from "./marquee.ts";
+
+// ornaments
+export { divider, DIVIDER_STYLES, type DividerData, type DividerOptions, type DividerStyle } from "./divider.ts";
+export { confetti, type ConfettiData, type ConfettiOptions } from "./confetti.ts";
+export { solid, SOLID_SHAPES, SOLID_TEXTURES, type SolidData, type SolidOptions, type SolidShape } from "./solid.ts";
+export { say, CREATURES, type Balloon, type Creature, type SayData, type SayOptions } from "./say.ts";
+export { orbit, type OrbitData, type OrbitOptions } from "./orbit.ts";
+
+// machines
+export { sequence, type SequenceData, type SequenceMessage, type SequenceOptions } from "./sequence.ts";
+export { git, type GitData, type GitStep, type GitOptions } from "./git.ts";
+export { railroad, type RailroadData, type RailroadOptions } from "./railroad.ts";
+export { logic, type LogicData, type LogicOptions } from "./logic.ts";
+
+// inside a system
+export { flame, type FlameData, type FlameOptions } from "./flame.ts";
+export { bits, type BitsData, type BitsOptions } from "./bits.ts";
+export { pinout, type PinoutData, type PinoutOptions } from "./pinout.ts";
+export { schema, type SchemaData, type SchemaOptions } from "./schema.ts";
+
+// tokens
+export { qr, encodeQr, qrCapacity, qrEcc, qrFormatBits, qrVersionBits, QR_VERSIONS, type QrData, type QrOptions, type QrLevel, type QrCode } from "./qr.ts";
+export { sigil, walkOf, SIGIL_FIELD, type SigilData, type SigilOptions } from "./sigil.ts";
+export { stamp, type StampData, type StampOptions, type StampTone } from "./stamp.ts";
+export { ticket, type TicketData, type TicketOptions } from "./ticket.ts";
+
+// games
+export { chess, type ChessData, type ChessOptions } from "./chess.ts";
+export { bracket, type BracketData, type BracketOptions } from "./bracket.ts";
+export { sprite, PIXELS, type SpriteData, type SpriteOptions } from "./sprite.ts";
+
+// places
+export { world, AIRPORTS, type WorldData, type WorldPlace, type WorldOptions } from "./world.ts";
 
 /** What every figure is: a fence's body, or its data, and options, to a piece. */
 export type Maker = (source: string, options?: Common & FenceOptions) => MarkdownPiece;
 
-/**
- * Every figure by name, as a fence names it: make(), fromFence() and the remark plugin find them here. A figure is
- * added as it is built; the catalog describes every one in GROUPS.
- */
-export const kinds: Readonly<Partial<Record<Kind, Maker>>> = {
+/** Every figure by name, as a fence names it: make(), fromFence() and the remark plugin find them here. */
+export const kinds: Readonly<Record<Kind, Maker>> = {
   headline: headline as Maker,
+  typing: typing as Maker,
+  flap: flap as Maker,
+  marquee: marquee as Maker,
+  divider: divider as Maker,
+  confetti: confetti as Maker,
+  solid: solid as Maker,
+  say: say as Maker,
+  orbit: orbit as Maker,
+  sequence: sequence as Maker,
+  git: git as Maker,
+  railroad: railroad as Maker,
+  logic: logic as Maker,
+  flame: flame as Maker,
+  bits: bits as Maker,
+  pinout: pinout as Maker,
+  schema: schema as Maker,
+  qr: qr as Maker,
+  sigil: sigil as Maker,
+  stamp: stamp as Maker,
+  ticket: ticket as Maker,
+  chess: chess as Maker,
+  bracket: bracket as Maker,
+  sprite: sprite as Maker,
+  world: world as Maker,
 };
 
 /**

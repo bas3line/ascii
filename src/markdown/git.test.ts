@@ -4,9 +4,9 @@ import { test } from "node:test";
 import { fnv1a32 } from "../kit/core.ts";
 import { svg } from "../svg.ts";
 import { entryOf, fenceOf } from "./catalog.ts";
-import { ACCENT, GOOD, INK, MARK, WARN, drawable, fence, plain, type MarkdownPiece } from "./core.ts";
+import { ACCENT, GOOD, INK, MARK, WARN, drawable, plain, type MarkdownPiece } from "./core.ts";
 import { git } from "./git.ts";
-import { fromFence, kinds } from "./index.ts";
+import { fromFence } from "./index.ts";
 
 const STILL = [
   "╭─ feature branch ──────────────────────────────────────────╮",
@@ -23,7 +23,7 @@ const STILL = [
 
 const ENTRY = entryOf("git");
 const INFO = fenceOf(ENTRY).split("\n")[0].slice(3);
-const fenced = (info: string, body: string) => (kinds.git ? fromFence(info, body) : git(body, fence(info).options));
+const fenced = (info: string, body: string) => fromFence(info, body);
 // The lanes and words of a log, its frame left off.
 const bare = (source: string, options = {}) => plain(git(source, { frame: "none", ...options }));
 
