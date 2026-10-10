@@ -31,6 +31,12 @@ export interface Item {
 
 const lib = import.meta.glob<string>("../../../src/{types,mount,banner,svg}.ts", { eager: true, query: "?raw", import: "default" });
 const react = import.meta.glob<string>("../../../registry/*.tsx", { eager: true, query: "?raw", import: "default" });
+// The kit's modules, without their tests: kit/index.ts, every module it exports and the recipes, laid out as in the library.
+const kit = import.meta.glob<string>(["../../../src/kit/*.ts", "../../../src/kit/recipes/*.ts", "!../../../src/kit/**/*.test.ts"], {
+  eager: true,
+  query: "?raw",
+  import: "default",
+});
 
 // Relative imports without their .ts or .tsx: import { mount } from "./mount".
 const strip = (source: string) => source.replace(/((?:from\s+|import\s*\(\s*)["']\.{1,2}\/[^"']*?)\.tsx?(["'])/g, "$1$2");
@@ -75,6 +81,17 @@ export const items: Item[] = [
   ),
   item("banner", "banner", "banner(): any text in block letters as a piece, every part of it an option.", [["src/banner.ts", src("banner.ts"), "registry:lib"]], ["core"]),
   item("svg", "svg", "svg() and bannerSvg(): any piece, or a banner with a tagline and a logo, as an animated SVG.", [["src/svg.ts", src("svg.ts"), "registry:lib"]], ["banner"]),
+  // The kit imports the piece contract (types.ts), which core brings, and its widgets banner().
+  item(
+    "kit",
+    "kit",
+    "The kit for making your own ascii art: recipes in one line, then fields, drawing, maths, 3D scenes, particles, effects, layouts, images, materials and SVGs.",
+    Object.keys(kit)
+      .sort()
+      .map((key): [string, string, FileType] => [key.replace("../../../", ""), kit[key], "registry:lib"]),
+    ["core", "banner"],
+    "The kit is in components/ascii/kit: import from ./kit/index. How to use it: https://ascii.rest/docs/kit/",
+  ),
   // The React components name react as an npm dependency, which a React project has already.
   { ...item("ascii", "Ascii", "<Ascii>: any piece in React and Next.js.", [["registry/ascii.tsx", reg("ascii.tsx"), "registry:component"]], ["core"]), dependencies: ["react"] },
   {
@@ -92,7 +109,7 @@ export const all: Item = {
   name: "all",
   type: "registry:item",
   title: "ascii.rest",
-  description: `Every piece, the banner, the SVG writer and the React components: ${pieces.length} pieces.`,
+  description: `Every piece, the banner, the SVG writer, the React components and the kit: ${pieces.length} pieces.`,
   files: [],
   registryDependencies: items.map((i) => url(i.name)),
 };

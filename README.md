@@ -26,7 +26,7 @@
 217 pieces for React, Next.js, Astro or plain HTML.<br>
 The banner above is drawn by ascii.rest: [make your own](https://ascii.rest/banner/).
 
-[ascii.rest](https://ascii.rest) · [docs](https://ascii.rest/docs/) · [install](#install) · [pieces](#pieces) · [contributing](CONTRIBUTING.md)
+[ascii.rest](https://ascii.rest) · [docs](https://ascii.rest/docs/) · [install](#install) · [make your own](#make-your-own) · [pieces](#pieces) · [contributing](CONTRIBUTING.md)
 
 [![by @bas3line](https://img.shields.io/badge/by-%40bas3line-181717?logo=github&logoColor=white)](https://github.com/bas3line)
 [![CI](https://github.com/bas3line/ascii/actions/workflows/ci.yml/badge.svg)](https://github.com/bas3line/ascii/actions/workflows/ci.yml)
@@ -67,6 +67,33 @@ npx ascii.rest add ascii donut
 ```
 
 Every way, with every option, is in [the docs](https://ascii.rest/docs/).
+
+## Make your own
+
+`ascii.rest/kit` makes a piece of your own in one line, by name, with options in words and no maths:
+
+```ts
+import { clockFace, plasma, sea, spinning, torus } from "ascii.rest/kit";
+
+export const ocean = sea({ palette: "ocean" });
+export const donut = spinning(torus(), { speed: "slow" });
+export const hot = plasma({ palette: "fire" }).mask("HOT");
+export default clockFace();
+```
+
+There are [looks](https://ascii.rest/docs/kit-looks/) (a sea, a plasma, aurora, flames, rain, a galaxy), [motions](https://ascii.rest/docs/kit-motion/) that set anything spinning, bouncing or floating, and [widgets](https://ascii.rest/docs/kit-widgets/) (a clock, a progress bar, a gauge, a chart). When no recipe makes your thing, say what it is made of. A glass of water is a cup, made of glass, with water inside and bubbles rising, written to an SVG for your README:
+
+```ts
+import { writeFileSync } from "node:fs";
+import { svg } from "ascii.rest/svg";
+import { bubbles, cup, emit, glass, inside, picture, shape, water } from "ascii.rest/kit";
+
+const drink = inside(cup(), { fill: "half" });
+const glassOfWater = picture([shape(cup(), glass()), shape(drink, water()), emit(bubbles(), { inside: drink })], { name: "glass of water", cols: 32, rows: 16 });
+writeFileSync("glass.svg", svg(glassOfWater));
+```
+
+Everything the kit makes is a normal piece, so it plays in React, on a page, as an SVG and in a terminal. The recipes are made of parts you can use yourself, all the way down to the maths: [fields](https://ascii.rest/docs/kit-field/), [drawing](https://ascii.rest/docs/kit-draw/), [maths](https://ascii.rest/docs/kit-math/), [3D scenes](https://ascii.rest/docs/kit-shapes3d/), [particles](https://ascii.rest/docs/kit-particles/), [effects](https://ascii.rest/docs/kit-fx/), [layouts](https://ascii.rest/docs/kit-compose/), [images](https://ascii.rest/docs/kit-image/), [materials](https://ascii.rest/docs/kit-materials/) and [SVG drawings](https://ascii.rest/docs/kit-vector/). Start with [the kit](https://ascii.rest/docs/kit/) in the docs, or the [examples](examples/kit/). `npx ascii.rest play sea.ts --watch` plays a file's piece in your terminal as you write it, and `npx ascii.rest svg sea.ts --out sea.svg` writes its SVG.
 
 ## React and Next.js
 

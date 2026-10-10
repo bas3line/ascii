@@ -216,6 +216,12 @@ export interface SvgOptions {
   label?: string;
   /** The piece's option overrides. */
   options?: Options;
+  /**
+   * The most bytes the SVG should come to: 1000000, about a megabyte, which a README loads quickly. Past it, svg() samples
+   * fewer frames a second (down to 6, unless `fps` was given), then folds a coloured piece's colours to 16, and if it is
+   * still bigger, says why on the console: its loop, its size and its colours. false keeps it as it is, whatever its size.
+   */
+  budget?: number | false;
 }
 
 const INK = { light: "#1f2328", dark: "#f0f6fc" };
@@ -236,8 +242,28 @@ const isDark = (css: string) => {
   return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] < 128;
 };
 
-/** A piece as a part, in the colours of `dark` or light, or of its own ground where it has one. */
-function pieceLoop(piece: Piece, o: SvgOptions): Loop {
+// A palette folded to at most `most` colours, the two that look most alike merged first, the earlier kept: the colours
+// left, and each old index's new one.
+function fold(palette: readonly string[], most: number): { palette: string[]; map: Uint8Array } {
+  const rgb = palette.map((c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)));
+  const into = palette.map((_, i) => i);
+  const alive = palette.map(() => true);
+  const apart = (a: number[], b: number[]) => 0.3 * (a[0] - b[0]) ** 2 + 0.59 * (a[1] - b[1]) ** 2 + 0.11 * (a[2] - b[2]) ** 2;
+  for (let left = palette.length; left > most; left--) {
+    let best = Infinity, keep = -1, drop = -1;
+    for (let i = 0; i < palette.length; i++)
+      for (let j = i + 1; j < palette.length; j++)
+        if (alive[i] && alive[j] && apart(rgb[i], rgb[j]) < best) (best = apart(rgb[i], rgb[j])), (keep = i), (drop = j);
+    alive[drop] = false;
+    for (let i = 0; i < into.length; i++) if (into[i] === drop) into[i] = keep;
+  }
+  const kept = palette.map((_, i) => i).filter((i) => alive[i]);
+  const at = new Map(kept.map((c, k) => [c, k]));
+  return { palette: kept.map((i) => palette[i]), map: Uint8Array.from(into, (i) => at.get(i)!) };
+}
+
+/** A piece as a part, in the colours of `dark` or light, or of its own ground where it has one. `most` folds its colours. */
+function pieceLoop(piece: Piece, o: SvgOptions & { most?: number }): Loop {
   const { meta } = piece;
   hex(o.ink, "ink");
   // On its own ground it is drawn for that ground, as mount() draws it, whatever the page.
@@ -246,13 +272,17 @@ function pieceLoop(piece: Piece, o: SvgOptions): Loop {
   const frame = piece.default(options);
   // One buffer for every frame, as a piece writes only its inked cells: the README SVGs have always been made this way.
   const color = new Uint8Array(meta.cols * meta.rows);
-  const at = (t: number) => ({ text: frame(t, { paper: !dark, color: meta.palette ? color : undefined }), color: color.slice() });
+  const folded = meta.palette && o.most !== undefined && meta.palette.length > o.most ? fold(meta.palette, o.most) : null;
+  const at = (t: number) => {
+    const text = frame(t, { paper: !dark, color: meta.palette ? color : undefined });
+    return { text, color: folded ? Uint8Array.from(color, (c) => folded.map[c] ?? c) : color.slice() };
+  };
   const loop = loopOf(piece, options);
   const every = o.seconds ?? loop.every;
   return {
     cols: meta.cols,
     rows: meta.rows,
-    palette: meta.palette ?? [o.ink ?? INK[dark ? "dark" : "light"]],
+    palette: folded?.palette ?? meta.palette ?? [o.ink ?? INK[dark ? "dark" : "light"]],
     every: every > 0 ? every : 1,
     from: o.from ?? loop.from,
     at: every > 0 ? at : () => at(o.from ?? 0),
@@ -261,8 +291,11 @@ function pieceLoop(piece: Piece, o: SvgOptions): Loop {
   };
 }
 
+// The pieces svg() has said have no loop, so it says so once each.
+const warned = new Set<string>();
+
 // A piece's frames, on its own ground where it has one, as a scene does: drawn over the page, its picture would change.
-const pieceArt = (piece: Piece, o: SvgOptions, prefix = ""): Part => {
+const pieceArt = (piece: Piece, o: SvgOptions & { most?: number }, prefix = ""): Part => {
   const p = part({ ...pieceLoop(piece, o), cell: piece.meta.cell ?? 2 }, prefix);
   const ground = piece.meta.ground;
   return ground ? { ...p, body: `<rect width="${p.width}" height="${p.height}" fill="${attr(ground)}"/>${p.body}` } : p;
@@ -270,10 +303,47 @@ const pieceArt = (piece: Piece, o: SvgOptions, prefix = ""): Part => {
 
 /**
  * A piece as an animated SVG, on its own ground if it has one. Its classes are bare, so to inline two in one HTML page,
- * give one a prefix with namespaced(). It throws for an `ink` that isn't #rrggbb or an `fps` that isn't 1 to 60.
+ * give one a prefix with namespaced(). Kept within `budget`, about a megabyte by default, by sampling fewer frames a
+ * second and then folding its colours, and if it can't be, it says why on the console. It throws for an `ink` that
+ * isn't #rrggbb or an `fps` that isn't 1 to 60.
  */
 export function svg(piece: Piece, options: SvgOptions = {}): string {
-  return wrap(pieceArt(piece, options), options.label ?? `${piece.meta.name}, in ascii, from ascii.rest`, num(options.scale, "scale"));
+  const label = options.label ?? `${piece.meta.name}, in ascii, from ascii.rest`, scale = num(options.scale, "scale");
+  const budget = options.budget === false ? Infinity : (num(options.budget, "budget") ?? 1_000_000);
+  // A piece that moves with no loop of its own plays 4 seconds and jumps back to its start: said once a piece, so a
+  // README's SVG isn't left to jump without anyone knowing why.
+  const { meta } = piece;
+  const key = LOOPS[meta.category];
+  const guessed = meta.fps > 0 && !meta.loop && !(piece as Partial<BannerPiece>).motion && !(key && typeof { ...meta.options, ...options.options }[key] === "number");
+  if (guessed && options.seconds === undefined && !warned.has(meta.name)) {
+    warned.add(meta.name);
+    console.warn(`ascii.rest: ${meta.name} moves but has no loop, so its SVG plays its first 4 seconds and jumps back: give it one (a recipe's period, row(), column() or grid()'s loop, or repeat()), or svg's seconds`);
+  }
+  const make = (o: SvgOptions & { most?: number }) => wrap(pieceArt(piece, o), label, scale);
+  let out = make(options);
+  if (out.length <= budget) return out;
+  // Fewer frames a second first, unless asked for: the motion steps more coarsely but plays the same loop.
+  const tried: string[] = [];
+  if (options.fps === undefined)
+    for (const fps of [10, 8, 6]) {
+      out = make({ ...options, fps });
+      if (out.length <= budget) return out;
+    }
+  if (options.fps === undefined) tried.push("6 frames a second");
+  // Then a coloured piece's colours, 16 at most: a gradient keeps its look in fewer steps.
+  const colours = piece.meta.palette?.length ?? 0;
+  if (colours > 16) {
+    out = make({ ...options, ...(options.fps === undefined ? { fps: 6 } : {}), most: 16 });
+    if (out.length <= budget) return out;
+    tried.push("16 colours");
+  }
+  const loop = options.seconds ?? loopOf(piece, { ...piece.meta.options, ...options.options }).every;
+  console.warn(
+    `ascii.rest: the SVG of ${piece.meta.name} is ${(out.length / 1e6).toFixed(1)} MB, over its budget of ${(budget / 1e6).toFixed(1)} MB` +
+      `${tried.length ? ` even at ${tried.join(" and ")}` : ""}: its loop is ${+loop.toFixed(2)} s, it is ${piece.meta.cols} by ${piece.meta.rows}` +
+      `${colours ? ` in ${colours} colours` : ""}. A shorter loop (period, or svg's seconds) or a smaller piece makes it smaller; { budget: false } keeps it as it is.`,
+  );
+  return out;
 }
 
 export interface BannerSvgOptions {

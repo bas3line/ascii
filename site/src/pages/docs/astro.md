@@ -6,6 +6,11 @@ description: Add an animation or a text banner to an Astro page, with its first 
 
 Two components add ascii art to an Astro page. `<Ascii>` plays a **piece**, which is one animation, such as `donut`. `<Banner>` draws any text you give it in big block letters.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/astro.mp4" poster="https://cdn.ascii.rest/videos/astro.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>npm install, both components in src/pages/index.astro, npm run dev, then the page: first the frame in the HTML, then the art moving once the script runs.</figcaption>
+</figure>
+
 1. Install the package in your Astro project:
 
    ```sh

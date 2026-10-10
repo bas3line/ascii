@@ -1,10 +1,17 @@
 ---
 layout: ../../layouts/Docs.astro
 title: introduction
-description: What ascii.rest is, five ways to use it, and what its 217 pieces are.
+description: What ascii.rest is, the ways to use it, and what its 217 pieces are.
 ---
 
 ascii.rest is a free, open-source library of animated ascii art: 217 small animations, called pieces, and block-letter banners for any text. You can play them on a web page, in a GitHub README or in a terminal.
+
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/intro.mp4" poster="https://cdn.ascii.rest/videos/intro.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>What ascii.rest is: a library of 217 pieces, two React components, a piece of your own made with the kit, the banner maker and image to ascii in the browser, and one piece in React, on a plain page, in a README and in a terminal.</figcaption>
+</figure>
+
+To make your own, [the kit](/docs/kit/) turns one line into a piece, with no maths: `sea({ palette: "ocean" })`, `spinning(torus())`, `clockFace()`. When you want more, its parts go all the way down: a formula, a 3D scene, snow, an SVG, an effect on any piece.
 
 ascii.rest is MIT licensed. You can use and change it in any project, free or paid.
 
@@ -68,6 +75,7 @@ Pick the row that fits your project. Each page has a full example.
 | an SVG | a GitHub README, or anywhere scripts can't run | [github readme](/docs/readme/), [svg](/docs/svg/) |
 | the terminal | a splash screen or a banner for your CLI | [terminal](/docs/terminal/) |
 | your own image | your logo or a photo as animated ascii, made in your browser, for a page or a README | [image to ascii](/docs/images/) |
+| the kit | your own ascii art in one line: looks, motions and widgets by name, then fields, 3D scenes, particles, effects, layouts, images and SVGs | [the kit](/docs/kit/) |
 
 ## Browse the pieces
 
@@ -130,7 +138,12 @@ If your agent can't read web pages, paste these rules into its prompt.
 - Size a text piece with `font-size`. Size a coloured piece with `width` (in React, in `style`, not a class), and never set its height.
 - Colours are six-digit hex, like `#f97316`. `#fff` and `orange` don't work.
 - `banner()` throws on an option it can't take. `<Banner>` and `<ascii-banner>` then draw nothing and `console.warn` why.
-- The package has no function that turns an image into ascii. That is the page https://ascii.rest/make/, which runs in a browser.
+- To turn an image into ascii in code, use `fromImage()` from `ascii.rest/kit`: any image in a browser, PNG in Node. The page https://ascii.rest/make/ does the same with no code.
+- To make a new piece, use `ascii.rest/kit` (version 0.4.0 or later). Start with a recipe, one call by name with options in words: looks such as `sea({ palette: "ocean" })` or `plasma().mask("HI")`, motions such as `spinning(torus())` or `floating(heart())`, widgets such as `clockFace()`, `gauge({ label: "cpu", value: "64%" })` or `progressBar()`. Only when no recipe fits, go down to `field()`, `scene()`, `particles()`, `picture()`, `fromSvg()`, effects such as `glint()`, layouts such as `grid()`, or `piece()` to draw on a grid.
+- Everything the kit makes is a normal piece: pass it to `<Ascii piece={...}>`, `mount()`, `svg()` or `play()`. It also chains: `stars().behind(pulsing(heart())).named("love")`.
+- Kit options take words: `speed: "slow"`, `amount: "subtle"`, `every: "rarely"`, a look's `scale: "large"`. Wherever it takes colours it takes a palette's name, such as `"ocean"`, `"fire"` or `"cola"`, as well as `#rrggbb`. A misspelt option or word throws with the ones it takes and a "did you mean".
+- The kit's `barChart`, `gauge`, `sparkline`, `marquee`, `typewriter`, `heart` and others share names with library pieces. In one file, `import * as lib from "ascii.rest/pieces"` and use `lib.gauge` beside the kit's `gauge()`.
+- In the kit, a frame should depend only on `t`. Use `random(seed)`, never `Math.random()`, and give `period` or `loop` so an SVG loops. `npx ascii.rest play file.ts --watch` plays a file's default export in the terminal as you edit it.
 
 ## Next
 

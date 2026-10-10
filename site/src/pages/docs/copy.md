@@ -7,7 +7,7 @@ description: Copy the TypeScript of any piece, the banner or the React component
 You can copy ascii.rest's source into your project instead of installing it from npm. The files become yours: change any line, and nothing updates unless you ask.
 
 <figure class="video">
-  <video src="https://cdn.ascii.rest/videos/copy.mp4" poster="https://cdn.ascii.rest/videos/copy.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <video src="https://cdn.ascii.rest/videos/copy-2.mp4" poster="https://cdn.ascii.rest/videos/copy-2.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
   <figcaption>Adding a piece with shadcn and with npx ascii.rest add, then using and changing the copied files.</figcaption>
 </figure>
 
@@ -91,7 +91,7 @@ If a file is already there and the same, shadcn skips it. If yours is different,
 
 ## Add files without shadcn
 
-Use this in any project. You need Node 18.3 or newer, and ascii.rest 0.3.0 or later. You don't need shadcn or a `components.json`.
+Use this in any project. You need Node 18.3 or newer, and ascii.rest 0.4.0 or later. You don't need shadcn or a `components.json`.
 
 1. Open a terminal in your project's root folder.
 2. Run `npx ascii.rest add` with the items you want, separated by spaces:
@@ -198,6 +198,7 @@ Each item brings the items it needs. Adding `ascii-banner` also adds `ascii`, `b
 | `banner` | `banner.ts`: `banner()`, which turns any text into a piece in block letters | `core` |
 | `ascii-banner` | `ascii-banner.tsx`: the `<Banner>` component for React and Next.js | `ascii`, `banner`, `core` |
 | `svg` | `svg.ts`: `svg()` and `bannerSvg()`, which turn a piece or a banner into an animated SVG | `banner`, `core` |
+| `kit` | `kit/`: the tools for making your own pieces, from the recipes in `kit/recipes/` to `field()` and `scene()`, imported from `kit/index`. See [make your own](/docs/kit/). | `banner`, `core` |
 | a piece's name, like `donut` | `pieces/donut.ts`: that one piece | `core` |
 | `all` | every file above and every piece | everything |
 
@@ -217,6 +218,7 @@ components/ascii/
 ├── banner.ts           banner(): any text in block letters (banner)
 ├── ascii-banner.tsx    <Banner> (ascii-banner)
 ├── svg.ts              svg() and bannerSvg() (svg)
+├── kit/                the kit: index.ts, its modules and recipes/ (kit)
 └── pieces/
     ├── donut.ts
     └── night-coast.ts

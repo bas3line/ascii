@@ -7,7 +7,7 @@ description: Play any piece in your terminal, print your text as a banner, or ad
 ascii.rest works in a terminal as well as on a web page. You can play any piece with one command, print your text in big block letters, or show an animation when your own command-line tool starts. You need Node 18.3 or newer, and nothing else.
 
 <figure class="video">
-  <video src="https://cdn.ascii.rest/videos/terminal.mp4" poster="https://cdn.ascii.rest/videos/terminal.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <video src="https://cdn.ascii.rest/videos/terminal-2.mp4" poster="https://cdn.ascii.rest/videos/terminal-2.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
   <figcaption>npx ascii.rest donut, the banner command, and a splash screen for a CLI made with play().</figcaption>
 </figure>
 

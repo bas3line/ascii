@@ -7,7 +7,7 @@ description: Add animated ascii art and text banners to any web page with one sc
 Add one script tag to an HTML page and you get two new tags. `<ascii-art>` plays a piece. `<ascii-banner>` draws your own text in big block letters.
 
 <figure class="video">
-  <video src="https://cdn.ascii.rest/videos/html.mp4" poster="https://cdn.ascii.rest/videos/html.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <video src="https://cdn.ascii.rest/videos/html-2.mp4" poster="https://cdn.ascii.rest/videos/html-2.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
   <figcaption>Both tags on a plain HTML page, with their attributes changed one at a time.</figcaption>
 </figure>
 
@@ -242,7 +242,9 @@ Any file that follows the piece contract plays in `<ascii-art>`. Put its URL in 
 
 `src` works like a link: a relative URL starts from the page's own. A file on another site must allow cross-origin requests (CORS).
 
-If the file can't load, the tag keeps what it showed before. The console logs `<ascii-art> could not load`, then the `src` you gave and the browser's reason.
+A file made with the [kit](/docs/kit/) plays too: its piece is its default export, `export default sea()`. Like any module a page loads, its imports must load in the browser, so build it with your bundler first.
+
+If the file can't load, or has no piece in it, the tag keeps what it showed before. The console logs `<ascii-art> could not load`, then the `src` you gave and the browser's reason.
 
 Every field of `meta` is in [Fill in its meta](/docs/pieces/#fill-in-its-meta). How to add colour is in [Draw it in colour](/docs/pieces/#draw-it-in-colour).
 
@@ -250,12 +252,12 @@ Every field of `meta` is in [Fill in its meta](/docs/pieces/#fill-in-its-meta). 
 
 `https://ascii.rest/ascii.js` always serves the newest version, so it can change without you doing anything. To stay on one version, load the same file from npm through jsDelivr, with an integrity hash. The browser then runs the file only if it matches the hash.
 
-1. Pick a version. `npm view ascii.rest version` prints the newest one, and [the package's versions on npm](https://www.npmjs.com/package/ascii.rest?activeTab=versions) lists them all. `<ascii-banner>` needs 0.3.0 or later.
+1. Pick a version. `npm view ascii.rest version` prints the newest one, and [the package's versions on npm](https://www.npmjs.com/package/ascii.rest?activeTab=versions) lists them all. `<ascii-banner>` needs 0.4.0 or later.
 
 2. Make the file's hash. Put your version in the URL:
 
    ```sh
-   curl -s https://cdn.jsdelivr.net/npm/ascii.rest@0.3.0/dist/ascii.js | openssl dgst -sha384 -binary | openssl base64 -A
+   curl -s https://cdn.jsdelivr.net/npm/ascii.rest@0.4.0/dist/ascii.js | openssl dgst -sha384 -binary | openssl base64 -A
    ```
 
 3. Put the same URL in the script tag, and paste the hash after `sha384-`:
@@ -263,7 +265,7 @@ Every field of `meta` is in [Fill in its meta](/docs/pieces/#fill-in-its-meta). 
    ```html
    <script
      type="module"
-     src="https://cdn.jsdelivr.net/npm/ascii.rest@0.3.0/dist/ascii.js"
+     src="https://cdn.jsdelivr.net/npm/ascii.rest@0.4.0/dist/ascii.js"
      integrity="sha384-PASTE-YOUR-HASH-HERE"
      crossorigin="anonymous"
    ></script>

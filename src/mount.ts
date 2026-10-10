@@ -26,6 +26,21 @@ import type { Env, Frame, Meta, Options, Piece } from "./types.ts";
  */
 export type MountOptions = Options & { fps?: number; motion?: boolean };
 
+const isPiece = (v: unknown): v is Piece =>
+  !!v && typeof v === "object" && !!(v as Piece).meta && typeof (v as Piece).meta === "object" && typeof (v as Piece).default === "function";
+
+/**
+ * The piece in a module a page imported, as <ascii-art src> imports one: its default export when that is a piece, as a
+ * kit file's `export default sea()` is, or else the module itself when it exports meta and a default function, as the
+ * library's pieces do. Throws, saying so, for a module with neither.
+ */
+export function pieceIn(mod: unknown, from: string): Piece {
+  const given = (mod as { default?: unknown } | null)?.default;
+  if (isPiece(given)) return given;
+  if (isPiece(mod)) return mod;
+  throw new Error(`ascii.rest: ${from} has no piece: export one as its default, export default sea(), or export meta and a default function`);
+}
+
 export function mount(el: HTMLElement, piece: Piece | Piece["default"], options: MountOptions = {}): () => void {
   const make = typeof piece === "function" ? piece : piece.default;
   const meta: Partial<Meta> = typeof piece === "function" ? {} : piece.meta;

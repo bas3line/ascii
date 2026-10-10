@@ -15,7 +15,7 @@ export const GET: APIRoute = () => {
   const lines = [
     "# ascii.rest",
     "",
-    `> Animated ascii art for web pages, READMEs and terminals: ${pieces.length} pieces, a banner for any text and an SVG writer, in TypeScript with no dependencies. npm install ascii.rest, one script tag, or the source copied in through a shadcn registry.`,
+    `> Animated ascii art for web pages, READMEs and terminals: ${pieces.length} pieces, a banner for any text, an SVG writer, and a kit (ascii.rest/kit) for making your own pieces in a few lines, in TypeScript with no dependencies. npm install ascii.rest, one script tag, or the source copied in through a shadcn registry.`,
     "",
     ...(rules ? ["## rules for AI coding agents", "", rules, ""] : []),
     ...DOCS.flatMap((section) => [`## ${section.label}`, "", ...section.pages.map((p) => `- [${p.title}](${SITE}${p.href}): ${about(p.href)}`), ""]),
