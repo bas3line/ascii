@@ -111,10 +111,9 @@ function seedOf(what: string, v: unknown, def: number): number {
   return v as number;
 }
 
-function charOf(what: string, v: unknown, def: string, many = false): string {
+function charOf(what: string, v: unknown, def: string): string {
   if (v === undefined) return def;
-  if (typeof v !== "string" || !v.length || (!many && v.length !== 1) || /[\u0000-\u001f\u007f-\u009f\ud800-\udfff]/.test(v))
-    fail(`${what} takes ${many ? "one or more printable characters" : "one printable character"}, not ${show(v)}`);
+  if (typeof v !== "string" || v.length !== 1 || /[\u0000-\u001f\u007f-\u009f\ud800-\udfff]/.test(v)) fail(`${what} takes one printable character, not ${show(v)}`);
   return v;
 }
 
@@ -875,7 +874,7 @@ export function cloud(o?: ShapeOpts<{ colors?: Colors }>): Cloud {
 
 /** A flame: round at the bottom and pointed at the top. Fire by default: shape(flame({ on: candle })). */
 export function flame(o?: ShapeOpts): Area {
-  return unitShape("flame", o, [], 0.55, { size: "small", at: "center" }, (px, py) => {
+  return unitShape("flame", o, [], 0.55, { size: "medium", at: "center" }, (px, py) => {
     if (py >= 0.2) return px * px + (py - 0.2) ** 2 <= 0.075;
     const k = (py + 0.5) / 0.7;
     return Math.abs(px) <= 0.274 * Math.pow(k, 1.4) * (1 + 0.15 * Math.sin(k * 3));
@@ -1468,14 +1467,17 @@ export function glass(o?: MaterialOptions & {
         cells.push(i), chars.push(y === floor + 1 ? code("_") : SPACE), roles.push(2);
       }
     }
-    // the streak: a column in from the left wall, down the upper part of the room
+    // the streak: a column in from the left wall, down the upper part of the room where it is wide, so a bottle's is
+    // down its body and not its neck
     const streak: number[] = [];
     const room = cav ?? c;
     if (highlight && room.x1 - room.x0 >= 5) {
       const h = room.y1 - room.y0;
+      let widest = 0;
+      for (let y = room.y0; y < room.y1; y++) if (room.left[y] >= 0) widest = Math.max(widest, room.right[y] - room.left[y] + 1);
       for (let y = room.y0 + Math.max(1, Math.round(h * 0.15)); y < room.y0 + Math.round(h * 0.7); y++) {
         const l = room.left[y];
-        if (l >= 0) streak.push(y * cols + l + 1);
+        if (l >= 0 && room.right[y] - l + 1 >= widest * 0.6) streak.push(y * cols + l + 1);
       }
     }
     return (t, pt) => {
@@ -2225,7 +2227,7 @@ export function material(draw: (cell: MaterialCell, t: number) => string | reado
   const p = optionsOf("material()", o, ["colors", "name", "steps", "period"]);
   const name = p.name ?? "material";
   if (typeof name !== "string" || !name) fail(`material.name takes a string, not ${show(name)}`);
-  const n = numberOf("material.steps", p.steps, typeof p.colors === "string" ? palettes[p.colors as PaletteName]?.dark.length ?? 1 : Array.isArray(p.colors) ? p.colors.length : isObject(p.colors) ? (p.colors as Duo).dark.length : 1, 1, 32);
+  const n = numberOf("material.steps", p.steps, stopsIn(p.colors), 1, 32);
   const colors = colorsOf("material.colors", p.colors, "ink", n);
   const period = p.period !== undefined ? periodOf("material.period", p.period, 4) : draw.length >= 2 ? Infinity : undefined;
   return makeMaterial(name, colors, period, (c) => {
