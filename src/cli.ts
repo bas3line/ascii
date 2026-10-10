@@ -9,7 +9,7 @@
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  */
 import { existsSync, mkdirSync, readFileSync, statSync, watch, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -283,9 +283,12 @@ async function mine(positionals: string[], values: { mono?: boolean; light?: boo
     if (played.interrupted) process.exitCode = 130;
     return;
   }
-  // Watching: each save stops the play and loads the file afresh; a key, Ctrl+C or --seconds ends it all.
+  // Watching: each save stops the play and loads the file afresh; a key, Ctrl+C or --seconds ends it all. Its folder is
+  // watched, not the file: most editors save by writing a new file and renaming it over the old one, and a watch on the
+  // file itself stays on the old one, so every save after the first would be missed.
   let controller = new AbortController(), changed = false, wake: (() => void) | null = null, version = 0;
-  const watcher = watch(path, () => {
+  const watcher = watch(dirname(path), (_, name) => {
+    if (name !== null && name !== basename(path)) return;
     changed = true;
     controller.abort();
     wake?.();
