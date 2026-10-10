@@ -30,7 +30,7 @@ import {
   speed,
   type Anchor,
 } from "./compose.ts";
-import { INK, Surface, gradient, piece, rgb, snapshot } from "./core.ts";
+import { INK, Surface, gradient, hex, piece, rgb, snapshot } from "./core.ts";
 
 // The checks scripts/check.ts makes of a frame, on paper and a dark page, in colour and as text: rows lines of cols
 // characters, colours inside the palette, and the same frame for the same t from a fresh player.
@@ -568,7 +568,91 @@ test("every option is checked when the piece is made, with an error that says wh
     [() => repeat("a", 0), /repeat takes a number of seconds above 0, not 0/],
     [() => freeze("a", Infinity), /freeze takes a number of seconds of 0 or more, not Infinity/],
     [() => named("a", " "), /named\(\) takes a name/],
+    [() => named("a", "two\nlines"), /named\(\) takes a name, one line such as "hello", not "two\\nlines"/],
+    [() => named("a", "a", { note: "one\ntwo" }), /named\(\)'s note takes one line saying what you see/],
     [() => over("a", "b", 3 as never), /over\(\) takes an object of options/],
   ];
   for (const [make, message] of bad) assert.throws(make, message);
+});
+
+test("past 64 colours, a thousand and more fold in well under a second, the first part's colours kept exactly", () => {
+  // 24 parts of 64 colours each, every fade its own: about 1,500 colours to fold to 64.
+  const swatch = (i: number) => {
+    const colors = gradient([hex([(i * 37) % 256, (i * 91) % 256, (i * 53) % 256]), hex([255 - ((i * 17) % 256), (i * 29) % 256, 255 - ((i * 71) % 256)])], 64);
+    return piece({ name: `swatch ${i}`, cols: 64, rows: 1, fps: 0, palette: colors }, (t, s) => colors.forEach((c, k) => s.set(k, 0, "#", c)));
+  };
+  const parts = Array.from({ length: 24 }, (_, i) => swatch(i));
+  const start = performance.now();
+  const wall = grid(parts, { columns: 1, gap: 0 });
+  const ms = performance.now() - start;
+  assert.ok(ms < 1000, `${ms.toFixed(0)} ms to make`);
+  assert.equal(wall.meta.palette!.length, 64);
+  assert.equal(colours(wall).hex[0], colours(parts[0]).hex[0]);
+  contract(wall, [0]);
+});
+
+test("box titles: a name kept to what a cell holds, text's own words, cut to fit with an ellipsis", () => {
+  const rocket = piece({ name: "rocket 🚀", cols: 12, rows: 1, fps: 0 }, (t, s) => s.fill("#"));
+  assert.equal(frame(border(rocket, { title: true })).split("\n")[0], "╭─ rocket ─────╮");
+  assert.equal(frame(grid([rocket], { border: { title: true } })).split("\n")[0], "╭─ rocket ─────╮");
+  assert.equal(frame(border("hi", { title: true, pad: [0, 3] })).split("\n")[0], "╭─ hi ───╮", "no quotes round a text's words");
+  assert.equal(frame(border("hello world", { title: true, pad: 0 })).split("\n")[0], "╭─ hello… ──╮");
+  assert.equal(frame(border("x", { title: "a long title", pad: [0, 3] })).split("\n")[0], "╭─ a… ──╮");
+});
+
+test("a scene keeps its ground on a blank stage, and parts that disagree give none", () => {
+  const night = piece({ name: "night", cols: 4, rows: 2, fps: 0, palette: ["#ffffff"], ground: "#000000" }, (t, s) => s.fill("*"));
+  const dusk = piece({ name: "dusk", cols: 4, rows: 2, fps: 0, palette: ["#ffffff"], ground: "#222222" }, (t, s) => s.fill("+"));
+  assert.equal(layer(new Surface(10, 4), { src: night, anchor: "center" }).meta.ground, "#000000");
+  assert.equal(over("x", night).meta.ground, "#000000");
+  assert.equal(layer(night, dusk).meta.ground, undefined);
+  assert.equal(row([night, "x"]).meta.ground, "#000000");
+});
+
+test("one still step does not dissolve into itself, an animated one does, and the overlap is checked all the same", () => {
+  const one = sequence(["a"]);
+  assert.equal(one.meta.fps, 0);
+  assert.equal(one.meta.loop, undefined, "a still has no loop");
+  assert.deepEqual([0, 3.3, 3.6, 3.9].map((t) => frame(one, t)), ["a", "a", "a", "a"]);
+  const moving = sequence([clock]);
+  assert.deepEqual([moving.meta.fps, moving.meta.loop], [24, 4]);
+  assert.throws(() => sequence(["a"], { seconds: 1, overlap: 2 }), /overlap, 2 seconds, is longer than step 1's 1/);
+});
+
+test("a loop slowed past 60 seconds is dropped, by the kit's time rule, so svg() never samples minutes of it", () => {
+  assert.equal(speed(looper(2), 0.04).meta.loop, 50);
+  assert.equal(speed(looper(2), 0.02).meta.loop, undefined, "100 seconds");
+  assert.equal(speed(rust, 0.001).meta.loop, undefined, "a logo's glint, 5000 seconds");
+  assert.equal(crop({ src: looper(2), speed: 0.02 }, { x: 0, y: 0, cols: 1, rows: 1 }).meta.loop, undefined);
+  assert.equal(named({ src: looper(2), speed: 0.02 }, "slow").meta.loop, undefined);
+  assert.equal(repeat(looper(2), 90).meta.loop, 90, "a loop asked for is kept");
+});
+
+test("text from a Windows file, its lines ending \\r\\n, is text all the same", () => {
+  assert.equal(frame(over("a\r\nb", "...\n...")), ".a.\n.b.");
+  assert.equal(frame(row(["a\r\nb"])), "a\nb");
+});
+
+test("a fade only thins: each character steps down toward a space, never through a denser one", () => {
+  // A thin box line, a dense letter, a full block and a dot, in rows of one each.
+  const art = "══════\n888888\n██████\n......";
+  const allowed = ["═:. ", "8#*+=-:. ", "█▓▒░ ", ". "];
+  const fades = sequence([art, art], { seconds: 2, overlap: 1, transition: "fade" });
+  for (let t = 1; t < 2; t += 0.05)
+    frame(fades, t)
+      .split("\n")
+      .forEach((line, y) => {
+        for (const ch of line) assert.ok(allowed[y].includes(ch), `t=${t.toFixed(2)} row ${y}: ${JSON.stringify(ch)} from ${JSON.stringify(art.split("\n")[y][0])}`);
+      });
+  // halfway it is gone, and either side it is thinned, not whole
+  assert.equal(frame(fades, 1.5).trim(), "");
+  assert.notEqual(frame(fades, 1.2), art);
+});
+
+test("every example plays as a piece should: the same frame for the same t in any order, on paper and dark", async () => {
+  for (const name of ["compose-dashboard", "compose-logos", "compose-starfield", "compose-banner-scene"]) {
+    const p = ((await import(`../../examples/kit/${name}.ts`)) as { default: Piece }).default;
+    // Ocean sunset fills a colour cache as it draws, so its own colours depend on the frames before; its text does not.
+    contract(p, [0, 1.5, 4], { colourOrder: name !== "compose-banner-scene" });
+  }
 });

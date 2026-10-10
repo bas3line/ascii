@@ -190,7 +190,9 @@ const textName = (text: string) => {
 function prepare(fn: string, v: unknown): Prepared {
   v = unwrap(v);
   const clip: Clip = isClip(v) ? v : { src: v as Source };
-  const src = unwrap(clip.src) as Source;
+  // Text read from a file written on Windows ends its lines with \r\n: a newline all the same.
+  const given = unwrap(clip.src);
+  const src = (typeof given === "string" ? given.replace(/\r\n?/g, "\n") : given) as Source;
   if (!(typeof src === "string" || src instanceof Surface || isPiece(src)))
     fail(`${fn}() takes pieces, text, Surfaces or { src } clips, not ${shown(src)}`);
   // A cell holds one UTF-16 unit, so an emoji would be cut in two by a crop, a flip or a layer's edge.
@@ -258,22 +260,35 @@ function merge(parts: readonly Prepared[], extra: readonly string[] = [], plain 
     };
     const idx = lists.map((p) => (p ?? []).map(add));
     const inked = lists.some((p) => !p) ? { light: add(INK.light), dark: add(INK.dark) } : null;
+    const n = all.length;
     const values = all.map(rgb);
     // Each colour's stand-in: itself, or the earlier colour it was folded into.
     const into = all.map((_, i) => i);
-    const alive = new Set(into);
-    while (alive.size > 64) {
-      let best = Infinity, keep = 0, drop = 0;
-      const live = [...alive];
-      for (let a = 0; a < live.length; a++)
-        for (let b = a + 1; b < live.length; b++) {
-          const d = apart(values[live[a]], values[live[b]]);
-          if (d < best) (best = d), (keep = live[a]), (drop = live[b]);
+    const alive = new Uint8Array(n).fill(1);
+    // Each live colour's nearest live colour, the first of equals, and how far. The closest pair is the nearest of them
+    // all; a fold keeps the earlier colour as it was, so only colours whose nearest was the one dropped look again.
+    // Hundreds of colours fold in milliseconds rather than seconds, to the same palette.
+    const near = new Int32Array(n), gap = new Float64Array(n);
+    const look = (i: number) => {
+      let best = Infinity, at = -1;
+      for (let j = 0; j < n; j++)
+        if (j !== i && alive[j]) {
+          const d = apart(values[i], values[j]);
+          if (d < best) (best = d), (at = j);
         }
-      alive.delete(drop);
-      for (let i = 0; i < into.length; i++) if (into[i] === drop) into[i] = keep;
+      near[i] = at;
+      gap[i] = best;
+    };
+    for (let i = 0; i < n; i++) look(i);
+    for (let left = n; left > 64; left--) {
+      let a = -1;
+      for (let i = 0; i < n; i++) if (alive[i] && (a < 0 || gap[i] < gap[a])) a = i;
+      const keep = Math.min(a, near[a]), drop = Math.max(a, near[a]);
+      alive[drop] = 0;
+      for (let i = 0; i < n; i++) if (into[i] === drop) into[i] = keep;
+      for (let i = 0; i < n; i++) if (alive[i] && near[i] === drop) look(i);
     }
-    const kept = [...alive].sort((a, b) => a - b);
+    const kept = into.filter((v, i) => v === i);
     const at = new Map(kept.map((c, i) => [c, i]));
     const to = (i: number) => at.get(into[i])!;
     return {
@@ -320,6 +335,9 @@ function together(periods: readonly (number | undefined)[]): number | undefined 
   }
   return l ? l / 100 : undefined;
 }
+
+// A loop of one part slowed down, kept by the same rule: 60 seconds or less, else none (svg() then plays 4 seconds).
+const playable = (loop: number | undefined) => (loop && loop <= 60 ? loop : undefined);
 
 // The moment to hold still for reduced motion: the latest any part names, in the whole's time, so a typed banner
 // shows every letter.
@@ -552,7 +570,8 @@ function stack(fn: string, all: Placed[]): KitPiece {
     cell,
     // A layer that moves needs frames even over stills.
     fps: Math.max(fpsOf(all), steered || travels.length ? 24 : 0),
-    ground: all[0].meta.ground,
+    // A scene on a blank stage keeps its ground, so it is drawn for its own dark sky on a light page too.
+    ground: groundOf(all),
     // By the kit's time rule: the crossings' period with the parts' loops, a part that never repeats counting as
     // repeating on the crossings'.
     loop: steered || own === undefined ? undefined : together([own, ...all.map((l) => period(l) ?? (own || undefined))]),
@@ -578,8 +597,8 @@ function stack(fn: string, all: Placed[]): KitPiece {
  * Pieces stacked, the first at the bottom, in the first one's size: each later one is laid over those before it, its
  * blank cells letting them show (see Layer's mask), at its anchor, margin and x, y on the first, travelling if it has a
  * move. Each keeps its own player, options and colours. A part made for character cells laid on a square grid (a
- * scene's, cell 1) has its rows doubled so it keeps its shape, and the other way round halved. The whole takes the first
- * part's ground and the highest frame rate of the parts (24 at least when a layer moves). Its loop is the least common
+ * scene's, cell 1) has its rows doubled so it keeps its shape, and the other way round halved. The whole takes the ground
+ * its parts agree on and the highest frame rate of the parts (24 at least when a layer moves). Its loop is the least common
  * multiple of the parts' and the moves' periods, within 60 seconds, a part that never repeats counting as repeating with
  * the moves; none when a layer moves by a function of t (wrap it in repeat()). For an empty stage of your own size, the
  * first part can be a blank grid: `new Surface(80, 24)`.
@@ -613,7 +632,10 @@ export interface BorderOptions {
    * right, bottom left, bottom right, across, down.
    */
   style?: "single" | "double" | "rounded" | "heavy" | "ascii" | (string & {});
-  /** Words on its top edge: none. true gives the piece's name; a long title is cut to fit. */
+  /**
+   * Words on its top edge: none. true gives the piece's name, or a block of text's own words; a long title is cut to
+   * fit, ending "…".
+   */
   title?: string | boolean;
   /**
    * Its colour and its title's, as #rrggbb, or one for each theme: the ink by default. A colour makes a piece in one ink
@@ -668,12 +690,20 @@ function box(s: Surface, { x, y, cols: w, rows: h }: Region, chars: string, titl
   for (let c = 1; c < w - 1; c++) set(x + c, y, across), set(x + c, y + h - 1, across);
   for (let r = 1; r < h - 1; r++) set(x, y + r, down), set(x + w - 1, y + r, down);
   set(x, y, tl), set(x + w - 1, y, tr), set(x, y + h - 1, bl), set(x + w - 1, y + h - 1, br);
-  // After the corner and one line, with a space each side, leaving a line before the far corner.
+  // After the corner and one line, with a space each side, leaving a line before the far corner; cut to fit with "…".
   if (title && w >= 7) {
-    const words = ` ${title.slice(0, w - 6)} `;
+    const room = w - 6;
+    const words = ` ${title.length > room ? title.slice(0, room - 1).trimEnd() + "…" : title} `;
     for (let k = 0; k < words.length; k++) set(x + 2 + k, y, words.charCodeAt(k));
   }
 }
+
+// A box's title: the words given, or with `true` the piece's name, kept to what a cell holds, so an emoji or a newline
+// in a name is left out rather than cut in two, and a block of text's own words, not its name in quotes.
+const titleOf = (b: Border, name: string) =>
+  b.title === true
+    ? name.replace(/[\u0000-\u001f\u007f-\u009f\ud800-\udfff]+/g, " ").replace(/\s+/g, " ").trim().replace(/^"(.+)"$/, "$1")
+    : b.title || "";
 
 // The palette index of a border's colour on paper and on a dark page, or null for the ink.
 const borderInk = (m: Merged, at: number, b: Border | null): [number, number] | null => (b?.color ? [m.maps[at][0], m.maps[at][b.color.length - 1]] : null);
@@ -691,7 +721,7 @@ export function border(src: Source | Clip, o: BorderOptions = {}): KitPiece {
   const [py, px] = b.pad;
   const cols = p.cols + 2 * px + 2, rows = p.rows + 2 * py + 2;
   const m = merge([p], b.color ?? [], !b.color);
-  const title = b.title === true ? p.meta.name : b.title || "";
+  const title = titleOf(b, p.meta.name);
   return build(fn, { ...single(p), cols, rows }, m, (options) => {
     const play = player(p, m.maps[0], options);
     const ink = borderInk(m, 1, b);
@@ -849,7 +879,7 @@ export function grid(parts: readonly (Source | Clip)[], o: GridOptions = {}): Ki
   const boxes = b
     ? all.map((p, i) => {
         const j = i % n, r = Math.floor(i / n);
-        return { region: { x: xs[j], y: ys[r], cols: cw[j], rows: ch[r] }, title: b.title === true ? p.meta.name : b.title || "" };
+        return { region: { x: xs[j], y: ys[r], cols: cw[j], rows: ch[r] }, title: titleOf(b, p.meta.name) };
       })
     : [];
   const cols = xs[n - 1] + cw[n - 1], rows = ys[lines - 1] + ch[lines - 1];
@@ -868,7 +898,7 @@ const single = (p: Prepared): Whole => ({
   cell: p.meta.cell ?? 2,
   fps: p.meta.fps,
   ground: p.meta.ground,
-  loop: period(p) || undefined,
+  loop: playable(period(p)),
   still: p.meta.still !== undefined ? Math.max(0, (p.meta.still - p.offset) / p.speed) : undefined,
   clock: p.meta.clock,
   options: optionsOf(p),
@@ -1043,15 +1073,30 @@ function thresholds(cols: number, rows: number, aspect: number, seed: number): F
   return th;
 }
 
-// A character's place on a ramp to fade it down: blocks fade through blocks, the rest through the standard ramp,
-// characters not on it from its densest end.
-const FADES = [ramps.blocks, ramps.standard];
-function fadeOf(ch: number): [string, number] {
-  for (const r of FADES) {
-    const i = r.indexOf(String.fromCharCode(ch));
-    if (i > 0) return [r, i];
+// The ramps a fade steps a character down, and for every character its ramp and its place on it, built when the first
+// fade is made: the blocks, eighths and dots down their own ramps, anything else down the standard ramp from the step that
+// has about as much ink as it does, so a thin line only thins and never thickens first. ASCII is placed by the detailed
+// ramp, which orders it by ink; box drawing is a thin line; braille goes by its dots; other characters sit midway.
+const FADES = [ramps.blocks, ramps.eighths, ramps.dots, ramps.standard] as const;
+let fades: { ramp: Uint8Array; level: Uint8Array } | null = null;
+function fadeTable() {
+  if (fades) return fades;
+  const ramp = new Uint8Array(65536).fill(3), level = new Uint8Array(65536).fill(5);
+  const top = ramps.standard.length - 1, ink = ramps.detailed;
+  const put = (c: number, r: number, l: number) => ((ramp[c] = r), (level[c] = l));
+  for (let c = 0; c <= 32; c++) level[c] = 0;
+  for (let i = 1; i < ink.length; i++) put(ink.charCodeAt(i), 3, Math.max(1, Math.round((i / (ink.length - 1)) * top)));
+  for (let c = 0x2500; c <= 0x257f; c++) put(c, 3, 3);
+  for (let k = 1; k < 256; k++) {
+    let dots = 0;
+    for (let b = k; b; b >>= 1) dots += b & 1;
+    put(0x2800 + k, 3, Math.max(1, Math.round((dots / 8) * top)));
   }
-  return [ramps.standard, ramps.standard.length - 1];
+  // Blocks that fill part of a cell, by how much: a quarter, a half, three quarters.
+  for (const [chars, l] of [["▖▗▘▝", 1], ["▀▌▐▚▞", 2], ["▙▛▜▟", 3]] as const) for (const ch of chars) put(ch.charCodeAt(0), 0, l);
+  // Each ramp's own characters, the earlier ramps last so they win: █ fades through ▓▒░, not ▇▆▅.
+  for (let k = FADES.length - 1; k >= 0; k--) for (let i = 1; i < FADES[k].length; i++) put(FADES[k].charCodeAt(i), k, i);
+  return (fades = { ramp, level });
 }
 
 const EDGE = 0.07; // how much of a dissolve's run a cell takes to cross, its edge drawn meanwhile
@@ -1083,10 +1128,12 @@ export function sequence(steps: readonly (Source | Step)[], o: SequenceOptions =
     const v = steps[i];
     return duration(isClip(v) ? (v as Step).seconds : undefined, `step ${i + 1}'s seconds`, each);
   });
-  const ov = transition === "cut" ? 0 : overlap;
+  const asked = transition === "cut" ? 0 : overlap;
   span.forEach((d, i) => {
-    if (d < ov) fail(`sequence's overlap, ${ov} seconds, is longer than step ${i + 1}'s ${d}: a transition happens inside the step it leaves, so give it less overlap or more seconds`);
+    if (d < asked) fail(`sequence's overlap, ${asked} seconds, is longer than step ${i + 1}'s ${d}: a transition happens inside the step it leaves, so give it less overlap or more seconds`);
   });
+  // A still turning into itself would only flash its edge, so one still step cuts back to itself.
+  const ov = n === 1 && !all[0].meta.fps ? 0 : asked;
   const start = span.map((_, i) => span.slice(0, i).reduce((a, v) => a + v, 0));
   const total = start[n - 1] + span[n - 1];
   const cols = Math.max(...all.map((p) => p.cols)), rows = Math.max(...all.map((p) => p.rows));
@@ -1102,15 +1149,18 @@ export function sequence(steps: readonly (Source | Step)[], o: SequenceOptions =
   const alone = n === 1 && (!ov || !loop);
   const m = merge(all, [], transition === "wipe");
   const th = transition === "dissolve" ? thresholds(cols, rows, cell, seed) : null;
+  const fading = transition === "fade" ? fadeTable() : null;
+  const fps = Math.max(fpsOf(all), alone ? 0 : 24);
   const whole: Whole = {
     name: all.map((p) => p.meta.name).join(", then "),
     category: categoryOf(all),
     cols,
     rows,
     cell,
-    fps: Math.max(fpsOf(all), alone ? 0 : 24),
+    fps,
     ground: groundOf(all),
-    loop: loop ? total : undefined,
+    // A still has no loop to play.
+    loop: loop && fps ? total : undefined,
     still: Math.max(0, still),
     clock: all.some((p) => p.meta.clock),
   };
@@ -1148,7 +1198,7 @@ export function sequence(steps: readonly (Source | Step)[], o: SequenceOptions =
           else if (d < 0) s.put(c, EDGES.charCodeAt(1), bc[c] !== EMPTY ? bcol[c] : acol[c]);
           else s.put(c, EDGES.charCodeAt(0), ac[c] !== EMPTY ? acol[c] : bcol[c]);
         }
-      } else if (transition === "fade") {
+      } else if (fading) {
         // The first half thins this step down its ramp to nothing, the second thickens the next up from nothing.
         const [g, gc] = k < 0.5 ? [ac, acol] : [bc, bcol];
         const f = k < 0.5 ? 2 * k : 2 - 2 * k;
@@ -1156,9 +1206,9 @@ export function sequence(steps: readonly (Source | Step)[], o: SequenceOptions =
           for (let x = 0; x < cols; x++, c++) {
             const ch = g[c];
             if (ch === EMPTY) continue;
-            const [r, level] = fadeOf(ch);
+            const level = fading.level[ch];
             const step = Math.max(0, Math.min(level, Math.round(level * (1 - f) + bayer(x, y))));
-            s.put(c, step >= level ? ch : step <= 0 ? EMPTY : r.charCodeAt(step), gc[c]);
+            s.put(c, step >= level ? ch : step <= 0 ? EMPTY : FADES[fading.ramp[ch]].charCodeAt(step), gc[c]);
           }
       } else {
         // A band leaning like a slash sweeps left to right, the next step behind it.
@@ -1212,7 +1262,7 @@ const stillAt = (p: Prepared) => (p.meta.still !== undefined ? Math.max(0, (p.me
 
 /**
  * A piece played `factor` times as fast: 2 is twice as fast, 0.5 half. Its loop and still moment scale with it, a
- * logo's glint period too.
+ * logo's glint period too; a loop slowed past 60 seconds is dropped, by the kit's time rule, so svg() plays 4 seconds.
  *
  *   speed(donut, 0.5)
  */
@@ -1220,7 +1270,7 @@ export function speed(src: Source | Clip, factor: number): KitPiece {
   if (!finite(factor) || factor <= 0) fail(`speed takes a number above 0, 2 for twice as fast, not ${shown(factor)}`);
   const p = prepare("speed", src);
   const loop = period(p), still = stillAt(p);
-  return retime("speed", p, (t) => t * factor, { loop: loop ? loop / factor : undefined, still: still && still / factor });
+  return retime("speed", p, (t) => t * factor, { loop: playable(loop ? loop / factor : undefined), still: still && still / factor });
 }
 
 /**
@@ -1267,13 +1317,16 @@ export function freeze(src: Source | Clip, at: number): KitPiece {
  */
 export function named(src: Source | Clip, name: string, o: { note?: string; category?: Category } = {}): KitPiece {
   const opts = object(o, "named()");
-  if (typeof name !== "string" || !name.trim()) fail(`named() takes a name, one line such as "hello", not ${shown(name)}`);
+  // A name and a note are one line each: screen readers, titles and svg() read them as one.
+  const line = (v: unknown) => typeof v === "string" && !!v.trim() && !/[\u0000-\u001f\u007f-\u009f]/.test(v);
+  if (!line(name)) fail(`named() takes a name, one line such as "hello", not ${shown(name)}`);
+  if (opts.note !== undefined && !line(opts.note)) fail(`named()'s note takes one line saying what you see, not ${shown(opts.note)}`);
   const p = prepare("named", src);
   // Played as it was, it keeps what else it carries, such as a banner's motion, which svg() reads, and its own loop.
   const asItWas = p.speed === 1 && !p.offset && !p.tint && !Object.keys(p.options).length;
   const renamed = retime("named", p, (t) => t, {
     fps: p.meta.fps,
-    loop: asItWas ? p.meta.loop : period(p) || undefined,
+    loop: asItWas ? p.meta.loop : playable(period(p)),
     still: stillAt(p),
     name: name.trim(),
     note: opts.note ?? short(name.trim()),
