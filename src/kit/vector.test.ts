@@ -281,6 +281,39 @@ test("in one ink, white among colours is left out, and where two colours meet th
   assert.equal(row[15], "8");
 });
 
+test("a white cut-out stays cut out with color: false, and beside the page's colour; white alone still shows on paper", () => {
+  const cut = (base: string) => `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="${base}"/><rect x="5" y="5" width="10" height="10" fill="#ffffff"/></svg>`;
+  // color: false is one ink everywhere, so the white square is a hole in it, as in mono.
+  const plain = fromSvg(cut("#7c3aed"), { width: 24, color: false });
+  assert.equal(plain.meta.palette, undefined);
+  assert.equal(lines(snapshot(plain).text)[5][12], " ");
+  assert.equal(lines(snapshot(plain).text)[5][3], "8");
+  // An icon in currentColor with a white mark: the mark is cut out in one ink, drawn white in colour.
+  const ink = fromSvg(cut("currentColor"), { width: 24 });
+  assert.equal(lines(snapshot(ink, 0, { mono: true }).text)[5][12], " ");
+  assert.equal(lines(snapshot(ink).text)[5][12], "8");
+  // drawSvg with color: false into a coloured grid cuts it out too.
+  const s = new Surface(24, 12, { palette: new Palette(["#7c3aed"]) });
+  s.mono = false;
+  drawSvg(s, cut("#7c3aed"), 0, { color: false, margin: [2, 1] });
+  assert.equal(s.get(12, 5), "");
+  // A drawing in nothing but white is not a cut-out: on paper it is darkened until it reads.
+  const white = fromSvg(`<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" fill="#ffffff"/></svg>`, { width: 20 });
+  const paper = snapshot(white, 0, { paper: true });
+  assert.notEqual(white.meta.palette![paper.color![5 * 20 + 10]], "#ffffff");
+  assert.equal(white.meta.palette![snapshot(white).color![5 * 20 + 10]], "#ffffff");
+});
+
+test("color: #rrggbb is the colour currentColor takes, the drawing's other colours kept", () => {
+  const icon = `<svg viewBox="0 0 20 10" fill="none" stroke="currentColor"><path d="M1 5h8"/><rect x="11" y="1" width="8" height="8" fill="#22c55e" stroke="none"/></svg>`;
+  const p = fromSvg(icon, { width: 24, color: "#F97316" });
+  assert.ok(p.meta.palette!.includes("#f97316") && p.meta.palette!.includes("#22c55e"));
+  assert.ok(!p.meta.palette!.includes("#1f2328"));
+  // A drawing in nothing but currentColor becomes a piece in that colour.
+  assert.deepEqual(fromSvg(`<svg viewBox="0 0 2 2"><rect width="2" height="2" fill="currentColor"/></svg>`, { color: "#f97316" }).meta.palette, ["#f97316", "#f97316"]);
+  assert.throws(() => fromSvg(icon, { color: "orange" }), /color takes true .*, false .*, or #rrggbb for what it draws in currentColor, not "orange"/);
+});
+
 test("styles: blocks and braille use their characters, outline draws lines only", () => {
   const blocks = snapshot(fromSvg(HEART, { style: "blocks" })).text.replace(/[\s\n]/g, "");
   assert.ok(blocks.length && [...blocks].every((c) => "▘▝▀▖▌▞▛▗▚▐▜▄▙▟█".includes(c)));
@@ -597,6 +630,46 @@ test("non-finite coordinates, paint servers that are not there, and text are lef
   assert.deepEqual(parseSvg(HEART).skipped, []);
 });
 
+test("character references past the last code point, titles with control characters, and options that are not an object", () => {
+  // A browser shows the replacement character; it is not an error.
+  assert.equal(parseSvg(`<svg viewBox="0 0 1 1"><title>a&#x110000;b&#xD800;c&#99999999999;</title><rect width="1" height="1"/></svg>`).title, "a�b�c�");
+  // The title is the piece's name: one line, its control characters and line breaks as spaces.
+  const p = fromSvg(`<svg viewBox="0 0 1 1"><title> Red&#7;&#10;Dot </title><rect width="1" height="1"/></svg>`);
+  assert.equal(p.meta.name, "red dot");
+  // Only the drawing's own title names it, not a group's tooltip; a title of nothing is none.
+  assert.equal(parseSvg(`<svg viewBox="0 0 1 1"><g><title>a tooltip</title><rect width="1" height="1"/></g></svg>`).title, null);
+  assert.equal(fromSvg(`<svg viewBox="0 0 1 1"><title>&#7;</title><rect width="1" height="1"/></svg>`).meta.name, "vector");
+  assert.throws(() => fromSvg(SQUARE, [] as never), /fromSvg takes options as an object/);
+  assert.throws(() => drawSvg(new Surface(4, 4), SQUARE, 0, [] as never), /drawSvg takes options as an object/);
+  assert.throws(() => drawSvg(new Surface(4, 4), SQUARE, 0, null as never), /drawSvg takes options as an object/);
+  assert.throws(() => drawSvg(new Surface(4, 4), SQUARE, 0, { region: { x: 0, y: 0, cols: 4 } as never }), /drawSvg's region takes \{ x, y, cols, rows \}/);
+  assert.throws(() => paletteOf(SQUARE, [] as never), /paletteOf takes options as an object/);
+});
+
+test("a fill or stroke a browser can't read is ignored, so the group's is taken; var() takes its fallback", () => {
+  const s = parseSvg(`<svg viewBox="0 0 10 10"><g fill="#ff0000" stroke="#0000ff">
+    <rect width="1" height="1" fill="bogus"/>
+    <rect width="1" height="1" fill="#00ff00" style="fill: notacolour"/>
+    <rect width="1" height="1" fill="var(--brand, #123456)" stroke="var(--line)"/>
+    <rect width="1" height="1" fill="#00ff00" style="fill: inherit"/>
+  </g></svg>`);
+  assert.deepEqual(s.shapes.map((x) => x.fill), ["#ff0000", "#00ff00", "#123456", "#ff0000"]);
+  assert.deepEqual(s.shapes.map((x) => x.stroke), ["#0000ff", "#0000ff", "#0000ff", "#0000ff"]);
+});
+
+test("a \"#\" name is an id when an element has it, and a colour only when none does", () => {
+  // "#add" is both an id here and a colour (#aadddd's short form): the id wins, and ranks as an id, over a colour
+  // given after it.
+  const svg = `<svg viewBox="0 0 20 10"><rect id="add" width="10" height="10" fill="#0000ff"/><rect x="10" width="10" height="10" fill="#aadddd"/></svg>`;
+  const p = fromSvg(svg, { width: 24, margin: 0, "#add": { color: "#ff0000" }, "#0000ff": { color: "#00ff00" } });
+  const c = snapshot(p).color!;
+  assert.equal(p.meta.palette![c[5 * 24 + 4]], "#ff0000");
+  assert.equal(p.meta.palette![c[5 * 24 + 18]], "#aadddd");
+  // With no element of that id, it names the colour.
+  const q = fromSvg(svg.replace(`id="add" `, ""), { width: 24, margin: 0, "#add": { color: "#ff0000" } });
+  assert.equal(q.meta.palette![snapshot(q, 0, { paper: true }).color![5 * 24 + 18]], "#ff0000");
+});
+
 test("rows crossed by many edges fill by their rule", () => {
   // Thirty teeth, 60 crossings a row; drawn twice over, nonzero fills them and even-odd cancels them out.
   const comb = Array.from({ length: 30 }, (_, i) => `M${i * 4} 0h2v10h-2z`).join("");
@@ -694,6 +767,60 @@ test("partCells works out a part's cells, its edge, which way is in and how deep
   const none = partCells(new Float32Array(6), 3, 2);
   assert.equal(none.list.length, 0);
   assert.deepEqual([none.x0, none.x1], [0, 0]);
+  assert.equal(none.outline().cells.length, 0);
+});
+
+test("partCells outlines a part as the kit's materials outline an area: sides, corners, and a fringe on a shallow slope", () => {
+  const cover = new Float32Array(8 * 6);
+  for (let y = 1; y < 5; y++) for (let x = 1; x < 7; x++) cover[y * 8 + x] = 1;
+  const c = partCells(cover, 8, 6);
+  const at = (style?: "line" | "round") => {
+    const o = c.outline(style), out = new Map<number, string>();
+    o.cells.forEach((k, j) => out.set(k, String.fromCharCode(o.chars[j])));
+    return out;
+  };
+  const line = at();
+  assert.equal(line.get(1 * 8 + 1), ".");
+  assert.equal(line.get(1 * 8 + 3), "-");
+  assert.equal(line.get(4 * 8 + 3), "_");
+  assert.equal(line.get(2 * 8 + 1), "|");
+  assert.equal(line.get(2 * 8 + 6), "|");
+  assert.equal(line.has(2 * 8 + 3), false);
+  assert.equal(at("round").get(2 * 8 + 1), "(");
+  assert.equal(at("round").get(2 * 8 + 6), ")");
+  // Worked out once for each style.
+  assert.equal(c.outline(), c.outline());
+  // A top that rises across the row: the cells just above it that it passes through are its fringe, "_" then ".".
+  const slope = new Float32Array(12 * 6);
+  for (let x = 1; x < 11; x++) {
+    slope[2 * 12 + x] = x / 12;
+    for (let y = 3; y < 6; y++) slope[y * 12 + x] = 1;
+  }
+  const s = partCells(slope, 12, 6);
+  assert.equal(s.fringe[2 * 12 + 3], 1);
+  assert.equal(s.inside[2 * 12 + 3], 0);
+  const f = s.outline();
+  const char = (k: number) => String.fromCharCode(f.chars[[...f.cells].indexOf(k)]);
+  assert.equal(char(2 * 12 + 3), "_");
+  assert.equal(char(2 * 12 + 5), ".");
+});
+
+test("a material that outlines its part, as glass does, draws through fromSvg; one that never repeats leaves no loop", () => {
+  const rim: PartMaterial = {
+    colors: { light: ["#64748b"], dark: ["#cbd5e1"] },
+    period: Infinity,
+    prepare(c) {
+      const o = c.outline();
+      return (_t: number, p: PartPaint) => o.cells.forEach((k, j) => p.s.put(k, o.chars[j], p.color(0)));
+    },
+  };
+  const p = fromSvg(SQUARE, { width: 24, "#sq": rim });
+  assert.equal(p.meta.fps, 30);
+  assert.equal(p.meta.loop, undefined);
+  const l = lines(snapshot(p).text);
+  assert.equal(l[5], "  |                  |  ");
+  assert.match(l[1], /^ {2}\.-+\. {2}$/);
+  contract(p, [0, 1]);
 });
 
 test("a material fills its part: it is prepared once with the part's cells, draws in its own colours, sees what is under it", () => {

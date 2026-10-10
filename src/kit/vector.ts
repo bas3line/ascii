@@ -118,9 +118,11 @@ const ATTR = /\s*([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/y;
 const ENTITY = /&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi;
 const NAMED_ENTITY: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 
+// A character reference past the last code point, or to a surrogate, is the replacement character, not an error.
+const codePoint = (n: number) => String.fromCodePoint(n >= 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff) ? n : 0xfffd);
 const entities = (v: string) =>
   v.replace(ENTITY, (_, e: string) =>
-    e[0] === "#" ? String.fromCodePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : NAMED_ENTITY[e.toLowerCase()],
+    e[0] === "#" ? codePoint(e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : NAMED_ENTITY[e.toLowerCase()],
   );
 // An element's name without its namespace, lowercase: "svg:linearGradient" is "lineargradient".
 const local = (name: string) => name.slice(name.indexOf(":") + 1).toLowerCase();
@@ -293,9 +295,12 @@ function hslToRgb(h: number, s: number, l: number): number[] {
 }
 
 // A colour as CSS writes it: #rgb, #rgba, #rrggbb, #rrggbbaa, rgb(), rgba(), hsl(), hsla(), a name, currentColor or
-// none. Undefined for anything else.
+// none, or var(--name, fallback) as its fallback (the custom properties themselves are not read). Undefined for anything
+// else.
 function color(v: string): Read | undefined {
   const s = v.trim().toLowerCase();
+  const fallback = /^var\(\s*--[\w-]+\s*,(.*)\)$/.exec(s);
+  if (fallback) return color(fallback[1]);
   if (s === "none" || s === "transparent") return { c: null, a: 0 };
   if (s === "currentcolor") return { c: "currentColor", a: 1 };
   const named = NAMED.get(s);
@@ -733,14 +738,15 @@ export function parseSvg(markup: string): Svg {
   // Everything with an id, for <use> and url(#...) to find, and every <style>'s rules.
   const ids = new Map<string, XNode>();
   const rules: Rule[] = [];
-  let title: string | null = null;
   const index = (n: XNode) => {
     if (n.attrs.id !== undefined && !ids.has(n.attrs.id)) ids.set(n.attrs.id, n);
     if (n.name === "style") stylesheet(n.text, rules);
-    if (n.name === "title" && title === null && n.text.trim()) title = entities(n.text.trim().replace(/\s+/g, " "));
   };
   index(svgRoot);
   each(svgRoot, index);
+  // The drawing's own <title>, not a group's tooltip, becomes the piece's name: one line of printable characters.
+  const named = svgRoot.kids.find((k) => k.name === "title");
+  const title = named ? entities(named.text).replace(/[\u0000-\u001f\u007f-\u009f\s]+/g, " ").trim() || null : null;
   rules.sort((a, b) => a.rank - b.rank);
 
   const vb0 = numbers(svgRoot.attrs.viewBox);
@@ -755,14 +761,18 @@ export function parseSvg(markup: string): Svg {
   const open = new Set<XNode>();
   let count = 0;
 
-  // An element's own properties: attributes, then the <style>'s rules by how specific they are, then style="".
+  // An element's own properties: attributes, then the <style>'s rules by how specific they are, then style="". A fill
+  // or stroke a browser can't read is dropped where it is written, so the one under it (or the group's) is taken.
   const own = (n: XNode) => {
     const p: Record<string, string> = {};
-    for (const k in n.attrs) if (PROPS.has(k)) p[k] = n.attrs[k];
+    const readable = (v: string) => /^\s*(url\(|inherit\s*$)/i.test(v) || color(v) !== undefined;
+    const put = (from: Record<string, string>) => {
+      for (const k in from) if (PROPS.has(k) && (readable(from[k]) || (k !== "fill" && k !== "stroke"))) p[k] = from[k];
+    };
+    put(n.attrs);
     const classes = (n.attrs.class ?? "").split(/\s+/).filter(Boolean);
-    for (const r of rules)
-      if ((!r.tag || r.tag === n.name) && (!r.id || r.id === n.attrs.id) && r.classes.every((c) => classes.includes(c))) Object.assign(p, r.decls);
-    if (n.attrs.style) Object.assign(p, declarations(n.attrs.style));
+    for (const r of rules) if ((!r.tag || r.tag === n.name) && (!r.id || r.id === n.attrs.id) && r.classes.every((c) => classes.includes(c))) put(r.decls);
+    if (n.attrs.style) put(declarations(n.attrs.style));
     return p;
   };
 
@@ -1001,8 +1011,16 @@ export interface PartCells {
   readonly cover: Float32Array;
   /** 1 for a cell on the part's edge: in it, with a cell above, below, left or right that is not. */
   readonly border: Uint8Array;
+  /** 1 for a cell just outside a sloping top or bottom that the edge passes through: part of outline(), not of the part. */
+  readonly fringe: Uint8Array;
   /** True for a cell in the part; false outside the grid, since a drawing's part stops at it. */
   has(x: number, y: number): boolean;
+  /**
+   * The part's outline as characters, as outlining materials (glass, ice, metal) draw it: "-" along a top, "_" along a
+   * bottom, "|" up a side ("(" and ")" when `style` is "round"), "/" and "\" where it slopes, and the fringe's "_ . ' -"
+   * just outside a shallow slope. Worked out once for each style.
+   */
+  outline(style?: "line" | "round"): { readonly cells: Int32Array; readonly chars: Uint16Array };
   /** Which way is in at the edge, on the page (a row counts 2): a unit vector, 0, 0 off the edge. */
   readonly nx: Float32Array;
   readonly ny: Float32Array;
@@ -1047,6 +1065,7 @@ export interface PartPaint {
  */
 export interface PartMaterial {
   readonly colors: { readonly light: readonly string[]; readonly dark: readonly string[] };
+  /** Seconds before it repeats exactly: undefined for a still, Infinity for one that never repeats. */
   readonly period?: number;
   prepare(cells: PartCells): (t: number, paint: PartPaint) => void;
 }
@@ -1140,8 +1159,12 @@ export interface VectorOptions {
   style?: VectorStyle;
   /** The character for solid cells in the "logo" style: "8", as the library's logos. The other styles have their own. */
   fill?: string;
-  /** The drawing's own colours: true. false draws it in the page's own colour. */
-  color?: boolean;
+  /**
+   * The drawing's own colours: true. false draws it in the page's own colour. A colour, #rrggbb, is the one its
+   * currentColor takes, as CSS's color does: an icon set's lines (Lucide, Feather, Heroicons) in your colour, its
+   * other colours kept.
+   */
+  color?: boolean | string;
   /** The thinnest a stroke is drawn, in columns, so a hairline still shows: 0.4. */
   line?: number;
   /** Lowercase display name: its <title>, else "vector". */
@@ -1199,6 +1222,7 @@ interface PartPlan {
   char: string | null;
   color: string | null;
   hide: boolean;
+  // Its place in the options, first 0.
   rank: number;
 }
 
@@ -1634,6 +1658,8 @@ interface PlanOptions {
   style: VectorStyle;
   fill: string;
   color: boolean;
+  // The colour currentColor takes, lowercase #rrggbb, or null for the page's own.
+  ink: string | null;
   line: number;
   aspect: number;
   parts: PartPlan[];
@@ -1738,21 +1764,26 @@ function partOf(key: string, v: unknown, rank: number): PartPlan {
   return plan;
 }
 
-// Which shapes a part names, and as which owners: the element the name is on, so a group moves as one.
-function matches(svg: Svg, key: string): Map<number, number[]> {
+// Which shapes a part names, and as which owners: the element the name is on, so a group moves as one. A "#" name is an
+// id when an element has it, and otherwise, written as #rgb or #rrggbb, a colour: "#add" names id="add" if there is one.
+function matches(svg: Svg, key: string): { owners: Map<number, number[]>; kind: "all" | "colour" | "class" | "id" } {
   const owners = new Map<number, number[]>();
   const add = (owner: number, shape: number) => (owners.get(owner) ?? owners.set(owner, []).get(owner)!).push(shape);
-  const colour = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(key) ? (color(key)?.c ?? null) : null;
+  if (key === "*") {
+    svg.shapes.forEach((_, i) => add(-1, i));
+    return { owners, kind: "all" };
+  }
+  const name = key.slice(1), byId = key[0] === "#";
   svg.shapes.forEach((s, i) => {
-    if (key === "*") return add(-1, i);
-    const name = key.slice(1);
     for (let k = s.chain.length - 1; k >= 0; k--) {
       const c = s.chain[k];
-      if (key[0] === "#" ? c.id === name : c.classes.includes(name)) return add(c.index, i);
+      if (byId ? c.id === name : c.classes.includes(name)) return add(c.index, i);
     }
-    if (colour && (s.fill === colour || s.stroke === colour)) add(-2 - i, i);
   });
-  return owners;
+  if (owners.size || !byId) return { owners, kind: byId ? "id" : "class" };
+  const colour = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(key) ? (color(key)?.c ?? null) : null;
+  if (colour) svg.shapes.forEach((s, i) => (s.fill === colour || s.stroke === colour) && add(-2 - i, i));
+  return { owners, kind: "colour" };
 }
 
 function plan(svg: Svg, o: PlanOptions): Plan {
@@ -1763,8 +1794,13 @@ function plan(svg: Svg, o: PlanOptions): Plan {
   // Each part's owners: the element its name is on, and how deep that element is, -1 for "*" (the whole drawing),
   // so an outer group's motion carries an inner one's.
   const owners = new Map<string, { part: number; shapes: number[]; index: number; count: number; depth: number }>();
+  // How each part ranks where several name one shape: "*" first, then colours, classes and ids, each in the order
+  // given, so the later and more specific win.
+  const rank = new Float64Array(o.parts.length);
+  const KINDS = { all: 0, colour: 1, class: 2, id: 3 };
   o.parts.forEach((p, pi) => {
-    const found = matches(svg, p.key);
+    const { owners: found, kind } = matches(svg, p.key);
+    rank[pi] = KINDS[kind] * o.parts.length + p.rank;
     if (!found.size) {
       const known = svg.parts.length ? `it has ${and(svg.parts.slice(0, 12).map((k) => JSON.stringify(k)))}${svg.parts.length > 12 ? " and more" : ""}` : "it names no parts";
       fail(`fromSvg's part ${JSON.stringify(p.key)} names nothing in this svg: ${known}`);
@@ -1778,7 +1814,7 @@ function plan(svg: Svg, o: PlanOptions): Plan {
       for (const s of list) partsOf[s].push({ part: pi, owner });
     }
   });
-  for (const list of partsOf) list.sort((a, b) => o.parts[a.part].rank - o.parts[b.part].rank);
+  for (const list of partsOf) list.sort((a, b) => rank[a.part] - rank[b.part]);
   const hidden = shapes.map((_, i) => partsOf[i].some((p) => o.parts[p.part].hide));
   const last = <K extends keyof PartPlan>(i: number, k: K): PartPlan[K] | null => {
     let v: PartPlan[K] | null = null;
@@ -1957,18 +1993,20 @@ function plan(svg: Svg, o: PlanOptions): Plan {
   shapes.forEach((s, i) => {
     if (hidden[i]) return;
     const recolor = last(i, "color") as string | null;
+    // A part's own colour, else the shape's, currentColor taking the colour the options give it.
+    const paint = (c: string) => recolor ?? (c === "currentColor" && o.ink ? o.ink : c);
     const subs = flatten(s.ops, toSamples, tol);
     const hwMin = (o.line * sx) / 2;
     // In the outline style a shape is its edges, walked as lines: a fill's edges closed, a stroke as it runs.
     if (s.fill) {
-      const c = recolor ?? s.fill;
+      const c = paint(s.fill);
       if (outline) raw.push({ shape: i, c, alpha: s.fillOpacity, rings: [], lines: subs.map((x) => ({ pts: x.pts, closed: true })), evenodd: false });
       else raw.push({ shape: i, c, alpha: s.fillOpacity, rings: subs.map((x) => x.pts), lines: null, evenodd: s.fillRule === "evenodd" });
     }
     if (s.stroke) {
       const hw = Math.max(hwMin, (s.strokeWidth * fit.k * sx) / 2);
-      if (outline) raw.push({ shape: i, c: recolor ?? s.stroke, alpha: s.strokeOpacity, rings: [], lines: subs, evenodd: false });
-      else raw.push({ shape: i, c: recolor ?? s.stroke, alpha: s.strokeOpacity, rings: strokeRings(subs, hw, s.cap), lines: null, evenodd: false });
+      if (outline) raw.push({ shape: i, c: paint(s.stroke), alpha: s.strokeOpacity, rings: [], lines: subs, evenodd: false });
+      else raw.push({ shape: i, c: paint(s.stroke), alpha: s.strokeOpacity, rings: strokeRings(subs, hw, s.cap), lines: null, evenodd: false });
     }
   });
 
@@ -2022,16 +2060,19 @@ function plan(svg: Svg, o: PlanOptions): Plan {
     return c;
   };
   const coloured = o.color && colours.length > 0;
-  const knockable = coloured && colours.some(white) && !colours.every(white);
+  // White among other colours, the page's own counting as one, is a cut-out, as /make/ draws a logo's white: left out
+  // in one ink, whether the page shows no colours or `color: false` asked for none.
+  const knockable = colours.some(white) && (hasInk || !colours.every(white));
   for (const c of colours) want(c);
   if (coloured && hasInk) want("currentcolor");
   const light: string[] = [], dark: string[] = [];
-  // The colours of parts given a character of their own, to be seen on paper even when white.
+  // The colours of parts given a character of their own, to be seen on paper even when white; and a white that is not
+  // a cut-out, in a drawing of nothing else, is seen too.
   const shown = new Set(raw.filter((r) => last(r.shape, "char")).map((r) => (r.c === "currentColor" ? "currentcolor" : final(r.c))));
   if (coloured) {
     for (let run = 0; run < runs; run++)
       for (const c of used) {
-        const l = c === "currentcolor" ? INK.light : sink(c, shown.has(c)), d = c === "currentcolor" ? INK.dark : lift(c);
+        const l = c === "currentcolor" ? INK.light : sink(c, shown.has(c) || !knockable), d = c === "currentcolor" ? INK.dark : lift(c);
         light.push(run ? tint(l, run * 0.35) : l);
         dark.push(run ? tint(d, run * 0.35) : d);
       }
@@ -2423,15 +2464,13 @@ function pick(v: Float64Array, style: VectorStyle, solid: number): number {
 // --- options into a plan ------------------------------------------------------------------------
 
 function planOptions(o: Record<string, unknown>, drawing: boolean, aspect: number): PlanOptions {
-  if (o === null || typeof o !== "object") fail(`${drawing ? "drawSvg" : "fromSvg"} takes options as an object, such as { width: 40, "#star": "spin" }`);
+  if (o === null || typeof o !== "object" || Array.isArray(o)) fail(`${drawing ? "drawSvg" : "fromSvg"} takes options as an object, such as { width: 40, "#star": "spin" }`);
   const parts: PartPlan[] = [];
-  let rank = 0;
   for (const key of Object.keys(o)) {
     if (key === "*" || key.startsWith("#") || key.startsWith(".")) {
       if (key.length < 2 && key !== "*") fail(`a part's name takes an id, a class or a colour after "${key}", such as "#cup" or ".flame"`);
-      // "*" first, then colours, classes and ids, each in the order given: the later and more specific win.
-      const kind = key === "*" ? 0 : /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(key) ? 1 : key[0] === "." ? 2 : 3;
-      parts.push(partOf(key, o[key], kind * 1000 + rank++));
+      // In the order given; plan() ranks them by what they name, once it knows the drawing.
+      parts.push(partOf(key, o[key], parts.length));
     } else if (!OPTIONS.includes(key) || (drawing && ["width", "cols", "rows", "name", "note", "category", "fps", "still", "ground"].includes(key)) || (!drawing && key === "region"))
       fail(`${drawing ? "drawSvg" : "fromSvg"} has no option named ${JSON.stringify(key)}: it takes ${and(OPTIONS.filter((k) => (drawing ? !["width", "cols", "rows", "name", "note", "category", "fps", "still", "ground"].includes(k) : k !== "region")))}, and parts by "#id", ".class", a colour or "*"`);
   }
@@ -2453,7 +2492,8 @@ function planOptions(o: Record<string, unknown>, drawing: boolean, aspect: numbe
     if (p.material && style === "outline") fail(`${p.key}'s material has nothing to fill in the "outline" style, which draws only edges: use "logo", "blocks" or "braille"`);
   const fit = o.fit ?? "ink";
   if (fit !== "ink" && fit !== "viewBox") fail(`fit takes "ink" or "viewBox", not ${JSON.stringify(o.fit)}`);
-  if (o.color !== undefined && typeof o.color !== "boolean") fail(`color takes true (the drawing's own colours) or false (the page's), not ${JSON.stringify(o.color)}`);
+  if (o.color !== undefined && typeof o.color !== "boolean" && !isHex(o.color))
+    fail(`color takes true (the drawing's own colours), false (the page's), or #rrggbb for what it draws in currentColor, not ${JSON.stringify(o.color)}`);
   const width = whole(o.width, "width", 3, MAX.cols);
   const cols = whole(o.cols, "cols", 1, MAX.cols), rows = whole(o.rows, "rows", 1, MAX.rows);
   if (width !== undefined && cols !== undefined) fail("fromSvg takes width or cols, not both: width sizes it by its shape, cols with rows fixes it");
@@ -2465,11 +2505,21 @@ function planOptions(o: Record<string, unknown>, drawing: boolean, aspect: numbe
     fit: fit as "ink" | "viewBox",
     style,
     fill: oneChar(o.fill, "fill") ?? "8",
-    color: (o.color as boolean | undefined) ?? true,
+    color: o.color !== false,
+    ink: typeof o.color === "string" ? o.color.toLowerCase() : null,
     line: above0(o.line, "line") ?? 0.4,
     aspect,
     parts,
   };
+}
+
+// drawSvg's and paletteOf's options, checked before their region is taken out: an object, its region one of the grid.
+function drawOptions(o: DrawSvgOptions, name: string): DrawSvgOptions {
+  if (o === null || typeof o !== "object" || Array.isArray(o)) fail(`${name} takes options as an object, such as { region, "#star": "spin" }`);
+  const r = o.region;
+  if (r !== undefined && !(r && typeof r === "object" && [r.x, r.y, r.cols, r.rows].every((v) => typeof v === "number" && Number.isFinite(v))))
+    fail(`${name}'s region takes { x, y, cols, rows } in cells, not ${JSON.stringify(r)}`);
+  return o;
 }
 
 const svgOf = (svg: string | Svg): Svg => {
@@ -2543,13 +2593,93 @@ export function partCells(cover: Float32Array, cols: number, rows: number, aspec
     depth[i] = border[i] ? 0 : Math.max(0, depth[i] - 1);
     maxDepth = Math.max(maxDepth, depth[i]);
   }
+  // The fringe: cells just outside a top or a bottom that the edge still passes through, where it slopes (its height
+  // changes along the row) and runs nearer flat than upright. A flat edge or a steep side has none.
+  const fringe = new Uint8Array(n);
+  for (let y = Math.max(0, y0 - 1); y < Math.min(rows, y1 + 1); y++)
+    for (let x = Math.max(0, x0 - 1); x < Math.min(cols, x1 + 1); x++) {
+      const i = y * cols + x;
+      if (inside[i] || cover[i] < 0.12 || isIn(x, y + 1) === isIn(x, y - 1) || Math.abs(cv(x - 1, y) - cv(x + 1, y)) < 0.08) continue;
+      const gx = cv(x + 1, y - 1) + 2 * cv(x + 1, y) + cv(x + 1, y + 1) - cv(x - 1, y - 1) - 2 * cv(x - 1, y) - cv(x - 1, y + 1);
+      const gy = cv(x - 1, y + 1) + 2 * cv(x, y + 1) + cv(x + 1, y + 1) - cv(x - 1, y - 1) - 2 * cv(x, y - 1) - cv(x + 1, y - 1);
+      if (Math.abs(gy) / aspect > Math.abs(gx)) fringe[i] = 1;
+    }
   const empty = x1 <= x0;
-  return {
-    cols, rows, list: Int32Array.from(list), inside, cover, border, has: (x, y) => isIn(Math.floor(x), Math.floor(y)) === 1, nx, ny, depth, maxDepth,
+  const outlines = new Map<string, { cells: Int32Array; chars: Uint16Array }>();
+  const cells: PartCells = {
+    cols, rows, list: Int32Array.from(list), inside, cover, border, fringe, has: (x, y) => isIn(Math.floor(x), Math.floor(y)) === 1,
+    outline(style = "line") {
+      let o = outlines.get(style);
+      if (!o) {
+        const at: number[] = [];
+        for (const i of list) if (border[i]) at.push(i);
+        for (let i = 0; i < n; i++) if (fringe[i]) at.push(i);
+        o = { cells: Int32Array.from(at), chars: Uint16Array.from(at, (i) => (border[i] ? edgeChar(cells, i, style) : fringeChar(cells, i)).charCodeAt(0)) };
+        outlines.set(style, o);
+      }
+      return o;
+    },
+    nx, ny, depth, maxDepth,
     x0: empty ? 0 : x0, y0: empty ? 0 : y0, x1: empty ? 0 : x1, y1: empty ? 0 : y1,
     top, bottom, left, right, level: null, room: null, cavity: null, open: false, char: null,
     placed: { test: (x, y) => isIn(Math.floor(x), Math.floor(y)) === 1, x0: empty ? 0 : x0, y0: empty ? 0 : y0, x1: empty ? 0 : x1, y1: empty ? 0 : y1 },
   };
+  return cells;
+}
+
+// A fringe cell's character: low in the cell over a top, "_" or "."; high in it under a bottom, "'" or "-". The same
+// rule as ascii.rest/kit's materials (fringeChar there), so an outlining material draws a drawing's part as its own.
+function fringeChar(c: PartCells, i: number): string {
+  const x = i % c.cols, y = (i - x) / c.cols;
+  const k = c.cover[i];
+  return c.has(x, y + 1) ? (k < 0.3 ? "_" : ".") : k < 0.3 ? "'" : "-";
+}
+
+// The outline character for a cell on a part's edge, from which of the cells round it are out: the same rules as
+// ascii.rest/kit's materials (edgeChar there), which integration may share through core.
+function edgeChar(c: PartCells, i: number, style: "line" | "round"): string {
+  const { cols } = c;
+  const x = i % cols, y = (i - x) / cols;
+  const has = c.has;
+  const L = !has(x - 1, y), R = !has(x + 1, y), U = !has(x, y - 1), D = !has(x, y + 1);
+  const left = style === "round" ? "(" : "|", right = style === "round" ? ")" : "|";
+  const n = +L + +R + +U + +D;
+  // a top or bottom whose line the fringe above or below already draws
+  const fringeAt = (yy: number) => yy >= 0 && yy < c.rows && c.fringe[yy * cols + x] === 1;
+  if (n === 1) {
+    if (U) return fringeAt(y - 1) ? " " : "-";
+    if (D) return fringeAt(y + 1) ? " " : "_";
+    // a side: a slope where it steps in or out a column on the next row
+    const d = L ? 1 : -1;
+    const out = (yy: number) => !has(x, yy) && has(x + d, yy);
+    if (style === "line" && out(y + 1) && !out(y - 1)) return d > 0 ? "\\" : "/";
+    if (style === "line" && out(y - 1) && !out(y + 1)) return d > 0 ? "/" : "\\";
+    return d > 0 ? left : right;
+  }
+  if (n === 2) {
+    if (L && R) return "|";
+    if (U && D) return "-";
+    // a corner, h and v the way in across and down
+    const h = L ? 1 : -1, v = U ? 1 : -1;
+    const slope = style === "round" ? (h > 0 ? "(" : ")") : (v > 0) === (h > 0) ? "/" : "\\";
+    // a shallow slope's fringe beside it carries the slope: here it is the top or the bottom
+    if (x - h >= 0 && x - h < cols && c.fringe[i - h]) return v > 0 ? "-" : "_";
+    const square = has(x, y + v) && !has(x - h, y + v) && has(x + h, y) && !has(x + h, y - v);
+    // a square corner: "." at the top; at the bottom the side goes on, or "'" closing a stroke a cell thick
+    if (square) return v > 0 ? "." : !has(x + h, y + v) ? "'" : h > 0 ? left : right;
+    if (has(x + h, y - v)) return slope;
+    if (c.cover[i] < 0.62) return v > 0 ? "." : "'";
+    return slope;
+  }
+  // a tip: a point at the top or the bottom, or the end of a stroke across, sloping if the edge goes on up or down
+  if (n === 3) {
+    if (!D) return ".";
+    if (!U) return "'";
+    const d = !R ? 1 : -1;
+    if (style === "round" && (has(x + d, y - 1) || has(x + d, y + 1))) return d > 0 ? "(" : ")";
+    return has(x + d, y - 1) ? (d > 0 ? "/" : "\\") : has(x + d, y + 1) ? (d > 0 ? "\\" : "/") : "-";
+  }
+  return ".";
 }
 
 // The parts a material or a piece fills, drawn over the drawing's cells in the grid, the backmost first. The drawing
@@ -2657,13 +2787,14 @@ export function fromSvg(svg: string | Svg, options: VectorOptions = {}): KitPiec
   };
 
   // The loop: the motions' periods and each fill's own, by the kit's time rule: a moving piece with no loop of its own
-  // counts as having the drawing's periods, and leaves the loop unknown when the drawing has none.
+  // counts as having the drawing's periods, and leaves the loop unknown when the drawing has none; a material whose
+  // period is Infinity moves without repeating, so there is no loop.
   const loops = [...p.periods];
   let unknown = false;
   for (const f of sources) {
     const l = f.material ? f.material.period : f.src!.meta.loop;
-    if (l !== undefined && l > 0) loops.push(l);
-    else if (f.src && f.src.meta.fps > 0 && !p.periods.length) unknown = true;
+    if (l !== undefined && Number.isFinite(l) && l > 0) loops.push(l);
+    else if (l === Infinity || (f.src && f.src.meta.fps > 0 && !p.periods.length)) unknown = true;
   }
   const moving = p.moving || sources.some((f) => (f.src ? f.src.meta.fps > 0 : f.material!.period !== undefined));
   const loop = moving && !unknown ? loopOf(loops) : undefined;
@@ -2737,7 +2868,7 @@ const keyOf = (o: Record<string, unknown>, s: Surface, region: Region) =>
  *   export default piece({ name: "badge", cols: 40, rows: 12, palette: paletteOf(heart) }, (t, s) => drawSvg(s, heart, t));
  */
 export function paletteOf(svg: string | Svg, options: DrawSvgOptions = {}): { light: string[]; dark: string[] } | undefined {
-  const { region: _, ...rest } = options;
+  const { region: _, ...rest } = drawOptions(options, "paletteOf");
   const o = planOptions(rest as Record<string, unknown>, true, 2);
   const p = plan(svgOf(svg), { ...o, cols: 48, rows: 24 });
   return p.light.length ? { light: p.light, dark: p.dark } : undefined;
@@ -2763,7 +2894,7 @@ export function drawSvg(s: Surface, svg: string | Svg, t: number, options: DrawS
       parsed.set(svg, doc);
     }
   } else doc = svgOf(svg);
-  const region = s.clip(options.region);
+  const region = s.clip(drawOptions(options, "drawSvg").region);
   if (!region.cols || !region.rows) return;
   const key = keyOf(options as Record<string, unknown>, s, region);
   let byKey = plans.get(doc);
@@ -2799,7 +2930,8 @@ export function drawSvg(s: Surface, svg: string | Svg, t: number, options: DrawS
   }
   const { plan: p, drawer, fills } = entry;
   entry.target = s;
-  const r = drawer.render(Number.isFinite(t) ? t : 0, s.mono);
+  // Drawn as one ink, cut-outs and all, on a page that shows no colours or when the options asked for none.
+  const r = drawer.render(Number.isFinite(t) ? t : 0, s.mono || !p.light.length);
   const theme = s.paper ? p.light : p.dark;
   for (let y = 0; y < p.rows; y++)
     for (let x = 0; x < p.cols; x++) {
