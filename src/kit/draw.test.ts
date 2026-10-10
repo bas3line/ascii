@@ -4,8 +4,9 @@ import { test } from "node:test";
 import { svg } from "../svg.ts";
 import type { Piece } from "../types.ts";
 import { EMPTY, NONE, Palette, Surface, piece, snapshot } from "./core.ts";
-import { around, boxes, braille, circle, ellipse, label, line, pixels, polygon, polyline, ray, rect, stamp, text } from "./draw.ts";
+import { arc, around, boxes, braille, circle, ellipse, label, line, pixels, polygon, polyline, ray, rect, stamp, text } from "./draw.ts";
 import clock from "../../examples/kit/draw-clock.ts";
+import gauge from "../../examples/kit/draw-gauge.ts";
 import sine from "../../examples/kit/draw-sine.ts";
 import sprite from "../../examples/kit/draw-sprite.ts";
 
@@ -293,10 +294,15 @@ test("rect: each style's corners and edges, from boxes", () => {
   const own = new Surface(4, 3);
   rect(own, 0, 0, 4, 3, { style: "1234=!" });
   assert.deepEqual(rows(own), ["1==2", "!  !", "3==4"]);
+  // a box one row tall is a line across, one column wide a line down; where they meet they join, ends and all
   const flat = new Surface(4, 2);
   rect(flat, 0, 0, 4, 1);
   rect(flat, 3, 0, 1, 2, { style: "double" });
-  assert.deepEqual(rows(flat), ["───║", "   ║"]);
+  assert.deepEqual(rows(flat), ["───╖", "   ║"]);
+  const over = new Surface(4, 2);
+  rect(over, 0, 0, 4, 1);
+  rect(over, 3, 0, 1, 2, { style: "double", join: false });
+  assert.deepEqual(rows(over), ["───║", "   ║"], "join: false draws over as it is");
   assert.throws(() => rect(own, 0, 0, 3, 3, { style: "dashed!" }), /style takes "single", "double", "rounded", "heavy", "ascii" or "none", or 6 characters of your own/);
   // six letters are a name spelt wrong, not a border
   assert.throws(() => rect(own, 0, 0, 3, 3, { style: "dotted" }), /not "dotted"/);
@@ -326,6 +332,250 @@ test("rect: a title on the top edge, cut to fit; fills; colours", () => {
   rect(block, 0, 0, -2, 3);
   assert.deepEqual(rows(block), ["    ", " ░░░", " ░░░"], "a box of no size draws nothing");
   assert.throws(() => rect(block, 0, 0, 2, 2, { fill: "##" }), /fill takes one character/);
+  // a title's characters are checked whether or not the box has room for it
+  assert.throws(() => rect(block, 0, 0, 4, 3, { title: "a\tb" }), /a cell takes one printable character/);
+  assert.throws(() => rect(block, 0, 0, 2, 2, { title: "😀" }), /Basic Multilingual Plane/);
+});
+
+test("rect: returns the region inside its border, to draw in", () => {
+  const s = new Surface(20, 8);
+  assert.deepEqual(rect(s, 2, 1, 10, 5), { x: 3, y: 2, cols: 8, rows: 3 });
+  assert.deepEqual(rect(s, 2, 1, 10, 5, { style: "none", fill: "." }), { x: 2, y: 1, cols: 10, rows: 5 }, "no border: all of it");
+  assert.deepEqual(rect(s, 0, 0, 2, 2), { x: 1, y: 1, cols: 0, rows: 0 }, "no room inside");
+  assert.deepEqual(rect(s, 0, 0, 0, 4), { x: 0, y: 0, cols: 0, rows: 0 });
+  assert.deepEqual(rect(s, NaN, 0, 4, 4), { x: 0, y: 0, cols: 0, rows: 0 });
+  // past the grid it is not cut: the region says where the inside is
+  assert.deepEqual(rect(s, 15, 6, 10, 5), { x: 16, y: 7, cols: 8, rows: 3 });
+  // it goes straight into braille(), pixels() and text()
+  const g = new Surface(12, 4);
+  const b = braille(g, rect(g, 0, 0, 12, 4, { style: "rounded" }));
+  assert.deepEqual([b.width, b.height], [20, 8]);
+  text(g, rect(g, 0, 0, 12, 4, { style: "rounded" }), "hi", { align: "center", valign: "middle" });
+  assert.deepEqual(rows(g), ["╭──────────╮", "│    hi    │", "│          │", "╰──────────╯"]);
+});
+
+test("rect: a box far bigger than the grid costs no more than the grid", () => {
+  const a = performance.now();
+  const out = new Surface(20, 6);
+  rect(out, -1e9, -1e9, 2e9 + 10, 2e9 + 3);
+  rect(out, 2 ** 32, 0, 5, 3);
+  assert.deepEqual(drawn(out), [], "its edges are all off the grid");
+  const wide = new Surface(20, 3);
+  rect(wide, 0, 0, 1e9, 3, { fill: ".", title: "x".repeat(100000) });
+  const tall = new Surface(4, 6);
+  rect(tall, 0, 0, 4, 1e9);
+  assert.ok(performance.now() - a < 50, `${performance.now() - a} ms`);
+  assert.deepEqual(rows(wide), ["┌─ xxxxxxxxxxxxxxxxx", "│...................", "└───────────────────"]);
+  assert.deepEqual(rows(tall), ["┌──┐", "│  │", "│  │", "│  │", "│  │", "│  │"]);
+});
+
+test("line: coordinates far past the grid never wrap round into it", () => {
+  // 2 ** 32 + 3 is 3 to a 32-bit integer: drawn nowhere, not at column 3
+  const s = new Surface(8, 3);
+  line(s, 2 ** 32 + 3, 0, 2 ** 32 + 5, 0, { char: "#" });
+  line(s, 2 ** 32 + 1, 1, 2 ** 32 + 1, 1, { char: "@" });
+  line(s, -(2 ** 32) + 2, 2, -(2 ** 32) + 4, 2, { style: "double" });
+  polygon(s, [[2 ** 32 + 1, 1], [2 ** 32 + 5, 1], [2 ** 32 + 3, 2]], { char: "x" });
+  polyline(s, [[2 ** 33, 0], [2 ** 33 + 4, 0]]);
+  ray(s, 2 ** 32 + 2, 1, 3, 0.25);
+  const b = braille(s);
+  b.line(2 ** 33 + 1, 1, 2 ** 33 + 3, 1);
+  b.draw();
+  const p = pixels(s);
+  p.line(2 ** 32 + 1, 1, 2 ** 32 + 3, 1);
+  p.draw();
+  assert.deepEqual(drawn(s), []);
+  // a line from far off to the grid still reaches it
+  line(s, -1e12, 1, 3, 1, { char: "=" });
+  assert.equal(rows(s)[1], "====    ");
+});
+
+test("joins: box-drawing lines merge where they meet", () => {
+  // a frame, then a divider across and one down from it: ├ ┤ ┬ ┴ ┼
+  const s = new Surface(13, 7);
+  rect(s, 0, 0, 13, 7);
+  line(s, 0, 3, 12, 3, { style: "single" });
+  line(s, 6, 0, 6, 6, { style: "single" });
+  assert.deepEqual(rows(s), ["┌─────┬─────┐", "│     │     │", "│     │     │", "├─────┼─────┤", "│     │     │", "│     │     │", "└─────┴─────┘"]);
+  // the other way round, dividers first, then the frame: loose ends are left out, so the corners stay corners
+  const d = new Surface(13, 7);
+  line(d, 0, 3, 12, 3, { style: "single" });
+  line(d, 6, 0, 6, 6, { style: "single" });
+  rect(d, 0, 0, 13, 7);
+  assert.deepEqual(rows(d), rows(s));
+  // two boxes sharing an edge, rounded: ┬ and ┴ where they meet, the outer corners still rounded
+  const two = new Surface(9, 3);
+  rect(two, 0, 0, 5, 3, { style: "rounded" });
+  rect(two, 4, 0, 5, 3, { style: "rounded" });
+  assert.deepEqual(rows(two), ["╭───┬───╮", "│   │   │", "╰───┴───╯"]);
+  // the same box twice is the same box
+  rect(two, 0, 0, 5, 3, { style: "rounded" });
+  assert.deepEqual(rows(two), ["╭───┬───╮", "│   │   │", "╰───┴───╯"]);
+  // weights mix where a character draws it: double with single, heavy with light
+  const mix = new Surface(9, 5);
+  rect(mix, 0, 0, 9, 5, { style: "double" });
+  line(mix, 0, 2, 8, 2, { style: "single" });
+  line(mix, 4, 0, 4, 4, { style: "single" });
+  assert.deepEqual(rows(mix), ["╔═══╤═══╗", "║   │   ║", "╟───┼───╢", "║   │   ║", "╚═══╧═══╝"]);
+  const heavy = new Surface(5, 3);
+  rect(heavy, 0, 0, 5, 3);
+  line(heavy, 2, 0, 2, 2, { style: "heavy" });
+  assert.deepEqual(rows(heavy), ["┌─┰─┐", "│ ┃ │", "└─┸─┘"]);
+  // heavy over double, which no character mixes, takes the new weight throughout
+  const hd = new Surface(5, 3);
+  rect(hd, 0, 0, 5, 3, { style: "double" });
+  line(hd, 2, 0, 2, 2, { style: "heavy" });
+  assert.equal(rows(hd)[0], "╔═┳═╗");
+  // ascii: + where they meet
+  const a = new Surface(7, 3);
+  rect(a, 0, 0, 7, 3, { style: "ascii" });
+  line(a, 3, 0, 3, 2, { style: "ascii" });
+  assert.deepEqual(rows(a), ["+--+--+", "|  |  |", "+--+--+"]);
+  // a box-drawing brush joins as it is: ─ over │ is ┼
+  const b = new Surface(3, 3);
+  line(b, 1, 0, 1, 2, { char: "│" });
+  line(b, 0, 1, 2, 1, { char: "─" });
+  assert.deepEqual(rows(b), [" │ ", "─┼─", " │ "]);
+  // join: false draws over, and other characters are never joined
+  const off = new Surface(5, 3);
+  rect(off, 0, 0, 5, 3);
+  line(off, 2, 0, 2, 2, { style: "single", join: false });
+  assert.deepEqual(rows(off), ["┌─│─┐", "│ │ │", "└─│─┘"]);
+  const t = Surface.from("-|+");
+  line(t, 0, 0, 2, 0, { style: "single" });
+  assert.equal(t.toString(), "───", "text that looks like lines is drawn over");
+  assert.throws(() => line(off, 0, 0, 1, 0, { join: 1 as never }), /join takes true or false/);
+});
+
+test("line, polyline and polygon in a box style: corners where they turn, slants as auto", () => {
+  const s = new Surface(12, 5);
+  polyline(s, [[0, 0], [5, 0], [5, 4], [11, 4]], { style: "single" });
+  assert.deepEqual(rows(s), ["─────┐      ", "     │      ", "     │      ", "     │      ", "     └──────"]);
+  const r = new Surface(12, 5);
+  polyline(r, [[0, 0], [5, 0], [5, 4], [11, 4]], { style: "rounded" });
+  assert.deepEqual([r.get(5, 0), r.get(5, 4)], ["╮", "╰"]);
+  for (const [style, corners] of [["double", "╔╗╚╝"], ["heavy", "┏┓┗┛"], ["rounded", "╭╮╰╯"], ["ascii", "++++"]] as const) {
+    const p = new Surface(6, 4);
+    polygon(p, [[0, 0], [5, 0], [5, 3], [0, 3]], { style });
+    assert.deepEqual([p.get(0, 0), p.get(5, 0), p.get(0, 3), p.get(5, 3)].join(""), corners, style);
+  }
+  // an L, filled
+  const room = new Surface(8, 6);
+  polygon(room, [[0, 0], [7, 0], [7, 2], [3, 2], [3, 5], [0, 5]], { style: "single", fill: "." });
+  assert.deepEqual(rows(room), ["┌──────┐", "│......│", "│..┌───┘", "│..│    ", "│..│    ", "└──┘    "]);
+  // a slanting stretch is drawn as "auto" draws a line; the straight ones stay box lines
+  const slant = new Surface(10, 3);
+  polyline(slant, [[0, 2], [4, 2], [9, 0]], { style: "single" });
+  assert.match(rows(slant)[2], /^────/);
+  assert.ok(/[_/]/.test(rows(slant).join("")) && !/[─│]/.test(rows(slant)[0]));
+  // a lone point is a short line across; a line of no length too
+  const dot = new Surface(3, 1);
+  line(dot, 1, 0, 1.5, 0.5, { style: "double" });
+  assert.equal(dot.toString(), " ═ ");
+  assert.throws(() => line(dot, 0, 0, 1, 0, { style: "dotted" as never }), /a line's style takes "single", "double", "rounded", "heavy" or "ascii", not "dotted"/);
+  assert.throws(() => line(dot, 0, 0, 1, 0, { style: "single", char: "#" }), /a line takes a char or a style, not both/);
+  assert.throws(() => polygon(dot, [[0, 0], [1, 0], [1, 1]], { style: "single", char: "*" }), /a polygon takes a char or a style, not both/);
+});
+
+test("text: in a region, wrapped to it and placed in it by align and valign", () => {
+  const s = new Surface(12, 5);
+  const box = { x: 1, y: 1, cols: 10, rows: 3 };
+  assert.deepEqual(text(s, box, "one two three", { align: "center" }), { x: 2, y: 1, cols: 7, rows: 2 });
+  assert.deepEqual(rows(s), ["            ", "  one two   ", "   three    ", "            ", "            "]);
+  const m = new Surface(12, 5);
+  text(m, box, "hi", { align: "right", valign: "bottom" });
+  assert.equal(m.get(9, 3) + m.get(10, 3), "hi");
+  // lines past the region's rows are left out; its options can still set the box
+  const cut = new Surface(12, 5);
+  assert.equal(text(cut, { x: 0, y: 0, cols: 3, rows: 2 }, "aa bb cc dd").rows, 2);
+  assert.equal(text(cut, { x: 0, y: 3, cols: 3, rows: 2 }, "aaaa bbbb", { wrap: false }).cols, 3);
+  // a region with no room draws nothing; one that is not a region throws
+  const none = new Surface(4, 2);
+  assert.deepEqual(text(none, { x: 1, y: 1, cols: 0, rows: 3 }, "x"), { x: 1, y: 1, cols: 0, rows: 0 });
+  assert.equal(none.toString(), "    \n    ");
+  assert.throws(() => text(none, { x: 0, y: 0, cols: NaN, rows: 1 }, "x"), /text\(\) takes a region as \{ x, y, cols, rows \}/);
+  assert.throws(() => text(none, { x: 0, y: 0, cols: 2, rows: 1 }, "\u0007"), /a cell takes one printable character/);
+});
+
+test("arc: part of a circle, clockwise from the top, as around() turns", () => {
+  const ring = new Surface(41, 21), part = new Surface(41, 21);
+  circle(ring, 20.5, 10.5, 16);
+  arc(part, 20.5, 10.5, 16, 0, 0.25);
+  // every cell of the arc is on the circle, and in the top right quarter
+  const cells = drawn(part);
+  assert.ok(cells.length > 10);
+  for (const [x, y] of cells) {
+    assert.equal(ring.get(x, y), "*");
+    assert.ok(x >= 20 && y <= 10, `${x}, ${y}`);
+  }
+  // a turn or more is the whole circle; to equal to from is nothing
+  const whole = new Surface(41, 21);
+  arc(whole, 20.5, 10.5, 16, 0.3, 1.3);
+  assert.equal(whole.toString(), ring.toString());
+  const nothing = new Surface(41, 21);
+  arc(nothing, 20.5, 10.5, 16, 0.3, 0.3);
+  arc(nothing, 20.5, 10.5, 16, NaN, 1);
+  assert.deepEqual(drawn(nothing), []);
+  // to before from goes round through the top: 0.75 to 0.25 is the top half
+  const top = new Surface(41, 21);
+  arc(top, 20.5, 10.5, 16, 0.75, 0.25);
+  assert.ok(drawn(top).every(([, y]) => y <= 10) && drawn(top).some(([x]) => x < 10) && drawn(top).some(([x]) => x > 30));
+  // with a fill, a slice of pie: its inside is in the same quarter
+  const pie = new Surface(41, 21);
+  arc(pie, 20.5, 10.5, 16, 0.25, 0.5, { char: "o", fill: ":" });
+  assert.equal(pie.get(26, 13), ":");
+  assert.equal(pie.get(14, 13), "");
+  assert.equal(pie.get(26, 7), "");
+  // on the canvases too
+  const b = braille(new Surface(20, 10));
+  b.arc(20, 20, 16, 0.5, 1);
+  let left = 0, right = 0;
+  for (let y = 0; y < b.height; y++) for (let x = 0; x < b.width; x++) if (b.get(x, y)) x < 20 ? left++ : right++;
+  assert.ok(left > 20 && right === 0, "0.5 to 1 is the left half");
+  const p = pixels(new Surface(20, 10));
+  p.arc(10, 10, 8, 0, 0.5, { fill: true });
+  assert.ok(p.get(14, 10) && !p.get(5, 10));
+  assert.throws(() => arc(pie, 1, 1, 2, 0, 1, { char: "ab" }), /an arc's char takes one character/);
+  assert.throws(() => ellipse(pie, 1, 1, 2, 2, { char: "ab" }), /an ellipse's char takes one character/);
+});
+
+test("circle and ellipse: the outline is joined at every size and centre, where the curve turns through a diagonal too", () => {
+  // the turn from flat to steep can fall between the column and row samples; the cell there must still be drawn
+  for (let r = 1.5; r <= 20; r += 0.25)
+    for (const [cx, cy] of [[30, 15], [30.5, 15.5], [30.25, 15], [30, 15.5], [30.7, 15.3], [30.1, 15.9]])
+      for (const char of ["*", "auto"]) {
+        const s = new Surface(62, 32);
+        circle(s, cx, cy, r, { char });
+        assert.ok(joined(drawn(s)), `circle r ${r} at ${cx}, ${cy}, ${char}`);
+      }
+  for (let rx = 1.5; rx <= 28; rx += 1.25)
+    for (let ry = 1; ry <= 14; ry += 0.75)
+      for (const [cx, cy] of [[30, 15], [30.5, 15.5], [30.3, 15.8]]) {
+        const s = new Surface(62, 32);
+        ellipse(s, cx, cy, rx, ry);
+        assert.ok(joined(drawn(s)), `ellipse ${rx} by ${ry} at ${cx}, ${cy}`);
+      }
+  for (let r = 2; r <= 39; r += 0.5) {
+    const b = braille(new Surface(40, 20));
+    b.circle(40.3, 40.8, r);
+    const dots: [number, number][] = [];
+    for (let y = 0; y < b.height; y++) for (let x = 0; x < b.width; x++) if (b.get(x, y)) dots.push([x, y]);
+    assert.ok(joined(dots), `braille circle r ${r}`);
+  }
+});
+
+test("circle: auto outlines have no doubled sides at any size or centre", () => {
+  for (let r = 1.5; r <= 14; r += 0.5)
+    for (const [cx, cy] of [[20, 10], [20.5, 10.5], [20.25, 10], [20, 10.5], [20.7, 10.3]]) {
+      const s = new Surface(42, 22);
+      circle(s, cx, cy, r, { char: "auto" });
+      for (const l of rows(s)) assert.doesNotMatch(l, /\|[/\\_]|[/\\_]\||\/\/|\\\\/, `r ${r} at ${cx}, ${cy}`);
+      assert.ok(joined(drawn(s)), `joined: r ${r} at ${cx}, ${cy}`);
+    }
+  // a small one centred on a cell: round, not a box
+  const s = new Surface(13, 7);
+  circle(s, 6.5, 3.5, 5, { char: "auto" });
+  assert.deepEqual(rows(s).slice(1, 6), ["   _______   ", "  /       \\  ", " |         | ", "  \\       /  ", "   \\_____/   "]);
 });
 
 // The outline's cells joined: every one reached from the first through neighbours, diagonals included.
@@ -783,12 +1033,15 @@ test("colours: an index or #rrggbb, by the page's theme, checked on a piece in o
 
 test("a piece drawn with draw is the same frame for the same t, whatever came before", () => {
   const p = piece({ name: "mix", cols: 30, rows: 10, palette: ["#0969da", "#cf222e"] }, (t, s) => {
-    rect(s, 0, 0, 30, 10, { style: "double", title: "mix" });
+    const inside = rect(s, 0, 0, 30, 10, { style: "double", title: "mix" });
+    line(s, 20, 0, 20, 9, { style: "single", color: 1 });
     circle(s, 15, 5, 6 + Math.sin(t), { char: "auto", color: 1 });
+    arc(s, 15, 5, 4, t / 4, t / 4 + 0.3, { char: "#" });
     const b = braille(s, { x: 2, y: 2, cols: 8, rows: 3 });
     b.plot((x) => Math.sin(x + t));
+    b.arc(8, 6, 5, 0, t % 1, { fill: true, color: 1 });
     b.draw();
-    text(s, 0, 9, `t ${t.toFixed(1)}`, { align: "right", width: 29 });
+    text(s, inside, `t ${t.toFixed(1)}`, { align: "right", valign: "bottom" });
   });
   for (const t of [0, 0.4, 3.3, 59.9]) {
     const fresh = snapshot(p, t);
@@ -844,5 +1097,16 @@ test("the examples: pieces that play everywhere and look like what they are", ()
     assert.equal(mono.text, snapshot(p, 1.5).text);
   }
   assert.match(snapshot(sprite, 3.5).text.split("\n")[5], /^▄ +▄████$/, "wrap: it walks off the right and back on at the left");
-  for (const p of [clock, sine, sprite]) assert.match(svg(p), /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+  // the gauge: the line down joins the frame, the reading is in the middle of its panel, and it loops every 8 s
+  contract(gauge, [0, 1, 2.5, 7.9]);
+  const g = snapshot(gauge, 2).text.split("\n");
+  assert.match(g[0], /^╭─ cpu ─+┬─+╮$/);
+  assert.match(g.at(-1)!, /^╰─+┴─+╯$/);
+  assert.match(g[6], /^│ █ +\d+% +[█░]  │/, "the reading in the middle of the dial, in the left panel");
+  assert.ok(g.join("").includes("█") && g.join("").includes("░"), "the dial's reading and its track differ by character, so mono reads too");
+  assert.equal(gauge.meta.loop, 8);
+  assert.equal(snapshot(gauge, 1.25).text, snapshot(gauge, 9.25).text, "it loops every 8 seconds");
+  assert.notEqual(snapshot(gauge, 1).text, snapshot(gauge, 3).text);
+  assert.equal(snapshot(gauge, 1.5, { mono: true }).text, snapshot(gauge, 1.5).text);
+  for (const p of [clock, sine, sprite, gauge]) assert.match(svg(p), /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
 });
