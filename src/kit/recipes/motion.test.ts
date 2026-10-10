@@ -129,6 +129,15 @@ test("spinning: a 3D shape tumbles, or turns as asked, once a period; a flat thi
   assert.equal(at(coin, 0), at(word, 0), "face on at the start");
   assert.equal(at(coin, 3), at(flip(word, "x"), 0), "its mirrored back half way round");
   assert.ok(ink(at(coin, 1.4)) < ink(at(coin, 0)) / 2, "narrow nearly edge on");
+  // A flat thing wider than 160 columns spins too, up to the 320 a piece can be: its back was a mirrored copy laid beside
+  // it, a piece twice as wide, which threw.
+  for (const wide of [asPiece(`(${"=".repeat(198)}>`), asPiece(`[${"-".repeat(318)}/`)]) {
+    const spun = spinning(wide);
+    assert.deepEqual([spun.meta.cols, spun.meta.rows], [wide.meta.cols, 1]);
+    assert.equal(at(spun, 0), at(wide, 0), "face on at the start");
+    assert.equal(at(spun, 3), at(flip(wide, "x"), 0), "its mirrored back half way round");
+    contract(spun);
+  }
   assert.throws(() => spinning(word, { way: "wheel" }), /spinning's way "wheel" is for a 3D shape/);
   assert.throws(() => spinning(torus(), { way: "sideways" as never }), /spinning's way takes "tumble", "turntable", "wheel" or "flip"/);
   assert.throws(() => spinning(torus(), { spin: 1 } as never), /spinning\(\) has no option "spin"/);

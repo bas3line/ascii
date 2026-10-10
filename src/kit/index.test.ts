@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import * as kit from "./index.ts";
 
-// Every module's values, so a new export can't be left out of ascii.rest/kit. glyphs.ts is image's data, not API, and
-// recipes/checks.ts is the recipes' own checking.
+// Every module's values, so a new export can't be left out of ascii.rest/kit. glyphs.ts is image's data, not API,
+// mirror.ts is flip()'s table of mirrored characters, which spinning() shares, and recipes/checks.ts is the recipes' own
+// checking.
 const recipes = ["recipes/palettes", "recipes/words", "recipes/looks", "recipes/motion", "recipes/widgets"];
 const modules = ["core", "math", "draw", "field", "shapes3d", "particles", "fx", "compose", "image", "materials", "vector", ...recipes];
 

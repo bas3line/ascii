@@ -21,8 +21,9 @@
  */
 import type { Piece } from "../../types.ts";
 import { Surface, TAU, fail, type KitPiece } from "../core.ts";
-import { crop, flip, layer, row, type Anchor, type Layer } from "../compose.ts";
+import { crop, layer, type Anchor, type Layer } from "../compose.ts";
 import { effect, shake } from "../fx.ts";
+import { mirror } from "../mirror.ts";
 import { group, orbit, scene, sphere, torus, type Shape3d } from "../shapes3d.ts";
 import {
   NAMING,
@@ -130,25 +131,26 @@ export function spinning(thing: Thing, o?: SpinOptions): KitPiece {
   if (p.way !== undefined && p.way !== "turntable")
     fail(`spinning's way ${show(p.way)} is for a 3D shape such as torus(): a flat thing turns like a coin, way "turntable"`);
   if (p.cols !== undefined || p.rows !== undefined) fail("spinning's cols and rows size a 3D shape's scene: a flat thing keeps its own size");
-  // A coin: the thing and its mirror image side by side, and each frame the columns of one of them, squeezed to the
-  // coin's width at that moment, cos of the turn; edge on, a line down its middle.
+  // A coin: each frame the thing's columns squeezed to the coin's width at that moment, cos of the turn, and past a
+  // quarter turn its back, the thing mirrored as flip() mirrors it, characters and all; edge on, a line down its middle.
+  // The back is read off the front, not a mirrored copy laid beside it, so a thing as wide as a piece can be spins.
   const src = pieceOf(thing, "spinning()");
   const { cols: w, rows: h } = src.meta;
-  const both = row([src, flip(src, "x")], { gap: 0 });
-  const coin = effect(both, { period, ...named(src, p, "spinning like a coin") }, (t, s, g) => {
+  const coin = effect(src, { period, ...named(src, p, "spinning like a coin") }, (t, s, g) => {
     const k = Math.cos(TAU * phaseAt(t, period));
-    const from = k >= 0 ? 0 : w;
+    const back = k < 0, turned = mirror().x;
     const half = w / 2;
     for (let x = 0; x < w; x++) {
       const u = (x + 0.5 - half) / Math.max(Math.abs(k), 1e-3) + half;
       if (u < 0 || u >= w) continue;
+      const from = back ? w - 1 - Math.floor(u) : Math.floor(u);
       for (let y = 0; y < h; y++) {
-        const j = y * g.cols + from + Math.floor(u);
-        if (g.chars[j]) s.put(y * s.cols + x, g.chars[j], g.colors[j]);
+        const j = y * g.cols + from;
+        if (g.chars[j]) s.put(y * s.cols + x, back ? turned[g.chars[j]] : g.chars[j], g.colors[j]);
       }
     }
     // edge on, where no column is wide enough to show, the coin is a line
-    if (Math.abs(k) * w < 1) for (let y = 0; y < h; y++) if (g.chars[y * g.cols + Math.floor(half)] || g.chars[y * g.cols + w + Math.floor(half)]) s.set(Math.floor(half), y, "|");
+    if (Math.abs(k) * w < 1) for (let y = 0; y < h; y++) if (g.chars[y * g.cols + Math.floor(half)] || g.chars[y * g.cols + w - 1 - Math.floor(half)]) s.set(Math.floor(half), y, "|");
   });
   return crop(coin, { x: 0, y: 0, cols: w, rows: h });
 }
