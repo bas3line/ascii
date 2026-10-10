@@ -78,6 +78,22 @@ test("typing: each word holds with its glint and the cursor blinking, is erased 
   assert.match(svg(p), /infinite/);
 });
 
+test("typing: play loop types the line, holds it as the still until the loop comes round, and types it again", () => {
+  const p = typing(SOURCE, { play: "loop" });
+  const intro = p.meta.still!;
+  // a build of 23 / 18 seconds and a hold of 3, round to 5
+  assert.equal(p.meta.loop, 5);
+  assert.equal(p.idle, false);
+  // held: the line with its first word, no cursor, no glint, and never erased or retyped before the loop comes round
+  const still = toned(p, intro);
+  assert.equal(still.text.trimEnd(), STILL);
+  for (const t of [intro + 0.1, intro + 0.3, 2, 2.78, 2.9, 3.28, 4, 4.5, 4.99]) assert.deepEqual(toned(p, t), still, `t = ${t}`);
+  // round again: it types the line from the start
+  assert.equal(at(p, 5), "▌");
+  assert.equal(at(p, 5.6), "ascii.rest▌");
+  assert.deepEqual(toned(p, 5 + intro + 1), still);
+});
+
 test("typing: takes its words as data too, and a line whose word never changes types once and blinks", () => {
   assert.equal(plain(typing({ before: "ascii.rest draws", turns: ["scenes", "banners", "components"] })), STILL);
   const fixed = typing("hello world");

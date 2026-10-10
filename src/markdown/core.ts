@@ -573,8 +573,9 @@ export function component<O extends object>(
       // build time: the speed's, and round the loop
       const bt = !moves ? body.intro : (period ? ((t % period) + period) % period : Math.max(0, t)) * speed;
       // The still: the finished figure with nothing passing over it. A figure that keeps moving once built is still
-      // only at the moment its build ends, the moment a player holds for reduced motion and plain() prints.
-      const isStill = !moves || Math.abs(bt - body.intro) < 1e-9 || (!lasting && !period && bt >= body.intro);
+      // only at the moment its build ends, the moment a player holds for reduced motion and plain() prints. A play
+      // "loop" holds the still from the end of its build until the loop comes round, its cycle never playing.
+      const isStill = !moves || Math.abs(bt - body.intro) < 1e-9 || (!lasting && bt >= body.intro);
       body.draw(s, isStill ? body.intro : bt, { x: pad, y: style ? 1 : 0, still: isStill });
       if (!style || !joins) return;
       // the frame over the body's edges, so nothing drawn reaches past them

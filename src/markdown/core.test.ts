@@ -219,6 +219,14 @@ test("component: a cycle keeps moving once built, seamless, its still at the end
   assert.deepEqual(ring({ speed: 2 }).motion, { seconds: 1, from: 0.5, once: false });
   // svg() loops the cycle from the end of the build
   assert.match(svg(p), /infinite/);
+  // play "loop" builds, then holds the still until the loop comes round: the cycle never plays in the hold
+  const loop = ring({ play: "loop" });
+  assert.equal(loop.idle, false);
+  assert.equal(loop.meta.loop, 4);
+  const looped = loop.default();
+  const still = looped(1, { paper: true });
+  for (const t of [1.5, 2, 2.5, 3, 3.5, 3.99, 5.5, 7.9]) assert.equal(looped(t, { paper: true }), still, `t = ${t}`);
+  assert.notEqual(looped(4.5, { paper: true }), still);
   // play "still" never moves, a cycle or not
   assert.equal(ring({ play: "still" }).idle, false);
   assert.equal(ring({ play: "still" }).motion, undefined);
