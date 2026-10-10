@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { svg } from "../svg.ts";
 import type { Piece } from "../types.ts";
-import { INK, Surface, isHex, piece, rgb, snapshot } from "./core.ts";
+import { INK, Surface, isHex, materialColors as palettes, piece, rgb, snapshot } from "./core.ts";
 import {
   area,
   ball,
@@ -40,7 +40,6 @@ import {
   mug,
   neon,
   partsPalette,
-  palettes,
   pattern,
   patterns,
   picture,

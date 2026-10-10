@@ -164,7 +164,9 @@ test("glint: options, colours on a piece in one ink, its loop and its still", ()
   assert.equal(glint(donut).meta.fps, 30);
   assert.throws(() => glint("x", { every: -1 }), /^Error: ascii\.rest: glint\.every takes a number of seconds above 0, not -1$/);
   assert.throws(() => glint("x", { chars: "abc" }), /glint\.chars takes one or two characters/);
-  assert.throws(() => glint("x", { color: "red" }), /glint\.color takes a colour as #rrggbb, not "red"/);
+  assert.throws(() => glint("x", { color: "red" }), /glint\.color takes a colour as #rrggbb, \{ light, dark \}, or a palette's name .* not "red"/);
+  assert.throws(() => glint("x", { color: 5 as never }), /glint\.color takes a colour as #rrggbb or a palette's name such as "gold", not 5/);
+  assert.ok(glint(donut, { color: "gold" }).meta.palette!.includes("#fef08a"), "a palette's name is its strong colour");
   assert.throws(() => glint("x", 5 as never), /glint\(\) takes its options as an object/);
   assert.throws(() => glint(42 as never), /glint\(\) takes a piece, a block of text or a Surface, not number/);
 });

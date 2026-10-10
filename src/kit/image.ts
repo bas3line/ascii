@@ -18,7 +18,7 @@
  *   mount(canvas, await fromImage("/logo.svg", { width: 40, glint: true }));
  */
 import type { Category } from "../types.ts";
-import { MAX, NONE, and, checkMeta, fail, hex, isHex, piece, ramp as rampOf, type KitPiece, type Palette, type PaletteSpec, type RampName, type Surface } from "./core.ts";
+import { MAX, NONE, and, checkMeta, colorsOf, fail, hex, isHex, piece, ramp as rampOf, type ColorName, type KitPiece, type Palette, type PaletteSpec, type RampName, type Surface } from "./core.ts";
 import { CH, CW, FILL, GLYPHS, GX, GY } from "./glyphs.ts";
 
 /** How cells are chosen: by the shape of the image's edge through them, or by how bright it is there. */
@@ -950,9 +950,11 @@ export function drawImage(s: Surface, img: Drawing | ImagePiece, x = 0, y = 0, o
  *
  *   palette: imagePalette(logo, { light: ["#1f2328"], dark: ["#f0f6fc"] })
  */
-export function imagePalette(img: Drawing | ImagePiece, colors?: PaletteSpec): { light: string[]; dark: string[] } {
+export function imagePalette(img: Drawing | ImagePiece, given?: PaletteSpec | ColorName): { light: string[]; dark: string[] } {
   const p = prepare(drawingOf(img, "imagePalette"), RAMP, "imagePalette");
-  if (colors === undefined) return { light: [...p.light], dark: [...p.dark] };
+  if (given === undefined) return { light: [...p.light], dark: [...p.dark] };
+  // A palette's name is its colours, as everywhere in the kit.
+  const colors = typeof given === "string" ? colorsOf(given, "imagePalette()'s colours") : given;
   const mine = (Array.isArray(colors) ? { light: colors, dark: colors } : colors) as { light: readonly string[]; dark: readonly string[] };
   const list = (l: unknown) => Array.isArray(l) && l.every(isHex);
   if (!mine || typeof mine !== "object" || !list(mine.light) || !list(mine.dark) || mine.light.length !== mine.dark.length)

@@ -45,6 +45,8 @@ import {
   TAU,
   and,
   code,
+  colorOf as named,
+  colorsOf as namedColors,
   fail,
   fract,
   hash,
@@ -60,6 +62,7 @@ import {
   type Color,
   type KitPiece,
   type MakerSpec,
+  type PaletteLike,
   type PaletteSpec,
   type RampName,
   type Themed,
@@ -249,9 +252,9 @@ export interface ShapeOptions {
   /** Its size, times: 1. */
   scale?: number;
   /**
-   * Its colour as #rrggbb. A shape with a colour makes the scene coloured, the shape drawn in shades of it by its light,
-   * darkened a little on a light page or lightened on a dark one if it would be hard to see there. None by default: it
-   * is drawn in the page's ink.
+   * Its colour as #rrggbb, or a palette's name such as "ocean" (its strong colour). A shape with a colour makes the
+   * scene coloured, the shape drawn in shades of it by its light, darkened a little on a light page or lightened on a
+   * dark one if it would be hard to see there. None by default: it is drawn in the page's ink.
    */
   color?: string;
   /**
@@ -360,7 +363,8 @@ function base(kind: string, o: unknown, extra: readonly string[], surface = true
   const p = (o ?? {}) as ShapeOptions;
   if (p.texture !== undefined && !surface) fail(`${kind}() takes no texture: it has no surface to put one on`);
   known(p, [...SHAPE_KEYS.slice(0, surface ? 7 : 5), ...extra], `${kind}()`);
-  if (p.color !== undefined && !isHex(p.color)) fail(`${kind}'s color takes a colour as #rrggbb, not ${shown(p.color)}`);
+  // A palette's name is its strong colour for a dark page, which the scene shades for each page as it does any colour.
+  const color = p.color === undefined ? undefined : isHex(p.color) ? p.color : typeof p.color === "string" ? named(p.color, `${kind}'s color`).dark : fail(`${kind}'s color takes a colour as #rrggbb or a palette's name such as "ocean", not ${shown(p.color)}`);
   let texture: Texture | undefined;
   if (typeof p.texture === "string") {
     if (!TEXTURES.includes(p.texture)) fail(`${kind}'s texture takes ${and(TEXTURES.map((n) => `"${n}"`))}, or a function (u, v, t) => brightness 0 to 1, not ${shown(p.texture)}`);
@@ -382,7 +386,7 @@ function base(kind: string, o: unknown, extra: readonly string[], surface = true
     rotate: animated(p.rotate, `${kind}'s rotate`),
     spin,
     scale: positive(p.scale, `${kind}'s scale`, 1),
-    color: p.color?.toLowerCase(),
+    color: color?.toLowerCase(),
     texture,
     edges: p.edges ?? true,
   };
@@ -1128,9 +1132,10 @@ export interface SceneOptions {
   /**
    * One fade for the whole scene instead of each shape's own colour: stops as #rrggbb, dark to bright, spread to
    * `shades` and each made to read on the page (darkened a little on paper or lightened on a dark page where it
-   * wouldn't); or { light, dark } of the same length, one fade for each page, used as given. None by default.
+   * wouldn't); or { light, dark } of the same length, one fade for each page, used as given; or a palette's name such
+   * as "ocean", its fade for each page. None by default.
    */
-  colors?: PaletteSpec;
+  colors?: PaletteLike;
   /** Shades of each colour, from dark to full: 4, a whole number from 1 to 16. */
   shades?: number;
   /**
@@ -1188,8 +1193,9 @@ function settings(o: SceneOptions, who: string): Settings {
   if (o.colorBy !== undefined && !COLOR_BY.includes(o.colorBy)) fail(`colorBy takes ${and(COLOR_BY.map((c) => `"${c}"`))}, not ${shown(o.colorBy)}`);
   const shades = o.shades ?? 4;
   if (!Number.isInteger(shades) || shades < 1 || shades > 16) fail(`shades takes a whole number from 1 to 16, not ${shown(o.shades)}`);
-  // spread() checks the colours, saying what is wrong with them
-  if (o.colors !== undefined) spread(o.colors, shades);
+  // A name is its colours; spread() checks the colours, saying what is wrong with them.
+  const colors = o.colors === undefined ? undefined : namedColors(o.colors, "colors");
+  if (colors !== undefined) spread(colors, shades);
   if (o.fit !== undefined && typeof o.fit !== "boolean") fail(`fit takes true or false, not ${shown(o.fit)}`);
   return {
     distance: positive(cam.distance, "camera's distance", 6),
@@ -1201,7 +1207,7 @@ function settings(o: SceneOptions, who: string): Settings {
     chars: Uint16Array.from({ length: chars.length }, (_, i) => chars.charCodeAt(i)),
     invert: o.invert ?? "auto",
     colorBy: o.colorBy ?? "shape",
-    colors: o.colors,
+    colors,
     shades,
     fit: o.fit ?? true,
     period: o.period === undefined ? undefined : positive(o.period, "period"),

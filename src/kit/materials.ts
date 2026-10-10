@@ -34,11 +34,13 @@ import {
   TAU,
   and,
   clamp,
+  colorsOf as namedColors,
   fail,
   fract,
   hash,
   isHex,
   lerp,
+  materialColors,
   piece,
   ramps,
   sample,
@@ -46,10 +48,13 @@ import {
   smoothstep,
   specOf,
   spread,
+  type ColorName,
   type KitPiece,
   type MakerSpec,
+  type MaterialColorName,
   type PaletteSpec,
   type RampName,
+  type Scheme,
   type Source,
 } from "./core.ts";
 
@@ -132,89 +137,25 @@ function rampOf(what: string, v: unknown, def: string): string {
 // --- colours by name ---------------------------------------------------------------
 
 /** A list of colours for each page: `light` is drawn on a light page (paper), `dark` on a dark one. */
-export interface Duo {
-  readonly light: readonly string[];
-  readonly dark: readonly string[];
-}
+export type Duo = Scheme;
+
+// The materials' colours by name, kept in the kit's core as `materialColors` so every option that takes colours knows
+// them, the looks' palettes too.
+const palettes = materialColors;
+
+/** The name of a material's colours in `materialColors`, its first choice for a material's `colors`. */
+export type PaletteName = MaterialColorName;
 
 /**
- * Colours by name, each a list for a light page and one for a dark page. Any material or emission takes one of these
- * names as `colors`, or colours of your own, spread along their fade to the colours it draws with, in this order:
- * water [deep, mid, near the surface, surface]; glass [walls, highlight, base]; fire [embers to white heat, five];
- * smoke, steam and sand [three, faint to strong]; cloud [outline, body, shadow]; metal [dark, mid, light, sheen];
- * wood and grass [dark, mid, light]; lava [four, cool to hot]; ice [outline, body, glint]; neon [glow, tube, hot core];
- * ceramic [outline, body, gleam]; starfield [dim, bright]; bubbles [rim, small]; sparks [hot, warm, cool]; rain
- * [drop, splash]; snow [flake, star].
+ * What a material or an emission takes as `colors`: a name from `materialColors` (or the looks' `schemes`), one colour,
+ * stops for both pages, or { light, dark }.
  */
-export const palettes = {
-  water: { light: ["#1e3a8a", "#1d4ed8", "#60a5fa", "#0369a1"], dark: ["#2563eb", "#60a5fa", "#a5d8ff", "#e0f2fe"] },
-  sea: { light: ["#134e4a", "#115e59", "#0f766e", "#0d9488"], dark: ["#0f766e", "#14b8a6", "#2dd4bf", "#ccfbf1"] },
-  cola: { light: ["#2b1408", "#431d0b", "#7c3a12", "#92400e"], dark: ["#5a250c", "#74351a", "#94532a", "#ead0a8"] },
-  lemonade: { light: ["#854d0e", "#a16207", "#ca8a04", "#a16207"], dark: ["#ca8a04", "#eab308", "#fde047", "#fef9c3"] },
-  coffee: { light: ["#3b2314", "#4a2c18", "#5b3a24", "#7c4a2a"], dark: ["#7b5135", "#946446", "#b8875e", "#e2c9a6"] },
-  tea: { light: ["#713f12", "#854d0e", "#a16207", "#b45309"], dark: ["#b45309", "#d97706", "#f59e0b", "#fde68a"] },
-  juice: { light: ["#9a3412", "#c2410c", "#ea580c", "#c2410c"], dark: ["#c2410c", "#ea580c", "#fb923c", "#fed7aa"] },
-  wine: { light: ["#4c0519", "#881337", "#9f1239", "#be123c"], dark: ["#9f1239", "#be123c", "#e11d48", "#fda4af"] },
-  milk: { light: ["#64748b", "#94a3b8", "#94a3b8", "#64748b"], dark: ["#cbd5e1", "#e2e8f0", "#f1f5f9", "#ffffff"] },
-  glass: { light: ["#475569", "#94a3b8", "#64748b"], dark: ["#94a3b8", "#f8fafc", "#cbd5e1"] },
-  fire: { light: ["#7f1d1d", "#b91c1c", "#c2410c", "#d97706", "#a16207"], dark: ["#7f1d1d", "#dc2626", "#f97316", "#facc15", "#fef9c3"] },
-  candle: { light: ["#9a3412", "#c2410c", "#d97706", "#b45309", "#92400e"], dark: ["#c2410c", "#f97316", "#fbbf24", "#fde68a", "#fffbeb"] },
-  lava: { light: ["#7f1d1d", "#b91c1c", "#ea580c", "#ca8a04"], dark: ["#991b1b", "#ef4444", "#f97316", "#fde047"] },
-  smoke: { light: ["#9ca3af", "#6b7280", "#4b5563"], dark: ["#4b5563", "#9ca3af", "#d1d5db"] },
-  steam: { light: ["#94a3b8", "#64748b"], dark: ["#94a3b8", "#e2e8f0"] },
-  cloud: { light: ["#6b7280", "#9ca3af", "#4b5563"], dark: ["#e5e7eb", "#6b7280", "#9ca3af"] },
-  storm: { light: ["#374151", "#6b7280", "#1f2937"], dark: ["#9ca3af", "#374151", "#4b5563"] },
-  steel: { light: ["#1e293b", "#475569", "#64748b", "#94a3b8"], dark: ["#475569", "#94a3b8", "#cbd5e1", "#ffffff"] },
-  gold: { light: ["#713f12", "#854d0e", "#a16207", "#ca8a04"], dark: ["#a16207", "#eab308", "#fde047", "#fffbeb"] },
-  copper: { light: ["#7c2d12", "#9a3412", "#c2410c", "#ea580c"], dark: ["#9a3412", "#c2410c", "#fb923c", "#ffedd5"] },
-  wood: { light: ["#3f2a14", "#6b4423", "#8b5a2b"], dark: ["#6b4423", "#a0682f", "#d29b5c"] },
-  grass: { light: ["#14532d", "#15803d", "#16a34a"], dark: ["#166534", "#22c55e", "#86efac"] },
-  seaweed: { light: ["#064e3b", "#047857", "#059669"], dark: ["#065f46", "#10b981", "#6ee7b7"] },
-  sand: { light: ["#713f12", "#92400e", "#a16207"], dark: ["#a16207", "#d4a24c", "#f5deb3"] },
-  ice: { light: ["#0369a1", "#0284c7", "#0c4a6e"], dark: ["#7dd3fc", "#bae6fd", "#ffffff"] },
-  neon: { light: ["#f9a8d4", "#db2777", "#831843"], dark: ["#9d174d", "#ec4899", "#fce7f3"] },
-  cyan: { light: ["#67e8f9", "#0891b2", "#164e63"], dark: ["#155e75", "#22d3ee", "#ecfeff"] },
-  lamp: { light: ["#fcd34d", "#d97706", "#92400e"], dark: ["#92400e", "#f59e0b", "#fef3c7"] },
-  ceramic: { light: ["#374151", "#9ca3af", "#6b7280"], dark: ["#e5e7eb", "#6b7280", "#ffffff"] },
-  wax: { light: ["#92400e", "#d6b98c", "#78350f"], dark: ["#fef3c7", "#a8a29e", "#ffffff"] },
-  moon: { light: ["#a16207", "#ca8a04", "#ca8a04"], dark: ["#fef9c3", "#fde68a", "#ffffff"] },
-  night: { light: ["#334155", "#94a3b8", "#475569"], dark: ["#cbd5e1", "#475569", "#f1f5f9"] },
-  stars: { light: ["#94a3b8", "#334155"], dark: ["#64748b", "#f8fafc"] },
-  rose: { light: ["#be123c", "#e11d48", "#9f1239"], dark: ["#e11d48", "#fb7185", "#ffe4e6"] },
-  goldfish: { light: ["#c2410c", "#ea580c", "#9a3412"], dark: ["#ea580c", "#fb923c", "#ffedd5"] },
-  brick: { light: ["#7f1d1d", "#9a3412"], dark: ["#b91c1c", "#f97316"] },
-  bubbles: { light: ["#0284c7", "#0369a1"], dark: ["#7dd3fc", "#f0f9ff"] },
-  fizz: { light: ["#92400e", "#b45309"], dark: ["#e0b98a", "#fef3c7"] },
-  sparks: { light: ["#ca8a04", "#ea580c", "#b91c1c"], dark: ["#fde047", "#f97316", "#dc2626"] },
-  rain: { light: ["#1d4ed8", "#2563eb"], dark: ["#60a5fa", "#bfdbfe"] },
-  snow: { light: ["#64748b", "#94a3b8"], dark: ["#e2e8f0", "#ffffff"] },
-  ink: { light: [INK.light], dark: [INK.dark] },
-  sunset: { light: ["#1e1b4b", "#6d28d9", "#c2410c", "#ca8a04"], dark: ["#1e1b4b", "#7c3aed", "#f97316", "#fde047"] },
-  sky: { light: ["#1e3a8a", "#2563eb", "#0ea5e9"], dark: ["#0f172a", "#1e3a8a", "#38bdf8"] },
-} as const satisfies Record<string, Duo>;
+export type Colors = ColorName | `#${string}` | PaletteSpec;
 
-/** The name of a palette in `palettes`. */
-export type PaletteName = keyof typeof palettes;
-
-/** What a material or an emission takes as `colors`: a palette's name, one colour, stops for both pages, or { light, dark }. */
-export type Colors = PaletteName | `#${string}` | PaletteSpec;
-
-// A material's colours: the named palette or the user's, spread along their fade to the n roles it draws with.
+// A material's colours: the named palette or the user's, spread along their fade to the n roles it draws with. A name
+// is a material's first, then a look's: "fire" is the materials' fire, "ocean" the looks'.
 function colorsOf(what: string, v: unknown, def: PaletteName, n: number): Duo {
-  let spec: PaletteSpec;
-  if (v === undefined) spec = palettes[def];
-  else if (isHex(v)) spec = [v];
-  else if (typeof v === "string") {
-    if (!Object.hasOwn(palettes, v)) fail(`${what} takes a palette's name, one of ${and(Object.keys(palettes))}, or colours as #rrggbb, not ${JSON.stringify(v)}`);
-    spec = palettes[v as PaletteName];
-  } else if (Array.isArray(v)) {
-    if (!v.length || !v.every(isHex)) fail(`${what} takes colours as #rrggbb, one or more, not ${JSON.stringify(v)}`);
-    spec = v;
-  } else if (isObject(v) && Array.isArray(v.light) && Array.isArray(v.dark)) {
-    if (!v.light.length || !v.dark.length || !v.light.every(isHex) || !v.dark.every(isHex))
-      fail(`${what} takes { light, dark }, each one or more colours as #rrggbb, not ${JSON.stringify(v)}`);
-    spec = v as unknown as PaletteSpec;
-  } else fail(`${what} takes a palette's name, colours as #rrggbb, or { light, dark }, not ${show(v)}`);
+  const spec: PaletteSpec = v === undefined ? palettes[def] : namedColors(v, what, "materials");
   const s = spread(spec, n);
   return Array.isArray(s) ? { light: s, dark: s } : (s as Duo);
 }

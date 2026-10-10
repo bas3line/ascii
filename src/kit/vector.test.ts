@@ -315,7 +315,9 @@ test("color: #rrggbb is the colour currentColor takes, the drawing's other colou
   assert.ok(!p.meta.palette!.includes("#1f2328"));
   // A drawing in nothing but currentColor becomes a piece in that colour.
   assert.deepEqual(fromSvg(`<svg viewBox="0 0 2 2"><rect width="2" height="2" fill="currentColor"/></svg>`, { color: "#f97316" }).meta.palette, ["#f97316", "#f97316"]);
-  assert.throws(() => fromSvg(icon, { color: "orange" }), /color takes true .*, false .*, or #rrggbb for what it draws in currentColor, not "orange"/);
+  assert.throws(() => fromSvg(icon, { color: "orange" }), /color takes true .*, false .*, or #rrggbb or a palette's name such as "ocean" for what it draws in currentColor, not "orange"/);
+  // a palette's name is its strong colour, as a 3D shape's is
+  assert.ok(fromSvg(icon, { width: 24, color: "ocean" }).meta.palette!.includes("#00b4d8"));
 });
 
 test("styles: blocks and braille use their characters, outline draws lines only", () => {
@@ -502,7 +504,7 @@ test("options and parts are checked when the piece is made, with errors that say
   assert.throws(() => fromSvg(HEART, { "#heart": { motion: "spin", every: 2 } }), /goes round and round: give it period/);
   assert.throws(() => fromSvg(HEART, { "#heart": { motion: "spin", period: 0 } }), /period takes a number above 0/);
   assert.throws(() => fromSvg(HEART, { "#heart": { spin: true } as never }), /#heart has no option named "spin"/);
-  assert.throws(() => fromSvg(HEART, { "#heart": { color: "red" } }), /color takes #rrggbb/);
+  assert.throws(() => fromSvg(HEART, { "#heart": { color: "red" } }), /#heart's color takes a colour as #rrggbb/);
   assert.throws(() => fromSvg(HEART, { "#heart": { material: 5 as never } }), /material takes a material such as water\(\)/);
   assert.throws(() => fromSvg(HEART, { "#": "spin" } as never), /a part's name takes an id, a class or a colour/);
   assert.throws(() => fromSvg(`<svg viewBox="0 0 10 10"><rect width="5" height="5" fill="none"/></svg>`), /found nothing to draw/);

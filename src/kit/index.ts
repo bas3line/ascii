@@ -11,15 +11,7 @@
  */
 
 // Recipes: looks by name, motions in words, widgets in one call, placing by words, and palettes.
-export {
-  schemes,
-  palette,
-  schemeOf,
-  type ColorLike,
-  type PaletteLike,
-  type Scheme,
-  type SchemeName,
-} from "./recipes/palettes.ts";
+export { palette, schemeOf } from "./recipes/palettes.ts";
 export {
   easings,
   loopFor,
@@ -153,6 +145,8 @@ export {
   checkMeta,
   clamp,
   code,
+  colorOf,
+  colorsOf,
   fail,
   fract,
   gradient,
@@ -160,6 +154,7 @@ export {
   hex,
   isHex,
   lerp,
+  materialColors,
   mergePalettes,
   metaOf,
   mix,
@@ -170,6 +165,7 @@ export {
   ramps,
   rgb,
   sample,
+  schemes,
   shadeChar,
   smoothstep,
   snapshot,
@@ -177,11 +173,17 @@ export {
   spread,
   valueNoise,
   type Color,
+  type ColorLike,
+  type ColorName,
   type Context,
   type Draw,
   type KitPiece,
   type MakerSpec,
+  type MaterialColorName,
+  type PaletteLike,
   type PaletteSpec,
+  type Scheme,
+  type SchemeName,
   type PieceSpec,
   type RampName,
   type Region,
@@ -470,7 +472,6 @@ export {
   moon,
   mug,
   neon,
-  palettes,
   partsPalette,
   pattern,
   patterns,

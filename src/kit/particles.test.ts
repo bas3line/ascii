@@ -615,9 +615,12 @@ test("every option is checked when the piece is made, saying what to change", ()
   assert.throws(() => particles({ front: 3 as never }, ok), /particles\(\)'s front takes text, a piece, a Surface, or \{ art, at, color, paint, solid \}, not 3/);
   assert.throws(() => particles({ back: { art: 3 } as never }, ok), /particles\(\)'s back takes text, a piece, a Surface, or \{ art, at, color, paint, solid \}/);
   assert.throws(() => particles({ back: { art: "x", at: "middle" as never } }, ok), /particles\(\)'s back\.at takes a place/);
-  assert.throws(() => particles({ front: { art: "x", color: "grey" } }, ok), /front\.color takes #rrggbb or \{ light, dark \}/);
+  assert.throws(() => particles({ front: { art: "x", color: "grey" } }, ok), /front\.color takes a colour as #rrggbb, \{ light, dark \}, or a palette's name/);
   assert.throws(() => particles({ front: { art: "x", paint: { ab: "#ffffff" } } }, ok), /front\.paint takes one character a key, not "ab"/);
-  assert.throws(() => particles({ front: { art: "x", paint: { x: "gold" } } }, ok), /front\.paint\["x"\] takes #rrggbb/);
+  assert.throws(() => particles({ front: { art: "x", paint: { x: "golden" } } }, ok), /front\.paint\["x"\] takes a colour as #rrggbb.* not "golden": did you mean "gold"\?/);
+  // a palette's name is its colours, as everywhere in the kit
+  assert.ok(particles({ front: { art: "x", paint: { x: "gold" } } }, ok).meta.palette!.length > 0);
+  assert.ok(particles({ cols: 20, rows: 6 }, { ...ok, colors: "ocean" }).meta.palette!.includes("#e0fbfc"));
   // drawParticles checks its own arguments.
   assert.throws(() => drawParticles({} as Surface, ok, 0), /drawParticles\(\) takes a Surface first/);
   assert.throws(() => drawParticles(new Surface(4, 4), ok, 0, { region: { x: 0 } as never }), /region takes \{ x, y, cols, rows \}/);

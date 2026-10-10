@@ -31,6 +31,7 @@ import {
   Palette,
   bayer,
   code,
+  colorsOf,
   fail,
   fract,
   piece,
@@ -40,6 +41,7 @@ import {
   type Color,
   type KitPiece,
   type MakerSpec,
+  type PaletteLike,
   type PaletteSpec,
   type RampName,
   type Region,
@@ -116,14 +118,15 @@ export interface FieldOptions<O extends Options = Options> {
    */
   ramp?: RampName | (string & {});
   /**
-   * Colour by value: colours as #rrggbb from the lowest value to the highest, spread along their fade to `steps`
-   * colours; or { light, dark }, stops for each page, each spread to `steps`. Without it (and without `color` or at.color)
+   * Colour by value: a palette's name such as "ocean" (its colours for each page, faint to strong), colours as #rrggbb
+   * from the lowest value to the highest, spread along their fade to `steps` colours; or { light, dark }, stops for
+   * each page, each spread to `steps`. Without it (and without `color` or at.color)
    * the field is one ink. Colours follow the value, not the ramp turned round on paper: give { light, dark } to pick
    * colours that read on a light page. field() may take a `palette` too, colours of its own for at.color and `color`
    * to pick, which come after the spread ones. drawField() finds each colour in the surface's palette, the nearest when
    * it is not one of them, and draws none on a surface with no palette.
    */
-  colors?: PaletteSpec;
+  colors?: PaletteLike;
   /** How many colours `colors` is spread to: 16. A whole number from 1 to 64, or up to 32 when `colors` is { light, dark }. */
   steps?: number;
   /**
@@ -220,8 +223,7 @@ function plan<O extends Options>(o: FieldOptions<O> | undefined, who: string): P
   if (!Number.isInteger(steps) || steps < 1 || steps > 64) fail(`steps takes a whole number of colours from 1 to 64, not ${show(steps)}`);
   let palette: PaletteSpec | null = null, light: readonly string[] | null = null, dark: readonly string[] | null = null;
   if (o.colors !== undefined) {
-    const c = o.colors;
-    if (c === null || typeof c !== "object") fail(`colors takes a list of #rrggbb, or { light, dark }, not ${show(c)}`);
+    const c = colorsOf(o.colors, "colors");
     if (!Array.isArray(c) && steps > 32) fail(`steps takes up to 32 when colors has a light and a dark list (64 colours in all), not ${steps}`);
     palette = spread(c, steps);
     if (Array.isArray(palette)) light = dark = palette as readonly string[];
@@ -491,7 +493,8 @@ export function field<O extends Options = Options>(first: FieldSpec<O> | FieldFn
     fail(`field() starts every frame empty, so a frame depends only on t, as svg() and reduced motion need: leave clear out, not ${show(spec.clear)}. For trails, draw with drawField() in a piece() of your own`);
   if (p.color && !p.palette && spec.palette === undefined)
     fail('field()\'s color function picks from the piece\'s colours: give the spec a palette, such as palette: ["#f97316", "#38bdf8"], or colors');
-  const palette = p.palette && spec.palette !== undefined ? join(p.palette, spec.palette) : (p.palette ?? spec.palette);
+  const own = spec.palette === undefined ? undefined : colorsOf(spec.palette, "palette");
+  const palette = p.palette && own !== undefined ? join(p.palette, own) : (p.palette ?? own);
 
   const made = piece<O>(
     { ...base, palette, loop: p.period || spec.loop },

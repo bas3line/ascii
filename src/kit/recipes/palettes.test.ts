@@ -51,8 +51,9 @@ test("palette() and schemeOf() throw, naming the palettes, for anything else", (
   assert.throws(() => palette("oceans"), /palette\(\) takes a palette's name, one of ocean, sunset, .* not "oceans"/);
   assert.throws(() => palette(3 as unknown as string), /not 3/);
   assert.throws(() => schemeOf("x", "blue"), /x takes a palette's name/);
-  assert.throws(() => schemeOf("x", []), /1 to 32 colours/);
-  assert.throws(() => schemeOf("x", ["#fff"]), /1 to 32 colours/);
+  assert.throws(() => schemeOf("x", []), /x takes colours as #rrggbb, one or more, not \[\]/);
+  assert.throws(() => schemeOf("x", ["#fff"]), /x takes colours as #rrggbb, one or more/);
+  assert.throws(() => schemeOf("x", Array(33).fill("#ffffff")), /x takes 1 to 32 colours for each page, not 33/);
   assert.throws(() => schemeOf("x", { light: ["#ffffff"], dark: [] }), /\{ light, dark \}/);
   assert.throws(() => schemeOf("x", 7), /x takes a palette's name/);
 });

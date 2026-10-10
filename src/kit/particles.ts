@@ -44,10 +44,14 @@ import {
   INK,
   NONE,
   asPiece,
+  colorOf,
+  colorsOf,
   type Color,
+  type ColorLike,
   type KitPiece,
   type MakerSpec,
   type Palette,
+  type PaletteLike,
   type PaletteSpec,
   type Region,
   type Source,
@@ -221,10 +225,13 @@ export interface System {
   glyphs?: string;
   /** Or a character of your own for each particle (and for each cell of its trail, where `back` is above 0). */
   glyph?: (p: Particle) => string;
-  /** Colours by age, from birth to death: these stops spread to `steps` colours. None by default: the page's ink. */
-  colors?: PaletteSpec;
+  /**
+   * Colours by age, from birth to death: these stops spread to `steps` colours, or a palette's name such as "ice"
+   * (its colours for each page). None by default: the page's ink.
+   */
+  colors?: PaletteLike;
   /** Or several fades: each burst takes the next in turn, and with a rate each particle takes one at random. */
-  palettes?: readonly PaletteSpec[];
+  palettes?: readonly PaletteLike[];
   /** How many colours `colors`, each of `palettes`, and `trailColors` spread to: 8. */
   steps?: number;
   /** Or a colour of your own for each particle: an index into the piece's palette, or #rrggbb found in it (give the piece a palette). */
@@ -253,7 +260,7 @@ export interface System {
   /** The trail's characters from just behind the particle to the end, instead of the line. */
   trailGlyphs?: string;
   /** The trail's colours from just behind the particle to the end: by default it takes the particle's colour. */
-  trailColors?: PaletteSpec;
+  trailColors?: PaletteLike;
   /**
    * Or where a particle is, worked out your own way: (p) => [column, row] at p.age, for spirals, orbits, swarms and
    * anything else. p.x0 and p.y0 are where it was born, p.angle and p.speed how it was thrown, p.k how far through its
@@ -299,10 +306,10 @@ export interface Scenery {
   art: Source;
   /** Where it sits on the grid: "bottom" (the middle of the bottom row) for text, "center" for a piece or a grid, or another Place. */
   at?: Place;
-  /** Its colour, #rrggbb or { light, dark }: a piece's or a grid's own colours, else the piece's ink. */
-  color?: Themed<string>;
-  /** Colours for some of its characters, as #rrggbb or { light, dark }: { "▪": "#fcd34d" } lights the windows. */
-  paint?: Readonly<Record<string, Themed<string>>>;
+  /** Its colour, #rrggbb, { light, dark } or a palette's name: a piece's or a grid's own colours, else the piece's ink. */
+  color?: ColorLike;
+  /** Colours for some of its characters, as #rrggbb, { light, dark } or a palette's name: { "▪": "#fcd34d" } lights the windows. */
+  paint?: Readonly<Record<string, ColorLike>>;
   /**
    * True (the default): a space with some of the picture above it in its column hides what is behind it, as the inside
    * of a house does, while the sky between the roofs still shows. False: every space shows what is behind.
@@ -506,8 +513,9 @@ function glyphCodes(v: unknown, what: string): Uint16Array {
   return Uint16Array.from(v, (ch) => code(ch));
 }
 
-// Colour stops spread to `steps`, for both themes. A single colour stays one colour.
-function fadeOf(spec: PaletteSpec, steps: number, what: string): Fade {
+// Colour stops spread to `steps`, for both themes. A single colour stays one colour. A palette's name is its colours.
+function fadeOf(given: PaletteLike, steps: number, what: string): Fade {
+  const spec: PaletteSpec = typeof given === "string" ? colorsOf(given, what) : (given as PaletteSpec);
   const themed = !!spec && typeof spec === "object" && !Array.isArray(spec);
   const f = spec as Fade;
   const ok = Array.isArray(spec)
@@ -1597,16 +1605,18 @@ function artOf(v: Source | Scenery | undefined, size: Size, what: string): Art |
     fail(`${what} takes text, a piece, a Surface, or { art, at, color, paint, solid }, not ${JSON.stringify(v)}`);
   const at = sc.at ?? (typeof sc.art === "string" ? "bottom" : "center");
   if (!PLACES.includes(at)) fail(`${what}.at takes a place, ${quoted(PLACES)}, not ${JSON.stringify(sc.at)}`);
-  if (sc.color !== undefined && !isThemedHex(sc.color)) fail(`${what}.color takes #rrggbb or { light, dark }, not ${JSON.stringify(sc.color)}`);
-  const paint = sc.paint ?? {};
-  if (!paint || typeof paint !== "object") fail(`${what}.paint takes { character: colour }, such as { "▪": "#fcd34d" }, not ${JSON.stringify(sc.paint)}`);
-  for (const [ch, c] of Object.entries(paint)) {
+  // A colour by name is its strong colour on each page, as everywhere in the kit.
+  const color: Themed<string> | undefined = sc.color === undefined ? undefined : isThemedHex(sc.color) ? sc.color : colorOf(sc.color, `${what}.color`);
+  const given = sc.paint ?? {};
+  if (!given || typeof given !== "object") fail(`${what}.paint takes { character: colour }, such as { "▪": "#fcd34d" }, not ${JSON.stringify(sc.paint)}`);
+  const paint: Record<string, Themed<string>> = {};
+  for (const [ch, c] of Object.entries(given)) {
     if (ch.length !== 1) fail(`${what}.paint takes one character a key, not ${JSON.stringify(ch)}`);
-    if (!isThemedHex(c)) fail(`${what}.paint["${ch}"] takes #rrggbb or { light, dark }, not ${JSON.stringify(c)}`);
+    paint[ch] = isThemedHex(c) ? c : colorOf(c, `${what}.paint["${ch}"]`);
   }
   if (sc.solid !== undefined && typeof sc.solid !== "boolean") fail(`${what}.solid takes true or false, not ${JSON.stringify(sc.solid)}`);
   const solid = sc.solid ?? true;
-  const pic = pictureOf(sc.art, sc.color === undefined);
+  const pic = pictureOf(sc.art, color === undefined);
   const { lines } = pic;
   const w = Math.max(0, ...lines.map((l) => l.length)), h = lines.length;
   const x0 = Math.floor(SPOT[at][0] * (size.cols - w)), y0 = Math.floor(SPOT[at][1] * (size.rows - h));
@@ -1616,7 +1626,7 @@ function artOf(v: Source | Scenery | undefined, size: Size, what: string): Art |
     const k = pairs.findIndex(([a, b]) => a === l && b === d);
     return k >= 0 ? k : pairs.push([l, d]) - 1;
   };
-  const base = sc.color === undefined ? -1 : pairIndex(sc.color);
+  const base = color === undefined ? -1 : pairIndex(color);
   const at2: number[] = [], chs: number[] = [], ks: number[] = [];
   let plain = false;
   // Whether some of the picture is above each column yet, for solid spaces.
@@ -1794,7 +1804,7 @@ export interface SnowOptions {
   /** Depths of flakes, 1 to 3, from far small "." to near "*": 3. */
   layers?: number;
   /** Colours from the farthest depth to the nearest: grey to white on a dark page, grey to slate on paper. */
-  colors?: PaletteSpec;
+  colors?: PaletteLike;
 }
 
 /** rain's options. */
@@ -1806,7 +1816,7 @@ export interface RainOptions {
   /** Characters the near drops make where they land on the bottom row: "o.". "" for none. */
   splash?: string;
   /** Colours from the far drops to the near ones. */
-  colors?: PaletteSpec;
+  colors?: PaletteLike;
 }
 
 /** stars' options. */
@@ -1816,7 +1826,7 @@ export interface StarsOptions {
   /** Seconds between shooting stars: 7. 0 for none. */
   shooting?: number;
   /** Colours a star fades through, from coming out to going in. */
-  colors?: PaletteSpec;
+  colors?: PaletteLike;
 }
 
 /** sparks' options. */
@@ -1828,7 +1838,7 @@ export interface SparksOptions {
   /** How many sparks, as a share of the usual: 1. */
   density?: number;
   /** Colours a spark cools through, hot to cold. */
-  colors?: PaletteSpec;
+  colors?: PaletteLike;
 }
 
 /** fireworks' options. */
@@ -1848,7 +1858,7 @@ export interface FirefliesOptions {
   /** How many fireflies, as a share of the usual: 1. */
   density?: number;
   /** Colours a firefly glows through, from lighting up to going out. */
-  colors?: PaletteSpec;
+  colors?: PaletteLike;
 }
 
 /** bubbles' options. */
@@ -1856,7 +1866,7 @@ export interface BubblesOptions {
   /** How many bubbles, as a share of the usual: 1. */
   density?: number;
   /** Colours a bubble goes through as it rises, small to large. */
-  colors?: PaletteSpec;
+  colors?: PaletteLike;
 }
 
 /** matrix's options. */
@@ -1866,7 +1876,7 @@ export interface MatrixOptions {
   /** How fast the streams fall, as a share of the usual: 1. */
   speed?: number;
   /** The head's colour, then the trail's from just behind it to the end: a list, or { light, dark }. */
-  colors?: PaletteSpec;
+  colors?: PaletteLike;
 }
 
 function sizeOf(size: unknown, what: string): Size {
@@ -1892,7 +1902,7 @@ function optionsOf<T extends object>(o: T | undefined, what: string): T {
 const scaleOf = ({ cols, rows }: Size) => (cols * rows) / (64 * 24);
 
 // A PaletteSpec's stops spread to n, as one colour (for both themes, or one for each) for each of n.
-function tones(spec: PaletteSpec, n: number, what: string): PaletteSpec[] {
+function tones(spec: PaletteLike, n: number, what: string): PaletteSpec[] {
   const f = fadeOf(spec, n, what);
   const pick = (list: readonly string[], i: number) => list[Math.min(list.length - 1, i)];
   return Array.from({ length: n }, (_, i) => {
@@ -2151,7 +2161,8 @@ function matrix(size: Size, o?: MatrixOptions): System[] {
   let head: PaletteSpec = { light: ["#052e16"], dark: ["#f0fdf4"] };
   let tail: PaletteSpec = { light: ["#15803d", "#86efac"], dark: ["#4ade80", "#14532d"] };
   if (colors !== undefined) {
-    const f = fadeOf(colors, Array.isArray(colors) ? colors.length : ((colors as Fade).light?.length ?? 1), "presets.matrix's colors");
+    const given = typeof colors === "string" ? colorsOf(colors, "presets.matrix's colors") : colors;
+    const f = fadeOf(given, Array.isArray(given) ? given.length : ((given as Fade).light?.length ?? 1), "presets.matrix's colors");
     if (f.light.length < 2) fail("presets.matrix's colors takes two or more colours: the head's, then the trail's");
     head = { light: [f.light[0]], dark: [f.dark[0]] };
     tail = { light: f.light.slice(1), dark: f.dark.slice(1) };

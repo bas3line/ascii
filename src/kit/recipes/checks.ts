@@ -7,12 +7,11 @@
  * and pieceOf() for recipes of your own.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  */
-import { checkMeta, fail } from "../core.ts";
+import { checkMeta, colorOf as inkOf, fail } from "../core.ts";
 import type { Piece } from "../../types.ts";
 import { ease as eases, type EaseName } from "../math.ts";
 import type { Area, Part } from "../materials.ts";
 import type { Shape3d } from "../shapes3d.ts";
-import { schemes, type SchemeName } from "./palettes.ts";
 
 // --- the words ----------------------------------------------------------------------------
 
@@ -200,17 +199,7 @@ export function easeOf(what: string, v: unknown, def: Easing): (k: number) => nu
  * one on a dark page. Undefined when none is given.
  */
 export function colorOf(what: string, v: unknown): { light: string; dark: string } | undefined {
-  if (v === undefined) return undefined;
-  const hex = (c: unknown) => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c);
-  if (hex(v)) return { light: v as string, dark: v as string };
-  if (typeof v === "string" && Object.hasOwn(schemes, v)) {
-    const s = schemes[v as SchemeName];
-    const strong = (list: readonly string[]) => list[Math.min(list.length - 1, Math.floor(list.length * 0.6))];
-    return { light: strong(s.light), dark: strong(s.dark) };
-  }
-  const o = v as { light?: unknown; dark?: unknown };
-  if (isObject(v) && hex(o.light) && hex(o.dark)) return { light: o.light as string, dark: o.dark as string };
-  return fail(`${what} takes a colour as #rrggbb, { light, dark }, or a palette's name such as "ocean", not ${show(v)}`);
+  return v === undefined ? undefined : inkOf(v, what);
 }
 
 // --- things -------------------------------------------------------------------------------

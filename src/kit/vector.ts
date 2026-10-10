@@ -38,14 +38,17 @@ import {
   asPiece,
   clamp,
   code,
+  colorOf as named,
   fail,
   fract,
   hex,
   isHex,
+  materialColors,
   mergePalettes,
   piece,
   rgb,
   sample,
+  schemes,
   type KitPiece,
   type Region,
   type Sampler,
@@ -1822,8 +1825,8 @@ function partOf(key: string, v: unknown, rank: number): PartPlan {
   }
   plan.fill = oneChar(o.fill, `${key}'s fill`) ?? null;
   plan.char = oneChar(o.char, `${key}'s char`) ?? null;
-  if (o.color !== undefined && !isHex(o.color)) fail(`${key}'s color takes #rrggbb, not ${JSON.stringify(o.color)}`);
-  plan.color = o.color?.toLowerCase() ?? null;
+  if (o.color !== undefined && typeof o.color !== "string") fail(`${key}'s color takes #rrggbb or a palette's name, not ${JSON.stringify(o.color)}`);
+  plan.color = o.color === undefined ? null : (isHex(o.color) ? o.color : named(o.color, `${key}'s color`).dark).toLowerCase();
   plan.hide = o.hide === true;
   return plan;
 }
@@ -2656,8 +2659,11 @@ function planOptions(o: Record<string, unknown>, drawing: boolean, aspect: numbe
     if (p.material && style === "outline") fail(`${p.key}'s material has nothing to fill in the "outline" style, which draws only edges: use "logo", "blocks" or "braille"`);
   const fit = o.fit ?? "ink";
   if (fit !== "ink" && fit !== "viewBox") fail(`fit takes "ink" or "viewBox", not ${JSON.stringify(o.fit)}`);
-  if (o.color !== undefined && typeof o.color !== "boolean" && !isHex(o.color))
-    fail(`color takes true (the drawing's own colours), false (the page's), or #rrggbb for what it draws in currentColor, not ${JSON.stringify(o.color)}`);
+  const known = (v: unknown) => typeof v === "string" && (isHex(v) || Object.hasOwn(schemes, v) || Object.hasOwn(materialColors, v));
+  if (o.color !== undefined && typeof o.color !== "boolean" && !known(o.color))
+    fail(`color takes true (the drawing's own colours), false (the page's), or #rrggbb or a palette's name such as "ocean" for what it draws in currentColor, not ${JSON.stringify(o.color)}`);
+  // A palette's name is its strong colour, as for a 3D shape.
+  const ink = typeof o.color === "string" ? (isHex(o.color) ? o.color : named(o.color, "color").dark) : null;
   const width = whole(o.width, "width", 3, MAX.cols);
   const cols = whole(o.cols, "cols", 1, MAX.cols), rows = whole(o.rows, "rows", 1, MAX.rows);
   if (width !== undefined && cols !== undefined) fail("fromSvg takes width or cols, not both: width sizes it by its shape, cols with rows fixes it");
@@ -2670,7 +2676,7 @@ function planOptions(o: Record<string, unknown>, drawing: boolean, aspect: numbe
     style,
     fill: oneChar(o.fill, "fill") ?? "8",
     color: o.color !== false,
-    ink: typeof o.color === "string" ? o.color.toLowerCase() : null,
+    ink: ink?.toLowerCase() ?? null,
     line: above0(o.line, "line") ?? 0.4,
     aspect,
     parts,

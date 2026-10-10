@@ -235,6 +235,242 @@ export class Palette {
   }
 }
 
+// --- colours by name --------------------------------------------------------------------
+
+/** Colours for each page: `light` is drawn on a light page (paper), `dark` on a dark one. */
+export interface Scheme {
+  readonly light: readonly string[];
+  readonly dark: readonly string[];
+}
+
+/**
+ * The looks' palettes by name, each a list of colours from faint to strong for a light page and for a dark one: on a
+ * dark page from dim to bright, on a light page from pale to deep, the way ink builds up on each. Any option in the kit
+ * that takes colours takes one of these names, and colorOf() gives one name's strong colour on each page.
+ *
+ * - ocean: deep navy to sea foam. sunset: violet through rose to gold. neon: violet, magenta and electric cyan.
+ * - fire: embers to white heat. aurora: violet sky into green curtains. forest: moss to new leaves.
+ * - candy: pink, lilac, mint and lemon. mono: greys. ink: GitHub's text colour, one colour on each page.
+ * - paper: sepia, pencil and old paper. github: the contribution graph's greens.
+ * - ice, gold, lava, matrix, night and space: for snow, suns, lamps, code rain, rain and galaxies.
+ */
+export const schemes = {
+  ocean: {
+    light: ["#7fb8d6", "#3a8fc4", "#0077b6", "#025a8c", "#023e6b", "#03045e"],
+    dark: ["#0a1f5c", "#0353a4", "#0077b6", "#00b4d8", "#90e0ef", "#e0fbfc"],
+  },
+  sunset: {
+    light: ["#f4a261", "#e76f51", "#c9184a", "#9d0b4a", "#6a0d6b", "#3b0f5c"],
+    dark: ["#3b0f5c", "#7b2cbf", "#c9184a", "#ff6b35", "#ffb627", "#ffe8a3"],
+  },
+  neon: {
+    light: ["#c77dff", "#9d4edd", "#e0218a", "#b5179e", "#7209b7", "#3a0ca3"],
+    dark: ["#3c096c", "#7b2ff7", "#f107a3", "#ff5edf", "#00e5ff", "#e0ffff"],
+  },
+  fire: {
+    light: ["#fbbf24", "#f59e0b", "#ea580c", "#c2410c", "#991b1b", "#5b0f0f"],
+    dark: ["#4a0d02", "#991b1b", "#dc2626", "#f97316", "#facc15", "#fef9c3"],
+  },
+  aurora: {
+    light: ["#a78bfa", "#7c3aed", "#0d9488", "#047857", "#065f46", "#064e3b"],
+    dark: ["#312e81", "#0e7490", "#059669", "#22c55e", "#86efac", "#ecfdf5"],
+  },
+  forest: {
+    light: ["#a3d9a5", "#4ade80", "#16a34a", "#15803d", "#166534", "#14532d"],
+    dark: ["#052e16", "#14532d", "#15803d", "#22c55e", "#86efac", "#dcfce7"],
+  },
+  candy: {
+    light: ["#f9a8d4", "#f472b6", "#db2777", "#a21caf", "#7e22ce", "#0e7490"],
+    dark: ["#831843", "#db2777", "#f472b6", "#c084fc", "#67e8f9", "#fef08a"],
+  },
+  mono: {
+    light: ["#d4d4d8", "#a1a1aa", "#71717a", "#3f3f46", "#18181b"],
+    dark: ["#3f3f46", "#71717a", "#a1a1aa", "#d4d4d8", "#fafafa"],
+  },
+  ink: { light: [INK.light], dark: [INK.dark] },
+  paper: {
+    light: ["#d6c4a8", "#b08d62", "#8b6a43", "#5c4630", "#3b2a1d"],
+    dark: ["#3f2d20", "#6b4f3a", "#a07850", "#d4b483", "#f3e3c3"],
+  },
+  github: {
+    light: ["#9be9a8", "#40c463", "#30a14e", "#216e39"],
+    dark: ["#0e4429", "#006d32", "#26a641", "#39d353"],
+  },
+  ice: {
+    light: ["#7dd3fc", "#38bdf8", "#0284c7", "#075985", "#0c4a6e"],
+    dark: ["#0c4a6e", "#0369a1", "#38bdf8", "#bae6fd", "#f0f9ff"],
+  },
+  gold: {
+    light: ["#facc15", "#eab308", "#ca8a04", "#a16207", "#713f12"],
+    dark: ["#713f12", "#ca8a04", "#facc15", "#fef08a", "#fffbeb"],
+  },
+  lava: {
+    light: ["#fdba74", "#f97316", "#dc2626", "#991b1b", "#450a0a"],
+    dark: ["#450a0a", "#991b1b", "#ef4444", "#f97316", "#fde047"],
+  },
+  matrix: {
+    light: ["#86efac", "#4ade80", "#16a34a", "#15803d", "#14532d"],
+    dark: ["#022c0f", "#15803d", "#22c55e", "#86efac", "#f0fdf4"],
+  },
+  night: {
+    light: ["#93c5fd", "#60a5fa", "#2563eb", "#1e40af", "#172554"],
+    dark: ["#1e293b", "#1e40af", "#3b82f6", "#93c5fd", "#f8fafc"],
+  },
+  space: {
+    light: ["#ddd6fe", "#c4b5fd", "#8b5cf6", "#6d28d9", "#4338ca", "#1e1b4b"],
+    dark: ["#2e1065", "#5b21b6", "#7c3aed", "#60a5fa", "#e0e7ff", "#fff7ed"],
+  },
+} as const satisfies Record<string, Scheme>;
+
+/** The name of a palette in `schemes`: "ocean", "sunset", "neon", "fire", "aurora", "forest", "candy", "mono" and the rest. */
+export type SchemeName = keyof typeof schemes;
+
+/**
+ * A material's colours by name, each a list for a light page and one for a dark page, in the order the material draws
+ * with them: water [deep, mid, near the surface, surface]; glass [walls, highlight, base]; fire [embers to white heat,
+ * five]; smoke, steam and sand [three, faint to strong]; cloud [outline, body, shadow]; metal [dark, mid, light,
+ * sheen]; wood and grass [dark, mid, light]; lava [four, cool to hot]; ice [outline, body, glint]; neon [glow, tube,
+ * hot core]; ceramic [outline, body, gleam]; starfield [dim, bright]; bubbles [rim, small]; sparks [hot, warm, cool];
+ * rain [drop, splash]; snow [flake, star]. A material's `colors` takes these names first and the looks' `schemes`
+ * after; anything else that takes colours takes the looks' first.
+ */
+export const materialColors = {
+  water: { light: ["#1e3a8a", "#1d4ed8", "#60a5fa", "#0369a1"], dark: ["#2563eb", "#60a5fa", "#a5d8ff", "#e0f2fe"] },
+  sea: { light: ["#134e4a", "#115e59", "#0f766e", "#0d9488"], dark: ["#0f766e", "#14b8a6", "#2dd4bf", "#ccfbf1"] },
+  cola: { light: ["#2b1408", "#431d0b", "#7c3a12", "#92400e"], dark: ["#5a250c", "#74351a", "#94532a", "#ead0a8"] },
+  lemonade: { light: ["#854d0e", "#a16207", "#ca8a04", "#a16207"], dark: ["#ca8a04", "#eab308", "#fde047", "#fef9c3"] },
+  coffee: { light: ["#3b2314", "#4a2c18", "#5b3a24", "#7c4a2a"], dark: ["#7b5135", "#946446", "#b8875e", "#e2c9a6"] },
+  tea: { light: ["#713f12", "#854d0e", "#a16207", "#b45309"], dark: ["#b45309", "#d97706", "#f59e0b", "#fde68a"] },
+  juice: { light: ["#9a3412", "#c2410c", "#ea580c", "#c2410c"], dark: ["#c2410c", "#ea580c", "#fb923c", "#fed7aa"] },
+  wine: { light: ["#4c0519", "#881337", "#9f1239", "#be123c"], dark: ["#9f1239", "#be123c", "#e11d48", "#fda4af"] },
+  milk: { light: ["#64748b", "#94a3b8", "#94a3b8", "#64748b"], dark: ["#cbd5e1", "#e2e8f0", "#f1f5f9", "#ffffff"] },
+  glass: { light: ["#475569", "#94a3b8", "#64748b"], dark: ["#94a3b8", "#f8fafc", "#cbd5e1"] },
+  fire: { light: ["#7f1d1d", "#b91c1c", "#c2410c", "#d97706", "#a16207"], dark: ["#7f1d1d", "#dc2626", "#f97316", "#facc15", "#fef9c3"] },
+  candle: { light: ["#9a3412", "#c2410c", "#d97706", "#b45309", "#92400e"], dark: ["#c2410c", "#f97316", "#fbbf24", "#fde68a", "#fffbeb"] },
+  lava: { light: ["#7f1d1d", "#b91c1c", "#ea580c", "#ca8a04"], dark: ["#991b1b", "#ef4444", "#f97316", "#fde047"] },
+  smoke: { light: ["#9ca3af", "#6b7280", "#4b5563"], dark: ["#4b5563", "#9ca3af", "#d1d5db"] },
+  steam: { light: ["#94a3b8", "#64748b"], dark: ["#94a3b8", "#e2e8f0"] },
+  cloud: { light: ["#6b7280", "#9ca3af", "#4b5563"], dark: ["#e5e7eb", "#6b7280", "#9ca3af"] },
+  storm: { light: ["#374151", "#6b7280", "#1f2937"], dark: ["#9ca3af", "#374151", "#4b5563"] },
+  steel: { light: ["#1e293b", "#475569", "#64748b", "#94a3b8"], dark: ["#475569", "#94a3b8", "#cbd5e1", "#ffffff"] },
+  gold: { light: ["#713f12", "#854d0e", "#a16207", "#ca8a04"], dark: ["#a16207", "#eab308", "#fde047", "#fffbeb"] },
+  copper: { light: ["#7c2d12", "#9a3412", "#c2410c", "#ea580c"], dark: ["#9a3412", "#c2410c", "#fb923c", "#ffedd5"] },
+  wood: { light: ["#3f2a14", "#6b4423", "#8b5a2b"], dark: ["#6b4423", "#a0682f", "#d29b5c"] },
+  grass: { light: ["#14532d", "#15803d", "#16a34a"], dark: ["#166534", "#22c55e", "#86efac"] },
+  seaweed: { light: ["#064e3b", "#047857", "#059669"], dark: ["#065f46", "#10b981", "#6ee7b7"] },
+  sand: { light: ["#713f12", "#92400e", "#a16207"], dark: ["#a16207", "#d4a24c", "#f5deb3"] },
+  ice: { light: ["#0369a1", "#0284c7", "#0c4a6e"], dark: ["#7dd3fc", "#bae6fd", "#ffffff"] },
+  neon: { light: ["#f9a8d4", "#db2777", "#831843"], dark: ["#9d174d", "#ec4899", "#fce7f3"] },
+  cyan: { light: ["#67e8f9", "#0891b2", "#164e63"], dark: ["#155e75", "#22d3ee", "#ecfeff"] },
+  lamp: { light: ["#fcd34d", "#d97706", "#92400e"], dark: ["#92400e", "#f59e0b", "#fef3c7"] },
+  ceramic: { light: ["#374151", "#9ca3af", "#6b7280"], dark: ["#e5e7eb", "#6b7280", "#ffffff"] },
+  wax: { light: ["#92400e", "#d6b98c", "#78350f"], dark: ["#fef3c7", "#a8a29e", "#ffffff"] },
+  moon: { light: ["#a16207", "#ca8a04", "#ca8a04"], dark: ["#fef9c3", "#fde68a", "#ffffff"] },
+  night: { light: ["#334155", "#94a3b8", "#475569"], dark: ["#cbd5e1", "#475569", "#f1f5f9"] },
+  stars: { light: ["#94a3b8", "#334155"], dark: ["#64748b", "#f8fafc"] },
+  rose: { light: ["#be123c", "#e11d48", "#9f1239"], dark: ["#e11d48", "#fb7185", "#ffe4e6"] },
+  goldfish: { light: ["#c2410c", "#ea580c", "#9a3412"], dark: ["#ea580c", "#fb923c", "#ffedd5"] },
+  brick: { light: ["#7f1d1d", "#9a3412"], dark: ["#b91c1c", "#f97316"] },
+  bubbles: { light: ["#0284c7", "#0369a1"], dark: ["#7dd3fc", "#f0f9ff"] },
+  fizz: { light: ["#92400e", "#b45309"], dark: ["#e0b98a", "#fef3c7"] },
+  sparks: { light: ["#ca8a04", "#ea580c", "#b91c1c"], dark: ["#fde047", "#f97316", "#dc2626"] },
+  rain: { light: ["#1d4ed8", "#2563eb"], dark: ["#60a5fa", "#bfdbfe"] },
+  snow: { light: ["#64748b", "#94a3b8"], dark: ["#e2e8f0", "#ffffff"] },
+  ink: { light: [INK.light], dark: [INK.dark] },
+  sunset: { light: ["#1e1b4b", "#6d28d9", "#c2410c", "#ca8a04"], dark: ["#1e1b4b", "#7c3aed", "#f97316", "#fde047"] },
+  sky: { light: ["#1e3a8a", "#2563eb", "#0ea5e9"], dark: ["#0f172a", "#1e3a8a", "#38bdf8"] },
+} as const satisfies Record<string, Scheme>;
+
+/** The name of a material's colours in `materialColors`: "water", "cola", "fire", "smoke", "steel" and the rest. */
+export type MaterialColorName = keyof typeof materialColors;
+
+/** Any colour's name the kit knows: a look's palette (`schemes`) or a material's (`materialColors`). */
+export type ColorName = SchemeName | MaterialColorName;
+
+/**
+ * Colours as every option in the kit that takes several takes them: a palette's name ("ocean", "fire", "cola" and the
+ * rest), one colour as #rrggbb, colours of your own faint to strong, or { light, dark } with a list for each page.
+ */
+export type PaletteLike = ColorName | (string & {}) | readonly string[] | Scheme;
+
+/** One colour as every option in the kit that takes one takes it: #rrggbb, { light, dark }, or a palette's name, its strong colour on each page. */
+export type ColorLike = ColorName | (string & {}) | { readonly light: string; readonly dark: string };
+
+// The table a name is in, the materials' first or the looks'.
+const named = (name: string, prefer: "looks" | "materials"): Scheme | undefined => {
+  const [a, b] = prefer === "materials" ? [materialColors, schemes] : [schemes, materialColors];
+  return Object.hasOwn(a, name) ? (a as Record<string, Scheme>)[name] : Object.hasOwn(b, name) ? (b as Record<string, Scheme>)[name] : undefined;
+};
+
+const NAMES = () => `a palette's name such as "ocean", "fire" or "cola" (see schemes and materialColors)`;
+
+/**
+ * Colours from anything the kit takes for several: a palette's name from `schemes` or `materialColors`, one #rrggbb, a
+ * list of them, or { light, dark } with a list for each page. A name in both tables is the looks' unless `prefer` is
+ * "materials". Returns a list, the same on both pages, or { light, dark }, copied. Throws, naming what it takes, for
+ * anything else; `what` names the option in the error.
+ *
+ *   colorsOf("ocean")              // { light: [6 blues], dark: [6 blues] }
+ *   field({ colors: "ocean" }, fn) // what every colours option does with a name
+ */
+export function colorsOf(v: PaletteLike | unknown, what = "colors", prefer: "looks" | "materials" = "looks"): PaletteSpec {
+  if (typeof v === "string") {
+    if (isHex(v)) return [v];
+    const s = named(v, prefer);
+    if (s) return { light: [...s.light], dark: [...s.dark] };
+    return fail(`${what} takes ${NAMES()}, colours as #rrggbb, or { light, dark }, not ${JSON.stringify(v)}: ${didYouMean(v)}`);
+  }
+  if (Array.isArray(v)) {
+    if (!v.length || !v.every(isHex)) fail(`${what} takes colours as #rrggbb, one or more, not ${JSON.stringify(v)}`);
+    return [...v];
+  }
+  if (v !== null && typeof v === "object" && Array.isArray((v as Scheme).light) && Array.isArray((v as Scheme).dark)) {
+    const { light, dark } = v as Scheme;
+    if (!light.length || !dark.length || !light.every(isHex) || !dark.every(isHex)) fail(`${what} takes { light, dark }, each one or more colours as #rrggbb, not ${JSON.stringify(v)}`);
+    return { light: [...light], dark: [...dark] };
+  }
+  return fail(`${what} takes ${NAMES()}, colours as #rrggbb, or { light, dark }, not ${typeof v === "object" ? JSON.stringify(v) ?? String(v) : String(v)}`);
+}
+
+/**
+ * One colour for each page from anything the kit takes for one: #rrggbb (the same on both), { light, dark }, or a
+ * palette's name, which gives that palette's strong colour on each page, as `colorOf("ocean")` is a deep blue on paper
+ * and a bright one on a dark page. Throws, naming what it takes, for anything else.
+ */
+export function colorOf(v: ColorLike | unknown, what = "color"): { light: string; dark: string } {
+  if (isHex(v)) return { light: v, dark: v };
+  if (typeof v === "string") {
+    const s = named(v, "looks");
+    if (!s) return fail(`${what} takes a colour as #rrggbb, { light, dark }, or ${NAMES()}, not ${JSON.stringify(v)}: ${didYouMean(v)}`);
+    const strong = (list: readonly string[]) => list[Math.min(list.length - 1, Math.floor(list.length * 0.6))];
+    return { light: strong(s.light), dark: strong(s.dark) };
+  }
+  const o = v as { light?: unknown; dark?: unknown };
+  if (v !== null && typeof v === "object" && !Array.isArray(v) && isHex(o.light) && isHex(o.dark)) return { light: o.light, dark: o.dark };
+  return fail(`${what} takes a colour as #rrggbb, { light, dark }, or ${NAMES()}, not ${typeof v === "object" ? JSON.stringify(v) ?? String(v) : String(v)}`);
+}
+
+// The names nearest one that is not a palette's, for an error to offer: "oceans" is one letter from "ocean".
+function didYouMean(word: string): string {
+  const all = [...new Set([...Object.keys(schemes), ...Object.keys(materialColors)])];
+  const far = (a: string, b: string) => {
+    const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      let prev = d[0];
+      d[0] = i;
+      for (let j = 1; j <= b.length; j++) {
+        const keep = d[j];
+        d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+        prev = keep;
+      }
+    }
+    return d[b.length];
+  };
+  const w = word.toLowerCase().slice(0, 40);
+  const near = all.filter((n) => far(w, n) <= (w.length <= 4 ? 1 : 2));
+  return near.length ? `did you mean ${near.slice(0, 3).map((n) => JSON.stringify(n)).join(" or ")}?` : `a colour of your own is #rrggbb, and the names are ${and(all)}`;
+}
+
 /**
  * Several pieces' colours as one palette: each colour once, and for each piece a map from its own index to the new one.
  * A piece with no colours (undefined) is drawn in INK, which is added for it, and `ink` says where. Throws when they come
@@ -535,8 +771,11 @@ export interface PieceSpec<O extends Options = Options> {
   rows: number;
   /** Frames a second: 30 by default, 0 for a still. */
   fps?: number;
-  /** Its colours: one list, or { light, dark } of the same length. Without, it is text in the page's own colour. */
-  palette?: PaletteSpec;
+  /**
+   * Its colours: one list, { light, dark } of the same length, or a palette's name such as "ocean" (its colours for
+   * each page). Without, it is text in the page's own colour.
+   */
+  palette?: PaletteSpec | ColorName;
   /** The colour of a cell drawn with none: the first colour by default, or one for each theme. */
   ink?: Themed<Color>;
   /** The colour behind it, as #rrggbb; it is then drawn for that ground whatever the page. */
@@ -561,10 +800,15 @@ export interface PieceSpec<O extends Options = Options> {
  */
 export type MakerSpec<O extends Options = Options> = Omit<PieceSpec<O>, "name" | "cols" | "rows"> & { name?: string; cols?: number; rows?: number };
 
-/** A maker's spec, its name and size filled in: `name`, and 64 by 24 unless `size` says otherwise. */
-export function specOf<O extends Options>(spec: MakerSpec<O> | undefined, name: string, size: { cols: number; rows: number } = { cols: 64, rows: 24 }): PieceSpec<O> {
+/**
+ * A maker's spec, its name and size filled in: `name`, and 64 by 24 unless `size` says otherwise. A palette given by
+ * name is its colours.
+ */
+export function specOf<O extends Options>(spec: MakerSpec<O> | undefined, name: string, size: { cols: number; rows: number } = { cols: 64, rows: 24 }): Omit<PieceSpec<O>, "palette"> & { palette?: PaletteSpec } {
   if (spec !== undefined && (spec === null || typeof spec !== "object")) fail(`${name}() takes a spec object, such as { cols: 64, rows: 24 }`);
-  return { ...spec, name: spec?.name ?? name, cols: spec?.cols ?? size.cols, rows: spec?.rows ?? size.rows };
+  const { palette: given, ...rest } = spec ?? {};
+  const palette = given === undefined ? undefined : colorsOf(given, `${name}()'s palette`);
+  return { ...rest, name: spec?.name ?? name, cols: spec?.cols ?? size.cols, rows: spec?.rows ?? size.rows, ...(palette !== undefined ? { palette } : {}) };
 }
 
 /** A palette spec's colours spread to `n` along their fade, for each theme it has: colours by value, from a few stops. */
@@ -595,7 +839,7 @@ export type Setup<O extends Options = Options> = (options: O, size: { cols: numb
 /** The meta and palette for a spec, checked. */
 export function metaOf<O extends Options>(spec: PieceSpec<O>): { meta: Meta<O>; palette: Palette | null } {
   if (!spec || typeof spec !== "object") fail("piece() takes a spec: { name, cols, rows } at least");
-  const palette = spec.palette === undefined ? null : new Palette(spec.palette, spec.ink ?? 0);
+  const palette = spec.palette === undefined ? null : new Palette(typeof spec.palette === "string" ? colorsOf(spec.palette, "palette") : spec.palette, spec.ink ?? 0);
   // An ink that isn't one of the colours throws now, not on the first frame.
   if (palette) {
     palette.ink(true);

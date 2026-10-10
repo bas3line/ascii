@@ -31,6 +31,8 @@ import {
   TAU,
   asPiece,
   bayer,
+  colorOf as named,
+  colorsOf as namedColors,
   fail,
   gradient,
   hash,
@@ -46,6 +48,7 @@ import {
   valueNoise,
   type Context,
   type KitPiece,
+  type PaletteLike,
   type PaletteSpec,
   type RampName,
   type Source,
@@ -121,10 +124,12 @@ function chars(v: unknown, name: string, fallback: string, least = 1, most = Inf
   return v;
 }
 
+// One colour: #rrggbb, or a palette's name, its strong colour for a dark page, as a 3D shape takes one.
 function colour(v: unknown, name: string): string | undefined {
   if (v === undefined) return undefined;
-  if (!isHex(v)) fail(`${name} takes a colour as #rrggbb, not ${show(v)}`);
-  return v;
+  if (isHex(v)) return v;
+  if (typeof v === "string") return named(v, name).dark;
+  return fail(`${name} takes a colour as #rrggbb or a palette's name such as "gold", not ${show(v)}`);
 }
 
 // What every effect takes besides its own options.
@@ -504,7 +509,7 @@ export interface GlintOptions extends FxOptions {
    */
   chars?: string | null;
   /**
-   * The band's colour as #rrggbb. By default, on a coloured piece, each cell's own colour lifted toward white (by 0.6
+   * The band's colour as #rrggbb, or a palette's name such as "gold". By default, on a coloured piece, each cell's own colour lifted toward white (by 0.6
    * in the core and 0.3 at the edge), but for a block on paper, whose lighter shade is the glint, as banner()'s; a piece
    * in one ink then stays in one ink, the glint drawn by its characters.
    */
@@ -838,7 +843,7 @@ export interface ScanOptions extends FxOptions {
   direction?: "down" | "up" | "right" | "left";
   /** The line's character: "─" across the piece for "down" and "up", "│" for "right" and "left". */
   char?: string;
-  /** The line's colour as #rrggbb: by default each cell's own colour where it crosses ink, and the piece's ink elsewhere. */
+  /** The line's colour as #rrggbb or a palette's name: by default each cell's own colour where it crosses ink, and the piece's ink elsewhere. */
   color?: string;
   /**
    * false (the default): the piece shows whole and the line crosses it, the whole period, off one edge and on at the
@@ -1035,8 +1040,8 @@ export const hues = {
 const cycle = (stops: readonly string[], n: number) => (stops.length === 1 ? Array(n).fill(stops[0]) : gradient([...stops, stops[0]], n + 1).slice(0, n));
 
 export interface RainbowOptions extends FxOptions {
-  /** The colours it cycles through, as #rrggbb, or { light, dark }: `hues`, twelve round the wheel, deeper on paper. */
-  colors?: PaletteSpec;
+  /** The colours it cycles through, as #rrggbb, { light, dark } or a palette's name such as "candy": `hues`, twelve round the wheel, deeper on paper. */
+  colors?: PaletteLike;
   /** Colours in the cycle, the stops faded into each other and back to the first: 12. */
   steps?: number;
   /** Seconds for a colour to come round again: 3. */
@@ -1056,7 +1061,7 @@ function rainbowOf(fx: string, src: Source, options: RainbowOptions | undefined,
   const period = num(o.period, `${fx}.period`, 3, "seconds");
   const cycles = num(o.cycles, `${fx}.cycles`, cyclesBy, "zeroUp");
   const direction = choice(o.direction, `${fx}.direction`, ["x", "y", "diagonal"], "x");
-  const spec = o.colors ?? hues;
+  const spec = typeof o.colors === "string" ? namedColors(o.colors, `${fx}.colors`) : (o.colors ?? hues);
   const list = (v: unknown, name: string) =>
     Array.isArray(v) && v.length && v.every(isHex) ? (v as string[]) : fail(`${name} takes a list of colours as #rrggbb, or { light, dark }, not ${show(v)}`);
   const [light, dark] = Array.isArray(spec)
@@ -1195,7 +1200,7 @@ function flood(solid: Uint8Array, out: Uint8Array, queue: Int32Array, cols: numb
 export interface OutlineOptions extends FxOptions {
   /** The line: "single", "double", "rounded", "heavy", "ascii", or 16 characters of your own, as `outlines` lays them out. */
   style?: keyof typeof outlines | (string & {});
-  /** Its colour as #rrggbb: by default, on a coloured piece, the colour of the ink it runs beside. */
+  /** Its colour as #rrggbb or a palette's name: by default, on a coloured piece, the colour of the ink it runs beside. */
   color?: string;
   /**
    * Empty cells in a row, between ink on both sides, that count as inside rather than outside: 1, so the line goes
@@ -1277,7 +1282,7 @@ export interface ShadowOptions extends FxOptions {
   dy?: number;
   /** Its character: "░". */
   char?: string;
-  /** Its colour as #rrggbb: by default, on a coloured piece, a muted grey for the page's theme. */
+  /** Its colour as #rrggbb or a palette's name: by default, on a coloured piece, a muted grey for the page's theme. */
   color?: string;
   /**
    * true (the default): the piece casts its shadow as one solid shape, so it falls only outside it, never into the

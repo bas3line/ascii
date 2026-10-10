@@ -30,6 +30,7 @@ import {
   bayer,
   checkMeta,
   code,
+  colorOf as inkOf,
   fail,
   hash,
   isHex,
@@ -70,7 +71,8 @@ export interface Clip {
   /** How fast its time runs: 1; 2 plays it twice as fast. */
   speed?: number;
   /**
-   * One colour for all of it, as #rrggbb, or one for each theme as { light, dark }: none, so it keeps its own. Text or a
+   * One colour for all of it, as #rrggbb, one for each theme as { light, dark }, or a palette's name such as "ocean"
+   * (its strong colour on each page): none, so it keeps its own. Text or a
    * piece in one ink is drawn in it; a coloured piece is played in one ink and drawn in it too. Like every colour, it
    * shows only when the piece is drawn in colour (env.color).
    */
@@ -183,7 +185,12 @@ function colorOf(v: unknown, name: string): string[] | null {
   if (isHex(v)) return [v];
   if (v !== null && typeof v === "object" && isHex((v as { light: unknown }).light) && isHex((v as { dark: unknown }).dark))
     return [(v as { light: string }).light, (v as { dark: string }).dark];
-  return fail(`${name} takes #rrggbb, or { light, dark }, not ${shown(v)}`);
+  // A palette's name: its strong colour on each page.
+  if (typeof v === "string") {
+    const c = inkOf(v, name);
+    return [c.light, c.dark];
+  }
+  return fail(`${name} takes #rrggbb, { light, dark }, or a palette's name such as "ocean", not ${shown(v)}`);
 }
 
 // A source or a clip, checked, and what compose needs to know of it.
@@ -708,7 +715,7 @@ export interface BorderOptions {
    */
   title?: string | boolean;
   /**
-   * Its colour and its title's, as #rrggbb, or one for each theme: the ink by default. A colour makes a piece in one ink
+   * Its colour and its title's, as #rrggbb, one for each theme, or a palette's name: the ink by default. A colour makes a piece in one ink
    * a coloured one, its own text then in INK.
    */
   color?: Themed<string>;
