@@ -175,6 +175,32 @@ test("glint: a gradient banner's colours and their tints stay within 64", () => 
   contract(p, [0, 0.7, 0.9, 1.2]);
 });
 
+test("glint: a lit cell is its own colour lifted, never another colour, and a block on paper keeps its colour", () => {
+  // A gradient banner has 32 colours: their 32 core tints fill the 64 and the edges' find no room. Coloured by theme it
+  // has 62, and most core tints find none either. Each lit cell is still a tint of its own colour, or its own, where
+  // its characters show the band: before, a tint with no room took the nearest colour left, a pink on an orange letter.
+  const gradient = banner("ascii.rest", { effect: "still", color: ["#f97316", "#f778ba"] });
+  const themed = banner("ascii.rest", { effect: "still", color: { light: ["#b45309", "#be185d"], dark: ["#f97316", "#f778ba"] } });
+  for (const src of [gradient, themed])
+    for (const paper of [false, true]) {
+      const p = glint(src, { first: 0, sweep: 1, width: 6 });
+      const before = look(src, 0, { paper }), flat = [...before.text.replace(/\n/g, "")];
+      let lifted = 0;
+      for (const t of [0.2, 0.35, 0.5, 0.65, 0.8]) {
+        const lit = look(p, t, { paper });
+        before.hexes.forEach((h, i) => {
+          if (!h) return;
+          const ok = [h, mix(h, "#ffffff", 0.6), mix(h, "#ffffff", 0.3)];
+          assert.ok(ok.includes(lit.hexes[i]!), `t=${t} cell ${i} ${flat[i]}: ${h} lit as ${lit.hexes[i]}`);
+          if (lit.hexes[i] !== h) lifted++;
+          // On paper the band's ▒▓ is the glint on a block; a tint on top all but rubbed it out.
+          if (paper && flat[i] >= "▀" && flat[i] <= "▟") assert.equal(lit.hexes[i], h, `block ${i} on paper`);
+        });
+      }
+      if (src === gradient && !paper) assert.ok(lifted > 50, `the gradient banner's band is lifted on a dark page: ${lifted} cells`);
+    }
+});
+
 test("typeIn: a character at a time behind a cursor, in reading order, then the whole and a blinking cursor", () => {
   const p = typeIn("abc\nde", { speed: 10 });
   assert.equal(p.meta.cols, 4, "a column for the cursor");
@@ -474,6 +500,20 @@ test("shadow: the ink moved right and down, behind it, a muted grey on a coloure
   assert.throws(() => shadow("x", { char: "ab" }), /shadow\.char takes one character/);
 });
 
+test("shadow: cast by the piece as one solid shape, none in the spaces it encloses, unless solid is false", () => {
+  // A ring's hole and a boxed word's inside get no shadow: it falls only outside, as behind a card.
+  assert.equal(look(shadow("###\n# #\n###"), 0).text, "### \n# #░\n###░\n ░░░");
+  assert.equal(look(shadow("###\n# #\n###", { solid: false }), 0).text, "### \n#░#░\n###░\n ░░░");
+  assert.equal(look(shadow(outline("a b", { gap: 0 })), 0).text, "┌─┬─┐ \n│a│b│░\n└─┴─┘░\n ░░░░░");
+  // An open gap is outside: the shadow falls into it.
+  assert.equal(look(shadow("# #\n# #\n###"), 0).text, "# # \n#░#░\n###░\n ░░░");
+  // Spaces that a logo's ink encloses, rust's inside its cog, stay clear.
+  const holes = (o: object) => look(shadow(rust, quietRust(o)), 0).text.split("\n").slice(12, 13)[0];
+  assert.match(holes({}), /88p {2}8888888888 {8}'"8888888888 {2}p8\| {2}\|888/);
+  assert.match(holes({ solid: false }), /88p░░8888888888░{8}'"8888888888░ p8\|░░\|888/);
+  assert.throws(() => shadow("x", { solid: "yes" as never }), /shadow\.solid takes true or false, not "yes"/);
+});
+
 test("chain: effects one after another, the same as calling them in turn", () => {
   const a = chain("hi\nyo", (p) => glint(p, { first: 0 }), (p) => wave(p));
   const b = wave(glint("hi\nyo", { first: 0 }));
@@ -527,8 +567,12 @@ test("effects play through svg() and the terminal", async () => {
 
 test("a misspelt option throws, naming the options there are, rather than being left out", () => {
   assert.throws(() => glint("x", { evry: 2 } as never), /^Error: ascii\.rest: glint\(\) has no option "evry": it takes every, sweep, first, width, slant, chars, color, name, note or options$/);
-  assert.throws(() => dissolve("x", { scale: 0.15 } as never), /dissolve\(\) has no option "scale": it takes period, mode, blob, edge, seed/);
-  assert.throws(() => rainbow("x", { spread: 0.03 } as never), /rainbow\(\) has no option "spread": it takes colors, steps, period, cycles, direction/);
+  assert.throws(() => dissolve("x", { sed: 2 } as never), /dissolve\(\) has no option "sed": it takes period, mode, blob, edge, seed/);
+  assert.throws(() => rainbow("x", { step: 2 } as never), /rainbow\(\) has no option "step": it takes colors, steps, period, cycles, direction/);
+  // The names the spec first gave say what to write now.
+  assert.throws(() => dissolve("x", { scale: 0.15 } as never), /dissolve\(\) has no option "scale": write blob, the patches' size in cells across, which is 1 \/ scale: 7 for 0\.15$/);
+  assert.throws(() => rainbow("x", { spread: 0.03 } as never), /rainbow\(\) has no option "spread": write cycles, the times the colours fit across the piece/);
+  assert.throws(() => hueCycle("x", { spread: 0.03 } as never), /hueCycle\(\) has no option "spread": write cycles/);
   assert.throws(() => hueCycle("x", { speed: 2 } as never), /hueCycle\(\) has no option "speed"/);
   for (const [fx, make] of [
     ["typeIn", typeIn],
@@ -557,12 +601,21 @@ test("text with Windows line ends and tabs is taken as a terminal shows it", () 
   assert.throws(() => ["a", "b"].map(glint as never), /glint\(\) takes its options as an object, not 0: over a list, write list\.map\(\(p\) => glint\(p\)\)/);
 });
 
-test("typeIn: on a still source an SVG plays it once and holds, as a page does; looping with hold", () => {
+test("typeIn: an SVG plays it once and holds, as a page does; looping with hold", () => {
   assert.deepEqual(loopOf(typeIn("hello")), { every: 0.625, from: 0, once: true });
   assert.match(svg(typeIn("hello")), /1 forwards/);
-  // With hold it loops; on a moving source it plays as the source does.
-  assert.equal(loopOf(typeIn("hello", { hold: 1 })).once, false);
-  assert.equal(loopOf(typeIn(donut)).once, undefined);
+  // With hold it loops, from the middle of the hold, so the frame held for reduced motion is all typed.
+  assert.deepEqual(loopOf(typeIn("hello", { hold: 1 })), { every: 1.125, from: 0.625, once: false });
+  // On a moving source it plays once too. It looped every 4 s from 0, so reduced motion showed a lone cursor; and on a
+  // logo it started at 4.5 s, where rust's own glint loop does, after the typing was over.
+  const ink = (p: Piece, t: number) => look(p, t, { mono: true }).text.replace(/[\s▌]/g, "").length;
+  for (const p of [typeIn(donut), typeIn(rust)]) {
+    const l = loopOf(p);
+    assert.equal(l.once, true, p.meta.name);
+    assert.equal(l.from, 0, p.meta.name);
+    assert.ok(ink(p, l.from + l.every) > 0.95 * ink(p.meta.name === "rust" ? rust : donut, l.from + l.every), `${p.meta.name} ends typed`);
+    assert.ok(ink(p, 1) < 0.5 * ink(p, l.every), `${p.meta.name} is typing at 1 s`);
+  }
 });
 
 test("an effect of a piece made with piece() keeps its colours by theme", () => {
@@ -600,11 +653,11 @@ test("dissolve: blocks cross the edge as lighter blocks, other characters as dot
   assert.deepEqual(edgeOf(wall("▓"), { edge: "*" }), new Set(["*"]));
 });
 
-test("typeIn: typing that runs past a minute is left to svg()'s 4 seconds, as a loop is, rather than sampled whole", () => {
-  assert.deepEqual(loopOf(typeIn("hello", { speed: 0.05 })), { every: 4, from: 0 });
+test("typeIn: typing that runs past a minute plays svg()'s 4 seconds from its held moment, rather than sampled whole", () => {
+  assert.deepEqual(loopOf(typeIn("hello", { speed: 0.05 })), { every: 4, from: 100.5, once: false });
   assert.match(svg(typeIn("hello", { speed: 1e-6 })), /^<svg /);
   assert.equal(loopOf(typeIn("x".repeat(59), { speed: 1 })).once, true, "59.5 s plays once");
-  assert.equal(loopOf(typeIn("x".repeat(60), { speed: 1 })).once, undefined, "60.5 s is past a minute");
+  assert.deepEqual(loopOf(typeIn("x".repeat(60), { speed: 1 })), { every: 4, from: 60.5, once: false }, "60.5 s is past a minute");
 });
 
 test("effect(): an effect of your own, sized, coloured, timed and checked as the kit's are", () => {
@@ -678,4 +731,47 @@ test("effect(): an effect of your own, sized, coloured, timed and checked as the
   assert.throws(() => effect("x", { moves: 1 as never }, () => {}), /effect\.moves takes true or false/);
   assert.throws(() => effect("x".repeat(300), { pad: 20 }, () => {}), /effect\(\) makes a piece 340 by 41/);
   assert.throws(() => effect("x", { setup: () => 5 as never }).default()(0), /effect\(\)'s setup returns the drawing/);
+});
+
+test("rainbow: a source in sixty colours still shows every hue, its own colours left out", () => {
+  // Coloured by theme, a gradient banner has 62 colours. Kept, they left two places for 24 hues, and the rest were drawn
+  // in the nearest of the banner's oranges and pinks: six colours where there should be twelve.
+  const full = banner("ascii.rest", { effect: "still", color: { light: ["#b45309", "#be185d"], dark: ["#f97316", "#f778ba"] } });
+  assert.equal(full.meta.palette!.length, 62);
+  const r = rainbow(full);
+  for (const paper of [false, true]) {
+    const seen = new Set(look(r, 0, { paper }).hexes.filter(Boolean));
+    assert.deepEqual(seen, new Set(paper ? hues.light : hues.dark), `paper ${paper}`);
+  }
+  assert.ok(!r.meta.palette!.includes("#f97316"), "none of the banner's own");
+  assert.equal(look(r, 0, { mono: true }).text, look(full, 0, { mono: true }).text);
+  contract(r);
+});
+
+test("loops: an effect's piece keeps to its own loop, not a logo's shine, in a chain and in an SVG", () => {
+  // Every 13 s with rust's 5 is 65 s, past a minute: no loop. It kept rust's `shine`, so svg() played rust's 5 s from
+  // 4.5 s, a window with no glint of its own in it, and an effect on top of it took 5 s as its period.
+  const slow = glint(rust, { every: 13 });
+  assert.equal(slow.meta.loop, undefined);
+  const l = loopOf(slow);
+  assert.deepEqual(l, { every: 4, from: slow.meta.still, once: false });
+  const lit = (t: number) => look(slow, t).text !== look(rust, t).text;
+  assert.ok([1, 1.5, 2].some(lit), "its glint crosses within the SVG's 4 seconds");
+  // A source with no loop counts as having the effect's period, by the kit's time rule: 2, not lcm(5, 2).
+  assert.equal(wave(slow).meta.loop, 2);
+  assert.equal(glint(slow, { every: 3 }).meta.loop, 3);
+  // An effect that doesn't move plays as its source: the outline of a typed banner types in once and holds.
+  const typed = banner("hi", { effect: "type" });
+  assert.deepEqual(loopOf(outline(typed)), loopOf(typed));
+  assert.deepEqual(loopOf(shadow(banner("hi"))), loopOf(banner("hi")));
+});
+
+test("any t gives a whole frame: before 0, not a number, and a long way on", () => {
+  const sources: Piece[] = [rust, still3, asPiece("ab\ncd")];
+  const makers = [glint, typeIn, dissolve, fade, scan, glitch, wave, rainbow, hueCycle, shake, outline, shadow] as ((s: Piece) => Piece)[];
+  for (const src of sources)
+    for (const make of makers) {
+      const p = make(src);
+      contract(p, [-3, Number.NaN, 1e9, 0, 123456.789]);
+    }
 });

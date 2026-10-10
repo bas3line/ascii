@@ -130,6 +130,14 @@ function colour(v: unknown, name: string): string | undefined {
 // What every effect takes besides its own options.
 const COMMON = ["name", "note", "options"] as const;
 
+// Options the kit's spec first gave other names, and what to write now. scale and spread name other things across the
+// kit (compose's scale(), core's spread()), and these say it in cells and in times across, which read more easily.
+const RENAMED: Record<string, string> = {
+  "dissolve.scale": "write blob, the patches' size in cells across, which is 1 / scale: 7 for 0.15",
+  "rainbow.spread": "write cycles, the times the colours fit across the piece, which is spread times its width",
+  "hueCycle.spread": "write cycles, the times the colours fit across the piece, which is spread times its width",
+};
+
 // An effect's options, checked to be an object of options it has: a misspelt one throws, naming the ones there are,
 // rather than being left out without a word.
 function optionsOf<T extends object>(o: T | undefined, fx: string, keys: readonly (keyof T & string)[]): T {
@@ -138,7 +146,8 @@ function optionsOf<T extends object>(o: T | undefined, fx: string, keys: readonl
   if (typeof o === "number") fail(`${fx}() takes its options as an object, not ${o}: over a list, write list.map((p) => ${fx}(p))`);
   if (o === null || typeof o !== "object" || Array.isArray(o)) fail(`${fx}() takes its options as an object, such as { period: 4 }, not ${show(o)}`);
   const known: readonly string[] = [...keys, ...COMMON];
-  for (const [k, v] of Object.entries(o)) if (v !== undefined && !known.includes(k)) fail(`${fx}() has no option ${JSON.stringify(k)}: it takes ${or(known)}`);
+  for (const [k, v] of Object.entries(o))
+    if (v !== undefined && !known.includes(k)) fail(`${fx}() has no option ${JSON.stringify(k)}: ${RENAMED[`${fx}.${k}`] ?? `it takes ${or(known)}`}`);
   return o;
 }
 
@@ -148,12 +157,13 @@ function optionsOf<T extends object>(o: T | undefined, fx: string, keys: readonl
 const mod = (a: number, n: number) => ((a % n) + n) % n;
 
 const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
-// The least common multiple of two periods, on hundredths of a second, when it is at most 60 seconds.
+// The least common multiple of two periods, found on hundredths of a second, when it is at most 60 seconds. It is a
+// whole number of b's own periods, so lcm(1.125, 1.125) is 1.125, not the 1.13 its hundredths would give.
 function lcm(a: number, b: number): number | undefined {
   const x = Math.round(a * 100), y = Math.round(b * 100);
   if (x < 1 || y < 1) return undefined;
-  const l = (x / gcd(x, y)) * y;
-  return l <= 6000 ? l / 100 : undefined;
+  const k = x / gcd(x, y);
+  return k * y <= 6000 ? +(k * b).toFixed(6) : undefined;
 }
 
 // The middle of the first stretch, from t on and within `span` seconds, when `busy` says the effect shows nothing:
@@ -199,6 +209,13 @@ class Inks {
     }
     return i;
   }
+
+  /** The index of a colour if it is here or there is room to add it; else `fallback`, rather than the nearest. */
+  fit(c: string, fallback: number): number {
+    const i = this.#at.get(c.toLowerCase());
+    if (i !== undefined && this.list[i].toLowerCase() === c.toLowerCase()) return i;
+    return this.list.length < 64 ? this.add(c) : fallback;
+  }
 }
 
 // The kit's quieter ink, for a shadow on a coloured piece: GitHub's muted text colours, as banner()'s shadow.
@@ -239,7 +256,7 @@ interface Made {
   period?: number;
   /** The moment to hold still, for a reader who prefers reduced motion: the source's by default. */
   still?: number;
-  /** For an effect that plays once and stays, the seconds it takes: an SVG of it on a still source then plays once and holds. */
+  /** For an effect that plays once and stays, the seconds it takes: an SVG of it then plays once and holds. */
   once?: number;
   /** For the note: "glinting now and then". */
   what: string;
@@ -258,13 +275,30 @@ interface Given {
 // The categories whose pieces glint or scan on a period an option sets, as svg() plays them.
 const LOOPS: Record<string, string> = { logos: "shine", companies: "shine", distros: "scan" };
 
+// The pieces effects have made. One keeps its source's category and options, a logo's `shine` among them, but its
+// period is its own loop: with none, it doesn't repeat within a minute, whatever `shine` says.
+const ours = new WeakSet<Piece>();
+
 // The source's own period: its loop, or a logo's glint or a distro's scan; none for a still or a piece that never repeats.
-function periodOf(m: Meta, options: Options): number | undefined {
+function periodOf(p: Piece, options: Options): number | undefined {
+  const m = p.meta;
   if (!m.fps) return undefined;
   if (m.loop) return m.loop;
+  if (ours.has(p)) return undefined;
   const v = Object.hasOwn(LOOPS, m.category) ? options[LOOPS[m.category]] : undefined;
   return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined;
 }
+
+// What svg() reads off a piece, as it does a banner's, to choose the loop it plays: `seconds` from `from`, or one play
+// of `seconds` that holds its last frame when `once`.
+interface Motion {
+  seconds: number;
+  from: number;
+  once: boolean;
+}
+
+const isMotion = (v: unknown): v is Motion =>
+  !!v && typeof v === "object" && typeof (v as Motion).seconds === "number" && typeof (v as Motion).from === "number";
 
 // Text as a frame holds it: Windows line ends as newlines, and tabs as spaces to the next stop of 8, as a terminal
 // shows them.
@@ -316,28 +350,30 @@ function mainInk(p: Piece, at: number, options: Options, map: Uint8Array): { lig
  * The piece an effect makes: the source played with its options, each frame read back into a grid in the new piece's
  * colours, and the effect drawn from it. The loop follows the kit's time rule: the least common multiple of the
  * source's period and the effect's, up to 60 seconds, a still source or one that never repeats counting as the
- * effect's.
+ * effect's. `keep` false is for an effect that recolours every cell, so the source's colours are left out and all 64 are
+ * the effect's.
  */
-function build(fx: string, src: Source, o: FxOptions, make: (g: Given) => Made): KitPiece {
+function build(fx: string, src: Source, o: FxOptions, make: (g: Given) => Made, keep = true): KitPiece {
   const p = sourceOf(src, fx);
   const m = p.meta;
   if (o.options !== undefined && (o.options === null || typeof o.options !== "object" || Array.isArray(o.options)))
     fail(`${fx}.options takes the source's options as an object, such as { shine: 0 }, not ${show(o.options)}`);
   const options: Options | undefined = m.options || o.options ? { ...m.options, ...o.options } : undefined;
-  const inks = new Inks(m.palette ?? null);
+  const inks = new Inks(keep ? (m.palette ?? null) : null);
   const e = make({ meta: m, inks, piece: p, options: options ?? {} });
   // A cell drawn with no colour takes the source's own main colour for the theme; on a source in one ink that the
   // effect adds colours to, the kit's ink.
-  const ink = m.palette ? mainInk(p, m.still ?? 0, options ?? {}, inks.map) : inks.list.length ? { light: inks.add(INK.light), dark: inks.add(INK.dark) } : null;
+  const ink =
+    keep && m.palette ? mainInk(p, m.still ?? 0, options ?? {}, inks.map) : inks.list.length ? { light: inks.add(INK.light), dark: inks.add(INK.dark) } : null;
   const cols = e.cols ?? m.cols, rows = e.rows ?? m.rows;
   if (cols > MAX.cols || rows > MAX.rows)
     fail(`${fx}() makes a piece ${cols} by ${rows} from one ${m.cols} by ${m.rows}, past the ${MAX.cols} by ${MAX.rows} a piece can be: use a smaller source, or a smaller reach`);
-  const own = periodOf(m, options ?? {});
+  const own = periodOf(p, options ?? {});
   const loop = !e.moves ? own : e.period ? lcm(own ?? e.period, e.period) : undefined;
   const name = o.name === undefined ? m.name : typeof o.name === "string" ? o.name : fail(`${fx}.name takes a string, not ${show(o.name)}`);
   const note = o.note ?? `${name}, ${e.what}`.slice(0, 72);
   const still = e.still ?? m.still;
-  const made = piece<Options>(
+  const out = piece<Options>(
     {
       name,
       note,
@@ -385,13 +421,25 @@ function build(fx: string, src: Source, o: FxOptions, make: (g: Given) => Made):
       },
     },
   );
-  // svg() reads a piece's `motion`, as it does a banner's, to start its loop on the held moment: an SVG of a dissolve
-  // then starts whole, and that is the frame it shows for reduced motion, not an empty one. Text typed in once plays
-  // once in an SVG too, and holds, as it does on a page, rather than typing again every 4 seconds; past 60 seconds it
-  // is left to svg()'s 4, as a loop is.
-  if (loop && made.meta.still) return Object.assign(made, { motion: { seconds: loop, from: made.meta.still, once: false } });
-  if (!loop && e.once && e.once <= 60 && !m.fps) return Object.assign(made, { motion: { seconds: +e.once.toFixed(3), from: 0, once: true } });
-  return made;
+  ours.add(out);
+  // svg() reads a piece's `motion`, as it does a banner's, to choose the loop it plays. An effect that moves by itself
+  // gives one. A loop starts on the held moment, so an SVG of a dissolve starts whole, and that is the frame it shows
+  // for reduced motion, not an empty one. Typing in plays once and holds, as on a page, so the typing shows and reduced
+  // motion shows it all typed. Anything else plays svg()'s 4 seconds from the held moment, rather than the period a
+  // logo's `shine` gives, which the effect's options still carry. An effect that doesn't move keeps its source's, so
+  // the outline of a typed banner plays once as the banner does.
+  const theirs = (p as { motion?: unknown }).motion;
+  const from = out.meta.still ?? 0;
+  const motion: Motion | undefined = !e.moves
+    ? isMotion(theirs)
+      ? { seconds: theirs.seconds, from: theirs.from, once: !!theirs.once }
+      : undefined
+    : loop
+      ? { seconds: loop, from, once: false }
+      : e.once !== undefined && e.once <= 60
+        ? { seconds: +e.once.toFixed(3), from: 0, once: true }
+        : { seconds: 4, from, once: false };
+  return motion ? Object.assign(out, { motion }) : out;
 }
 
 // Copies a source's frame into the new piece's grid as it is, when the two are the same size.
@@ -457,7 +505,8 @@ export interface GlintOptions extends FxOptions {
   chars?: string | null;
   /**
    * The band's colour as #rrggbb. By default, on a coloured piece, each cell's own colour lifted toward white (by 0.6
-   * in the core and 0.3 at the edge); a piece in one ink then stays in one ink, the glint drawn by its characters.
+   * in the core and 0.3 at the edge), but for a block on paper, whose lighter shade is the glint, as banner()'s; a piece
+   * in one ink then stays in one ink, the glint drawn by its characters.
    */
   color?: string;
 }
@@ -485,9 +534,12 @@ export function glint(src: Source, options?: GlintOptions): KitPiece {
       core.fill(inks.add(color));
       edge.fill(inks.add(color));
     } else {
+      // The core's tints first, then the edge's. Where the 64 colours a piece can have run out, an edge is drawn in its
+      // core's tint and a core in the cell's own colour, its characters showing the band, never in the nearest colour
+      // left, which on a gradient is as likely another hue as a lighter one.
       const own = inks.list.slice(0, inks.own);
-      own.forEach((c, i) => (core[i] = inks.add(mix(c, "#ffffff", 0.6))));
-      own.forEach((c, i) => (edge[i] = inks.add(mix(c, "#ffffff", 0.3))));
+      own.forEach((c, i) => (core[i] = inks.fit(mix(c, "#ffffff", 0.6), i)));
+      own.forEach((c, i) => (edge[i] = inks.fit(mix(c, "#ffffff", 0.3), core[i])));
     }
     // The band runs from wholly off the grid on one side to wholly off it on the other.
     const reach = width / 2 + 1;
@@ -523,13 +575,11 @@ export function glint(src: Source, options?: GlintOptions): KitPiece {
               const d = Math.abs(x + slant * y - at);
               if (d >= reach) continue;
               const inCore = d < width / 2;
-              if (given) s.chars[i] = inCore ? c0 : c1;
-              else if (!keep) {
-                const k = kind(ch);
-                if (k === 1) s.chars[i] = inCore ? c0 : c1;
-                else if (k === 2 && inCore) s.chars[i] = SLASH;
-              }
-              if (!ctx.mono) s.colors[i] = (inCore ? core : edge)[g.colors[i]];
+              const k = given || keep ? -1 : kind(ch);
+              if (given || k === 1) s.chars[i] = inCore ? c0 : c1;
+              else if (k === 2 && inCore) s.chars[i] = SLASH;
+              // On paper a block's lighter shade is its glint, as banner()'s is: a tint on top would all but rub it out.
+              if (!ctx.mono && !(k === 1 && ctx.paper)) s.colors[i] = (inCore ? core : edge)[g.colors[i]];
             }
         };
       },
@@ -574,7 +624,7 @@ export function typeIn(src: Source, options?: TypeInOptions): KitPiece {
   if (o.speed !== undefined) num(o.speed, "typeIn.speed", 40, "positive");
   // Text gets a column after its longest line, for the cursor to blink in once it is all typed.
   const text = typeof src === "string" && cursor ? textOf(src).split("\n").map((l) => l + " ").join("\n") : src;
-  return build("typeIn", text, o,({ meta: m, piece: p, options: opts }) => {
+  return build("typeIn", text, o, ({ meta: m, piece: p, options: opts }) => {
     const { cols, rows } = m;
     // The characters to type: as many as its frame has at the moment it names to be held, its first by default, so a
     // source that starts empty, a dissolve say, still counts whole.
@@ -813,7 +863,7 @@ export function scan(src: Source, options?: ScanOptions): KitPiece {
   if (o.reveal !== undefined && typeof o.reveal !== "boolean") fail(`scan.reveal takes true or false, not ${show(o.reveal)}`);
   const reveal = o.reveal ?? false;
   const forward = direction === "down" || direction === "right";
-  return build("scan", src, o,({ meta: m, inks }) => {
+  return build("scan", src, o, ({ meta: m, inks }) => {
     const ink = color ? inks.add(color) : -1;
     const along = across ? m.rows : m.cols;
     // The line's row or column at t, from -1 (not yet on) to `along` (gone), counted in the way it moves; null when the
@@ -881,7 +931,7 @@ export function glitch(src: Source, options?: GlitchOptions): KitPiece {
   const amount = num(o.amount, "glitch.amount", 0.5, "share");
   const junk = [...chars(o.chars, "glitch.chars", "#%&@$/\\|<>", 1)].map((c) => c.charCodeAt(0));
   const seed = num(o.seed, "glitch.seed", 1, "whole");
-  return build("glitch", src, o,({ meta: m }) => {
+  return build("glitch", src, o, ({ meta: m }) => {
     const busy = (t: number) => mod(t - first, every) < length;
     const reach = 1 + Math.round(amount * 10);
     return {
@@ -942,7 +992,7 @@ export function wave(src: Source, options?: WaveOptions): KitPiece {
   const wavelength = num(o.wavelength, "wave.wavelength", rows ? 12 : 16, "positive");
   const period = num(o.period, "wave.period", 2, "seconds");
   const room = Math.ceil(amplitude);
-  return build("wave", src, o,({ meta: m }) => ({
+  return build("wave", src, o, ({ meta: m }) => ({
     cols: m.cols + (rows ? 2 * room : 0),
     rows: m.rows + (rows ? 0 : 2 * room),
     moves: true,
@@ -1014,7 +1064,9 @@ function rainbowOf(fx: string, src: Source, options: RainbowOptions | undefined,
     : spec && typeof spec === "object"
       ? [list((spec as { light: unknown }).light, `${fx}.colors.light`), list((spec as { dark: unknown }).dark, `${fx}.colors.dark`)]
       : fail(`${fx}.colors takes a list of colours as #rrggbb, or { light, dark }, not ${show(spec)}`);
-  return build(fx, src, o,({ meta: m, inks }) => {
+  // Every cell of ink is recoloured, so the source's colours are left out: a source in sixty colours still shows every
+  // hue, not the nearest of its own.
+  return build(fx, src, o, ({ meta: m, inks }) => {
     // The cycle's colours for each theme: [on a dark page, on paper].
     const at = [cycle(dark, steps).map((c) => inks.add(c)), cycle(light, steps).map((c) => inks.add(c))];
     // How far round the cycle a cell is from the last, so it fits `cycles` times across the piece's length that way.
@@ -1037,7 +1089,7 @@ function rainbowOf(fx: string, src: Source, options: RainbowOptions | undefined,
           }
       },
     };
-  });
+  }, false);
 }
 
 /**
@@ -1081,7 +1133,7 @@ export function shake(src: Source, options?: ShakeOptions): KitPiece {
   const length = num(o.length, "shake.length", 0.3, "seconds");
   const first = num(o.first, "shake.first", 0.5, "number");
   const seed = num(o.seed, "shake.seed", 1, "whole");
-  return build("shake", src, o,({ meta: m }) => ({
+  return build("shake", src, o, ({ meta: m }) => ({
     cols: m.cols + 2 * amount,
     rows: m.rows + 2 * amount,
     moves: true,
@@ -1117,6 +1169,28 @@ export const outlines = {
   ascii: " |||-+++-+++-+++",
 } as const;
 
+// A cell's neighbours: the four across, then the four diagonals.
+const NX = [0, 0, 1, -1, 1, -1, 1, -1], NY = [1, -1, 0, 0, 1, 1, -1, -1];
+
+// Marks in `out` the outside of a shape: every cell reached from the grid's edge without crossing one set in `solid`.
+function flood(solid: Uint8Array, out: Uint8Array, queue: Int32Array, cols: number, rows: number): void {
+  out.fill(0);
+  let head = 0, tail = 0;
+  for (let i = 0; i < cols * rows; i++) {
+    const x = i % cols, y = (i / cols) | 0;
+    if ((x === 0 || y === 0 || x === cols - 1 || y === rows - 1) && !solid[i]) (out[i] = 1), (queue[tail++] = i);
+  }
+  while (head < tail) {
+    const i = queue[head++], x = i % cols, y = (i / cols) | 0;
+    for (let k = 0; k < 4; k++) {
+      const nx = x + NX[k], ny = y + NY[k];
+      if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+      const j = ny * cols + nx;
+      if (!out[j] && !solid[j]) (out[j] = 1), (queue[tail++] = j);
+    }
+  }
+}
+
 export interface OutlineOptions extends FxOptions {
   /** The line: "single", "double", "rounded", "heavy", "ascii", or 16 characters of your own, as `outlines` lays them out. */
   style?: keyof typeof outlines | (string & {});
@@ -1144,7 +1218,7 @@ export function outline(src: Source, options?: OutlineOptions): KitPiece {
   const color = colour(o.color, "outline.color");
   const gap = num(o.gap, "outline.gap", 1, "whole");
   if (gap < 0) fail(`outline.gap takes a whole number of cells, 0 or more, not ${gap}`);
-  return build("outline", src, o,({ meta: m, inks }) => {
+  return build("outline", src, o, ({ meta: m, inks }) => {
     const ink = color ? inks.add(color) : -1;
     const cols = m.cols + 2, rows = m.rows + 2;
     return {
@@ -1155,6 +1229,9 @@ export function outline(src: Source, options?: OutlineOptions): KitPiece {
       setup: () => {
         const solid = new Uint8Array(cols * rows), out = new Uint8Array(cols * rows), queue = new Int32Array(cols * rows);
         const is = (a: Uint8Array, x: number, y: number) => x >= 0 && x < cols && y >= 0 && y < rows && a[y * cols + x] === 1;
+        // The line: outside cells touching ink, joined to a neighbour on the line when some ink touches both.
+        const line = (x: number, y: number) => is(out, x, y) && (is(solid, x - 1, y - 1) || is(solid, x, y - 1) || is(solid, x + 1, y - 1) || is(solid, x - 1, y) || is(solid, x + 1, y) || is(solid, x - 1, y + 1) || is(solid, x, y + 1) || is(solid, x + 1, y + 1));
+        const over = { mask: null };
         return (t, s, g) => {
           solid.fill(0);
           for (let y = 0; y < g.rows; y++) for (let x = 0; x < g.cols; x++) if (g.chars[y * g.cols + x] !== EMPTY) solid[(y + 1) * cols + x + 1] = 1;
@@ -1167,22 +1244,7 @@ export function outline(src: Source, options?: OutlineOptions): KitPiece {
                 last = x;
               }
           // The outside: every empty cell reached from the border without crossing ink.
-          out.fill(0);
-          let head = 0, tail = 0;
-          for (let i = 0; i < cols * rows; i++) {
-            const x = i % cols, y = (i / cols) | 0;
-            if ((x === 0 || y === 0 || x === cols - 1 || y === rows - 1) && !solid[i]) (out[i] = 1), (queue[tail++] = i);
-          }
-          while (head < tail) {
-            const i = queue[head++], x = i % cols, y = (i / cols) | 0;
-            for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
-              if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
-              const j = ny * cols + nx;
-              if (!out[j] && !solid[j]) (out[j] = 1), (queue[tail++] = j);
-            }
-          }
-          // The line: outside cells touching ink, joined to a neighbour on the line when some ink touches both.
-          const line = (x: number, y: number) => is(out, x, y) && (is(solid, x - 1, y - 1) || is(solid, x, y - 1) || is(solid, x + 1, y - 1) || is(solid, x - 1, y) || is(solid, x + 1, y) || is(solid, x - 1, y + 1) || is(solid, x, y + 1) || is(solid, x + 1, y + 1));
+          flood(solid, out, queue, cols, rows);
           for (let y = 0; y < rows; y++)
             for (let x = 0; x < cols; x++) {
               if (!line(x, y)) continue;
@@ -1194,17 +1256,13 @@ export function outline(src: Source, options?: OutlineOptions): KitPiece {
               if (!bits) continue;
               // Its colour: the one given, or the first ink beside it, across then diagonally.
               let c = ink;
-              if (c < 0)
-                for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
-                  const sx = x + dx - 1, sy = y + dy - 1;
-                  if (sx >= 0 && sx < g.cols && sy >= 0 && sy < g.rows && g.chars[sy * g.cols + sx] !== EMPTY) {
-                    c = g.colors[sy * g.cols + sx];
-                    break;
-                  }
-                }
+              for (let k = 0; c < 0 && k < 8; k++) {
+                const sx = x + NX[k] - 1, sy = y + NY[k] - 1;
+                if (sx >= 0 && sx < g.cols && sy >= 0 && sy < g.rows && g.chars[sy * g.cols + sx] !== EMPTY) c = g.colors[sy * g.cols + sx];
+              }
               s.put(y * cols + x, joins[bits], c < 0 ? NONE : c);
             }
-          s.paste(g, 1, 1, { mask: null });
+          s.paste(g, 1, 1, over);
         };
       },
     };
@@ -1220,21 +1278,28 @@ export interface ShadowOptions extends FxOptions {
   char?: string;
   /** Its colour as #rrggbb: by default, on a coloured piece, a muted grey for the page's theme. */
   color?: string;
+  /**
+   * true (the default): the piece casts its shadow as one solid shape, so it falls only outside it, never into the
+   * spaces enclosed inside, in a logo or a box. false: a shadow under every cell of ink, showing through every space.
+   */
+  solid?: boolean;
 }
 
 /**
- * A drop shadow: the piece's ink, moved a cell right and down, drawn behind it in a light shade. The piece grows by the
- * shadow's reach.
+ * A drop shadow: the piece's shape, moved a cell right and down, drawn behind it in a light shade. The piece grows by
+ * the shadow's reach.
  *
  *   export default shadow(banner("hi", { effect: "still", shadow: "none" }), { char: "▒" });
  */
 export function shadow(src: Source, options?: ShadowOptions): KitPiece {
-  const o = optionsOf(options, "shadow", ["dx", "dy", "char", "color"]);
+  const o = optionsOf(options, "shadow", ["dx", "dy", "char", "color", "solid"]);
   const dx = num(o.dx, "shadow.dx", 1, "shift");
   const dy = num(o.dy, "shadow.dy", 1, "shift");
   const char = chars(o.char, "shadow.char", "░", 1, 1).charCodeAt(0);
   const color = colour(o.color, "shadow.color");
-  return build("shadow", src, o,({ meta: m, inks }) => {
+  if (o.solid !== undefined && typeof o.solid !== "boolean") fail(`shadow.solid takes true or false, not ${show(o.solid)}`);
+  const solid = o.solid ?? true;
+  return build("shadow", src, o, ({ meta: m, inks }) => {
     // [on a dark page, on paper]: the colour given, or a muted grey on a coloured piece, or none.
     const tone = color ? [inks.add(color), inks.add(color)] : m.palette ? [inks.add(QUIET.dark), inks.add(QUIET.light)] : [NONE, NONE];
     const cols = m.cols + Math.abs(dx), rows = m.rows + Math.abs(dy);
@@ -1244,10 +1309,24 @@ export function shadow(src: Source, options?: ShadowOptions): KitPiece {
       rows,
       moves: false,
       what: "with a drop shadow",
-      setup: () => (t, s, g, ctx) => {
-        const c = tone[ctx.paper ? 1 : 0];
-        for (let y = 0, i = 0; y < g.rows; y++) for (let x = 0; x < g.cols; x++, i++) if (g.chars[i] !== EMPTY) s.put((y + y0 + dy) * cols + x + x0 + dx, char, c);
-        s.paste(g, x0, y0, { mask: null });
+      setup: () => {
+        const ink = new Uint8Array(cols * rows), out = new Uint8Array(cols * rows).fill(1), queue = new Int32Array(cols * rows);
+        const over = { mask: null };
+        return (t, s, g, ctx) => {
+          const c = tone[ctx.paper ? 1 : 0];
+          // The outside of the piece's shape, where alone a solid shadow falls.
+          if (solid) {
+            ink.fill(0);
+            for (let y = 0, i = 0; y < g.rows; y++) for (let x = 0; x < g.cols; x++, i++) if (g.chars[i] !== EMPTY) ink[(y + y0) * cols + x + x0] = 1;
+            flood(ink, out, queue, cols, rows);
+          }
+          for (let y = 0, i = 0; y < g.rows; y++)
+            for (let x = 0; x < g.cols; x++, i++) {
+              const k = (y + y0 + dy) * cols + x + x0 + dx;
+              if (g.chars[i] !== EMPTY && out[k]) s.put(k, char, c);
+            }
+          s.paste(g, x0, y0, over);
+        };
       },
     };
   });
