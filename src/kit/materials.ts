@@ -12,6 +12,10 @@
  * lays the parts over each other, in order, into one piece that loops, in
  * colour and in one ink, on light and dark pages, and plays wherever a piece
  * does: mount(), <Ascii>, <ascii-art>, svg() for a README, play() in a terminal.
+ * Where no word fits, make your own: area.fit() for a shape, material() for
+ * what it is made of, emission() for what it gives off, a function for how it
+ * moves, and texture() to play any piece inside an area. drawParts() draws
+ * parts into a piece() of your own, to mix them with anything else.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
  *   import { picture, shape, emit, cup, inside, glass, water, bubbles } from "ascii.rest/kit";
@@ -24,7 +28,9 @@ import type { Options } from "../types.ts";
 import {
   EMPTY,
   INK,
+  MAX,
   NONE,
+  Surface,
   TAU,
   and,
   clamp,
@@ -34,22 +40,27 @@ import {
   isHex,
   lerp,
   piece,
+  ramps,
+  sample,
+  shadeChar,
   smoothstep,
   specOf,
   spread,
   type KitPiece,
   type MakerSpec,
   type PaletteSpec,
-  type Surface,
+  type RampName,
+  type Source,
 } from "./core.ts";
 
 // --- checking what a user passes ---------------------------------------------------
 
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 
-// A value as an error shows it: NaN as NaN, a string in quotes, an object as JSON where it can be.
+// A value as an error shows it: NaN as NaN, a string in quotes, a list item by item, an object as JSON where it can be.
 function show(v: unknown): string {
   if (typeof v !== "object" || v === null) return typeof v === "string" ? JSON.stringify(v) : String(v);
+  if (Array.isArray(v)) return `[${v.map(show).join(", ")}]`;
   try {
     return JSON.stringify(v) ?? String(v);
   } catch {
@@ -104,6 +115,16 @@ function charOf(what: string, v: unknown, def: string, many = false): string {
   if (v === undefined) return def;
   if (typeof v !== "string" || !v.length || (!many && v.length !== 1) || /[\u0000-\u001f\u007f-\u009f\ud800-\udfff]/.test(v))
     fail(`${what} takes ${many ? "one or more printable characters" : "one printable character"}, not ${show(v)}`);
+  return v;
+}
+
+// A ramp, as everywhere in the kit: a name from core's ramps ("blocks", "dots" and the rest), or two or more characters
+// of your own, from no ink to the most.
+function rampOf(what: string, v: unknown, def: string): string {
+  if (v === undefined) return def;
+  if (typeof v === "string" && Object.hasOwn(ramps, v)) return ramps[v as RampName];
+  if (typeof v !== "string" || v.length < 2 || /[\u0000-\u001f\u007f-\u009f\ud800-\udfff]/.test(v))
+    fail(`${what} takes a ramp's name, ${and(Object.keys(ramps))}, or two or more characters of your own, not ${show(v)}`);
   return v;
 }
 
@@ -398,17 +419,22 @@ function unitShape(what: string, o: Placement | undefined, keys: readonly string
     const test = unitTest(b, ratio, unit);
     if (!more.vessel) return placedOf(b, test);
     const base = Math.max(1, more.vessel.base(b.h));
-    const top = more.vessel.open ? 0 : 1;
-    const cavity = (x: number, y: number) => test(x, y) && test(x - 1, y) && test(x + 1, y) && test(x, y + base) && (top === 0 || test(x, y - top));
+    const open = more.vessel.open;
+    // Inside the walls and off the base; under the vessel itself, or for an open one in its top row, its mouth, so a
+    // bottle's shoulders stay walls instead of opening to the sky.
+    const cavity = (x: number, y: number) => test(x, y) && test(x - 1, y) && test(x + 1, y) && test(x, y + base) && (test(x, y - 1) || (open && y - 1 < b.y0));
     return placedOf(b, test, { cavity: { test: cavity, x0: b.x0, y0: b.y0, x1: b.x0 + b.w, y1: b.y0 + b.h }, open: more.vessel.open });
   }, { material: more.material });
 }
 
-// Inside a polygon of points, by the even-odd rule.
+// Inside a polygon of points, by the even-odd rule. A point on an edge is in, whichever side the edge is on, so a shape
+// symmetric about its middle comes out symmetric where its edges run through the points cells are sampled at.
 function inPolygon(pts: readonly Point[], x: number, y: number): boolean {
   let c = false;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
     const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    const cross = (xj - xi) * (y - yi) - (yj - yi) * (x - xi);
+    if (Math.abs(cross) <= 1e-9 * (Math.abs(xj - xi) + Math.abs(yj - yi)) && x >= Math.min(xi, xj) && x <= Math.max(xi, xj) && y >= Math.min(yi, yj) && y <= Math.max(yi, yj)) return true;
     if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c;
   }
   return c;
@@ -422,9 +448,9 @@ function segmentDistance(x: number, y: number, a: Point, b: Point): number {
   return Math.hypot(x - (ax + dx * k), py - (ay + dy * k));
 }
 
-function pointsOf(what: string, v: unknown, min: number): Point[] {
+function pointsOf(what: string, v: unknown, min: number, unit = "[x, y] in cells"): Point[] {
   if (!Array.isArray(v) || v.length < min || !v.every((p) => Array.isArray(p) && p.length === 2 && p.every((n) => typeof n === "number" && Number.isFinite(n))))
-    fail(`${what} takes a list of ${min} or more points [x, y] in cells, not ${show(v)}`);
+    fail(`${what} takes a list of ${min} or more points ${unit}, not ${show(v)}`);
   return v as Point[];
 }
 
@@ -568,6 +594,23 @@ export const area = {
   /** The whole picture: for a sky, or a wash behind everything. */
   all(): Area {
     return makeArea((cols, rows) => ({ test: () => true, x0: 0, y0: 0, x1: cols, y1: rows }));
+  },
+  /**
+   * A shape of your own, placed and sized by words as cup() and the rest are: its outline as three or more points
+   * [u, v], or a function (u, v) => true for a point in it, u and v 0 to 1 across and down its box. `ratio` is its
+   * width over its height as it looks on screen: 1. "medium" and "center" by default.
+   *
+   *   const rocket = area.fit([[0.5, 0], [0.8, 0.35], [0.8, 0.8], [1, 1], [0, 1], [0.2, 0.8], [0.2, 0.35]], { ratio: 0.5 });
+   */
+  fit(outline: readonly Point[] | ((u: number, v: number) => boolean), o?: Placement & { ratio?: number }): Area {
+    let inside: (u: number, v: number) => boolean;
+    if (typeof outline === "function") inside = (u, v) => !!outline(u, v);
+    else {
+      const pts = pointsOf("area.fit", outline, 3, "[u, v], 0 to 1 across and down its box, or a function (u, v) => true for a point in it").map((q) => [q[0], q[1]] as Point);
+      inside = (u, v) => inPolygon(pts, u, v);
+    }
+    const ratio = numberOf("area.fit.ratio", isObject(o) ? o.ratio : undefined, 1, 0.05, 20);
+    return unitShape("area.fit", o, ["ratio"], ratio, { size: "medium", at: "center" }, (px, py) => inside(px / ratio + 0.5, py + 0.5));
   },
 };
 
@@ -762,7 +805,9 @@ export function straw(o?: ShapeOpts<{ lean?: number }>): Area {
   const lean = numberOf("straw.lean", p.lean, 0.35, -2, 2);
   return makeArea((cols, rows) => {
     const f = roomOf(p, cols, rows);
-    const h = p.rows ?? Math.round((f.y1 - f.y0) * (p.size === undefined ? 1.3 : typeof p.size === "number" ? p.size : SIZES[p.size]));
+    let h = p.rows ?? Math.round((f.y1 - f.y0) * (p.size === undefined ? 1.3 : typeof p.size === "number" ? p.size : SIZES[p.size]));
+    // standing on the room's floor, a straw of its own height stops at the top of the picture rather than running off it
+    if (p.rows === undefined && p.at === undefined && !p.on) h = Math.max(1, Math.min(h, Math.floor(f.y1 - 1.5 + (p.y ?? 0))));
     // its foot in the middle of the room's floor, unless placed by at or a point
     const b = p.at !== undefined || p.on ? boxOf({ ...p, rows: h, cols: Math.max(2, Math.round(Math.abs(lean) * h * ASPECT) + 2) }, 1, cols, rows, { size: "large", at: "bottom" }) : null;
     const foot: Point = b ? [lean >= 0 ? b.x0 + 1 : b.x0 + b.w - 1, b.y0 + b.h - 0.5] : [Math.round((f.x0 + f.x1) / 2 - (lean * h * ASPECT) / 3) + (p.x ?? 0), f.y1 - 1.5 + (p.y ?? 0)];
@@ -808,22 +853,24 @@ export function blob(o?: ShapeOpts<{ seed?: number }>): Area {
   }, { material: () => lava() });
 }
 
-// The puffs of cloud(), as circles [x, y, r] in its true proportions, over a flat base.
-const PUFFS: readonly (readonly [number, number, number])[] = [[-0.78, 0.18, 0.24], [-0.38, -0.02, 0.36], [0.12, -0.2, 0.32], [0.55, 0.02, 0.3], [0.88, 0.2, 0.22]];
+// The puffs of cloud(), as circles [x, y, r] in its true proportions (a height of 1, 2.4 across): a small one, a big
+// one and a middling one, over a flat base that runs between the outer two.
+const CLOUD_RATIO = 2.4;
+const PUFFS: readonly (readonly [number, number, number])[] = [[-0.816, 0.22, 0.28], [-0.096, 0, 0.5], [0.72, 0.16, 0.34]];
 
 /**
  * A cloud, as a shape and as a material. As a shape, cloud() is puffs on a flat base, filled with cloud by default:
- * shape(cloud({ at: "top-left" })). As a material, shape(anyArea, cloud()) fills any area with soft cloud and a round
- * outline. `colors`: "cloud" (or "storm" for a dark one); `period` of its drift: 8 seconds.
+ * shape(cloud({ at: "top-left" })), and it drifts with shape(cloud(), { move: "drift" }). As a material, shape(anyArea,
+ * cloud()) gives any area a cloud's outline, ".-~~-." over each puff and a flat base. `colors`: "cloud" (or "storm" for
+ * a dark one).
  */
-export function cloud(o?: ShapeOpts<{ colors?: Colors; period?: number }>): Area & Material {
-  const shapeArea = unitShape("cloud", o, ["colors", "period"], 2.2, { size: "small", at: "top" }, (px, py) => {
-    if (py > 0.42) return false;
-    if (py > 0.22 && px > -0.9 && px < 1.0) return true;
+export function cloud(o?: ShapeOpts<{ colors?: Colors }>): Cloud {
+  const shapeArea = unitShape("cloud", o, ["colors"], CLOUD_RATIO, { size: "small", at: "top" }, (px, py) => {
+    if (py >= 0.1 && px >= PUFFS[0][0] && px <= PUFFS[PUFFS.length - 1][0]) return true;
     return PUFFS.some(([x, y, r]) => (px - x) ** 2 + (py - y) ** 2 <= r * r);
   });
-  const fill = cloudMaterial(o?.colors, o?.period);
-  return { ...shapeArea, ...fill, kind: "area", material: () => fill } as unknown as Area & Material;
+  const fill = cloudMaterial(o?.colors);
+  return { ...shapeArea, ...fill, kind: "area", material: () => fill };
 }
 
 /** A flame: round at the bottom and pointed at the top. Fire by default: shape(flame({ on: candle })). */
@@ -859,14 +906,15 @@ export function star(o?: ShapeOpts<{ points?: number; inner?: number }>): Area {
     const a = -Math.PI / 2 + (i * Math.PI) / n, r = i % 2 ? 0.5 * inner : 0.5;
     return [r * Math.cos(a), 0.04 + r * Math.sin(a)];
   });
-  return unitShape("star", o, ["points", "inner"], 1, { size: "small", at: "center" }, (px, py) => inPolygon(pts, px, py), {
+  return unitShape("star", o, ["points", "inner"], 1, { size: "medium", at: "center" }, (px, py) => inPolygon(pts, px, py), {
     material: () => solid({ colors: "gold" }),
   });
 }
 
 /** A crescent moon, lit on its left: `flip` lights its right. Pale yellow by default. */
 export function moon(o?: ShapeOpts): Area {
-  return unitShape("moon", o, [], 1, { size: "small", at: "top-right" }, (px, py) => px * px + py * py <= 0.25 && (px - 0.2) ** 2 + py * py > 0.42 * 0.42, {
+  // a disc less a slightly higher one to its right: a crescent thick enough to read at a few rows, its horns tipped up
+  return unitShape("moon", o, [], 1, { size: "small", at: "top-right" }, (px, py) => px * px + py * py <= 0.25 && (px - 0.3) ** 2 + (py + 0.06) ** 2 > 0.16, {
     material: () => solid({ colors: "moon", char: "█" }),
   });
 }
@@ -882,7 +930,7 @@ export function fish(o?: ShapeOpts): Area {
     return px < -0.38 && px > -0.9 + 0.3 * (1 - Math.abs(py) / 0.4) && Math.abs(py) <= 0.08 + (-0.38 - px) * 0.8;
   };
   return makeArea((cols, rows) => {
-    const b = boxOf(p, ratio, cols, rows, { size: "tiny", at: "center" });
+    const b = boxOf(p, ratio, cols, rows, { size: "small", at: "center" });
     // the eye: a cell back from the nose, a little above the middle; a material that takes text draws it
     const ex = Math.floor(b.flip ? b.x0 + b.w * 0.22 : b.x0 + b.w * 0.78), ey = Math.floor(b.y0 + b.h * 0.4);
     return placedOf(b, unitTest(b, ratio, unit), { char: (x, y) => (Math.floor(x) === ex && Math.floor(y) === ey ? "o" : "") });
@@ -942,15 +990,17 @@ export function lamp(o?: ShapeOpts): Lamp {
   const p = optionsOf("lamp()", o, PLACE_KEYS) as Placement;
   checkPlace("lamp", p);
   const ratio = 0.42;
+  // A cone of a cap, a glass that widens down to its lower third and draws in a little, and a cone of a base, wide at
+  // the foot; the cap and the base each reach a row over the glass, so where they meet is one line, not two.
   const units: Record<string, Unit> = {
-    cap: (px, py) => py >= -0.5 && py < -0.38 && Math.abs(px) <= lerp(0.05, 0.1, (py + 0.5) / 0.12),
+    cap: (px, py) => py >= -0.5 && py <= -0.34 && Math.abs(px) <= lerp(0.035, 0.085, (py + 0.5) / 0.16),
     globe: (px, py) => {
       if (py < -0.38 || py > 0.24) return false;
       const k = (py + 0.38) / 0.62;
-      const w = lerp(0.1, 0.18, Math.sin((k * Math.PI) / 2) ** 1.5) - (k > 0.85 ? (k - 0.85) * 0.25 : 0);
+      const w = k < 0.75 ? lerp(0.075, 0.175, k / 0.75) : lerp(0.175, 0.145, (k - 0.75) / 0.25);
       return Math.abs(px) <= w;
     },
-    base: (px, py) => py > 0.24 && py <= 0.5 && Math.abs(px) <= lerp(0.13, 0.21, (py - 0.24) / 0.26),
+    base: (px, py) => py >= 0.19 && py <= 0.5 && Math.abs(px) <= lerp(0.145, 0.21, (py - 0.19) / 0.31),
   };
   const part = (u: Unit, vessel = false) => makeArea((cols, rows) => {
     const b = boxOf(p, ratio, cols, rows, { size: "large", at: "bottom" });
@@ -1231,7 +1281,7 @@ export function edgeChar(c: Cells, i: number, style: EdgeStyle = "line"): string
  * What a material draws with each frame: the grid, the page, its own colours, and what was under it before it drew.
  */
 export interface Paint {
-  /** The picture's grid. */
+  /** The grid to draw in: the picture's, or for a shape that moves, a grid of its own laid into the picture after. */
   readonly s: Surface;
   /** Dark on a light page. */
   readonly paper: boolean;
@@ -1251,15 +1301,15 @@ export type MaterialDraw = (t: number, p: Paint) => void;
 
 /**
  * What something is made of: it fills any area, and moves on its own from t. Make one with water(), glass(), fire()
- * and the rest, or material() for your own.
+ * and the rest, or material() for your own. Anything with these fields is one, so cloud() and smoke() are materials
+ * as well as a shape and an emission.
  */
 export interface Material {
-  readonly kind: "material";
   /** Its name, for errors. */
   readonly name: string;
   /** Its colours, a list for each page, in the order its drawing asks for them by index. */
   readonly colors: Duo;
-  /** How often it repeats exactly, in seconds; undefined for a material that does not move. */
+  /** How often it repeats exactly, in seconds: undefined for a material that does not move, Infinity for one that moves without repeating. */
   readonly period?: number;
   /** Gets ready for an area (once, when a picture is set up) and returns its drawing of a frame. */
   prepare(c: Cells): MaterialDraw;
@@ -1267,8 +1317,13 @@ export interface Material {
 
 const isMaterial = (v: unknown): v is Material => isObject(v) && typeof v.prepare === "function" && isObject(v.colors) && typeof v.name === "string";
 
+/** What cloud() gives: a shape, filled with cloud by default, that is also cloud as a material for any other area. */
+export type Cloud = Area & Material;
+/** What smoke() gives: smoke as a material for an area, and as an emission rising from one. */
+export type Smoke = Emission & Material;
+
 function makeMaterial(name: string, colors: Duo, period: number | undefined, prepare: (c: Cells) => MaterialDraw): Material {
-  return { kind: "material", name, colors, period, prepare };
+  return { name, colors, period, prepare };
 }
 
 const code = (ch: string) => ch.charCodeAt(0);
@@ -1397,8 +1452,9 @@ export function glass(o?: MaterialOptions & {
     line.cells.forEach((i, k) => {
       const x = i % cols, y = (i - x) / cols;
       if (cav?.inside[i]) return;
-      // an open vessel has no lid: nothing is drawn over its mouth, and its walls end in a rim
-      if (c.open && cav && (cav.inside[i + cols] || (c.fringe[i] && cav.top[x] >= 0 && cav.top[x] <= y + 1))) return;
+      // an open vessel has no lid: nothing is drawn just over its mouth, and its walls end in a rim; a wall over the
+      // room (a bottle's neck over its shoulders) is still a wall
+      if (c.open && cav && !c.inside[i] && (cav.inside[i + cols] || (c.fringe[i] && cav.top[x] >= 0 && cav.top[x] <= y + 1))) return;
       const rim = c.open && cav && c.border[i] && y === c.top[x] && c.ny[i] > 0.3;
       cells.push(i), chars.push(rim ? code(".") : line.chars[k]), roles.push(0);
     });
@@ -1442,21 +1498,25 @@ export function fire(o?: MaterialOptions & {
   period?: number;
   /** How fierce, 0.2 to 2: 1. */
   heat?: number;
-  /** The characters from the faintest flame to the hottest: " .:^*#%@". */
-  ramp?: string;
+  /** A ramp from no flame (its first character, left empty) to the hottest: " .:^*#%@", or a name such as "blocks". */
+  ramp?: RampName | (string & {});
+  /** A glow of "." round it, this many columns deep, where nothing else is drawn, as round a candle's flame: 0. */
+  glow?: number;
 }): Material {
-  const p = optionsOf("fire()", o, ["colors", "period", "heat", "ramp"]);
+  const p = optionsOf("fire()", o, ["colors", "period", "heat", "ramp", "glow"]);
   const colors = colorsOf("fire.colors", p.colors, "fire", 5);
   const period = periodOf("fire.period", p.period, 2);
   const heat = numberOf("fire.heat", p.heat, 1, 0.2, 2);
-  const chars = charOf("fire.ramp", p.ramp, " .:^*#%@", true);
-  if (chars.length < 2) fail(`fire.ramp takes two or more characters, not ${JSON.stringify(chars)}`);
+  const chars = rampOf("fire.ramp", p.ramp, " .:^*#%@");
+  const glow = numberOf("fire.glow", p.glow, 0, 0, 6);
   return makeMaterial("fire", colors, period, (c) => {
     const { cols } = c;
     const h = Math.max(1, c.y1 - c.y0), md = Math.max(1, c.maxDepth);
     const scale = Math.max(1, h / 6);
+    const halo = haloOf(c, glow).cells;
     return (t, pt) => {
       const { s } = pt;
+      for (const j of halo) if (s.chars[j] === EMPTY) s.put(j, code("."), pt.color(1));
       // the flames rise through a noise that wraps, so a period moves it by whole wraps
       const rise = (t / period) * 4;
       for (const i of c.list) {
@@ -1480,7 +1540,7 @@ export function fire(o?: MaterialOptions & {
 function hazeMaterial(name: string, colorsIn: unknown, def: PaletteName, periodIn: unknown, rampIn: unknown): Material {
   const colors = colorsOf(`${name}.colors`, colorsIn, def, 3);
   const period = periodOf(`${name}.period`, periodIn, 4);
-  const chars = charOf(`${name}.ramp`, rampIn, " .:-~=o", true);
+  const chars = rampOf(`${name}.ramp`, rampIn, " .:-~=o");
   return makeMaterial(name, colors, period, (c) => {
     const { cols } = c;
     const h = Math.max(1, c.y1 - c.y0);
@@ -1505,8 +1565,8 @@ function hazeMaterial(name: string, colorsIn: unknown, def: PaletteName, periodI
 export interface SmokeOptions extends MaterialOptions {
   /** Seconds for it to come round: 4. */
   period?: number;
-  /** As a material: the characters from the thinnest to the thickest, " .:-~=o". */
-  ramp?: string;
+  /** As a material: a ramp from none (its first character, left empty) to the thickest, " .:-~=o", or a name such as "dots". */
+  ramp?: RampName | (string & {});
   /** As an emission: how many rows the column rises, 8. */
   height?: number;
   /** As an emission: how many columns each side moves out a row as it rises, 0.3. */
@@ -1522,33 +1582,56 @@ export interface SmokeOptions extends MaterialOptions {
  * emission, emit(smoke(), { from: chimney }) sends a column of it up from the top of an area (or a point), leaning in
  * the wind, swaying and opening out as it rises, and breaking up at the top.
  */
-export function smoke(o?: SmokeOptions): Material & Emission {
+export function smoke(o?: SmokeOptions): Smoke {
   const p = optionsOf("smoke()", o, ["colors", "period", "ramp", "height", "spread", "wind", "seed"]);
   const m = hazeMaterial("smoke", p.colors, "smoke", p.period, p.ramp);
   const e = plume("smoke", p);
-  return { ...e, ...m, kind: "material", emits: e.emits } as Material & Emission;
+  return { ...m, ...e, kind: "emission", prepare: m.prepare };
 }
 
-function cloudMaterial(colorsIn: unknown, periodIn: unknown): Material {
+// A cloud's outline character for a cell on its edge, read from the heights of the columns round it, as ascii clouds
+// are drawn: ".-~~-." over a puff, "'" where a puff meets the shoulder beside it, "(" and ")" down the sides, and a
+// flat "_" base. `top` and `bottom` are each column's first and last row in the area, -1 for none.
+function cloudChar(c: Cells, x: number, y: number): string {
+  const { cols, top, bottom } = c;
+  const t = (k: number) => (k >= 0 && k < cols && top[k] >= 0 ? top[k] : Infinity);
+  const b = (k: number) => (k >= 0 && k < cols && bottom[k] >= 0 ? bottom[k] : -Infinity);
+  if (y === top[x]) {
+    const l = t(x - 1), r = t(x + 1), h = top[x];
+    // a neighbour taller than this column: a valley where two puffs meet, or a side going down
+    if (l < h && r < h) return "'";
+    if (r < h) return l === h ? "'" : "(";
+    if (l < h) return r === h ? "'" : ")";
+    if (l > h || r > h) return ".";
+    return t(x - 2) !== h || t(x + 2) !== h ? "-" : "~";
+  }
+  if (y === bottom[x]) {
+    const l = b(x - 1), r = b(x + 1), h = bottom[x];
+    if (l > h && r > h) return ".";
+    if (r > h) return l === h ? "." : "(";
+    if (l > h) return r === h ? "." : ")";
+    if (l < h || r < h) return "'";
+    return "_";
+  }
+  // a side, or the edge of a hole in it
+  return !c.has(x - 1, y) ? "(" : !c.has(x + 1, y) ? ")" : !c.has(x, y - 1) ? "-" : "_";
+}
+
+// Cloud as a material: the outline cloudChar() gives, its base in the shadow colour, and inside clear but covering what
+// is behind it. It does not move of itself: shape(cloud(), { move: "drift" }) moves it.
+function cloudMaterial(colorsIn: unknown): Material {
   const colors = colorsOf("cloud.colors", colorsIn, "cloud", 3);
-  const period = periodOf("cloud.period", periodIn, 8);
-  return makeMaterial("cloud", colors, period, (c) => {
+  return makeMaterial("cloud", colors, undefined, (c) => {
     const { cols } = c;
-    const h = Math.max(1, c.y1 - c.y0);
-    const line = c.outline("round");
-    return (t, pt) => {
-      const { s } = pt;
-      const drift = (t / period) * 4;
-      line.cells.forEach((i, k) => s.put(i, line.chars[k], pt.color(0)));
-      for (const i of c.list) {
-        const x = i % cols, y = (i - x) / cols;
-        if (c.border[i]) continue;
-        // the underside is in shadow; soft billows drift across inside
-        const down = (y - c.y0 + 0.5) / h;
-        const n = tiled(x * 0.25 + drift, y * 0.6, 4, 0, 31);
-        const ch = down > 0.72 && n > 0.45 ? "." : n > 0.82 ? "-" : " ";
-        s.put(i, code(ch), pt.color(down > 0.72 ? 2 : 1));
-      }
+    const at: number[] = [], ch: number[] = [], role: number[] = [];
+    for (const i of c.list) {
+      const x = i % cols, y = (i - x) / cols;
+      at.push(i);
+      if (!c.border[i]) ch.push(SPACE), role.push(1);
+      else ch.push(code(cloudChar(c, x, y))), role.push(y === c.bottom[x] && y !== c.top[x] ? 2 : 0);
+    }
+    return (_t, pt) => {
+      for (let k = 0; k < at.length; k++) pt.s.put(at[k], ch[k], pt.color(role[k]));
     };
   });
 }
@@ -1559,17 +1642,20 @@ export function metal(o?: MaterialOptions & {
   sheen?: boolean;
   /** Seconds between sheens: 4. */
   period?: number;
-  /** The characters from the darkest metal to the brightest: "░▒▓█". */
-  ramp?: string;
+  /** A ramp from the darkest metal to the brightest: "░▒▓█", or a name such as "standard". */
+  ramp?: RampName | (string & {});
   /** Outline it: true. */
   edge?: boolean;
+  /** Turn the ramp round: "auto" (the default) does on paper, as the kit's shading does, so the lit side reads as lit there too. */
+  invert?: boolean | "auto";
 }): Material {
-  const p = optionsOf("metal()", o, ["colors", "sheen", "period", "ramp", "edge"]);
+  const p = optionsOf("metal()", o, ["colors", "sheen", "period", "ramp", "edge", "invert"]);
   const colors = colorsOf("metal.colors", p.colors, "steel", 4);
   const sheen = boolOf("metal.sheen", p.sheen, true);
   const period = periodOf("metal.period", p.period, 4);
-  const chars = charOf("metal.ramp", p.ramp, "░▒▓█", true);
+  const chars = rampOf("metal.ramp", p.ramp, "░▒▓█");
   const edge = boolOf("metal.edge", p.edge, true);
+  const invert = p.invert === "auto" || p.invert === undefined ? "auto" : boolOf("metal.invert", p.invert, false);
   return makeMaterial("metal", colors, sheen ? period : undefined, (c) => {
     const { cols } = c;
     const w = Math.max(1, c.x1 - c.x0), h = Math.max(1, c.y1 - c.y0);
@@ -1579,6 +1665,7 @@ export function metal(o?: MaterialOptions & {
       if (edge) line.cells.forEach((i, k) => s.put(i, line.chars[k], pt.color(2)));
       // the sheen crosses from left to right, leaning, then rests off the metal
       const at = fract(t / period) * 2.2 - 0.6;
+      const flip = invert === "auto" ? pt.paper : invert;
       for (const i of c.list) {
         const x = i % cols, y = (i - x) / cols;
         const u = (x - c.x0 + 0.5) / w, v = (y - c.y0 + 0.5) / h;
@@ -1587,7 +1674,7 @@ export function metal(o?: MaterialOptions & {
         const lit = clamp(1 - Math.abs(u - 0.33) * 1.5);
         const shine = sheen && Math.abs(u + 0.35 * v - at) < 0.07;
         if (shine) s.put(i, code("/"), pt.color(3));
-        else s.put(i, code(chars[Math.min(chars.length - 1, Math.floor(lit * chars.length))]), pt.color(Math.min(2, Math.floor(lit * 3))));
+        else s.put(i, code(shadeChar(chars, lit, flip)), pt.color(Math.min(2, Math.floor(lit * 3))));
       }
     };
   });
@@ -1642,9 +1729,9 @@ export function wood(o?: MaterialOptions & {
 }
 
 /**
- * Grass: blades growing up from the bottom of the area, each its own height, swaying in the wind, over a line of turf.
- * "seaweed" waves slowly, as under water, and lets what is behind it show between its fronds; "reeds" are tall and
- * straight.
+ * Grass. A "lawn" is short blades along the top of the area swaying in the wind, a line of turf under them and earth
+ * below. "reeds" grow tall and straight up from the bottom of the area, each its own height; "seaweed" waves slowly,
+ * as under water, and lets what is behind it show between its fronds.
  */
 export function grass(o?: MaterialOptions & {
   /** "lawn" (the default), "reeds" or "seaweed". */
@@ -1653,7 +1740,7 @@ export function grass(o?: MaterialOptions & {
   sway?: number;
   /** Seconds for a sway to come round: 4. */
   period?: number;
-  /** The share of columns with a blade, 0 to 1: 0.85 (0.3 for seaweed). */
+  /** The share of columns with a blade, 0 to 1: 0.7 (0.85 for reeds, 0.3 for seaweed). */
   density?: number;
   /** Hides what is behind it between the blades: true, false for seaweed. */
   opaque?: boolean;
@@ -1665,25 +1752,21 @@ export function grass(o?: MaterialOptions & {
   const colors = colorsOf("grass.colors", p.colors, kind === "seaweed" ? "seaweed" : "grass", 3);
   const sway = numberOf("grass.sway", p.sway, 1, 0, 3);
   const period = periodOf("grass.period", p.period, 4);
-  const density = numberOf("grass.density", p.density, kind === "seaweed" ? 0.3 : 0.85, 0, 1);
+  const density = numberOf("grass.density", p.density, kind === "seaweed" ? 0.3 : kind === "reeds" ? 0.85 : 0.7, 0, 1);
   const opaque = boolOf("grass.opaque", p.opaque, kind !== "seaweed");
   const seed = seedOf("grass.seed", p.seed, 1);
   return makeMaterial("grass", colors, sway ? period : undefined, (c) => {
     const { cols } = c;
+    if (kind === "lawn") return lawn(c, sway, period, density, opaque, seed);
     return (t, pt) => {
       const { s } = pt;
       const w = (TAU * t) / period;
-      // an opaque lawn covers what is behind it, a line of turf along its bottom
-      if (opaque)
-        for (const i of c.list) {
-          const turf = kind === "lawn" && c.bottom[i % cols] === (i - (i % cols)) / cols;
-          s.put(i, turf ? code(hash(i, seed, 5) > 0.5 ? "\"" : ",") : SPACE, pt.color(0));
-        }
+      if (opaque) for (const i of c.list) s.put(i, SPACE, pt.color(0));
       for (let x = c.x0; x < c.x1; x++) {
         const b = c.bottom[x], tp = c.top[x];
         if (b < 0 || hash(x, seed, 1) > density) continue;
         const room = b - tp + 1;
-        const tall = kind === "lawn" ? 0.45 + 0.55 * hash(x, seed, 2) : kind === "reeds" ? 0.7 + 0.3 * hash(x, seed, 2) : 0.45 + 0.55 * hash(x, seed, 2);
+        const tall = kind === "reeds" ? 0.7 + 0.3 * hash(x, seed, 2) : 0.45 + 0.55 * hash(x, seed, 2);
         const len = Math.max(1, Math.round(room * tall));
         for (let k = 0; k < len; k++) {
           const y = b - k, f = (k + 1) / len;
@@ -1694,13 +1777,55 @@ export function grass(o?: MaterialOptions & {
           if (xx < 0 || xx >= cols || !c.inside[i]) continue;
           let ch: string;
           if (kind === "seaweed") ch = Math.cos(phase) > 0 ? ")" : "(";
-          else if (k === len - 1) ch = lean > 0.35 ? "/" : lean < -0.35 ? "\\" : kind === "reeds" ? "|" : "'";
-          else ch = kind === "lawn" && k === 0 ? (hash(x, seed, 3) > 0.5 ? "\"" : "|") : lean > 0.6 && f > 0.5 ? "/" : lean < -0.6 && f > 0.5 ? "\\" : "|";
+          else if (k === len - 1) ch = lean > 0.35 ? "/" : lean < -0.35 ? "\\" : "|";
+          else ch = lean > 0.6 && f > 0.5 ? "/" : lean < -0.6 && f > 0.5 ? "\\" : "|";
           s.put(i, code(ch), pt.color(f < 0.34 ? 0 : f < 0.75 ? 1 : 2));
         }
       }
     };
   });
+}
+
+// A lawn on an area: up to two rows of short blades along its top, each leaning its own way and swaying with the wind,
+// then a line of turf, then earth. Only the blades move, so the rest is worked out once.
+function lawn(c: Cells, sway: number, period: number, density: number, opaque: boolean, seed: number): MaterialDraw {
+  const { cols } = c;
+  const fixed: number[] = [], fixedCh: number[] = [], fixedRole: number[] = [];
+  const blades: { x: number; y: number; len: number; slant: number; short: string }[] = [];
+  for (let x = c.x0; x < c.x1; x++) {
+    const top = c.top[x], bottom = c.bottom[x];
+    if (top < 0) continue;
+    const h = bottom - top + 1;
+    // the rows of blades over the turf: none in a band one row tall, one in two or three rows, two in more
+    const over = h >= 4 ? 2 : h >= 2 ? 1 : 0;
+    const turf = top + over;
+    for (let y = turf; y <= bottom; y++) {
+      const r = hash(x, y, seed + 5);
+      const ch = y === turf ? (r < 0.6 ? "\"" : r < 0.85 ? "'" : ",") : r < 0.12 ? "." : r < 0.2 ? "," : r < 0.24 ? "'" : " ";
+      fixed.push(y * cols + x), fixedCh.push(code(ch)), fixedRole.push(y === turf ? 1 : 0);
+    }
+    if (over && hash(x, seed, 1) < density)
+      blades.push({ x, y: turf - 1, len: 1 + Math.floor(hash(x, seed, 2) * over * 0.999), slant: Math.floor(hash(x, seed, 3) * 3) - 1, short: hash(x, seed, 4) < 0.5 ? "," : "'" });
+  }
+  return (t, pt) => {
+    const { s } = pt;
+    if (opaque) for (const i of c.list) s.put(i, SPACE, pt.color(0));
+    for (let k = 0; k < fixed.length; k++) if (c.inside[fixed[k]]) s.put(fixed[k], fixedCh[k], pt.color(fixedRole[k]));
+    const w = (TAU * t) / period;
+    for (const b of blades) {
+      // each blade's own lean, and the wind's, which runs along the lawn as a wave
+      const lean = b.slant * 0.6 + sway * Math.sin(w - b.x * 0.3);
+      const tip = lean > 0.5 ? "/" : lean < -0.5 ? "\\" : "|";
+      for (let k = 0; k < b.len; k++) {
+        const i = (b.y - k) * cols + b.x;
+        if (!c.inside[i]) continue;
+        const last = k === b.len - 1;
+        // a short blade is a tuft, "," or "'" when it stands upright
+        const ch = last ? (b.len === 1 && tip === "|" ? b.short : tip) : "|";
+        s.put(i, code(ch), pt.color(last ? 2 : 1));
+      }
+    }
+  };
 }
 
 /** Sand: a stipple of grains, denser lower down, with a ripple now and then. It does not move. */
@@ -1812,6 +1937,29 @@ export function ice(o?: MaterialOptions & {
   });
 }
 
+// The cells round an area, out of it, within `glow` columns of it (a row counts 2), and how far each is: a glow's.
+function haloOf(c: Cells, glow: number): { cells: number[]; far: number[] } {
+  const cells: number[] = [], far: number[] = [];
+  if (!(glow > 0)) return { cells, far };
+  const { cols, rows } = c;
+  const g = Math.ceil(glow), gy = Math.ceil(g / ASPECT);
+  const near = new Float32Array(cols * rows).fill(Infinity);
+  for (const i of c.list) {
+    const x = i % cols, y = (i - x) / cols;
+    for (let dy = -gy; dy <= gy; dy++)
+      for (let dx = -g; dx <= g; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || xx >= cols || yy < 0 || yy >= rows) continue;
+        const j = yy * cols + xx;
+        if (!c.inside[j]) near[j] = Math.min(near[j], Math.hypot(dx, dy * ASPECT));
+      }
+  }
+  near.forEach((d, j) => {
+    if (d <= glow) cells.push(j), far.push(d);
+  });
+  return { cells, far };
+}
+
 /**
  * Neon: a bright tube of light with a glow round it, flickering now and then. On text, the letters themselves glow:
  * shape(area.text("OPEN"), neon()).
@@ -1833,32 +1981,15 @@ export function neon(o?: MaterialOptions & {
   const period = periodOf("neon.period", p.period, 4);
   const tube = code(charOf("neon.char", p.char, "█"));
   return makeMaterial("neon", colors, flicker ? period : undefined, (c) => {
-    const { cols, rows } = c;
+    const { cols } = c;
     const core = c.list.map((i) => {
       const x = i % cols;
       const ch = c.char?.(x, (i - x) / cols);
       return ch ? code(ch) : tube;
     });
     // the glow: cells round the area within `glow`, nearer ones brighter
-    const halo: number[] = [], haloCh: number[] = [];
-    if (glow > 0) {
-      const g = Math.ceil(glow);
-      const near = new Float32Array(cols * rows).fill(Infinity);
-      for (const i of c.list) {
-        const x = i % cols, y = (i - x) / cols;
-        for (let dy = -Math.ceil(g / ASPECT); dy <= Math.ceil(g / ASPECT); dy++)
-          for (let dx = -g; dx <= g; dx++) {
-            const xx = x + dx, yy = y + dy;
-            if (xx < 0 || xx >= cols || yy < 0 || yy >= rows) continue;
-            const j = yy * cols + xx;
-            if (c.inside[j]) continue;
-            near[j] = Math.min(near[j], Math.hypot(dx, dy * ASPECT));
-          }
-      }
-      near.forEach((d, j) => {
-        if (d <= glow) halo.push(j), haloCh.push(code(d <= glow / 2 ? ":" : "."));
-      });
-    }
+    const ring = haloOf(c, glow);
+    const halo = ring.cells, haloCh = ring.far.map((d) => code(d <= glow / 2 ? ":" : "."));
     return (t, pt) => {
       const { s } = pt;
       const f = fract(t / period);
@@ -1872,18 +2003,20 @@ export function neon(o?: MaterialOptions & {
 }
 
 /**
- * A solid fill in one character and colour, or shaded from the edge in: give `char` two or more characters, from the
- * edge's to the middle's ("░▒▓█"). On text, each letter stays itself.
+ * A solid fill in one character and colour, or shaded from the edge in by a `ramp`, the edge's character first
+ * ("░▒▓█"). On text, each letter stays itself.
  */
 export function solid(o?: MaterialOptions & {
-  /** The character, or two or more from the edge in: "█". */
+  /** The character: "█". */
   char?: string;
+  /** Shading from the edge in instead of one character: a ramp's name or two or more characters, the edge's first. */
+  ramp?: RampName | (string & {});
   /** Outline it with "|", "-", "/" and the like instead of filling the edge: false. */
   edge?: boolean;
 }): Material {
-  const p = optionsOf("solid()", o, ["colors", "char", "edge"]);
+  const p = optionsOf("solid()", o, ["colors", "char", "ramp", "edge"]);
   const colors = colorsOf("solid.colors", p.colors, "ink", 3);
-  const chars = charOf("solid.char", p.char, "█", true);
+  const chars = p.ramp !== undefined ? rampOf("solid.ramp", p.ramp, "█") : charOf("solid.char", p.char, "█");
   const edge = boolOf("solid.edge", p.edge, false);
   return makeMaterial("solid", colors, undefined, (c) => {
     const { cols } = c;
@@ -1911,15 +2044,15 @@ export function gradientFill(o?: MaterialOptions & {
   direction?: "down" | "up" | "left" | "right" | "out";
   /** How many steps of colour: 8. */
   steps?: number;
-  /** The characters along the fade, the first colour's first: "█". */
-  chars?: string;
+  /** The characters along the fade, the first colour's first, so it reads in one ink too: "█▓▒░", or a ramp's name, or one character for a flat fill. */
+  ramp?: RampName | (string & {});
 }): Material {
-  const p = optionsOf("gradientFill()", o, ["colors", "direction", "steps", "chars"]);
+  const p = optionsOf("gradientFill()", o, ["colors", "direction", "steps", "ramp"]);
   const steps = numberOf("gradientFill.steps", p.steps, 8, 1, 24);
   if (!Number.isInteger(steps)) fail(`gradientFill.steps takes a whole number from 1 to 24, not ${steps}`);
   const colors = colorsOf("gradientFill.colors", p.colors, "sunset", steps);
   const direction = wordOf("gradientFill.direction", p.direction, ["down", "up", "left", "right", "out"] as const, "down");
-  const chars = charOf("gradientFill.chars", p.chars, "█", true);
+  const chars = typeof p.ramp === "string" && p.ramp.length === 1 ? charOf("gradientFill.ramp", p.ramp, "█") : rampOf("gradientFill.ramp", p.ramp, "█▓▒░");
   return makeMaterial("gradient", colors, undefined, (c) => {
     const { cols } = c;
     const w = Math.max(1, c.x1 - c.x0), h = Math.max(1, c.y1 - c.y0), md = Math.max(1, c.maxDepth);
@@ -1994,10 +2127,13 @@ export function ceramic(o?: MaterialOptions & {
   const shade = boolOf("ceramic.shade", p.shade, true);
   return makeMaterial("ceramic", colors, undefined, (c) => {
     const { cols } = c;
-    // an open vessel's mouth is left open, so what is in it shows at the rim
+    // an open vessel's mouth is left open, so what is in it shows at the rim: the room where it is the vessel's top row,
+    // and the outline just over it
     const mouth = (i: number) => {
-      const x = i % cols;
-      return c.open && c.cavity && (c.cavity.inside[i] || c.cavity.inside[i + cols]) && (i - x) / cols <= c.cavity.top[x];
+      const cav = c.cavity;
+      if (!c.open || !cav) return false;
+      const x = i % cols, y = (i - x) / cols;
+      return cav.inside[i] ? y === c.top[x] : !c.inside[i] && cav.inside[i + cols] === 1 && y + 1 === c.top[x];
     };
     const at: number[] = [], out: number[] = [], role: number[] = [];
     const line = c.outline();
@@ -2052,7 +2188,7 @@ export function starfield(o?: MaterialOptions & {
 
 /** What material() calls your function with: one object for every cell, reused, so read it and keep nothing of it. */
 export interface MaterialCell {
-  /** The cell: x columns across, y rows down. */
+  /** The cell: x columns across, y rows down. On a shape that moves, they are in a grid of its own, so what you draw moves with it. */
   x: number;
   y: number;
   /** 0 to 1 across and down the area's box, at the cell's centre. */
@@ -2062,14 +2198,15 @@ export interface MaterialCell {
   depth: number;
   /** The outline character here ("|", "/", "_" and the like), "" inside. */
   edge: string;
-  /** The picture's size. */
+  /** The size of the grid x and y are in: the picture's, or a moving shape's own. */
   cols: number;
   rows: number;
 }
 
 /**
  * A material of your own: a function of each cell and t that returns its character, or [character, colour index], or
- * "" (or null) to leave the cell as it is. Colour indices count from 0 in `colors`.
+ * "" (or null) to leave the cell as it is. Colour indices count from 0 in `colors`. A function that takes t moves:
+ * give it `period` so the picture loops.
  *
  *   const checks = material((c, t) => ((c.x + c.y + Math.floor(t * 2)) % 2 ? "#" : "."), { period: 1 });
  */
@@ -2078,7 +2215,10 @@ export function material(draw: (cell: MaterialCell, t: number) => string | reado
   name?: string;
   /** How many colours `colors` is spread to: as many as it lists. */
   steps?: number;
-  /** How often it repeats exactly, in seconds: none (a still) when not given. */
+  /**
+   * How often it repeats exactly, in seconds. Not given, a function that takes t moves on without repeating (the
+   * picture plays but sets no loop), and one that does not take t is a still.
+   */
   period?: number;
 }): Material {
   if (typeof draw !== "function") fail("material takes a function (cell, t) => a character, [character, colour index] or \"\"");
@@ -2087,7 +2227,7 @@ export function material(draw: (cell: MaterialCell, t: number) => string | reado
   if (typeof name !== "string" || !name) fail(`material.name takes a string, not ${show(name)}`);
   const n = numberOf("material.steps", p.steps, typeof p.colors === "string" ? palettes[p.colors as PaletteName]?.dark.length ?? 1 : Array.isArray(p.colors) ? p.colors.length : isObject(p.colors) ? (p.colors as Duo).dark.length : 1, 1, 32);
   const colors = colorsOf("material.colors", p.colors, "ink", n);
-  const period = p.period === undefined ? undefined : periodOf("material.period", p.period, 4);
+  const period = p.period !== undefined ? periodOf("material.period", p.period, 4) : draw.length >= 2 ? Infinity : undefined;
   return makeMaterial(name, colors, period, (c) => {
     const { cols, rows } = c;
     const w = Math.max(1, c.x1 - c.x0), h = Math.max(1, c.y1 - c.y0);
@@ -2148,6 +2288,7 @@ const isEmission = (v: unknown): v is Emission => isObject(v) && typeof v.emits 
 // from hash(seed, i mod n), n being the births in a period, so the whole stream repeats every period exactly. Births
 // before 0 count too, so the first frame is already under way.
 function eachParticle(t: number, rate: number, period: number, life: number, seed: number, fn: (k: number, age: number) => void) {
+  if (!(rate > 0)) return;
   const n = Math.max(1, Math.round(rate * period)), r = n / period;
   for (let i = Math.floor((t - life) * r) - 1; i <= Math.floor(t * r); i++) {
     const k = ((i % n) + n) % n;
@@ -2465,22 +2606,197 @@ export function snow(o?: MaterialOptions & {
   };
 }
 
+/** What emission() calls your function with: one object for each particle alive, reused, so read it and keep nothing of it. */
+export interface Emitted {
+  /** Which particle it is: the same one comes round again a period later, born in the same place. */
+  index: number;
+  /** Seconds since it was born. */
+  age: number;
+  /** Seconds it lives. */
+  life: number;
+  /** age / life: 0 at birth, near 1 as it goes. */
+  k: number;
+  /** Where it was born, in cells: x columns across and y rows down. */
+  x: number;
+  y: number;
+  /** The picture's size. */
+  cols: number;
+  rows: number;
+  /** A number 0 to 1 of its own for each n, the same each time it comes round: for its speed, its way, its look. */
+  random(n: number): number;
+}
+
+/**
+ * An emission of your own: particles born at `rate` a second where it comes from, each living `life` seconds, and a
+ * function saying where each one is and what it looks like: [x, y, character], or [x, y, character, colour index], or
+ * null to hide it. It is born along the top of where it comes from (`birth`), or at the point given; within an area
+ * given as `inside`, it is drawn only inside it. Every frame depends only on t, and the stream repeats every `period`.
+ *
+ *   const fireflies = emission((p) => [p.x + 3 * Math.sin(p.age * 2 + p.random(1) * 6), p.y - p.age, p.k < 0.5 ? "*" : "."], { birth: "anywhere" });
+ */
+export function emission(draw: (p: Emitted, t: number) => readonly [number, number, string] | readonly [number, number, string, number] | null | undefined, o?: MaterialOptions & {
+  /** Its name, for errors: "emission". */
+  name?: string;
+  /** Particles a second: 6. */
+  rate?: number;
+  /** Seconds each lives: 2. */
+  life?: number;
+  /** Where on what it comes from each is born: "top" (the default), "bottom" or "anywhere" in it. */
+  birth?: "top" | "bottom" | "anywhere";
+  /** Seconds for the stream to come round exactly: 4. */
+  period?: number;
+  /** How many colours `colors` is spread to: as many as it lists. */
+  steps?: number;
+  /** Its seed: 1. */
+  seed?: number;
+}): Emission {
+  if (typeof draw !== "function") fail("emission takes a function (particle, t) => [x, y, character], or null to hide it");
+  const p = optionsOf("emission()", o, ["colors", "name", "rate", "life", "birth", "period", "steps", "seed"]);
+  const name = p.name ?? "emission";
+  if (typeof name !== "string" || !name) fail(`emission.name takes a string, not ${show(name)}`);
+  const n = numberOf("emission.steps", p.steps, stopsIn(p.colors), 1, 32);
+  const colors = colorsOf("emission.colors", p.colors, "ink", n);
+  const rate = numberOf("emission.rate", p.rate, 6, 0, 400);
+  const life = numberOf("emission.life", p.life, 2, 0.05, 60);
+  const birth = wordOf("emission.birth", p.birth, ["top", "bottom", "anywhere"] as const, "top");
+  const period = periodOf("emission.period", p.period, 4);
+  const seed = seedOf("emission.seed", p.seed, 1);
+  return {
+    kind: "emission",
+    name,
+    colors,
+    period,
+    emits(sp) {
+      const { cols, rows } = sp;
+      const home = sp.inside ?? sp.from;
+      // where each can be born: the cells along the top or the bottom of what it comes from, or all of them
+      const spots: number[] = [];
+      if (!sp.point) {
+        if (home) {
+          if (birth === "anywhere") spots.push(...home.list);
+          else for (const x of columnsOf(home)) spots.push((birth === "top" ? home.top[x] : home.bottom[x]) * cols + x);
+        } else if (birth === "anywhere") for (let i = 0; i < cols * rows; i++) spots.push(i);
+        else for (let x = 0; x < cols; x++) spots.push((birth === "top" ? 0 : rows - 1) * cols + x);
+      }
+      const em: Emitted = { index: 0, age: 0, life, k: 0, x: 0, y: 0, cols, rows, random: (r) => hash(seed, em.index, 1000 + r) };
+      return (t, pt) => {
+        if (!sp.point && !spots.length) return;
+        eachParticle(t, rate, period, life, seed, (k, age) => {
+          em.index = k;
+          em.age = age;
+          em.k = age / life;
+          if (sp.point) (em.x = sp.point[0]), (em.y = sp.point[1]);
+          else {
+            const i = spots[Math.floor(hash(seed, k, 1) * spots.length)];
+            em.x = (i % cols) + 0.5;
+            em.y = Math.floor(i / cols) + 0.5;
+          }
+          const r = draw(em, t);
+          if (r === null || r === undefined) return;
+          if (!Array.isArray(r) || !Number.isFinite(r[0]) || !Number.isFinite(r[1]) || typeof r[2] !== "string")
+            fail(`${name} gave ${show(r)}: an emission's function returns [x, y, character], [x, y, character, colour index] or null`);
+          const x = Math.floor(r[0]), y = Math.floor(r[1]);
+          if (x < 0 || x >= cols || y < 0 || y >= rows || !r[2]) return;
+          const i = y * cols + x;
+          if (sp.inside && !sp.inside.inside[i]) return;
+          const cc = r[2].charCodeAt(0);
+          if (cc < 32 || (cc >= 0x7f && cc <= 0x9f) || (cc >= 0xd800 && cc <= 0xdfff)) fail(`${name} drew ${JSON.stringify(r[2])}: a cell takes one printable character`);
+          const col = r[3];
+          pt.s.put(i, cc, col === undefined ? pt.color(0) : Number.isInteger(col) && col >= 0 && col < n ? pt.color(col) : NONE);
+        });
+      };
+    },
+  };
+}
+
+// How many colours a `colors` option lists, for spreading it to no more than that: 1 when none is given.
+function stopsIn(v: unknown): number {
+  if (typeof v === "string") return Object.hasOwn(palettes, v) ? palettes[v as PaletteName].dark.length : 1;
+  if (Array.isArray(v)) return Math.max(1, v.length);
+  if (isObject(v) && Array.isArray(v.dark)) return Math.max(1, v.dark.length);
+  return 1;
+}
+
+/** What texture() takes besides the piece. */
+export interface TextureOptions {
+  /** The piece's own options: none. */
+  options?: Options;
+  /** How fast it plays: 1. */
+  speed?: number;
+  /** Repeat it across the area: false, so it is centred in the area's box and cut to it. */
+  tile?: boolean;
+  /** Its spaces cover what is under it, as a screen does: true. false lets what is under show through them. */
+  opaque?: boolean;
+}
+
+/**
+ * Any piece as a material: one of the library's, one of your own, a banner() or a block of text, playing inside the
+ * area in its own colours. A screen showing the donut: shape(area.rounded(4, 2, 42, 22), texture(donut)).
+ */
+export function texture(src: Source, o?: TextureOptions): Material {
+  const ok = typeof src === "string" || src instanceof Surface || (isObject(src) && isObject(src.meta) && typeof src.default === "function");
+  if (!ok) fail(`texture takes a piece (such as one from ascii.rest/pieces), a block of text or a Surface, not ${show(src)}`);
+  const p = optionsOf("texture()", o, ["options", "speed", "tile", "opaque"]);
+  if (p.options !== undefined && !isObject(p.options)) fail(`texture.options takes the piece's options as an object, not ${show(p.options)}`);
+  const speed = numberOf("texture.speed", p.speed, 1, 0.01, 100);
+  const tile = boolOf("texture.tile", p.tile, false);
+  const opaque = boolOf("texture.opaque", p.opaque, true);
+  // played once now, so a piece it cannot play says so here and not on the first frame
+  const meta = sample(src, p.options).meta;
+  const own = meta.palette;
+  // its colours as they are: a cell keeps the index the piece gave it, on either page
+  const colors: Duo = own ? { light: own, dark: own } : { light: [INK.light], dark: [INK.dark] };
+  const period = meta.fps === 0 ? undefined : meta.loop ? meta.loop / speed : Infinity;
+  return makeMaterial(`texture of ${meta.name}`, colors, period, (c) => {
+    const { cols } = c;
+    const player = sample(src, p.options);
+    // its top left: the area's box's middle less half the piece, so it sits in the middle
+    const ox = Math.floor((c.x0 + c.x1 - meta.cols) / 2), oy = Math.floor((c.y0 + c.y1 - meta.rows) / 2);
+    return (t, pt) => {
+      const g = player.at(t * speed, { paper: pt.paper, mono: pt.mono });
+      for (const i of c.list) {
+        const x = i % cols, y = (i - x) / cols;
+        let gx = x - ox, gy = y - oy;
+        if (tile) (gx = ((gx % g.cols) + g.cols) % g.cols), (gy = ((gy % g.rows) + g.rows) % g.rows);
+        else if (gx < 0 || gx >= g.cols || gy < 0 || gy >= g.rows) {
+          if (opaque) pt.s.put(i, SPACE, NONE);
+          continue;
+        }
+        const k = gy * g.cols + gx, ch = g.chars[k];
+        if (ch === EMPTY) {
+          if (opaque) pt.s.put(i, SPACE, NONE);
+          continue;
+        }
+        const col = g.colors[k];
+        pt.s.put(i, ch, col === NONE ? pt.color(0) : pt.color(col));
+      }
+    };
+  });
+}
+
 // --- parts and the picture ---------------------------------------------------------------------
 
 /** How a shape moves as a whole. */
 export type Move = "none" | "bob" | "sway" | "swim" | "drift";
 
+/**
+ * A move of your own: where the shape is at t, as columns right and rows down from where it was placed (fractions are
+ * rounded to whole cells), and `true` third to turn it round to face the other way.
+ */
+export type MoveFn = (t: number) => readonly [number, number] | readonly [number, number, boolean];
+
 /** How a part moves as a whole, on top of what its material does. */
 export interface PartOptions {
   /**
    * "bob" up and down (an ice cube floating), "sway" side to side, "swim" across its room and back, turning to face
-   * the way it goes (a fish, which faces right), or "drift" right across the picture and round again (a cloud).
-   * "none" by default.
+   * the way it goes (a fish, which faces right), or "drift" right across the picture and round again (a cloud). Or a
+   * function of your own, t => [dx, dy]: give it `period` too, the seconds it takes to come round, or the picture will
+   * not loop. "none" by default.
    */
-  move?: Move;
+  move?: Move | MoveFn;
   /** How far, in cells: bob 1, sway 2, swim across the room it was placed in, drift the picture's width. */
   amount?: number;
-  /** Seconds for one round of the move: bob 4, sway 4, swim 12, drift 24. */
+  /** Seconds for one round of the move: bob 4, sway 4, swim 12, drift 24; none for a move of your own. */
   period?: number;
 }
 
@@ -2489,7 +2805,7 @@ export interface Part {
   readonly kind: "part";
   /** Its material or emission: the colours and period picture() gathers. */
   readonly what: Material | Emission;
-  /** Its period of moving as a whole, if it moves. */
+  /** Its period of moving as a whole, if it moves: Infinity for a move of your own that never comes round. */
   readonly period?: number;
   /** Where it reaches in fixed cells, when it is only in fixed cells. */
   readonly extent?: { readonly cols: number; readonly rows: number };
@@ -2501,19 +2817,98 @@ const isPart = (v: unknown): v is Part => isObject(v) && v.kind === "part" && ty
 
 const MOVES: Record<Exclude<Move, "none">, number> = { bob: 4, sway: 4, swim: 12, drift: 24 };
 
+// An area as placed, seen from ox, oy: the cell at x, y here is the picture's at x + ox, y + oy. Given `about`, it is
+// mirrored left to right about that column first, so a swimmer can turn round.
+function moved(q: Placed, ox: number, oy: number, about?: number): Placed {
+  const mx = about === undefined ? (x: number) => x : (x: number) => 2 * about - x;
+  const char = q.char;
+  return {
+    test: (x, y) => q.test(mx(x + ox), y + oy),
+    x0: (about === undefined ? q.x0 : 2 * about - q.x1) - ox,
+    x1: (about === undefined ? q.x1 : 2 * about - q.x0) - ox,
+    y0: q.y0 - oy,
+    y1: q.y1 - oy,
+    ...(q.level !== undefined ? { level: q.level - oy } : {}),
+    ...(q.room ? { room: moved(q.room, ox, oy, about) } : {}),
+    ...(q.cavity ? { cavity: moved(q.cavity, ox, oy, about) } : {}),
+    ...(q.open !== undefined ? { open: q.open } : {}),
+    // a cell's character moves with it; turned, the cell's centre mirrors onto the matching cell
+    ...(char ? { char: (x: number, y: number) => char(mx(Math.floor(x + ox) + 0.5), y + oy) } : {}),
+  };
+}
+
+// A moving shape's window: its cells and its material's drawing worked out once on a grid of their own, and a way to
+// lay that grid into the picture each frame, moved by dx, dy.
+interface Window {
+  lay(t: number, pt: Paint, dx: number, dy: number): void;
+}
+
+function frameWindow(placed: Placed, parts: readonly Placed[], about: number | undefined, m: Material, cols: number, rows: number, all: (d: MaterialDraw[]) => MaterialDraw): Window {
+  const whole = moved(placed, 0, 0, about);
+  // a cell round its box, so it keeps its outline wherever it goes; cut to three pictures across and down, so an area
+  // far larger than the picture cannot take all the memory
+  const x0 = Math.max(-cols, Math.floor(whole.x0) - 1), y0 = Math.max(-rows, Math.floor(whole.y0) - 1);
+  const w = Math.max(1, Math.min(2 * cols, Math.ceil(whole.x1) + 1) - x0), h = Math.max(1, Math.min(2 * rows, Math.ceil(whole.y1) + 1) - y0);
+  const grid = new Surface(w, h);
+  const draw = all(parts.map((q) => m.prepare(cellsOf(moved(q, x0, y0, about), w, h))));
+  const under = { chars: new Uint16Array(w * h), colors: new Uint8Array(w * h) };
+  let copied = false;
+  let outer: Paint | null = null;
+  const paint: Paint = {
+    s: grid,
+    get paper() {
+      return outer!.paper;
+    },
+    get mono() {
+      return outer!.mono;
+    },
+    color: (i) => outer!.color(i),
+    get under() {
+      if (!copied) under.chars.set(grid.chars), under.colors.set(grid.colors), (copied = true);
+      return under;
+    },
+  };
+  return {
+    lay(t, pt, dx, dy) {
+      const s = pt.s, ox = x0 + dx, oy = y0 + dy;
+      // the rows and columns of the window that land in the picture
+      const c0 = Math.max(0, -ox), c1 = Math.min(w, cols - ox), r0 = Math.max(0, -oy), r1 = Math.min(h, rows - oy);
+      if (c0 >= c1 || r0 >= r1) return;
+      // what is under it comes in, so a see-through material shows it; the material draws; the window goes back out
+      grid.clear();
+      for (let r = r0; r < r1; r++) {
+        const j = (oy + r) * cols + ox;
+        grid.chars.set(s.chars.subarray(j + c0, j + c1), r * w + c0);
+        grid.colors.set(s.colors.subarray(j + c0, j + c1), r * w + c0);
+      }
+      outer = pt;
+      copied = false;
+      draw(t, paint);
+      for (let r = r0; r < r1; r++) {
+        const j = (oy + r) * cols + ox;
+        s.chars.set(grid.chars.subarray(r * w + c0, r * w + c1), j + c0);
+        s.colors.set(grid.colors.subarray(r * w + c0, r * w + c1), j + c0);
+      }
+    },
+  };
+}
+
 /**
  * A shape: an area filled with a material, drawn over what is already there. With no material it takes the area's own
  * (glass for a cup, fire for a flame), else solid; the options may then come second: shape(cloud(), { move: "drift" }).
  */
 export function shape(where: Area, what?: Material | PartOptions, o?: PartOptions): Part {
   areaOf("shape", where);
+  if (isArea(what) && !isMaterial(what)) fail("shape takes a material second, not another area: give each area a shape() of its own, or join them with union()");
   if (what !== undefined && !isMaterial(what) && isObject(what) && o === undefined) (o = what as PartOptions), (what = undefined);
   const m = what ?? where.material?.() ?? solid();
   if (!isMaterial(m)) fail(`shape takes a material second, such as water(), glass() or solid(), not ${show(what)}`);
   const p = optionsOf("shape()'s options", o, ["move", "amount", "period"]);
-  const move = wordOf("shape's move", p.move, ["none", "bob", "sway", "swim", "drift"] as const, "none");
+  const own = typeof p.move === "function" ? (p.move as MoveFn) : null;
+  const move = own ? "own" : wordOf("shape's move", p.move, ["none", "bob", "sway", "swim", "drift"] as const, "none");
   const amount = p.amount === undefined ? undefined : numberOf("shape's amount", p.amount, 1, 0, 320);
-  const period = move === "none" ? undefined : periodOf("shape's period", p.period, MOVES[move]);
+  // a move of your own with no period moves on without coming round, so the picture sets no loop
+  const period = move === "none" ? undefined : move === "own" ? (p.period === undefined ? Infinity : periodOf("shape's period", p.period, 4)) : periodOf("shape's period", p.period, MOVES[move]);
   return {
     kind: "part",
     what: m,
@@ -2525,45 +2920,34 @@ export function shape(where: Area, what?: Material | PartOptions, o?: PartOption
       const parts = (where.pieces?.length ? where.pieces : [where]).map((a) => a.place(cols, rows));
       const all = (draws: MaterialDraw[]): MaterialDraw => (draws.length === 1 ? draws[0] : (t, pt) => draws.forEach((d) => d(t, pt)));
       if (move === "none") return all(parts.map((q) => m.prepare(cellsOf(q, cols, rows))));
-      // a moving shape: each offset (and facing) is worked out once, when first reached
-      const seen = new Map<string, MaterialDraw>();
       const f = placed.frame ?? { x0: 0, y0: 0, x1: cols, y1: rows };
       const w = placed.x1 - placed.x0;
       const reach = amount ?? (move === "bob" ? 1 : move === "sway" ? 2 : move === "swim" ? Math.max(0, Math.floor((f.x1 - f.x0 - w) / 2) - 1) : cols);
       const cx = (placed.x0 + placed.x1) / 2;
+      // A moving shape is worked out once in a window of its own, a cell round its box (and once more turned round, for
+      // a swimmer), and each frame that window is laid into the picture where the move puts it.
+      const windows: (Window | null)[] = [null, null];
+      const windowOf = (turned: boolean) => (windows[+turned] ??= frameWindow(placed, parts, turned ? cx : undefined, m, cols, rows, all));
       return (t, pt) => {
-        const k = fract(t / (period as number));
         let dx = 0, dy = 0, turn = false;
-        if (move === "bob") dy = Math.round(reach * Math.sin(TAU * k));
-        else if (move === "sway") dx = Math.round(reach * Math.sin(TAU * k));
-        else if (move === "swim") {
-          // across its room and back, easing at the ends, facing the way it goes
-          dx = Math.round(reach * Math.sin(TAU * k)) + Math.round((f.x0 + f.x1) / 2 - cx);
-          turn = Math.cos(TAU * k) < 0;
-        } else dx = Math.round(k * reach);
-        const key = `${dx},${dy},${turn}`;
-        let draw = seen.get(key);
-        if (!draw) {
-          const wrap = move === "drift";
-          const moved = (q: Placed): Placed => ({
-            ...q,
-            test: (x, y) => {
-              const xx = x - dx;
-              if (q.test(turn ? 2 * cx - xx : xx, y - dy)) return true;
-              return wrap && (q.test(xx + reach, y - dy) || q.test(xx - reach, y - dy));
-            },
-            // a cell's character moves with it; turned, the cell's centre mirrors onto the matching cell
-            char: q.char && ((x, y) => q.char!(turn ? 2 * cx - (Math.floor(x) + 0.5 - dx) : x - dx, y - dy)),
-            x0: wrap ? 0 : turn ? 2 * cx - q.x1 + dx : q.x0 + dx,
-            x1: wrap ? cols : turn ? 2 * cx - q.x0 + dx : q.x1 + dx,
-            y0: q.y0 + dy,
-            y1: q.y1 + dy,
-            cavity: undefined,
-          });
-          draw = all(parts.map((q) => m.prepare(cellsOf(moved(q), cols, rows))));
-          seen.set(key, draw);
+        if (own) {
+          const r = own(t);
+          if (!Array.isArray(r) || !Number.isFinite(r[0]) || !Number.isFinite(r[1])) fail(`shape's move gave ${show(r)} at t = ${t}: a move of your own returns [dx, dy] in cells, or [dx, dy, true] turned round`);
+          (dx = Math.round(r[0])), (dy = Math.round(r[1])), (turn = r[2] === true);
+        } else {
+          const k = fract(t / (period as number));
+          if (move === "bob") dy = Math.round(reach * Math.sin(TAU * k));
+          else if (move === "sway") dx = Math.round(reach * Math.sin(TAU * k));
+          else if (move === "swim") {
+            // across its room and back, easing at the ends, facing the way it goes
+            dx = Math.round(reach * Math.sin(TAU * k)) + Math.round((f.x0 + f.x1) / 2 - cx);
+            turn = Math.cos(TAU * k) < 0;
+          } else dx = Math.round(k * reach);
         }
-        draw(t, pt);
+        const win = windowOf(turn);
+        win.lay(t, pt, dx, dy);
+        // drifting off the right, it comes back in from the left
+        if (move === "drift" && reach > 0) win.lay(t, pt, dx - reach, dy);
       };
     },
   };
@@ -2600,12 +2984,14 @@ export function emit(what: Emission, o?: EmitOptions): Part {
   };
 }
 
-// The least common multiple of periods, on hundredths of a second, when it is at most 60 seconds.
+// The least common multiple of periods, on hundredths of a second, when it is at most 60 seconds. Something that moves
+// without repeating (a period of Infinity) means there is none.
 function loopOf(periods: readonly number[]): number | undefined {
   if (!periods.length) return undefined;
   const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
   let l = 1;
   for (const p of periods) {
+    if (!Number.isFinite(p)) return undefined;
     const h = Math.round(p * 100);
     if (h <= 0) return undefined;
     l = (l * h) / gcd(l, h);
@@ -2614,26 +3000,27 @@ function loopOf(periods: readonly number[]): number | undefined {
   return l / 100;
 }
 
-/**
- * A picture: parts laid over each other in order, the first at the bottom, as one piece. Its size is `cols` by `rows`
- * if given; else, when every part is in fixed cells, just big enough for them; else 64 by 24. Its colours are its
- * parts' (up to 32 for each page), and it loops on the least common multiple of their periods when that is a minute or
- * less. It works in colour and in one ink, on light and dark pages, and every frame depends only on t.
- */
-export function picture<O extends Options = Options>(parts: readonly Part[], spec?: MakerSpec<O>): KitPiece<O> {
-  if (!Array.isArray(parts) || !parts.length) fail("picture takes a list of one or more parts, such as [shape(cup(), glass())]");
+// Checks a list of parts, for `what`.
+function partsOf(what: string, parts: unknown): readonly Part[] {
+  if (!Array.isArray(parts) || !parts.length) fail(`${what} takes a list of one or more parts, such as [shape(cup(), glass())]`);
   parts.forEach((part, i) => {
-    if (!isPart(part)) fail(`picture's part ${i + 1} is not a part: make one with shape(area, material) or emit(emission)`);
+    if (isPart(part)) return;
+    // the parts a picture is made of, said for what was given instead
+    const n = `${what}'s part ${i + 1}`;
+    if (isArea(part)) fail(`${n} is an area: draw it with shape(area), or shape(area, material)`);
+    if (isEmission(part)) fail(`${n} is an emission: send it out with emit(${part.name}(), { from: area })`);
+    if (isMaterial(part)) fail(`${n} is a material: fill an area with it, shape(area, ${part.name}())`);
+    fail(`${n} is not a part: make one with shape(area, material) or emit(emission)`);
   });
-  const fixed = parts.every((part) => part.extent);
-  const size = fixed && spec?.cols === undefined && spec?.rows === undefined
-    ? { cols: Math.max(1, Math.ceil(Math.max(...parts.map((part) => part.extent!.cols)))), rows: Math.max(1, Math.ceil(Math.max(...parts.map((part) => part.extent!.rows)))) }
-    : { cols: 64, rows: 24 };
-  const s = specOf(spec, "picture", size);
-  // The palette: the ink first, then each part's colours, a colour for each page, each pair once.
+  return parts as readonly Part[];
+}
+
+// The colours parts need, the ink first, then each part's colours, a colour for each page, each pair once; and for each
+// part, where its colours are in them.
+function colorsFor(parts: readonly Part[]): { light: string[]; dark: string[]; slots: number[][] } {
   const light: string[] = [INK.light], dark: string[] = [INK.dark];
   const seen = new Map<string, number>([[`${INK.light}${INK.dark}`, 0]]);
-  const slots: number[][] = parts.map((part) => {
+  const slots = parts.map((part) => {
     const { colors } = part.what;
     return colors.dark.map((d: string, i: number): number => {
       const l = colors.light[i] ?? colors.light[colors.light.length - 1];
@@ -2646,40 +3033,112 @@ export function picture<O extends Options = Options>(parts: readonly Part[], spe
     });
   });
   if (light.length > 32) fail(`these parts have ${light.length} colours for each page between them, past the 32 a picture can have: use fewer materials, or give some the same colors`);
+  return { light, dark, slots };
+}
+
+/**
+ * The colours a list of parts draws with, as a palette for piece(): the ink first, then each part's, a list for each
+ * page. With it, drawParts() draws every part in its own colours.
+ */
+export function paletteOf(parts: readonly Part[]): Duo {
+  const { light, dark } = colorsFor(partsOf("paletteOf", parts));
+  return { light, dark };
+}
+
+// Parts set up on a grid's size, drawn in order each frame, each with its colours for the page (`maps` gives a part's
+// palette indices on paper or on a dark page) and its view of the grid as it was before it drew.
+function stage(parts: readonly Part[], cols: number, rows: number, maps: (k: number, paper: boolean) => Uint8Array) {
+  const draws = parts.map((part) => part.setup(cols, rows));
+  const under = { chars: new Uint16Array(cols * rows), colors: new Uint8Array(cols * rows) };
+  let copied = false;
+  let map = maps(0, false);
+  // Copied when a part first reads it, which a see-through material does before it draws.
+  const paint = {
+    s: null as unknown as Surface,
+    paper: false,
+    mono: true,
+    color: (i: number) => map[i < map.length ? i : map.length - 1] ?? NONE,
+    get under() {
+      if (!copied) under.chars.set(paint.s.chars), under.colors.set(paint.s.colors), (copied = true);
+      return under;
+    },
+  };
+  return (t: number, s: Surface) => {
+    paint.s = s;
+    paint.paper = s.paper;
+    paint.mono = s.mono;
+    draws.forEach((draw, k) => {
+      map = maps(k, s.paper);
+      copied = false;
+      draw(t, paint);
+    });
+  };
+}
+
+// What drawParts() has set up for each grid it has drawn into.
+const staged = new WeakMap<Surface, { parts: readonly Part[]; draw: (t: number, s: Surface) => void }>();
+
+/**
+ * Draws parts into a grid you already have, at t, over what is there: for mixing materials with your own drawing in
+ * piece(). Each part's colours are found in the grid's palette (the nearest); a grid with no palette draws them in its
+ * ink. Make the parts once, outside the drawing: they are set up the first time a grid sees them.
+ *
+ *   const parts = [shape(cup()), shape(inside(cup()), water())];
+ *   export default piece({ name: "label", cols: 64, rows: 24, palette: paletteOf(parts) }, (t, s) => {
+ *     drawParts(s, parts, t);
+ *     s.write(2, 1, "fresh water");
+ *   });
+ */
+export function drawParts(s: Surface, parts: readonly Part[], t: number): void {
+  if (!(s instanceof Surface)) fail("drawParts takes the grid to draw into first, the s a piece() drawing is given");
+  let st = staged.get(s);
+  if (!st || st.parts !== parts) {
+    partsOf("drawParts", parts);
+    const pal = s.palette;
+    const maps = parts.map((part) => {
+      const { light, dark } = part.what.colors;
+      const at = (list: readonly string[], paper: boolean) => Uint8Array.from(list, (c) => (pal ? pal.index(c, paper) : NONE));
+      return [at(light, true), at(dark, false)];
+    });
+    st = { parts, draw: stage(parts, s.cols, s.rows, (k, paper) => maps[k][paper ? 0 : 1]) };
+    staged.set(s, st);
+  }
+  st.draw(Number.isFinite(t) ? t : 0, s);
+}
+
+const SPEC_KEYS = ["name", "note", "category", "cols", "rows", "fps", "ground", "loop", "still", "clock", "options", "clear", "palette", "ink", "cell"];
+
+/**
+ * A picture: parts laid over each other in order, the first at the bottom, as one piece. Its size is `cols` by `rows`
+ * if given; else, when every part is in fixed cells, just big enough for them; else 64 by 24. Its colours are its
+ * parts' (up to 32 for each page), and it loops on the least common multiple of their periods when that is a minute or
+ * less. It works in colour and in one ink, on light and dark pages, and every frame depends only on t.
+ */
+export function picture<O extends Options = Options>(parts: readonly Part[], spec?: MakerSpec<O>): KitPiece<O> {
+  partsOf("picture", parts);
+  const sp = optionsOf("picture()'s spec", spec, SPEC_KEYS);
+  if (sp.palette !== undefined || sp.ink !== undefined) fail("picture() makes its palette from its parts' colours: give each material `colors` instead of a palette or an ink");
+  if (sp.cell !== undefined && sp.cell !== 2) fail(`picture() draws for cells twice as tall as wide, so its cell can only be 2, not ${show(sp.cell)}`);
+  const fixed = parts.every((part) => part.extent);
+  let size = { cols: 64, rows: 24 };
+  if (fixed && sp.cols === undefined && sp.rows === undefined) {
+    size = { cols: Math.max(1, Math.ceil(Math.max(...parts.map((part) => part.extent!.cols)))), rows: Math.max(1, Math.ceil(Math.max(...parts.map((part) => part.extent!.rows)))) };
+    if (size.cols > MAX.cols || size.rows > MAX.rows)
+      fail(`picture's parts reach ${size.cols} by ${size.rows} cells, past the ${MAX.cols} by ${MAX.rows} a piece can be: give the picture cols and rows, or make the areas smaller`);
+  }
+  const s = specOf(sp, "picture", size);
+  const { light, dark, slots } = colorsFor(parts);
   const periods = [...parts.map((part) => part.what.period), ...parts.map((part) => part.period)].filter((v): v is number => v !== undefined);
   const loop = s.loop ?? loopOf(periods);
   const n = light.length;
+  // Each part's colours on each page, as palette indices: the light ones first, then the dark ones.
+  const maps = slots.map((sl) => [Uint8Array.from(sl), Uint8Array.from(sl, (k) => n + k)]);
   return piece<O>(
     { ...s, fps: s.fps ?? (periods.length ? 24 : 0), category: s.category ?? "scenes", palette: { light, dark }, ink: 0, ...(loop ? { loop } : {}) },
     {
       setup: (_o, { cols, rows }) => {
-        const draws = parts.map((part) => part.setup(cols, rows));
-        // Each part's colours on each page, as palette indices, and its view of the grid before it drew.
-        const maps = slots.map((sl) => [Uint8Array.from(sl), Uint8Array.from(sl, (k) => n + k)]);
-        const under = { chars: new Uint16Array(cols * rows), colors: new Uint8Array(cols * rows) };
-        let copied = false;
-        let map = maps[0][0];
-        // Copied when a part first reads it, which a see-through material does before it draws.
-        const paint = {
-          s: null as unknown as Surface,
-          paper: false,
-          mono: true,
-          color: (i: number) => map[i < map.length ? i : map.length - 1] ?? NONE,
-          get under() {
-            if (!copied) under.chars.set(paint.s.chars), under.colors.set(paint.s.colors), (copied = true);
-            return under;
-          },
-        };
-        return (t, grid, ctx) => {
-          paint.s = grid;
-          paint.paper = ctx.paper;
-          paint.mono = ctx.mono;
-          draws.forEach((draw, k) => {
-            map = maps[k][ctx.paper ? 0 : 1];
-            copied = false;
-            draw(t, paint);
-          });
-        };
+        const draw = stage(parts, cols, rows, (k, paper) => maps[k][paper ? 0 : 1]);
+        return (t, grid) => draw(t, grid);
       },
     },
   );
@@ -2691,11 +3150,12 @@ export function picture<O extends Options = Options>(parts: readonly Part[], spe
  * A glass of water with bubbles, in one call: a preset written with the same parts anyone can use. `fill` how full
  * ("half"), `waves` ("gentle"), `colors` the drink's ("water"; "cola", "juice", "wine", "tea"...), and the size.
  */
-export function waterGlass(o: { fill?: Fill; waves?: Waves; colors?: Colors; cols?: number; rows?: number } = {}): KitPiece {
+export function waterGlass(o?: { fill?: Fill; waves?: Waves; colors?: Colors; cols?: number; rows?: number }): KitPiece {
+  const p = optionsOf("waterGlass()", o, ["fill", "waves", "colors", "cols", "rows"]);
   const tumbler = cup({ size: "huge" });
-  const drink = inside(tumbler, { fill: o.fill ?? "half" });
+  const drink = inside(tumbler, { fill: p.fill ?? "half" });
   return picture(
-    [shape(tumbler, glass()), shape(drink, water({ waves: o.waves, colors: o.colors })), emit(bubbles(), { inside: drink })],
-    { name: "glass of water", note: "a glass of water, its surface rippling, bubbles rising", cols: o.cols ?? 32, rows: o.rows ?? 16 },
+    [shape(tumbler, glass()), shape(drink, water({ waves: p.waves, colors: p.colors })), emit(bubbles(), { inside: drink })],
+    { name: "glass of water", note: "a glass of water, its surface rippling, bubbles rising", cols: p.cols ?? 32, rows: p.rows ?? 16 },
   );
 }

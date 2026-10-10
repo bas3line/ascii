@@ -11,7 +11,7 @@ const cola = inside(tumbler, { fill: "high" });
 export default picture([
   shape(straw({ within: tumbler })),
   shape(tumbler, glass()),
-  shape(cola, water({ colors: "cola" })),
+  shape(cola, water({ colors: "cola", texture: 0.2 })),
   emit(bubbles({ colors: "fizz", rate: 5 }), { inside: cola }),
   shape(box({ within: cola, at: "top-left", x: 2, y: -1, size: 0.3 }), ice(), { move: "bob" }),
   shape(box({ within: cola, at: "top-right", x: -2, size: 0.3 }), ice(), { move: "bob", period: 2 }),

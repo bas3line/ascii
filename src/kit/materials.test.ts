@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { svg } from "../svg.ts";
 import type { Piece } from "../types.ts";
-import { INK, isHex, snapshot } from "./core.ts";
+import { INK, Surface, isHex, piece, snapshot } from "./core.ts";
 import {
   area,
   ball,
@@ -15,7 +15,9 @@ import {
   cellsOf,
   cloud,
   cup,
+  drawParts,
   edgeChar,
+  emission,
   emit,
   fire,
   fish,
@@ -37,6 +39,7 @@ import {
   moon,
   mug,
   neon,
+  paletteOf,
   palettes,
   pattern,
   patterns,
@@ -54,6 +57,7 @@ import {
   steam,
   straw,
   subtract,
+  texture,
   union,
   water,
   waterGlass,
@@ -61,6 +65,7 @@ import {
   type Area,
   type Material,
 } from "./materials.ts";
+import * as rust from "../pieces/rust.ts";
 import * as aquarium from "../../examples/kit/materials-aquarium.ts";
 import * as candle from "../../examples/kit/materials-candle.ts";
 import * as coffee from "../../examples/kit/materials-coffee.ts";
@@ -68,6 +73,8 @@ import * as cola from "../../examples/kit/materials-cola.ts";
 import * as glassOfWater from "../../examples/kit/materials-glass.ts";
 import * as houseAtNight from "../../examples/kit/materials-house.ts";
 import * as lavaLamp from "../../examples/kit/materials-lava-lamp.ts";
+import * as rocket from "../../examples/kit/materials-rocket.ts";
+import * as tv from "../../examples/kit/materials-tv.ts";
 
 // The checks scripts/check.ts makes of a frame: rows lines of cols characters, colours inside the palette, on both
 // pages, in colour and in one ink.
@@ -382,9 +389,13 @@ test("neon glows round its area and keeps text's letters; it flickers once a per
 test("solid: one character, a ramp from the edge in, and the edge as an outline", () => {
   const where = area.rect(0, 0, 10, 5);
   assert.deepEqual(lines(picture([shape(where, solid({ char: "#" }))], { cols: 10, rows: 5 }))[2], "##########");
-  const ramp = lines(picture([shape(where, solid({ char: ".:#" }))], { cols: 10, rows: 5 }));
+  const ramp = lines(picture([shape(where, solid({ ramp: ".:#" }))], { cols: 10, rows: 5 }));
   assert.equal(ramp[0][0], ".");
   assert.equal(ramp[2][5], "#");
+  // a ramp by name, as everywhere in the kit; one character is a char, more is a ramp
+  assert.equal(lines(picture([shape(where, solid({ ramp: "blocks" }))], { cols: 10, rows: 5 }))[2][5], "█");
+  assert.throws(() => solid({ char: ".:#" }), /solid\.char takes one printable character, not "\.:#"/);
+  assert.throws(() => solid({ ramp: "x" }), /solid\.ramp takes a ramp's name, standard, detailed/);
   assert.throws(() => solid({ colors: ["red"] }), /solid\.colors takes colours as #rrggbb/);
   assert.throws(() => solid({ colors: "nope" as never }), /solid\.colors takes a palette's name/);
 });
@@ -489,6 +500,10 @@ test("shape(): a shape's own material, its options second, and moving as a whole
   assert.ok(left(2) > left(0));
   assert.throws(() => shape(3 as never), /shape takes an area/);
   assert.throws(() => shape(cup(), 5 as never), /shape takes a material second/);
+  assert.throws(() => shape(ball(), house() as never), /shape takes a material second, not another area: give each area a shape\(\) of its own/);
+  // cloud() and smoke() are materials too
+  assert.equal((shape(ball(), cloud()).what as Material).name, "cloud");
+  assert.equal((shape(ball(), smoke()).what as Material).name, "smoke");
   assert.throws(() => shape(cup(), glass(), { move: "spin" as never }), /shape's move takes "none", "bob"/);
 });
 
@@ -523,18 +538,26 @@ test("picture(): its size, its palette, its loop, a still, and its errors", () =
 });
 
 test("every example is a normal piece: the frame contract, the same frame for the same t, a loop, and an SVG", () => {
-  for (const [name, mod] of Object.entries({ aquarium, candle, coffee, cola, glassOfWater, houseAtNight, lavaLamp })) {
+  for (const [name, mod] of Object.entries({ aquarium, candle, coffee, cola, glassOfWater, houseAtNight, lavaLamp, rocket, tv })) {
     const p = mod.default;
     contract(p);
+    // nothing carries over between frames, moving shapes included: t = 5 and then 1.3 gives what 1.3 fresh does
+    const frame = p.default();
+    frame(5);
+    assert.equal(frame(1.3), p.default()(1.3), `${name}: a frame depends only on t`);
+    for (const t of [0.3, 1.7]) assert.deepEqual(snapshot(p, t), snapshot(p, t), `${name} at ${t}`);
+    assert.match(svg(p), /^<svg/, `${name} exports to SVG`);
+    // the tv plays the donut, which does not loop, so neither does it; the rest loop
+    if (mod === tv) {
+      assert.equal(p.meta.loop, undefined);
+      assert.equal(p.meta.fps, 24);
+      continue;
+    }
     const loop = p.meta.loop;
     assert.ok(loop && loop <= 60, `${name} loops`);
-    for (const t of [0.3, 1.7]) {
-      assert.deepEqual(snapshot(p, t), snapshot(p, t), `${name} at ${t}`);
-      sameAfterPeriod(snapshot(p, t + loop!), snapshot(p, t), `${name} at ${t} and a loop on`);
-    }
+    for (const t of [0.3, 1.7]) sameAfterPeriod(snapshot(p, t + loop!), snapshot(p, t), `${name} at ${t} and a loop on`);
     // the loop's seam: its last frame as svg() samples it runs on into its first
     sameAfterPeriod(snapshot(p, loop!), snapshot(p, 0), `${name}: its end is its start`);
-    assert.match(svg(p), /^<svg/, `${name} exports to SVG`);
   }
 });
 
@@ -547,6 +570,255 @@ test("waterGlass(): the preset is a picture of the same parts anyone can use", (
   const cola = waterGlass({ colors: "cola", fill: "high", cols: 40, rows: 20 });
   assert.deepEqual([cola.meta.cols, cola.meta.rows], [40, 20]);
   assert.notDeepEqual(cola.meta.palette, p.meta.palette);
+  assert.throws(() => waterGlass({ fil: "half" } as never), /waterGlass\(\) has no option "fil"/);
+});
+
+// The cell index of "x,y" in a picture `cols` wide.
+const at = (cell: string, cols: number) => {
+  const [x, y] = cell.split(",").map(Number);
+  return y * cols + x;
+};
+
+test("an open vessel opens only at its mouth: a bottle's shoulders stay walls, outlined", () => {
+  const where = bottle({ rows: 14, at: "center" });
+  const b = cellsOf(where, 30, 16), cav = b.cavity!;
+  // the room reaches the vessel's top row only in the neck, its mouth
+  const mouth: number[] = [], body: number[] = [];
+  for (let x = cav.x0; x < cav.x1; x++) if (cav.top[x] >= 0) (cav.top[x] === b.top[x] ? mouth : body).push(x);
+  assert.ok(mouth.length > 0 && mouth.length < body.length, `mouth ${mouth.length} columns, body ${body.length}`);
+  // and every column of the body has the glass drawn above its room: the shoulders
+  const text = lines(picture([shape(where, glass({ highlight: false }))], { cols: 30, rows: 16 }));
+  for (const x of body) {
+    const above = text.slice(b.top[x], cav.top[x]).map((l) => l[x]).join("");
+    assert.match(above, /[^ ]/, `column ${x} is open above its room`);
+  }
+});
+
+test("a moving shape is the same shape moved: at no offset it is the still one; drift comes round; moves of your own", () => {
+  const backdrop = shape(area.all(), solid({ char: "#" }));
+  const tumbler = cup({ rows: 8, at: "center" });
+  const still = picture([backdrop, shape(tumbler, glass({ highlight: false }))], { cols: 30, rows: 12 });
+  // bob is at no offset at t = 0: the moving glass keeps its open mouth and its see-through room, as the still one
+  const bobbing = picture([backdrop, shape(tumbler, glass({ highlight: false }), { move: "bob" })], { cols: 30, rows: 12 });
+  assert.deepEqual(lines(bobbing, 0), lines(still, 0));
+  // at a quarter of the way round it is a row down: the still frame moved
+  assert.deepEqual(lines(bobbing, 1).slice(3, 11), lines(still, 0).slice(2, 10));
+  // drifting off the right, it comes back in from the left
+  const d = picture([shape(area.rect(14, 0, 4, 2), solid({ char: "#" }), { move: "drift", period: 20 })], { cols: 20, rows: 2 });
+  assert.equal(lines(d, 4)[0], "##                ##");
+  // a move of your own: three columns right, a row up after a second, turned round at the end
+  const block = box({ cols: 4, rows: 2, at: "top-left" });
+  const own = picture([shape(block, solid({ char: "#" }), { move: (t) => [3, t >= 1 ? 1 : 0], period: 2 })], { cols: 10, rows: 4 });
+  assert.deepEqual(lines(own, 0), ["   ####   ", "   ####   ", "          ", "          "]);
+  assert.deepEqual(lines(own, 1.5), ["          ", "   ####   ", "   ####   ", "          "]);
+  assert.equal(own.meta.loop, 2);
+  const sea = area.rect(0, 0, 40, 8);
+  const eye = (p: Piece) => lines(p).find((l) => l.includes("o"))!.indexOf("o");
+  const fwd = picture([shape(fish({ within: sea, rows: 6 }), { move: () => [0, 0] })], { cols: 40, rows: 8 });
+  const back = picture([shape(fish({ within: sea, rows: 6 }), { move: () => [0, 0, true] })], { cols: 40, rows: 8 });
+  assert.ok(eye(back) < eye(fwd), "turned round, it faces left");
+  // no period: it plays but sets no loop
+  const endless = picture([shape(block, solid(), { move: (t) => [Math.floor(t) % 5, 0] })], { cols: 10, rows: 4 });
+  assert.equal(endless.meta.loop, undefined);
+  assert.equal(endless.meta.fps, 24);
+  const bad = picture([shape(block, solid(), { move: () => [1] as never })], { cols: 10, rows: 4 });
+  assert.throws(() => snapshot(bad, 0), /shape's move gave \[1\] at t = 0: a move of your own returns \[dx, dy\]/);
+});
+
+test("material() that takes t moves even with no period; one that does not is a still", () => {
+  const anim = material((c, t) => (Math.floor(t * 2 + c.x) % 2 ? "#" : "."));
+  assert.equal(anim.period, Infinity);
+  const p = picture([shape(area.rect(0, 0, 4, 1), anim)]);
+  assert.equal(p.meta.fps, 24);
+  assert.equal(p.meta.loop, undefined);
+  assert.notEqual(lines(p, 0)[0], lines(p, 0.5)[0]);
+  const flat = material(() => "#");
+  assert.equal(flat.period, undefined);
+  assert.equal(picture([shape(area.rect(0, 0, 4, 1), flat)]).meta.fps, 0);
+  assert.equal(picture([shape(area.rect(0, 0, 4, 1), material((c, t) => (t > 1 ? "#" : "."), { period: 2 }))]).meta.loop, 2);
+});
+
+test("area.fit: a shape of your own, from points or a function, placed and sized by words like the rest", () => {
+  const tri = cellsOf(area.fit([[0.5, 0], [1, 1], [0, 1]], { rows: 10, at: "bottom" }), 40, 12);
+  assert.equal(tri.y1, 12, "at the bottom");
+  assert.ok(Math.abs(tri.x1 - tri.x0 - 20) <= 1, "ratio 1: as wide on screen as it is tall, 20 columns for 10 rows");
+  assert.ok(tri.right[tri.y0] - tri.left[tri.y0] < tri.right[tri.y1 - 1] - tri.left[tri.y1 - 1], "a point at the top, wide at the bottom");
+  // the same triangle as a function, cell for cell: a point on a polygon's edge is in, on either side
+  const fn = cellsOf(area.fit((u, v) => Math.abs(u - 0.5) <= v / 2, { rows: 10, at: "bottom" }), 40, 12);
+  assert.deepEqual(fn.inside, tri.inside);
+  // so a polygon symmetric about its middle comes out symmetric: a star, and a house's roof
+  for (const a of [star({ rows: 9, at: "center" }), house({ rows: 12, at: "center" }).roof]) {
+    const c = cellsOf(a, 40, 12), mid = c.x0 + c.x1 - 1;
+    for (const i of c.list) assert.ok(c.inside[i - (i % 40) + mid - (i % 40)], `${i % 40},${Math.floor(i / 40)} has no mirror`);
+  }
+  // ratio, within, size and flip, as any shape
+  const wide = cellsOf(area.fit((u) => u < 0.5, { ratio: 2, rows: 4, at: "top-left" }), 40, 12);
+  assert.deepEqual([wide.x0, wide.x1, wide.y1 - wide.y0], [0, 8, 4]);
+  const flipped = cellsOf(area.fit((u) => u < 0.5, { ratio: 2, rows: 4, at: "top-left", flip: true }), 40, 12);
+  assert.deepEqual([flipped.x0, flipped.x1], [8, 16]);
+  const inner = cellsOf(area.fit([[0, 0], [1, 0], [0, 1]], { within: area.rect(20, 2, 10, 8), size: "full" }), 40, 12);
+  assert.ok(inner.x0 >= 20 && inner.x1 <= 30 && inner.y0 >= 2 && inner.y1 <= 10);
+  // filled like any other area
+  assert.ok(drawn(picture([shape(area.fit([[0.5, 0], [1, 1], [0, 1]]), fire())]), 1).size > 20);
+  assert.throws(() => area.fit([[0, 0], [1, 1]]), /area\.fit takes a list of 3 or more points \[u, v\], 0 to 1 across and down its box/);
+  assert.throws(() => area.fit([[0, 0], [1, 0], [0, 1]], { ratio: 0 }), /area\.fit\.ratio takes a number from 0\.05 to 20, not 0/);
+  assert.throws(() => area.fit((u) => u > 0, { colour: 1 } as never), /area\.fit\(\) has no option "colour"/);
+});
+
+test("emission(): particles of your own, born where it comes from, the same for the same t, repeating, checked", () => {
+  const block = box({ at: "bottom", cols: 6, rows: 3 });
+  const c = cellsOf(block, 30, 16);
+  const rising = emission((p) => [p.x, p.y - p.age * 4, p.k < 0.5 ? "*" : "."], { rate: 8, life: 1.5 });
+  const p = picture([emit(rising, { from: block })], { cols: 30, rows: 16 });
+  contract(p);
+  // born along the top of the block, rising: above it and in its columns
+  for (const t of [0, 0.7, 1.9]) for (const cell of drawn(p, t)) {
+    const [x, y] = cell.split(",").map(Number);
+    assert.ok(y <= c.y0 && x >= c.x0 && x < c.x1, `${cell} is not over the block`);
+  }
+  assert.ok(drawn(p, 1).size > 3);
+  const frame = p.default();
+  frame(5);
+  assert.equal(frame(1), p.default()(1), "nothing carries over between frames");
+  sameAfterPeriod(snapshot(p, 5.2), snapshot(p, 1.2), "a period on");
+  // anywhere inside an area, drawn only there, in a colour by index
+  const pool = area.rect(5, 5, 10, 4);
+  const fizz = picture([emit(emission((q) => [q.x + 2, q.y - q.age * 6, "o", 1], { rate: 20, birth: "anywhere", colors: ["#ff0000", "#00ff00"] }), { inside: pool })], { cols: 30, rows: 16 });
+  const pal = fizz.meta.palette!;
+  for (const t of [0.4, 1.1]) {
+    const { color } = snapshot(fizz, t);
+    for (const cell of drawn(fizz, t)) {
+      const [x, y] = cell.split(",").map(Number);
+      assert.ok(x >= 5 && x < 15 && y >= 5 && y < 9, `${cell} is out of the pool`);
+      assert.equal(pal[color![at(cell, 30)]], "#00ff00");
+    }
+  }
+  assert.ok(drawn(fizz, 1.1).size > 2);
+  // from a point
+  assert.ok(drawn(picture([emit(rising, { from: [10, 12] })], { cols: 20, rows: 16 }), 1).size > 2);
+  // a rate of 0 gives none, here and in the kit's own
+  assert.equal(drawn(picture([emit(emission((q) => [q.x, q.y, "*"], { rate: 0 }))], { cols: 10, rows: 4 }), 1).size, 0);
+  assert.equal(drawn(picture([emit(bubbles({ rate: 0 }), { inside: area.rect(0, 0, 10, 4) })], { cols: 10, rows: 4 }), 1).size, 0);
+  assert.throws(() => emission(3 as never), /emission takes a function/);
+  assert.throws(() => emission((q) => [q.x, q.y, "*"], { birth: "side" as never }), /emission\.birth takes "top", "bottom" and "anywhere", not "side"/);
+  assert.throws(() => emission((q) => [q.x, q.y, "*"], { life: 0 }), /emission\.life takes a number from 0\.05 to 60, not 0/);
+  const bad = picture([emit(emission(() => [1, 1] as never))], { cols: 4, rows: 4 });
+  assert.throws(() => snapshot(bad, 1), /emission gave \[1, 1\]: an emission's function returns \[x, y, character\]/);
+});
+
+test("texture(): any piece as a material, in its own colours, centred or tiled, keeping its loop", () => {
+  // the rust logo over the whole picture is the logo, colour for colour, on both pages
+  const { cols, rows } = rust.meta;
+  const tex = picture([shape(area.all(), texture(rust))], { cols, rows });
+  for (const paper of [false, true]) {
+    const a = snapshot(tex, 0.5, { paper }), b = snapshot(rust, 0.5, { paper });
+    assert.equal(a.text, b.text);
+    for (let i = 0; i < cols * rows; i++) if (b.text[i + Math.floor(i / cols)] !== " ") assert.equal(tex.meta.palette![a.color![i]], rust.meta.palette![b.color![i]]);
+  }
+  // text: centred in its area and cut to it, or tiled; opaque, or letting what is under it show through its spaces
+  assert.deepEqual(lines(picture([shape(area.rect(0, 0, 9, 3), texture("ab\ncd"))], { cols: 9, rows: 3 })), ["   ab    ", "   cd    ", "         "]);
+  assert.equal(lines(picture([shape(area.rect(0, 0, 5, 1), texture("ab", { tile: true }))], { cols: 5, rows: 1 }))[0], "babab");
+  const backdrop = shape(area.all(), solid({ char: "#" }));
+  assert.equal(lines(picture([backdrop, shape(area.rect(0, 0, 3, 1), texture("a b"))], { cols: 5, rows: 1 }))[0], " a b#".replace(/^ /, "a").slice(0, 0) + "a b##");
+  assert.equal(lines(picture([backdrop, shape(area.rect(0, 0, 3, 1), texture("a b", { opaque: false }))], { cols: 5, rows: 1 }))[0], "a#b##");
+  // its period: the piece's loop at its speed; a still for a still; none for one that moves without a loop
+  const blink = piece({ name: "blink", cols: 2, rows: 1, loop: 2 }, (t, s) => s.write(0, 0, t % 2 < 1 ? "on" : "  "));
+  assert.equal(texture(blink, { speed: 2 }).period, 1);
+  assert.equal(texture("still").period, undefined);
+  assert.equal(texture(rust).period, Infinity);
+  assert.equal(lines(picture([shape(area.all(), texture(blink, { speed: 2 }))], { cols: 2, rows: 1 }), 0.75)[0], "  ");
+  assert.throws(() => texture(3 as never), /texture takes a piece \(such as one from ascii\.rest\/pieces\), a block of text or a Surface, not 3/);
+  assert.throws(() => texture(rust, { speed: 0 }), /texture\.speed takes a number from 0\.01 to 100, not 0/);
+  assert.throws(() => texture(rust, { option: 1 } as never), /texture\(\) has no option "option"/);
+});
+
+test("drawParts() draws parts in a piece of your own: with paletteOf() it is the picture, colour for colour", () => {
+  const tumbler = cup({ rows: 10, at: "center" });
+  const drink = inside(tumbler, { fill: "half" });
+  const parts = [shape(tumbler, glass()), shape(drink, water()), emit(bubbles(), { inside: drink }), shape(cloud({ rows: 3, at: "top-left" }), { move: "drift" })];
+  const pic = picture(parts, { cols: 30, rows: 12 });
+  const own = piece({ name: "own", cols: 30, rows: 12, palette: paletteOf(parts) }, (t, s) => drawParts(s, parts, t));
+  for (const paper of [false, true])
+    for (const t of [0, 1.3, 7]) {
+      const a = snapshot(pic, t, { paper }), b = snapshot(own, t, { paper });
+      assert.equal(b.text, a.text, `t=${t}`);
+      for (let i = 0; i < 360; i++) assert.equal(own.meta.palette![b.color![i]], pic.meta.palette![a.color![i]]);
+    }
+  // with drawing of your own over it
+  const label = piece({ name: "label", cols: 30, rows: 12, palette: paletteOf(parts) }, (t, s) => {
+    drawParts(s, parts, t);
+    s.write(0, 11, "fresh");
+  });
+  assert.equal(lines(label, 1)[11].slice(0, 5), "fresh");
+  // on a grid with no palette: the same characters, in its ink
+  const plain = piece({ name: "plain", cols: 30, rows: 12 }, (t, s) => drawParts(s, parts, t));
+  assert.equal(snapshot(plain, 1.3).text, snapshot(pic, 1.3).text);
+  assert.equal(paletteOf(parts).light[0], INK.light);
+  assert.throws(() => drawParts({} as never, parts, 0), /drawParts takes the grid to draw into first/);
+  assert.throws(() => drawParts(new Surface(4, 2), [], 0), /drawParts takes a list of one or more parts/);
+});
+
+test("picture() checks its spec: no unknown keys, no palette of its own, cells twice as tall, a size it can be", () => {
+  assert.throws(() => picture([shape(ball())], { colour: 1 } as never), /picture\(\)'s spec has no option "colour"/);
+  assert.throws(() => picture([shape(ball())], { palette: ["#000000"] }), /picture\(\) makes its palette from its parts' colours/);
+  assert.throws(() => picture([shape(ball())], { cell: 1 }), /its cell can only be 2, not 1/);
+  assert.throws(() => picture([shape(area.rect(0, 0, 400, 3))]), /picture's parts reach 400 by 3 cells, past the 320 by 120 a piece can be/);
+  // given something else than a part, it says how to make one of it
+  assert.throws(() => picture([water() as never]), /picture's part 1 is a material: fill an area with it, shape\(area, water\(\)\)/);
+  assert.throws(() => picture([shape(ball()), cup() as never]), /picture's part 2 is an area: draw it with shape\(area\)/);
+  assert.throws(() => picture([bubbles() as never]), /picture's part 1 is an emission: send it out with emit\(bubbles\(\), \{ from: area \}\)/);
+  // a list in an error shows its items as they are: NaN as NaN
+  const nan = picture([emit(emission(() => [Number.NaN, 0, "*"]))], { cols: 4, rows: 2 });
+  assert.throws(() => snapshot(nan, 1), /emission gave \[NaN, 0, "\*"\]/);
+});
+
+test("ramps by name, as everywhere in the kit; a gradient reads in one ink too", () => {
+  const where = area.rect(0, 0, 12, 6);
+  assert.match(lines(picture([shape(where, fire({ ramp: "blocks" }))], { cols: 12, rows: 6 }), 0.5).join(""), /^[ ░▒▓█]+$/);
+  assert.match(lines(picture([shape(where, metal({ ramp: "dots", sheen: false, edge: false }))], { cols: 12, rows: 6 })).join(""), /^[ .·•●]+$/);
+  assert.throws(() => fire({ ramp: "x" }), /fire\.ramp takes a ramp's name, standard, detailed/);
+  // metal's lit side reads as lit on paper too: its ramp turned round there, unless invert says otherwise
+  const can = picture([shape(where, metal({ sheen: false, edge: false }))], { cols: 12, rows: 6 });
+  const lit = (paper: boolean) => lines(can, 0, { paper })[3][4];
+  assert.deepEqual([lit(false), lit(true)], ["█", "░"]);
+  assert.equal(lines(picture([shape(where, metal({ sheen: false, edge: false, invert: false }))], { cols: 12, rows: 6 }), 0, { paper: true })[3][4], "█");
+  assert.throws(() => metal({ invert: "yes" as never }), /metal\.invert takes true or false, not "yes"/);
+  const g = lines(picture([shape(where, gradientFill())], { cols: 12, rows: 6 }));
+  assert.ok(new Set(g.map((l) => l[0])).size >= 3, g.join("\n"));
+  assert.equal(lines(picture([shape(where, gradientFill({ ramp: "#" }))], { cols: 12, rows: 6 })).join(""), "#".repeat(72));
+});
+
+test("a lawn: short blades along the top, a line of turf under them and earth below; the blades sway", () => {
+  const p = picture([shape(ground({ rows: 6 }), grass())], { cols: 40, rows: 10 });
+  const rows = lines(p, 0);
+  // the band is rows 4 to 9: blades in its top two, turf in its third, earth under that
+  assert.equal(rows.slice(0, 4).join("").trim(), "");
+  for (const r of rows.slice(4, 6)) assert.match(r, /^[ |/\\,']+$/);
+  assert.match(rows[6], /^["',]+$/);
+  for (const r of rows.slice(7)) assert.match(r, /^[ .,']+$/);
+  assert.match(rows.slice(4, 6).join(""), /[|/\\]/);
+  assert.notDeepEqual(lines(p, 0).slice(4, 6), lines(p, 1).slice(4, 6));
+  assert.equal(picture([shape(ground({ rows: 6 }), grass({ sway: 0 }))], { cols: 40, rows: 10 }).meta.fps, 0);
+});
+
+test("a cloud is drawn as ascii clouds are: puffs over a flat base, round at the sides; and fire can glow", () => {
+  const rows = lines(picture([shape(cloud({ rows: 5, at: "center" }))], { cols: 30, rows: 7 }));
+  assert.deepEqual(rows.slice(1, 6).map((r) => r.trim()), [".-~~-.", ".'      '.", ".--'          '-~~-.", "(                    )", "'__________________'"]);
+  assert.equal(cloud().period, undefined);
+  assert.throws(() => cloud({ period: 4 } as never), /cloud\(\) has no option "period"/);
+  // a glow of "." round a flame, only outside it
+  const tip = flame({ rows: 8, at: "center" });
+  const c = cellsOf(tip, 20, 10);
+  const glowing = picture([shape(tip, fire({ glow: 1 }))], { cols: 20, rows: 10 });
+  let outside = 0;
+  for (const cell of drawn(glowing, 0)) {
+    if (c.inside[at(cell, 20)]) continue;
+    outside++;
+    const [x, y] = cell.split(",").map(Number);
+    assert.equal(lines(glowing, 0)[y][x], ".");
+  }
+  assert.ok(outside > 6, `${outside} cells of glow`);
+  assert.throws(() => fire({ glow: -1 }), /fire\.glow takes a number from 0 to 6, not -1/);
 });
 
 test("edge cases: a one-cell picture, a shape bigger than the picture, a room with nothing in it", () => {
