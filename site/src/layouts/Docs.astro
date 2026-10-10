@@ -75,8 +75,11 @@ const sections = headings.filter((h) => h.depth === 2);
 <script>
   import "ascii.rest/element";
 
-  // Each code block gets a [copy] button, as the rest of the site's code does.
+  // Each code block gets a [copy] button, as the rest of the site's code does. A component's copies its still, the
+  // finished drawing as plain() prints it for a README, spaces at line ends left out: the page holds it until start()
+  // below plays it, so it is taken now, never the frame the component is on when the button is clicked.
   document.querySelectorAll<HTMLPreElement>(".docs pre").forEach((pre) => {
+    const still = pre.matches("[data-md]") ? (pre.textContent ?? "").split("\n").map((l) => l.trimEnd()).join("\n") : null;
     const button = document.createElement("button");
     button.className = "button copy";
     button.type = "button";
@@ -84,7 +87,7 @@ const sections = headings.filter((h) => h.depth === 2);
     const label = button.firstElementChild as HTMLElement;
     button.addEventListener("click", async () => {
       try {
-        await navigator.clipboard.writeText(pre.textContent ?? "");
+        await navigator.clipboard.writeText(still ?? pre.textContent ?? "");
         label.textContent = "[copied]";
       } catch {
         label.textContent = "[select and copy]";
