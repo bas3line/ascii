@@ -88,6 +88,10 @@ test("invLerp, remap, mod, wrap, pingpong, step, degrees and radians", () => {
   assert.equal(wrap(64, 0, 64), 0);
   assert.equal(wrap(12, 10, 12), 10);
   assert.equal(wrap(5, 3, 3), 3);
+  // the ends either way round
+  assert.equal(wrap(-1, 64, 0), 63);
+  assert.equal(wrap(370, 360, 0), 10);
+  assert.equal(wrap(5, 10, 0), 5);
   assert.deepEqual([0, 1, 2, 3, 4, 5, 6].map((v) => pingpong(v, 3)), [0, 1, 2, 3, 2, 1, 0]);
   assert.equal(pingpong(-1, 3), 1);
   assert.equal(pingpong(5, 0), 0);
@@ -142,7 +146,14 @@ test("random's helpers: range, int, pick, chance, normal, sign, angle", () => {
   const list = ["a", "b", "c", "d"], seen = new Set<string>();
   for (let i = 0; i < 200; i++) seen.add(r.pick(list));
   assert.deepEqual([...seen].sort(), list);
-  assert.throws(() => r.pick([]), /pick\(\) takes a list of one or more/);
+  assert.throws(() => r.pick([]), /pick\(\) takes a list of one or more things, or a string of characters, to pick from, not \[\]/);
+  // a character of a string, for a glyph
+  const glyphs = new Set<string>();
+  for (let i = 0; i < 200; i++) glyphs.add(r.pick("*+.·"));
+  assert.deepEqual([...glyphs].sort(), ["*", "+", ".", "·"]);
+  assert.equal(random(4).pick("*+.·"), random(4).pick(["*", "+", ".", "·"]), "the same draw as a list of its characters");
+  assert.throws(() => r.pick(""), /pick\(\) takes .*, not ""/);
+  assert.throws(() => r.pick(7 as never), /pick\(\) takes .*, not 7/);
 
   let yes = 0;
   for (let i = 0; i < N; i++) if (r.chance(0.25)) yes++;
@@ -219,6 +230,7 @@ test("every noise stays in 0..1 and spreads over most of it", () => {
 });
 
 test("noise is continuous: a small step moves it a little", () => {
+  const cells = noise({ kind: "cells" }), band = noise({ drift: 3, period: 8 });
   const fns: [string, (x: number, y: number) => number][] = [
     ["noise2", (x, y) => noise2(x, y)],
     ["noise3", (x, y) => noise3(x, y, 0.3)],
@@ -229,6 +241,9 @@ test("noise is continuous: a small step moves it a little", () => {
     ["ridged", (x, y) => ridged(x, y)],
     ["loopNoise", (x, y) => loopNoise(x, y, 1.3, 4)],
     ["worley", (x, y) => worley(x, y)],
+    ["worley edge", (x, y) => worley(x, y, { edge: true })],
+    ["noise() cells", (x, y) => cells(x * 12, y * 6, 1.3)],
+    ["noise() smooth drifting loop", (x, y) => band(x * 12, y * 6, 1.3)],
   ];
   const r = random(3);
   for (const [name, f] of fns)
@@ -256,10 +271,17 @@ test("noise is the same for the same seed, different across seeds, and fixed for
     const a = all(make(7)), b = all(make(8));
     assert.ok(a.filter((v, i) => v !== b[i]).length > 190, `${name}: another seed is another pattern`);
   }
-  // Past the 256 seeds kept, tables are made again, and the same.
+  // A seed's lowest 8 bits choose its table and the bits above move the pattern on it: seeds a table's length apart,
+  // and negative ones, are other patterns too, and the same each time, after any other seeds.
   const first = noise2(1.1, 2.2, 5);
   for (let s = 1000; s < 1300; s++) noise2(0.5, 0.5, s);
   assert.equal(noise2(1.1, 2.2, 5), first);
+  for (const f of [(s: number) => (x: number, y: number) => noise2(x, y, s), (s: number) => (x: number, y: number) => noise3(x, y, 0.5, s), (s: number) => (x: number, y: number) => noise4(x, y, 0.5, 1.5, s)]) {
+    const seen = [5, 261, 517, 5 + 256 * 4000, -251, -1].map((s) => all(f(s)));
+    for (let i = 0; i < seen.length; i++)
+      for (let j = i + 1; j < seen.length; j++) assert.ok(seen[i].filter((v, k) => v !== seen[j][k]).length > 190, `seeds ${i} and ${j} are one pattern`);
+    assert.deepEqual(all(f(261)), seen[1]);
+  }
   // What pieces made with these have drawn: a change here changes people's art, so it must be on purpose.
   assert.equal(noise2(1.37, 2.71).toFixed(12), "0.545422004923");
   assert.equal(noise2(1.37, 2.71, 9).toFixed(12), "0.945392676004");
@@ -270,6 +292,19 @@ test("noise is the same for the same seed, different across seeds, and fixed for
   assert.equal(loopNoise(3.31, 1.79, 0.7, 2).toFixed(12), "0.359430457430");
   assert.equal(worley(3.31, 1.79).toFixed(12), "0.280966264237");
   assert.equal(random(1)().toFixed(12), "0.627073940588");
+  assert.equal(noise2(1.37, 2.71, 1000).toFixed(12), "0.201672749714");
+  assert.equal(noise2(1.37, 2.71, -1).toFixed(12), "0.164027066823");
+});
+
+test("noise: thousands of seeds a frame cost no more than one", () => {
+  // Each of 2000 things wobbling on a seed of its own: once a table made a seed, this took 3 ms a frame.
+  let sum = 0;
+  for (let i = 0; i < 2000; i++) sum += noise2(0, 0.5, i) + noise3(0, 0.5, 0.5, i) + noise4(0, 0.5, 0.5, 0.5, i);
+  const start = performance.now();
+  for (let f = 0; f < 30; f++) for (let i = 0; i < 2000; i++) sum += noise2(f / 30, 0.5, i);
+  const ms = (performance.now() - start) / 30;
+  assert.ok(Number.isFinite(sum));
+  assert.ok(ms < 1, `2000 seeds take ${ms.toFixed(3)} ms a frame`);
 });
 
 test("fractal noise: octaves, gain and lacunarity, checked", () => {
@@ -354,6 +389,21 @@ test("worley: 0 at its points, edges 0 between cells", () => {
   let min = 1;
   for (let x = 0; x < 3; x += 0.01) min = Math.min(min, worley(x, 0.5, { edge: true }));
   assert.ok(min < 0.02, `edges reach 0: ${min}`);
+  // exactly the nearest and second nearest of all the points, as a search of 7 by 7 squares finds them: searching only
+  // the 3 by 3 round x, y missed the second nearest now and then, a seam in the edges
+  const r = random(5);
+  for (let n = 0; n < 40000; n++) {
+    const x = r.range(-300, 300), y = r.range(-300, 300), seed = n % 3;
+    let d1 = Infinity, d2 = Infinity;
+    for (let cy = Math.floor(y) - 3; cy <= Math.floor(y) + 3; cy++)
+      for (let cx = Math.floor(x) - 3; cx <= Math.floor(x) + 3; cx++) {
+        const d = Math.hypot(cx + hash(cx, cy, seed, 1) - x, cy + hash(cx, cy, seed, 2) - y);
+        if (d < d1) (d2 = d1), (d1 = d);
+        else if (d < d2) d2 = d;
+      }
+    near(worley(x, y, { seed }), Math.min(1, d1), 1e-12);
+    near(worley(x, y, { seed, edge: true }), Math.min(1, d2 - d1), 1e-12);
+  }
 });
 
 const NAMES: EaseName[] = [
@@ -708,6 +758,8 @@ test("progress and tween: in seconds, eased, once or every period", () => {
   assert.deepEqual(tween(0.5, [], []), []);
   // outBack goes past the end on the way
   assert.ok(tween(0.6, 0, 10, { ease: "outBack" }) > 10);
+  // there and back again, as tween's doc says: an eased triangle
+  assert.deepEqual([0, 1, 2, 3, 4].map((t) => +lerp(3, 9, ease.inOutSine(triangle(t, 4))).toFixed(12)), [3, 6, 9, 6, 3]);
 });
 
 test("progress and tween check their options", () => {

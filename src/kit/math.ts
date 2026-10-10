@@ -30,8 +30,8 @@ import { TAU, and, clamp, fail, hash, mulberry32 } from "./core.ts";
 // The maths core already has, so one import brings all of it.
 export { TAU, bayer, clamp, fract, hash, lerp, mulberry32, smoothstep, valueNoise } from "./core.ts";
 
-// A value as an error shows it: strings quoted, so the string "7" doesn't read as the number 7.
-const said = (v: unknown) => (typeof v === "string" ? JSON.stringify(v) : String(v));
+// A value as an error shows it: strings quoted, so the string "7" doesn't read as the number 7, and lists in brackets.
+const said = (v: unknown): string => (typeof v === "string" ? JSON.stringify(v) : Array.isArray(v) ? `[${v.map(said).join(", ")}]` : String(v));
 // A number that is finite, and not a string that looks like one.
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
@@ -58,8 +58,12 @@ export function mod(a: number, n: number): number {
   return r < 0 ? (r + n < n ? r + n : 0) : r + 0;
 }
 
-/** v wrapped into lo..hi, coming back round to lo at hi: wrap(370, 0, 360) is 10, wrap(-1, 0, 64) is 63. hi above lo. */
-export const wrap = (v: number, lo: number, hi: number): number => (hi === lo ? lo : lo + mod(v - lo, hi - lo));
+/**
+ * v wrapped into lo..hi, coming back round to lo at hi: wrap(370, 0, 360) is 10, wrap(-1, 0, 64) is 63. The ends may be
+ * given either way round: wrap(v, 64, 0) is wrap(v, 0, 64).
+ */
+export const wrap = (v: number, lo: number, hi: number): number =>
+  hi === lo ? lo : hi > lo ? lo + mod(v - lo, hi - lo) : hi + mod(v - hi, lo - hi);
 
 /** v bounced between 0 and length: up from 0 to length, back down to 0 at twice length, and again. */
 export const pingpong = (v: number, length: number): number => (length > 0 ? length - Math.abs(mod(v, 2 * length) - length) : 0);
@@ -90,6 +94,8 @@ export interface Random {
   int(lo: number, hi: number): number;
   /** One item of a list, each as likely. Throws for an empty list. */
   pick<T>(list: readonly T[]): T;
+  /** One character of a string, each as likely: pick("*+.") for a star. Throws for "". */
+  pick(chars: string): string;
   /** True with probability p, 0 to 1: chance(0.25) is true about a quarter of the time. */
   chance(p: number): boolean;
   /** A number from a bell curve around `mean` (0) with spread `sd` (1): most within one sd, nearly all within three. */
@@ -132,10 +138,10 @@ export function random(seed = 1): Random {
     if (!Number.isInteger(lo) || !Number.isInteger(hi) || hi < lo) fail(`int() takes whole numbers lo and hi, with hi at least lo, not ${lo} and ${hi}`);
     return lo + Math.floor(next() * (hi - lo + 1));
   };
-  r.pick = <T>(list: readonly T[]): T => {
-    if (!list || !list.length) fail("pick() takes a list of one or more things to pick from");
+  r.pick = (<T>(list: ArrayLike<T>): T => {
+    if (!list || !list.length) fail(`pick() takes a list of one or more things, or a string of characters, to pick from, not ${said(list)}`);
     return list[Math.floor(next() * list.length)];
-  };
+  }) as Random["pick"];
   r.chance = (p) => {
     if (!(finite(p) && p >= 0 && p <= 1)) fail(`chance() takes a probability from 0 to 1, not ${said(p)}`);
     return next() < p;
@@ -181,24 +187,23 @@ export function random(seed = 1): Random {
 
 // --- noise ----------------------------------------------------------------------------
 
-// Each seed's permutation of 0 to 255, twice over so lookups never wrap, and the same mod 12 for the 3D gradients.
-// Made the first time a seed is used and kept: a few hundred bytes a seed, and at most 256 seeds before starting over.
+// A seed's permutation of 0 to 255, twice over so lookups never wrap, and the same mod 12 for the 3D gradients. The
+// seed's lowest 8 bits choose it, made the first time and kept: 256 at most, a kilobyte each. The bits above move the
+// pattern to another place on it (shift()), so a piece can give each of thousands of things a seed of its own and never
+// pay to make a table again.
 interface Table {
   perm: Uint8Array;
   mod12: Uint8Array;
 }
-const tables = new Map<number, Table>();
-let lastSeed = 0;
-let last: Table | null = null;
+const tables: (Table | undefined)[] = [];
 
 function table(seed: number): Table {
-  seed |= 0;
-  if (seed === lastSeed && last) return last;
-  let t = tables.get(seed);
+  const b = seed & 255;
+  let t = tables[b];
   if (!t) {
     const p = new Uint8Array(256);
     for (let i = 0; i < 256; i++) p[i] = i;
-    const r = mulberry32(seed);
+    const r = mulberry32(b);
     for (let i = 255; i > 0; i--) {
       const j = Math.floor(r() * (i + 1));
       const v = p[i];
@@ -210,13 +215,14 @@ function table(seed: number): Table {
       perm[i] = p[i & 255];
       mod12[i] = perm[i] % 12;
     }
-    if (tables.size >= 256) tables.clear();
-    tables.set(seed, (t = { perm, mod12 }));
+    tables[b] = t = { perm, mod12 };
   }
-  lastSeed = seed;
-  last = t;
   return t;
 }
+
+// How far a seed's bits above the lowest 8 move its pattern along one axis: 0 for seeds 0 to 255, else a place up to
+// 256 units on, where the permutation's pattern starts over.
+const shift = (seed: number, axis: number) => hash(seed >> 8, axis, 0x5eed) * 256;
 
 // Gradients for 2D and 3D: the midpoints of a cube's twelve edges (Gustavson's grad3). 2D uses their x and y.
 const G3 = new Float64Array([1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0, 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1, 0, 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1]);
@@ -243,6 +249,7 @@ const dot4 = (g: number, a: number, b: number, c: number, d: number) => G4[g] * 
 // Simplex noise in 2D, -1..1: Stefan Gustavson's, from "Simplex noise demystified" (2005, 2012).
 function simplex2(x: number, y: number, seed: number): number {
   const { perm, mod12 } = table(seed);
+  if (seed >> 8) (x += shift(seed, 1)), (y += shift(seed, 2));
   const s = (x + y) * F2;
   const i = Math.floor(x + s), j = Math.floor(y + s);
   const t = (i + j) * H2;
@@ -262,6 +269,7 @@ function simplex2(x: number, y: number, seed: number): number {
 // Simplex noise in 3D, -1..1.
 function simplex3(x: number, y: number, z: number, seed: number): number {
   const { perm, mod12 } = table(seed);
+  if (seed >> 8) (x += shift(seed, 1)), (y += shift(seed, 2)), (z += shift(seed, 3));
   const s = (x + y + z) * F3;
   const i = Math.floor(x + s), j = Math.floor(y + s), l = Math.floor(z + s);
   const t = (i + j + l) * H3;
@@ -293,6 +301,7 @@ function simplex3(x: number, y: number, z: number, seed: number): number {
 // Simplex noise in 4D, -1..1: what loopNoise() travels a circle through, two axes of it, so x and y stay where they are.
 function simplex4(x: number, y: number, z: number, w: number, seed: number): number {
   const { perm } = table(seed);
+  if (seed >> 8) (x += shift(seed, 1)), (y += shift(seed, 2)), (z += shift(seed, 3)), (w += shift(seed, 4));
   const s = (x + y + z + w) * F4;
   const i = Math.floor(x + s), j = Math.floor(y + s), l = Math.floor(z + s), m = Math.floor(w + s);
   const t = (i + j + l + m) * H4;
@@ -348,12 +357,10 @@ export function valueNoise3(x: number, y: number, z: number, seed = 0): number {
   const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
   const fx = x - xi, fy = y - yi, fz = z - zi;
   const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy), w = fz * fz * (3 - 2 * fz);
-  // A lattice corner's value: the seed is hash's fourth number.
-  const at = (a: number, b: number, c: number) => hash(a, b, c, seed);
-  const x00 = at(xi, yi, zi) + (at(xi + 1, yi, zi) - at(xi, yi, zi)) * u;
-  const x10 = at(xi, yi + 1, zi) + (at(xi + 1, yi + 1, zi) - at(xi, yi + 1, zi)) * u;
-  const x01 = at(xi, yi, zi + 1) + (at(xi + 1, yi, zi + 1) - at(xi, yi, zi + 1)) * u;
-  const x11 = at(xi, yi + 1, zi + 1) + (at(xi + 1, yi + 1, zi + 1) - at(xi, yi + 1, zi + 1)) * u;
+  // The eight lattice corners' values, once each: the seed is hash's fourth number.
+  const a0 = hash(xi, yi, zi, seed), b0 = hash(xi, yi + 1, zi, seed), c0 = hash(xi, yi, zi + 1, seed), d0 = hash(xi, yi + 1, zi + 1, seed);
+  const x00 = a0 + (hash(xi + 1, yi, zi, seed) - a0) * u, x10 = b0 + (hash(xi + 1, yi + 1, zi, seed) - b0) * u;
+  const x01 = c0 + (hash(xi + 1, yi, zi + 1, seed) - c0) * u, x11 = d0 + (hash(xi + 1, yi + 1, zi + 1, seed) - d0) * u;
   const y0 = x00 + (x10 - x00) * v, y1 = x01 + (x11 - x01) * v;
   return y0 + (y1 - y0) * w;
 }
@@ -499,17 +506,24 @@ export interface WorleyOptions {
 export function worley(x: number, y: number, o?: WorleyOptions): number {
   const seed = o?.seed ?? 0;
   if (!Number.isInteger(seed)) fail(`seed takes a whole number, such as 7, not ${said(seed)}`);
-  const xi = Math.floor(x), yi = Math.floor(y);
+  const xi = Math.floor(x), yi = Math.floor(y), edge = !!o?.edge;
+  const gap = Math.min(x - xi, xi + 1 - x, y - yi, yi + 1 - y);
   let d1 = Infinity, d2 = Infinity;
-  for (let dy = -1; dy <= 1; dy++)
-    for (let dx = -1; dx <= 1; dx++) {
-      const cx = xi + dx, cy = yi + dy;
-      const px = cx + hash(cx, cy, seed, 1) - x, py = cy + hash(cx, cy, seed, 2) - y;
-      const d = px * px + py * py;
-      if (d < d1) (d2 = d1), (d1 = d);
-      else if (d < d2) d2 = d;
-    }
-  const v = o?.edge ? Math.sqrt(d2) - Math.sqrt(d1) : Math.sqrt(d1);
+  // The nine squares round x, y nearly always hold the nearest two points. The ring of squares past them is searched
+  // only when a distance it needs reaches further than where that ring starts, so there are no seams; no point that
+  // counts is further out than that.
+  for (let ring = 1; ring <= 2; ring++) {
+    for (let dy = -ring; dy <= ring; dy++)
+      for (let dx = -ring; dx <= ring; dx += ring > 1 && dy > -ring && dy < ring ? 2 * ring : 1) {
+        const cx = xi + dx, cy = yi + dy;
+        const px = cx + hash(cx, cy, seed, 1) - x, py = cy + hash(cx, cy, seed, 2) - y;
+        const d = px * px + py * py;
+        if (d < d1) (d2 = d1), (d1 = d);
+        else if (d < d2) d2 = d;
+      }
+    if ((edge ? d2 : d1) <= (ring + gap) ** 2) break;
+  }
+  const v = edge ? Math.sqrt(d2) - Math.sqrt(d1) : Math.sqrt(d1);
   return v > 1 ? 1 : v;
 }
 
@@ -523,7 +537,8 @@ const KINDS: readonly NoiseKind[] = ["smooth", "ridged", "cells"];
 export interface NoiseOptions {
   /**
    * How big a feature is, in cells: 12, hills about 12 columns across and 6 rows tall, which is round on the grid's
-   * cells (a row is two columns tall). Or [columns, rows] for a stretched one.
+   * cells (a row is two columns tall). Or [columns, rows] for a stretched one, or for a square grid (meta.cell 1):
+   * [12, 12].
    */
   size?: number | readonly [number, number];
   /**
@@ -565,19 +580,23 @@ export type Noise = (x: number, y?: number, t?: number) => number;
 // between cells. Each point goes round a small circle by `turn` radians (every other one the other way), so the cells
 // change shape; `wrap` repeats the pattern every that many squares across, for a band that comes round.
 function cellular(x: number, y: number, turn: number, wrap: number, seed: number): number {
-  const xi = Math.floor(x), yi = Math.floor(y);
-  let d1 = 9, d2 = 9;
-  for (let dy = -1; dy <= 1; dy++)
-    for (let dx = -1; dx <= 1; dx++) {
-      const cx = xi + dx, cy = yi + dy, hx = wrap ? mod(cx, wrap) : cx;
-      const h = hash(hx, cy, seed, 3), a = TAU * h + (h < 0.5 ? turn : -turn);
-      // Each point stays inside its own square, so the nine squares round x, y always hold the two nearest.
-      const px = cx + 0.5 + 0.5 * (hash(hx, cy, seed, 1) - 0.5) + 0.2 * Math.cos(a) - x;
-      const py = cy + 0.5 + 0.5 * (hash(hx, cy, seed, 2) - 0.5) + 0.2 * Math.sin(a) - y;
-      const d = px * px + py * py;
-      if (d < d1) (d2 = d1), (d1 = d);
-      else if (d < d2) d2 = d;
-    }
+  const xi = Math.floor(x), yi = Math.floor(y), gap = Math.min(x - xi, xi + 1 - x, y - yi, yi + 1 - y);
+  let d1 = Infinity, d2 = Infinity;
+  // As worley(): the nine squares round x, y, and the ring past them only when the second nearest may be out there.
+  for (let ring = 1; ring <= 2; ring++) {
+    for (let dy = -ring; dy <= ring; dy++)
+      for (let dx = -ring; dx <= ring; dx += ring > 1 && dy > -ring && dy < ring ? 2 * ring : 1) {
+        const cx = xi + dx, cy = yi + dy, hx = wrap ? mod(cx, wrap) : cx;
+        const h = hash(hx, cy, seed, 3), a = TAU * h + (h < 0.5 ? turn : -turn);
+        // Each point stays inside its own square, 0.05 from its sides at the closest.
+        const px = cx + 0.5 + 0.5 * (hash(hx, cy, seed, 1) - 0.5) + 0.2 * Math.cos(a) - x;
+        const py = cy + 0.5 + 0.5 * (hash(hx, cy, seed, 2) - 0.5) + 0.2 * Math.sin(a) - y;
+        const d = px * px + py * py;
+        if (d < d1) (d2 = d1), (d1 = d);
+        else if (d < d2) d2 = d;
+      }
+    if (d2 <= (ring + gap) ** 2) break;
+  }
   return Math.sqrt(d2) - Math.sqrt(d1);
 }
 // Measured over a million points, 99% of cellular() is below this (half is below 0.26): it is scaled to 1 there, and
@@ -795,7 +814,8 @@ export function progress(t: number, o?: TweenOptions): number {
 /**
  * A value moving from `from` to `to` over time, eased: from before it starts, to after it ends. Takes numbers, or
  * points as [x, y] or [x, y, z] of the same length, and returns the same kind. Options: start (0), duration (1),
- * ease ("inOutSine"), period (none: once).
+ * ease ("inOutSine"), period (none: once). For there and back again, ease a triangle():
+ * lerp(from, to, ease.inOutSine(triangle(t, 4))).
  *
  *   const [x, y] = tween(t, [4, 2], [40, 12], { duration: 1.5, ease: "outBack", period: 4 });
  *   s.set(x, y, "@");

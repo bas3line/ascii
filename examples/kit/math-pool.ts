@@ -4,7 +4,8 @@
  * it is 0 on the walls between cells, where the light gathers. A wider,
  * smooth noise, on the same 4 second loop, sways where each cell reads from,
  * so the walls bend like light through moving water. The value is turned
- * round and sharpened, then shaded through a ramp and a blue gradient.
+ * round and sharpened, so half the floor stays dark and the light reads as
+ * lines, then shaded through a ramp and a blue gradient.
  */
 import { gradient, piece, ramps, shadeChar } from "../../src/kit/index.ts";
 import { noise } from "../../src/kit/math.ts";
@@ -15,7 +16,7 @@ export default piece({ name: "pool", note: "light on a pool floor from cellular 
   palette: { light: gradient(["#9ec5fe", "#0a58ca"], 6), dark: gradient(["#0c2d6b", "#cae8ff"], 6) } }, (t, s) => {
   for (let y = 0; y < s.rows; y++)
     for (let x = 0; x < s.cols; x++) {
-      const w = swell(x, y, t), v = (1 - floor(x + w, y + w / 2, t)) ** 4;
+      const w = swell(x, y, t), v = (1 - floor(x + w, y + w / 2, t)) ** 6;
       s.set(x, y, shadeChar(ramps.standard, v), Math.floor(v * 5.99));
     }
 });
