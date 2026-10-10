@@ -6,19 +6,18 @@
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
  *   ```ascii marquee
- *   "markdown figures" "a fence in, a picture out" "npx ascii.rest add markdown"
+ *   "markdown components" "drawn in text" "npx ascii.rest add markdown"
  *   ```
  *
- *   marquee('"markdown figures" "a fence in, a picture out"', { sep: "/" })
- *   marquee({ items: ["markdown figures", "a fence in, a picture out"] })
+ *   marquee('"markdown components" "drawn in text"', { sep: "/" })
+ *   marquee({ items: ["markdown components", "drawn in text"] })
  */
 import { fail } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { ACCENT, INK, clean, component, progress, statements, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, INK, clean, component, progress, show, statements, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A ticker as data: what a fence's body says, for items already in JavaScript. */
 export interface MarqueeData {
-  /** The items, in the order they pass: ["markdown figures", "a fence in, a picture out"]. */
+  /** The items, in the order they pass: ["markdown components", "drawn in text"]. */
   items: string[];
 }
 
@@ -42,23 +41,23 @@ function parse(source: string): MarqueeData {
       continue;
     }
     const key = Object.keys(s.attrs)[0];
-    if (key !== undefined) fail(`marquee's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii marquee ${key}=${s.attrs[key] || "..."}`);
+    if (key !== undefined) fail(`marquee's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii marquee ${key}=${s.attrs[key] && s.attrs[key].length <= 40 ? s.attrs[key] : "..."}`);
     if (s.words.length) fail(`marquee's line ${s.line} has ${show(s.words.join(" "))} beside its quoted items: put it in quotes too, or on a line of its own`);
     items.push(...s.texts);
   }
-  if (!items.length) fail(`marquee takes items to scroll, each in quotes, such as "markdown figures" "a fence in, a picture out"`);
+  if (!items.length) fail(`marquee takes items to scroll, each in quotes, such as "markdown components" "drawn in text"`);
   return { items };
 }
 
 // Data, checked: every item some words, on one line.
 function check(data: MarqueeData): string[] {
-  if (!data || typeof data !== "object" || !Array.isArray(data.items)) fail(`marquee() takes a fence's body, its items in quotes, or { items: ["markdown figures"] }, not ${show(data)}`);
-  if (!data.items.length) fail(`marquee takes items to scroll, each in quotes, such as "markdown figures" "a fence in, a picture out"`);
+  if (!data || typeof data !== "object" || !Array.isArray(data.items)) fail(`marquee() takes a fence's body, its items in quotes, or { items: ["markdown components"] }, not ${show(data)}`);
+  if (!data.items.length) fail(`marquee takes items to scroll, each in quotes, such as "markdown components" "drawn in text"`);
   if (data.items.length > ITEMS) fail(`marquee takes up to ${ITEMS} items, not ${data.items.length}: keep the newest`);
   return data.items.map((item, i) => {
     if (typeof item !== "string") fail(`marquee's item ${i + 1} takes words, not ${show(item)}`);
     const words = tidy(item, `marquee's item ${i + 1}`);
-    if (!words) fail(`marquee's item ${i + 1} is empty: each item takes words, as "markdown figures"`);
+    if (!words) fail(`marquee's item ${i + 1} is empty: each item takes words, as "markdown components"`);
     return words;
   });
 }
@@ -70,7 +69,7 @@ function check(data: MarqueeData): string[] {
  * At rest, and in its still, it shows as many whole items as fit, from the first, and blank after them: the strip
  * keeps that blank before the next item, so the loop comes round to it seamlessly.
  *
- *   marquee('"markdown figures" "a fence in, a picture out" "npx ascii.rest add markdown"')
+ *   marquee('"markdown components" "drawn in text" "npx ascii.rest add markdown"')
  *   marquee("shipping today", { width: 30, frame: "heavy" })
  */
 export function marquee(source: string | MarqueeData, options?: MarqueeOptions): MarkdownPiece {

@@ -12,8 +12,7 @@
  *   railroad({ usages: ["git add <path>...", "git add (-A | --all)"] })
  */
 import { fail } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { ACCENT, GLINT, INK, QUIET, clean, component, progress, statements, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, GLINT, INK, QUIET, clean, component, progress, show, statements, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A railroad as data: usage lines as people write them, one diagram each, stacked. */
 export interface RailroadData {

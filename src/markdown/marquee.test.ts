@@ -10,7 +10,7 @@ import { marquee } from "./marquee.ts";
 const SOURCE = entryOf("marquee").source;
 const STILL = [
   "╭──────────────────────────────────────────────╮",
-  "│ markdown figures · a fence in, a picture out │",
+  "│ markdown components · drawn in text          │",
   "╰──────────────────────────────────────────────╯",
 ].join("\n");
 // What a fence draws.
@@ -25,12 +25,12 @@ const windowAt = (p: MarkdownPiece, t: number) => p.default()(t, { paper: true }
 
 test("marquee: the catalog's example draws its still, the items that fit whole, through plain() and a fence", () => {
   const p = marquee(SOURCE);
-  assert.equal(SOURCE, '"markdown figures" "a fence in, a picture out" "npx ascii.rest add markdown"');
+  assert.equal(SOURCE, '"markdown components" "drawn in text" "npx ascii.rest add markdown"');
   assert.equal(plain(p), STILL);
   assert.equal(plain(drawn("ascii marquee", SOURCE)), STILL);
   assert.equal(p.meta.cols, 48);
   assert.equal(p.meta.rows, 3);
-  assert.equal(p.says, "marquee: markdown figures; a fence in, a picture out; npx ascii.rest add markdown.");
+  assert.equal(p.says, "marquee: markdown components; drawn in text; npx ascii.rest add markdown.");
   assert.equal(p.kind, "marquee");
   // items in ink, the dots between them in the accent
   const still = toned(p, p.meta.still!);
@@ -45,18 +45,19 @@ test("marquee: slides in from the right and eases to rest; the still holds at th
   assert.equal(windowAt(p, 0).trim(), "");
   const early = windowAt(p, 0.3);
   assert.notEqual(early, windowAt(p, 0.8));
-  assert.match(early, /^ +markdown figures/);
+  assert.match(early, /^ +markdown components/);
   assert.equal(plain(p, { t: 0.8 }), STILL);
 });
 
 test("marquee: scrolls 8 cells a second round the whole strip, a cell at a time, back to its still", () => {
   const p = marquee(SOURCE);
   const intro = p.meta.still!;
-  // the strip: the three items, a mark after each: 77 cells, a loop of 77 / 8 seconds
+  // the strip: the two items that fit whole, the blank after them to the window's edge, the third, a mark after each:
+  // 77 cells, a loop of 77 / 8 seconds
   const cycle = 77 / 8;
   assert.equal(p.idle, true);
   assert.deepEqual(p.motion, { seconds: cycle, from: intro, once: false });
-  assert.equal(windowAt(p, intro + 1), " figures · a fence in, a picture out · npx a");
+  assert.equal(windowAt(p, intro + 1), " components · drawn in text          · npx a");
   // every step is the window moved one cell left, a new cell at its right: nothing pops in
   for (let k = 1; k <= 77; k++) {
     const before = windowAt(p, intro + (k - 1) / 8 + 0.01), after = windowAt(p, intro + k / 8 + 0.01);
@@ -92,18 +93,18 @@ test("marquee: at rest it shows only whole items, keeping the blank after them i
 test("marquee: a line with no quotes is one item, and the items as data", () => {
   assert.equal(plain(marquee("shipping today")).split("\n")[1], "│ shipping today                               │");
   assert.equal(marquee("v=1 is   out\n\"two\"").says, "marquee: v=1 is out; two.");
-  assert.equal(plain(marquee({ items: ["markdown figures", "a fence in, a picture out", "npx ascii.rest add markdown"] })), STILL);
+  assert.equal(plain(marquee({ items: ["markdown components", "drawn in text", "npx ascii.rest add markdown"] })), STILL);
 });
 
-test("marquee: its own options, and the options every figure takes", () => {
+test("marquee: its own options, and the options every component takes", () => {
   // sep: its mark with a space each side, or spaces alone
-  assert.equal(plain(marquee(SOURCE, { sep: "/" })).split("\n")[1], "│ markdown figures / a fence in, a picture out │");
-  assert.equal(plain(marquee(SOURCE, { sep: "" })).split("\n")[1], "│ markdown figures   a fence in, a picture out │");
-  assert.equal(plain(drawn('ascii marquee sep="|"', SOURCE)).split("\n")[1], "│ markdown figures | a fence in, a picture out │");
+  assert.equal(plain(marquee(SOURCE, { sep: "/" })).split("\n")[1], "│ markdown components / drawn in text          │");
+  assert.equal(plain(marquee(SOURCE, { sep: "" })).split("\n")[1], "│ markdown components   drawn in text          │");
+  assert.equal(plain(drawn('ascii marquee sep="|"', SOURCE)).split("\n")[1], "│ markdown components | drawn in text          │");
   // a width, no frame, a title
   const bare = marquee(SOURCE, { frame: "none", width: 30 });
   assert.equal(bare.meta.cols, 30);
-  assert.equal(plain(bare), "markdown figures");
+  assert.equal(plain(bare), "markdown components");
   assert.match(plain(marquee(SOURCE, { title: "news" })).split("\n")[0], /^╭─ news ─+╮$/);
   // faster: the same loop in half the time
   assert.equal(marquee(SOURCE, { speed: 2 }).motion!.seconds, 77 / 16);

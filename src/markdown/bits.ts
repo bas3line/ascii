@@ -17,8 +17,7 @@
  *   bits({ rows: ["vvvviiii"], names: { v: "version", i: "ihl" } })
  */
 import { fail } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { INK, QUIET, SOFT, clean, component, linesOf, progress, statements, wrap, type Common, type MarkdownPiece } from "./core.ts";
+import { INK, QUIET, SOFT, clean, component, linesOf, progress, show, statements, wrap, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A binary layout as data: what a fence's body says, for a layout already in JavaScript. */
 export interface BitsData {

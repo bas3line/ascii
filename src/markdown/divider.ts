@@ -14,8 +14,8 @@
  *   divider({ style: "train", words: "next stop, the docs" }, { width: 60 })
  */
 import { fail, fnv1a32, hash, mulberry32 } from "../kit/core.ts";
-import { show, wordOf } from "../kit/recipes/checks.ts";
-import { ACCENT, PROSE, QUIET, SOFT, WARN, clean, component, progress, shown, statements, type Common, type MarkdownPiece } from "./core.ts";
+import { wordOf } from "../kit/recipes/checks.ts";
+import { ACCENT, PROSE, QUIET, SOFT, WARN, clean, component, progress, show, shown, statements, type Common, type MarkdownPiece } from "./core.ts";
 
 /** The divider's styles: what moves along it. */
 export const DIVIDER_STYLES = ["waves", "stars", "rain", "sparks", "train", "dots"] as const;
@@ -56,7 +56,7 @@ function parse(source: string): DividerData {
   let style: string | undefined, words: string | undefined;
   for (const s of statements(source, "divider")) {
     const key = Object.keys(s.attrs)[0];
-    if (key !== undefined) fail(`divider's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii divider ${key}=${s.attrs[key] || "..."}`);
+    if (key !== undefined) fail(`divider's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii divider ${key}=${s.attrs[key] && s.attrs[key].length <= 40 ? s.attrs[key] : "..."}`);
     for (const w of s.words) {
       if (style !== undefined) fail(`divider takes one style and quoted words, and line ${s.line} has another word, ${show(w)}: put words to show in quotes, as waves "part two"`);
       style = w;

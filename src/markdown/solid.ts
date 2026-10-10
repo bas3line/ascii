@@ -15,9 +15,9 @@
  *   solid({ shape: "sphere", texture: "bands", caption: "planet" }, { turn: "tumble" })
  */
 import { Surface, fail } from "../kit/core.ts";
-import { show, wholeOf, wordOf } from "../kit/recipes/checks.ts";
+import { wholeOf, wordOf } from "../kit/recipes/checks.ts";
 import { cone, cube, cylinder, group, points, render3d, sphere, torus, type SceneOptions, type Shape3d, type TextureName } from "../kit/shapes3d.ts";
-import { ACCENT, INK, SOFT, clean, component, progress, shown, statements, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, INK, SOFT, clean, component, progress, show, shown, statements, type Common, type MarkdownPiece } from "./core.ts";
 
 /** The shapes: the kit's solids, then its clouds of points. */
 export const SOLID_SHAPES = ["torus", "cube", "sphere", "cone", "cylinder", "galaxy", "helix", "ring"] as const;
@@ -57,7 +57,7 @@ function parse(source: string): SolidData {
   let caption: string | undefined;
   for (const s of statements(source, "solid")) {
     const key = Object.keys(s.attrs)[0];
-    if (key !== undefined) fail(`solid's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii solid ${key}=${s.attrs[key] || "..."}`);
+    if (key !== undefined) fail(`solid's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii solid ${key}=${s.attrs[key] && s.attrs[key].length <= 40 ? s.attrs[key] : "..."}`);
     words.push(...s.words);
     for (const text of s.texts) {
       if (caption !== undefined) fail(`solid takes one quoted caption, and line ${s.line} has another: ${show(text)}`);

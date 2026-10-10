@@ -37,7 +37,7 @@ const kit = import.meta.glob<string>(["../../../src/kit/*.ts", "../../../src/kit
   query: "?raw",
   import: "default",
 });
-// The markdown figures, without their tests: the core, every figure, the remark plugin and the tag, then React.
+// The markdown components, without their tests: the core, every component, the remark plugin and the tag, then React.
 const markdown = import.meta.glob<string>(["../../../src/markdown/*.ts", "!../../../src/markdown/*.test.ts"], { eager: true, query: "?raw", import: "default" });
 const markdownReact = import.meta.glob<string>("../../../src/markdown/react.tsx", { eager: true, query: "?raw", import: "default" });
 
@@ -101,20 +101,20 @@ export const items: Item[] = [
     ...item("ascii-banner", "Banner", "<Banner>: any text in block letters in React and Next.js.", [["registry/ascii-banner.tsx", reg("ascii-banner.tsx"), "registry:component"]], ["ascii", "banner"]),
     dependencies: ["react"],
   },
-  // The markdown figures are kit pieces, so they need the kit, core for the piece contract, and banner for the
-  // figures drawn in its letters.
+  // The markdown components are kit pieces, so they need the kit, core for the piece contract, and banner for the
+  // ones drawn in its letters.
   item(
     "markdown",
     "markdown",
-    "The markdown figures: an ```ascii fence in markdown drawn in text, built in as it is seen, for a page, a README or a terminal.",
+    "The markdown components: an ```ascii fence in markdown drawn in text, built in as it is seen, for a page, a README or a terminal.",
     Object.keys(markdown)
       .sort()
       .map((key): [string, string, FileType] => [key.replace("../../../", ""), markdown[key], "registry:lib"]),
     ["core", "kit", "banner"],
-    "The markdown figures are in components/ascii/markdown: import from ./markdown/index. How to use them: https://ascii.rest/docs/markdown/",
+    "The markdown components are in components/ascii/markdown: import from ./markdown/index. How to use them: https://ascii.rest/docs/markdown/",
   ),
   {
-    ...item("markdown-react", "Markdown", "<Markdown> and a component for each figure, <Headline> and the rest: the markdown figures in React and Next.js.", [["src/markdown/react.tsx", markdownReact["../../../src/markdown/react.tsx"], "registry:component"]], ["markdown"]),
+    ...item("markdown-react", "Markdown", "<Markdown> and a React component for each one, <Headline> and the rest: the markdown components in React and Next.js.", [["src/markdown/react.tsx", markdownReact["../../../src/markdown/react.tsx"], "registry:component"]], ["markdown"]),
     dependencies: ["react"],
   },
   ...pieces.map((p) =>
@@ -128,7 +128,7 @@ export const all: Item = {
   name: "all",
   type: "registry:item",
   title: "ascii.rest",
-  description: `Every piece, the banner, the SVG writer, the React components, the kit and the markdown figures: ${pieces.length} pieces.`,
+  description: `Every piece, the banner, the SVG writer, the React components, the kit and the markdown components: ${pieces.length} pieces.`,
   files: [],
   registryDependencies: items.map((i) => url(i.name)),
 };

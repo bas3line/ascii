@@ -43,15 +43,15 @@ test("linesOf: an indented template literal reads as written", () => {
 
 test("statements: bare words, quoted texts and key=value, in order, a line each", () => {
   const [a, b] = statements(`
-    browser -> api "GET /users" gate=npm
+    app -> auth "sign in" gate=npm
     v=version seat="1 A" "say \\"hi\\""
   `);
   assert.equal(a.line, 1);
-  assert.deepEqual(a.words, ["browser", "->", "api"]);
-  assert.deepEqual(a.texts, ["GET /users"]);
+  assert.deepEqual(a.words, ["app", "->", "auth"]);
+  assert.deepEqual(a.texts, ["sign in"]);
   assert.deepEqual(a.attrs, { gate: "npm" });
-  assert.deepEqual(a.tokens, [{ word: "browser" }, { word: "->" }, { word: "api" }, { text: "GET /users" }, { key: "gate", value: "npm" }]);
-  assert.equal(a.raw, 'browser -> api "GET /users" gate=npm');
+  assert.deepEqual(a.tokens, [{ word: "app" }, { word: "->" }, { word: "auth" }, { text: "sign in" }, { key: "gate", value: "npm" }]);
+  assert.equal(a.raw, 'app -> auth "sign in" gate=npm');
   assert.equal(b.line, 2);
   assert.deepEqual(b.words, []);
   assert.deepEqual(b.attrs, { v: "version", seat: "1 A" });
@@ -262,7 +262,7 @@ test("component: options are checked when it is made, the kit's way", () => {
   // a body that sizes itself past the 160 columns a figure can take says so, rather than losing what is past them
   const wide = (cols: number) => component("wide", undefined, [], () => ({ cols, rows: 1, intro: 0, says: "wide", draw: (s, _, at) => s.write(at.x, at.y, "x".repeat(cols)) }));
   assert.equal(wide(156).meta.cols, 160);
-  assert.throws(() => wide(157), /ascii\.rest: wide needs 161 columns for this, past the 160 a figure can take: give it less to show, or shorter words/);
+  assert.throws(() => wide(157), /ascii\.rest: wide needs 161 columns for this, past the 160 a component can take: give it less to show, or shorter words/);
   assert.throws(() => words("a", { color: "#nope" }), /ascii\.rest:/);
   // a colour of its own replaces the accent, and a palette's name is its strong colour
   const own = words("a", { color: "#0969da" });

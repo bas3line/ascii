@@ -8,23 +8,22 @@
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
  *   ```ascii ticket
- *   v0.4 v0.5 "markdown figures"
+ *   v0.4 v0.5 "markdown components"
  *   gate=npm seat=1A time=18:00
  *   ```
  *
  *   ticket('v1.0 "launch party"\nwhere=online time=18:00')
- *   ticket({ ends: ["v0.4", "v0.5"], line: "markdown figures", fields: { gate: "npm" } })
+ *   ticket({ ends: ["v0.4", "v0.5"], line: "markdown components", fields: { gate: "npm" } })
  */
 import { fail, fnv1a32 } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
 import { banner, drawable as inFont } from "../banner.ts";
-import { ACCENT, INK, QUIET, SOFT, clean, component, progress, shown, statements, wrap, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, INK, QUIET, SOFT, clean, component, progress, show, shown, statements, wrap, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A ticket as data: its ends, the line under them, and the stub's fields. */
 export interface TicketData {
   /** One end, an admission, or two, where from and where to: ["v0.4", "v0.5"]. Drawn in slim banner letters. */
   ends: readonly string[];
-  /** A line under the ends: "markdown figures". None by default. */
+  /** A line under the ends: "markdown components". None by default. */
   line?: string;
   /** The stub's details, in order: { gate: "npm", seat: "1A" }, or pairs, [["gate", "npm"]]. None by default. */
   fields?: Readonly<Record<string, string>> | readonly (readonly [string, string])[];
@@ -46,7 +45,7 @@ type Field = readonly [string, string];
 // The fence's body: line 1 the ends and a quoted line; key=value fields, on it or the lines after, in order.
 function parse(source: string): TicketData {
   const lines = statements(source, "ticket");
-  if (!lines.length) fail(`ticket takes its ends on its first line, one or two words, such as v0.4 v0.5 "markdown figures"`);
+  if (!lines.length) fail(`ticket takes its ends on its first line, one or two words, such as v0.4 v0.5 "markdown components"`);
   const first = lines[0];
   const fields: Field[] = [];
   for (const s of lines)
@@ -62,7 +61,7 @@ function parse(source: string): TicketData {
 
 // Data, checked: one end or two that slim letters draw, a line, and fields of words.
 function check(data: TicketData): { ends: string[]; line?: string; fields: Field[] } {
-  if (!data || typeof data !== "object") fail(`ticket() takes a fence's body, such as v0.4 v0.5 "markdown figures", or { ends, line, fields }, not ${show(data)}`);
+  if (!data || typeof data !== "object") fail(`ticket() takes a fence's body, such as v0.4 v0.5 "markdown components", or { ends, line, fields }, not ${show(data)}`);
   if (!Array.isArray(data.ends) || data.ends.length < 1 || data.ends.length > 2) fail(`ticket's ends take one end or two, such as ["v0.4", "v0.5"], not ${show(data.ends)}`);
   const ends = data.ends.map((e, i) => {
     if (typeof e !== "string" || !e.trim()) fail(`ticket's end ${i + 1} takes words, such as "v0.5", not ${show(e)}`);

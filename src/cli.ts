@@ -60,10 +60,10 @@ const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
 
   md:
   --out <path>      where the markdown goes: printed by default
-  --ascii           its figures' box drawing as + - |, for a place without it
-  --svg <dir>       each figure as an animated SVG in <dir>, light and dark,
+  --ascii           its components' box drawing as + - |, for a place without it
+  --svg <dir>       each component as an animated SVG in <dir>, light and dark,
                     in a <picture> where its fence was
-  --play            plays each figure in the terminal in turn, a key for the
+  --play            plays each component in the terminal in turn, a key for the
                     next; takes --seconds for each, --light and --mono
 
   -h, --help        this help
@@ -361,14 +361,17 @@ async function md(positionals: string[], values: { out?: string; ascii?: boolean
       throw new Usage(`${clean(why)}\n  in ${file}, line ${f.line}: \`\`\`${clean(f.info)}`);
     }
   });
+  // A QR code in + - | is no code a phone can read: say so rather than print one that doesn't scan.
+  const qr = values.ascii ? found.findIndex((_, i) => fences[i].kind === "qr") : -1;
+  if (qr >= 0) throw new Usage(`qr needs its blocks to scan, and --ascii has none: draw it with --svg, or as text without --ascii\n  in ${file}, line ${found[qr].line}: \`\`\`${clean(found[qr].info)}`);
 
   if (values.play) {
     if (!fences.length) throw new Usage(`${file} has no \`\`\`ascii fences to play`);
-    // Piped or redirected, there is nothing to play on: each figure's still, as text.
+    // Piped or redirected, there is nothing to play on: each component's still, as text.
     if (!process.stdout.isTTY) return void process.stdout.write(`${fences.map((p) => plain(p)).join("\n\n")}\n`);
     for (const piece of fences) {
       const { meta } = piece;
-      // Its build and two seconds more, of its cycle or the finished figure, or its loop; a key goes on to the next,
+      // Its build and two seconds more, of its cycle or its finished drawing, or its loop; a key goes on to the next,
       // Ctrl+C stops.
       const each = seconds ?? meta.loop ?? (meta.fps ? (meta.still ?? 0) : 0) + 2;
       const played = await play(piece, { seconds: each, light: values.light === true, mono: values.mono === true });
@@ -383,7 +386,7 @@ async function md(positionals: string[], values: { out?: string; ascii?: boolean
   let out: string;
   if (values.svg === undefined) out = render(doc, { ascii: values.ascii === true });
   else {
-    // Each figure as an SVG for a light page and one for a dark page, and a <picture> showing the one for the reader's
+    // Each component as an SVG for a light page and one for a dark page, and a <picture> showing the one for the reader's
     // theme where its fence was, its paths from the folder the markdown goes in.
     const dir = resolve(values.svg);
     const from = values.out === undefined ? process.cwd() : dirname(resolve(values.out));
@@ -407,7 +410,7 @@ async function md(positionals: string[], values: { out?: string; ascii?: boolean
     });
     out += doc.slice(at);
   }
-  const drawn = fences.length ? `${fences.length} figure${fences.length === 1 ? "" : "s"} drawn` : "no ```ascii fences, so as it was";
+  const drawn = fences.length ? `${fences.length} component${fences.length === 1 ? "" : "s"} drawn` : "no ```ascii fences, so as it was";
   const svgs = values.svg !== undefined && fences.length ? `, as ${fences.length * 2} SVGs in ${clean(values.svg)}` : "";
   if (values.out === undefined) {
     process.stdout.write(out);
@@ -453,10 +456,10 @@ async function main() {
     if ([values.fps, values.color, values.tagline, values.font, values.shadow, values.effect, values.dir, values.overwrite, values.registry, values.watch, values.dark].some((v) => v !== undefined))
       throw new Usage(`md takes --out, --ascii, --svg and --play, and with --play --seconds, --light and --mono: npx ascii.rest md README.src.md --out README.md`);
     if (values.play && [values.out, values.ascii, values.svg].some((v) => v !== undefined))
-      throw new Usage(`--play plays the figures in the terminal: it takes --seconds, --light and --mono, not --out, --ascii or --svg`);
+      throw new Usage(`--play plays the components in the terminal: it takes --seconds, --light and --mono, not --out, --ascii or --svg`);
     if (!values.play && [values.seconds, values.light, values.mono].some((v) => v !== undefined))
       throw new Usage(`--seconds, --light and --mono are for --play: npx ascii.rest md README.src.md --play`);
-    if (values.ascii && values.svg !== undefined) throw new Usage(`--ascii draws the figures as text and --svg as SVGs: one or the other`);
+    if (values.ascii && values.svg !== undefined) throw new Usage(`--ascii draws the components as text and --svg as SVGs: one or the other`);
     return md(positionals, values);
   }
   if ([values.ascii, values.svg, values.play].some((v) => v !== undefined))

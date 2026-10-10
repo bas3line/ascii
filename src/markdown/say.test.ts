@@ -8,9 +8,9 @@ import { fromFence } from "./index.ts";
 import { CREATURES, say } from "./say.ts";
 
 const STILL = [
-  "╭───────────────────────────╮",
-  "│ a fence in, a figure out. │",
-  "╰──┬────────────────────────╯",
+  "╭────────────────────────────╮",
+  "│ a fence in, a drawing out. │",
+  "╰──┬─────────────────────────╯",
   "    ╲",
   "     /\\_/\\",
   "    ( o.o )",
@@ -49,11 +49,11 @@ const toned = (p: MarkdownPiece, t: number) => {
 };
 
 test("say: the catalog's example draws its still, a cat under a balloon, through plain() and a fence", () => {
-  assert.equal(SOURCE, "a fence in, a figure out.");
+  assert.equal(SOURCE, "a fence in, a drawing out.");
   const p = say(SOURCE);
   assert.equal(plain(p), STILL);
   assert.equal(plain(say(SOURCE, fence("ascii say").options)), STILL);
-  assert.equal(p.says, "say: a cat says a fence in, a figure out.");
+  assert.equal(p.says, "say: a cat says a fence in, a drawing out.");
   // the catalog's owl thinking
   const { options } = fence("ascii say creature=owl balloon=think");
   const owl = say("where did i put that fence?", options);
@@ -68,8 +68,8 @@ test("say: through fromFence()", () => {
 test("say: the creature appears, the balloon opens, the words type, and the still is every word", () => {
   const p = say(SOURCE);
   const at = (t: number) => p.default()(t, { paper: true }).split("\n").map((l) => l.trimEnd()).join("\n");
-  // 25 characters at 30 a second, after the balloon opens at 0.4 s
-  assert.ok(Math.abs(p.meta.still! - (0.4 + 25 / 30)) < 1e-9, String(p.meta.still));
+  // 26 characters at 30 a second, after the balloon opens at 0.4 s
+  assert.ok(Math.abs(p.meta.still! - (0.4 + 26 / 30)) < 1e-9, String(p.meta.still));
   // the cat first, no balloon yet
   const first = at(0.1).split("\n");
   assert.equal(first.slice(4).join("\n"), STILL.split("\n").slice(4).join("\n"));
@@ -120,7 +120,7 @@ test("say: tones, the balloon quiet, the words ink, the creature soft and its ey
 });
 
 test("say: takes its words as data, wraps them, and keeps paragraphs", () => {
-  assert.equal(plain(say({ text: "a fence in, a figure out." })), STILL);
+  assert.equal(plain(say({ text: "a fence in, a drawing out." })), STILL);
   // lines are joined by a space; a blank line is a new paragraph in the balloon
   const p = plain(say("one two\nthree\n\nfour")).split("\n");
   assert.deepEqual(p.slice(0, 5), ["╭───────────────╮", "│ one two three │", "│               │", "│ four          │", "╰──┬────────────╯"]);
@@ -149,6 +149,10 @@ test("say: says what is wrong, the kit's way", () => {
   assert.throws(() => say("w ".repeat(2000)), /say draws \d+ rows, past the 120 a piece can have/);
   assert.throws(() => say({ text: 3 } as never), /say's text takes words, not 3/);
   assert.throws(() => say(undefined as never), /say\(\) takes a fence's body/);
-  // quotes are only words here: the balloon shows them as written
+  // quotes inside the words are shown as written; a body that is one quoted text is the words inside, as qr reads one
   assert.match(plain(say('she said "hi"')), /│ she said "hi" │/);
+  assert.equal(plain(say('"a fence in, a drawing out."')), STILL);
+  assert.equal(plain(fromFence("ascii say", '\n  "a fence in,\n  a drawing out."\n')), STILL);
+  assert.match(plain(say('"say \\"hi\\""')), /│ say "hi" │/);
+  assert.match(plain(say('"one" and "two"')), /│ "one" and "two" │/);
 });

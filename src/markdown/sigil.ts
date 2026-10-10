@@ -15,8 +15,7 @@
  *   sigil({ text: "SHA256:2c26b46b68ffc68ff99b453c1d304134" }, { title: "release key" })
  */
 import { fail, fnv1a32, mulberry32 } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { ACCENT, BAD, GOOD, INK, SOFT, clean, component, linesOf, statements, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, BAD, GOOD, INK, SOFT, clean, component, linesOf, show, statements, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A sigil as data: the text it is the fingerprint of. */
 export interface SigilData {

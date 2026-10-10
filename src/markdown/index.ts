@@ -1,7 +1,7 @@
 /*
- * ascii.rest/markdown: figures you write in an ```ascii fence in markdown,
+ * ascii.rest/markdown: components you write in an ```ascii fence in markdown,
  * drawn in text. A line of words becomes a headline in banner letters with a
- * glint passing over it. Each figure is an ascii.rest piece, so it builds in
+ * glint passing over it. Each component is an ascii.rest piece, so it builds in
  * as it is seen, many keep moving while they are in view, and it plays
  * wherever a piece plays (a page, React, MDX, an SVG in a README, a
  * terminal); it prints as plain text for a fenced block. They are their own
@@ -11,12 +11,11 @@
  *   import { headline, plain, fromFence } from "ascii.rest/markdown";
  *
  *   const top = headline('ascii.rest "animated ascii art for web pages"');
- *   plain(top);                                                  // the figure as text, for a README's fence
+ *   plain(top);                                                  // the drawing as text, for a README's fence
  *   fromFence("ascii headline font=slim", "ascii.rest");          // what a ```ascii fence draws
  */
 import { fail, suggest } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { KINDS, fence, plain, type Common, type FenceOptions, type Kind, type MarkdownPiece } from "./core.ts";
+import { KINDS, fence, plain, show, type Common, type FenceOptions, type Kind, type MarkdownPiece } from "./core.ts";
 import { figure, paint, type PaintOptions } from "./html.ts";
 import { headline } from "./headline.ts";
 import { typing } from "./typing.ts";
@@ -126,7 +125,7 @@ export const kinds: Readonly<Record<Kind, Maker>> = {
 export function make(kind: string, source: string, options: Common & FenceOptions = {}): MarkdownPiece {
   if (typeof kind !== "string" || !Object.hasOwn(kinds, kind)) {
     const built = Object.keys(kinds);
-    fail(`there is no markdown figure ${show(kind)}${suggest(kind, [...KINDS])}: there are ${built.join(", ")}`);
+    fail(`there is no markdown component ${show(kind)}${suggest(kind, [...KINDS])}: there are ${built.join(", ")}`);
   }
   if (typeof source !== "string") fail(`${kind}() takes its fence's body as a string, not ${show(source)}`);
   return kinds[kind as Kind]!(source, options);
@@ -141,12 +140,12 @@ export function make(kind: string, source: string, options: Common & FenceOption
 export function fromFence(info: string, body: string): MarkdownPiece {
   const { lang, kind, options } = fence(info);
   if (lang !== "ascii") fail(`fromFence() takes a fence whose language is ascii, as \`\`\`ascii headline, not ${show(lang)}`);
-  if (!kind) fail(`an ascii fence names its figure after ascii, as \`\`\`ascii headline: there are ${Object.keys(kinds).join(", ")}`);
+  if (!kind) fail(`an ascii fence names its component after ascii, as \`\`\`ascii headline: there are ${Object.keys(kinds).join(", ")}`);
   return make(kind, body, options);
 }
 
 /**
- * A figure as a page's HTML: its still in a <pre class="ascii-md">, with what start() needs to play it in a browser
+ * A component as a page's HTML: its still in a <pre class="ascii-md">, with what start() needs to play it in a browser
  * (data-md, data-md-source and data-md-options), so it builds in when it is scrolled to. For a server, a build step or a
  * markdown plugin.
  *
@@ -212,9 +211,11 @@ export function fencesOf(doc: string): Fenced[] {
 }
 
 /**
- * A markdown document with every ```ascii fence drawn: each becomes a plain ``` fence holding the figure as text,
- * its still, which any markdown shows as it is, a README on GitHub, an issue or a chat. Everything else is left as
- * it was, a fence shown inside another fence too. With `ascii`, box drawing becomes + - |.
+ * A markdown document with every ```ascii fence drawn: each becomes a plain ``` fence holding the drawing as text,
+ * its still, which any markdown shows as it is, a README on GitHub, an issue or a chat. Its fence is longer than any
+ * run of its character a line of the text starts with, so the text can't close it. Everything else is left as it
+ * was, a fence shown inside another fence too. With `ascii`, box drawing becomes + - |, and a qr fence, which no
+ * reader could scan that way, throws.
  *
  *   render(readFileSync("README.src.md", "utf8"))
  */
@@ -222,8 +223,13 @@ export function render(doc: string, o: { ascii?: boolean } = {}): string {
   if (typeof doc !== "string") fail(`render() takes a markdown document as a string, not ${show(doc)}`);
   let out = "", from = 0;
   for (const f of fencesOf(doc)) {
-    const text = plain(fromFence(f.info, f.body), o);
-    out += `${doc.slice(from, f.from)}${f.indent}${f.ticks}\n${text.split("\n").map((l) => f.indent + l).join("\n")}\n${f.indent}${f.ticks}`;
+    const p = fromFence(f.info, f.body);
+    if (o.ascii && p.kind === "qr") fail(`qr needs its blocks to scan, and ascii has none: the fence on line ${f.line} draws a code no reader can read in + - |`);
+    const text = plain(p, o);
+    const ch = f.ticks[0];
+    const run = Math.max(0, ...text.split("\n").map((l) => (ch === "`" ? /^\s*(`*)/ : /^\s*(~*)/).exec(l)![1].length));
+    const ticks = ch.repeat(Math.max(f.ticks.length, run + 1));
+    out += `${doc.slice(from, f.from)}${f.indent}${ticks}\n${text.split("\n").map((l) => f.indent + l).join("\n")}\n${f.indent}${ticks}`;
     from = f.to;
   }
   return out + doc.slice(from);
@@ -232,17 +238,18 @@ export function render(doc: string, o: { ascii?: boolean } = {}): string {
 const started = new WeakSet<Element>();
 
 /**
- * Plays every figure on a page that markup() or the remark plugin wrote, each <pre data-md>, as it is scrolled to,
- * with paint(). Each starts once, however often this is called, until the function this returns stops it: a later
- * call starts it again, as React's StrictMode mounts, unmounts and mounts an effect. Returns a function that stops
- * them all.
+ * Plays every component on a page that markup() or the remark plugin wrote, each <pre data-md data-md-source>, as it
+ * is scrolled to, with paint(). Each starts once, however often this is called, until the function this returns stops
+ * it: a later call starts it again, as React's StrictMode mounts, unmounts and mounts an effect, or as a page's own
+ * motion switch restarts them with `motion` changed. Returns a function that stops them all. React's and
+ * <ascii-markdown>'s own <pre>s carry data-md but no source, and play themselves.
  *
  *   import { start } from "ascii.rest/markdown";
  *   start();
  */
 export function start(root: ParentNode = document, o: PaintOptions = {}): () => void {
   const stops: (() => void)[] = [];
-  for (const el of root.querySelectorAll<HTMLElement>("[data-md]")) {
+  for (const el of root.querySelectorAll<HTMLElement>("[data-md][data-md-source]")) {
     if (started.has(el)) continue;
     started.add(el);
     try {
@@ -253,7 +260,7 @@ export function start(root: ParentNode = document, o: PaintOptions = {}): () => 
         started.delete(el);
       });
     } catch (error) {
-      console.warn(`ascii.rest: could not play the ${el.dataset.md} figure:`, error);
+      console.warn(`ascii.rest: could not play the ${el.dataset.md} component:`, error);
     }
   }
   return () => stops.forEach((stop) => stop());

@@ -1,31 +1,31 @@
 /*
- * sequence: messages between actors, top to bottom in time, each one
- * travelling its arrow. How a request moves through a system, for docs, an
- * issue or an agent's explanation. Written in PlantUML's notation, one message
- * a line: a -> b "words" a call, a --> b "words" a reply, a -> a "words" a call
- * to itself.
+ * sequence: who says what to whom, in order, top to bottom in time, each
+ * message travelling its arrow. A protocol's exchange, a handshake or a
+ * conversation between parties, for docs, an issue or an agent's explanation.
+ * Arrows as PlantUML draws them, the words in quotes, one message a line, and
+ * every message says something: a -> b "words" a call, a --> b "words" a
+ * reply, a -> a "words" a call to itself.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
- *   ```ascii sequence title="list users"
- *   browser -> api "GET /users"
- *   api -> db "select users"
- *   db --> api "12 rows"
- *   api --> browser "200 ok"
+ *   ```ascii sequence title=oauth
+ *   app -> auth "sign in"
+ *   auth --> app "code"
+ *   app -> auth "code for a token"
+ *   auth --> app "token"
  *   ```
  *
- *   sequence('browser -> api "GET /users"\napi --> browser "200 ok"')
- *   sequence({ messages: [{ from: "browser", to: "api", text: "GET /users" }, { from: "api", to: "browser", text: "200 ok", reply: true }] })
+ *   sequence('app -> auth "sign in"\nauth --> app "code"')
+ *   sequence({ messages: [{ from: "app", to: "auth", text: "sign in" }, { from: "auth", to: "app", text: "code", reply: true }] })
  */
 import { fail } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { ACCENT, INK, QUIET, SOFT, clean, component, progress, statements, wrap, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, INK, QUIET, SOFT, clean, component, progress, show, statements, wrap, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A message: who sends it, who gets it, its words, and whether it answers one (drawn dashed). */
 export interface SequenceMessage {
   from: string;
   to: string;
-  /** Its words, over its arrow: "GET /users". None by default. */
-  text?: string;
+  /** Its words, over its arrow: "sign in". Every message has some. */
+  text: string;
   /** True for a reply, drawn dashed, as --> writes it. */
   reply?: boolean;
 }
@@ -49,47 +49,51 @@ const ACTOR = /^[^\s<>"]+$/;
 // Reads an actor's name off one side of an arrow.
 function actorOf(at: string, side: string, name: string, raw: string): string {
   if (!name) fail(`${at} has an arrow with no actor ${side} it: ${show(raw)}, a message is from -> to "words"`);
-  if (!ACTOR.test(name) || name.startsWith("-") || name.endsWith("-")) fail(`${at} names an actor ${show(name)}: an actor is one word, as browser or api`);
+  if (!ACTOR.test(name) || name.startsWith("-") || name.endsWith("-")) fail(`${at} names an actor ${show(name)}: an actor is one word, as app or auth`);
   return name;
 }
 
-// The fence's body: one message a line, PlantUML's arrow between two actors and its words in quotes.
+// The fence's body: one message a line, an arrow between two actors and its words, always, in quotes.
 function parse(source: string): SequenceMessage[] {
   const lines = statements(source, "sequence");
-  if (!lines.length) fail(`sequence takes messages, one a line, as browser -> api "GET /users", or api --> browser "200 ok" for a reply`);
+  if (!lines.length) fail(`sequence takes messages, one a line, as app -> auth "sign in", or auth --> app "code" for a reply`);
   return lines.map((s) => {
     const at = `sequence's line ${s.line}`;
     const key = Object.keys(s.attrs)[0];
-    if (key !== undefined) fail(`${at} has ${key}=${show(s.attrs[key])}: sequence's options go on the fence, as \`\`\`ascii sequence ${key}=${s.attrs[key] || "..."}`);
-    if (s.texts.length > 1) fail(`${at} has ${s.texts.length} quoted texts: a message's words are one quoted text, as browser -> api "GET /users"`);
+    if (key !== undefined) fail(`${at} has ${key}=${show(s.attrs[key])}: sequence's options go on the fence, as \`\`\`ascii sequence ${key}=${s.attrs[key] && s.attrs[key].length <= 40 ? s.attrs[key] : "..."}`);
+    if (s.texts.length > 1) fail(`${at} has ${s.texts.length} quoted texts: a message's words are one quoted text, as app -> auth "sign in"`);
     const head = s.words.join(" ");
     const arrows = [...head.matchAll(/-->|->/g)];
     if (arrows.length > 1) fail(`${at} has ${arrows.length === 2 ? "two" : arrows.length} arrows; a message goes from one actor to one actor`);
     if (!arrows.length) {
-      if (/<-/.test(head)) fail(`${at} points its arrow left: write the sender first, as api -> browser`);
+      if (/<-/.test(head)) fail(`${at} points its arrow left: write the sender first, as auth -> app`);
       fail(`${at} has no arrow: a message is from -> to "words", or from --> to "words" for a reply, not ${show(s.raw)}`);
     }
     const m = arrows[0];
     const from = actorOf(at, "before", head.slice(0, m.index).trim(), s.raw);
     const to = actorOf(at, "after", head.slice(m.index! + m[0].length).trim(), s.raw);
-    return { from, to, ...(s.texts.length && s.texts[0].trim() ? { text: s.texts[0].replace(/\s+/g, " ").trim() } : {}), ...(m[0] === "-->" ? { reply: true } : {}) };
+    const text = (s.texts[0] ?? "").replace(/\s+/g, " ").trim();
+    if (!text) fail(`${at} has no words: a message is from -> to "words", as app -> auth "sign in"`);
+    return { from, to, text, ...(m[0] === "-->" ? { reply: true } : {}) };
   });
 }
 
-// Data, checked: each message from one actor to one, its words cleaned.
+// Data, checked: each message from one actor to one, its words there and cleaned.
 function check(data: SequenceData): SequenceMessage[] {
-  if (!data || typeof data !== "object" || !Array.isArray(data.messages)) fail(`sequence() takes messages, such as browser -> api "GET /users", or { messages: [{ from, to, text }] }, not ${show(data)}`);
-  if (!data.messages.length) fail(`sequence's messages take one message or more, such as { from: "browser", to: "api", text: "GET /users" }`);
+  if (!data || typeof data !== "object" || !Array.isArray(data.messages)) fail(`sequence() takes messages, such as app -> auth "sign in", or { messages: [{ from, to, text }] }, not ${show(data)}`);
+  if (!data.messages.length) fail(`sequence's messages take one message or more, such as { from: "app", to: "auth", text: "sign in" }`);
   return data.messages.map((m, i) => {
     const at = `sequence's message ${i + 1}`;
     if (!m || typeof m !== "object") fail(`${at} is ${show(m)}: a message is { from, to, text }`);
     const name = (v: unknown, side: string) => {
-      if (typeof v !== "string") fail(`${at}'s ${side} takes an actor's name, such as "api", not ${show(v)}`);
+      if (typeof v !== "string") fail(`${at}'s ${side} takes an actor's name, such as "auth", not ${show(v)}`);
       return actorOf(at, side === "from" ? "before" : "after", clean(v, `${at}'s ${side}`).trim(), `${show(m.from)} -> ${show(m.to)}`);
     };
+    const from = name(m.from, "from"), to = name(m.to, "to");
     if (m.text !== undefined && typeof m.text !== "string") fail(`${at}'s text takes words, not ${show(m.text)}`);
     const text = m.text === undefined ? "" : clean(m.text, `${at}'s text`).replace(/\s+/g, " ").trim();
-    return { from: name(m.from, "from"), to: name(m.to, "to"), ...(text ? { text } : {}), ...(m.reply ? { reply: true } : {}) };
+    if (!text) fail(`${at} has no words: a message is { from, to, text }, as { from: "app", to: "auth", text: "sign in" }`);
+    return { from, to, text, ...(m.reply ? { reply: true } : {}) };
   });
 }
 
@@ -97,14 +101,14 @@ function check(data: SequenceData): SequenceMessage[] {
 type Step = [x: number, y: number, ch: string];
 
 /**
- * Messages between actors, top to bottom in time, from a fence's body in PlantUML's notation, one message a line:
- * `browser -> api "GET /users"` a call, drawn solid; `db --> api "12 rows"` a reply, drawn dashed; `api -> api
- * "check"` a call to itself, a loop on its lifeline. Actors stand in the order they first appear, each over its
- * lifeline, spaced so every message's words fit over its arrow. Heads and lifelines draw down, then a dot runs each
- * message from its sender to its receiver, drawing the arrow behind it as its words type; then, while it is in view, a
- * dot runs the messages again in turn.
+ * Who says what to whom, in order, top to bottom in time, from a fence's body: one message a line, an arrow as
+ * PlantUML draws it and its words in quotes, which every message has. `app -> auth "sign in"` a call, drawn solid;
+ * `auth --> app "code"` a reply, drawn dashed; `server -> server "pick a cipher"` a call to itself, a loop on its
+ * lifeline. Actors stand in the order they first appear, each over its lifeline, spaced so every message's words fit
+ * over its arrow. Heads and lifelines draw down, then a dot runs each message from its sender to its receiver, drawing
+ * the arrow behind it as its words type; then, while it is in view, a dot runs the messages again in turn.
  *
- *   sequence('browser -> api "GET /users"\napi --> browser "200 ok"', { title: "list users" })
+ *   sequence('app -> auth "sign in"\nauth --> app "code"', { title: "oauth" })
  */
 export function sequence(source: string | SequenceData, options?: SequenceOptions): MarkdownPiece {
   const messages = typeof source === "string" ? parse(source) : check(source);

@@ -1,10 +1,10 @@
 ---
 layout: ../../layouts/Docs.astro
 title: places
-description: A markdown figure of the world, the earth piece's map with pins by airport code, great circle routes and a key, where your servers or your users are.
+description: A markdown component of the world, the earth piece's map with pins by airport code, great circle routes and a key, where your servers or your users are.
 ---
 
-A figure of where things are. Its land is the map ascii.rest's earth piece is drawn from. How fences work, and every place they play, is on [markdown figures](/docs/markdown/).
+A component of where things are. Its land is the map ascii.rest's earth piece is drawn from. How fences work, and every place they play, is on [markdown components](/docs/markdown/).
 
 ## world
 

@@ -1,9 +1,9 @@
 /*
- * <ascii-markdown>: ascii.rest's markdown figures on a plain page, as one
+ * <ascii-markdown>: ascii.rest's markdown components on a plain page, as one
  * tag. Its text is a fence's body and its attributes are the options, as a
- * fence's are. It draws the figure's still at once, then builds it in when it
- * is first scrolled to, as paint() plays it. Importing this module defines the
- * tag; on a server, where there is no DOM, it does nothing.
+ * fence's are. It draws the component's still at once, then builds it in when
+ * it is first scrolled to, as paint() plays it. Importing this module defines
+ * the tag; on a server, where there is no DOM, it does nothing.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
  *   import "ascii.rest/markdown/element";
@@ -13,13 +13,13 @@
  *   </ascii-markdown>
  *
  * Attributes:
- *   kind     the figure: headline and the rest
- *   label    what the figure shows, for screen readers; its own sentence otherwise
+ *   kind     the component: headline and the rest
+ *   label    what it shows, for screen readers; its own sentence otherwise
  *   motion   plays even when the reader prefers reduced motion: only behind a control
  *            the reader chooses
  *   options  JSON for options the attributes can't name: '{"align":"center"}'
  *   any other, an option, read as a fence reads it: title, width, frame, color, play,
- *            speed and the figure's own. A bare one is true, "true" and "false" are
+ *            speed and the component's own. A bare one is true, "true" and "false" are
  *            booleans and a number is a number (but a title is always words).
  *
  * The page's own attributes, class, id, style, data-* and aria-* and the rest,
@@ -42,8 +42,8 @@ const OWN = new Set(["kind", "label", "motion", "options", "data-source"]);
 const ours = (name: string) => !PAGE.has(name) && !OWN.has(name) && !/^(data-|aria-|xml|on)/.test(name);
 
 /**
- * The figures' own options, as the catalog names them, besides the options every figure takes: a change to any of
- * these, or to the tag's own attributes, draws the figure again.
+ * The components' own options, besides the options every one takes: a change to any of these, or to the tag's own
+ * attributes, draws it again. element.test.ts checks every component's options are here.
  */
 const OPTIONS = ["font", "shadow", "align", "hold", "cursor", "sep", "count", "turn", "rows", "creature", "balloon", "trunk", "unit", "pulse", "level", "caption", "invert", "tone", "flip", "fps", "here"];
 
@@ -86,7 +86,7 @@ export class AsciiMarkdown extends Base {
   }
 
   #start() {
-    // Its markdown, kept: the text it holds now is the figure.
+    // Its markdown, kept: the text it holds now is the component's body.
     let source = this.getAttribute("data-source") ?? this.#kept;
     if (source === null) {
       const text = this.textContent ?? "";

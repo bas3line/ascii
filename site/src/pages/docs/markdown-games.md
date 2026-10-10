@@ -1,10 +1,10 @@
 ---
 layout: ../../layouts/Docs.astro
 title: games
-description: Markdown figures from games, a chess position with its moves sliding in, a knockout bracket and pixel art that walks, each written the way its players write it.
+description: Markdown components from games, a chess position with its moves sliding in, a knockout bracket and pixel art that walks, each written the way its players write it.
 ---
 
-Figures from games: a chess position with its moves, a knockout bracket, pixel art that walks. Each is written the way its players already write it, FEN and UCI for chess, a line a round for a bracket, rows of letters for a sprite. How fences work, and every place they play, is on [markdown figures](/docs/markdown/).
+Components from games: a chess position with its moves, a knockout bracket, pixel art that walks. Each is written the way its players already write it, FEN and UCI for chess, a line a round for a bracket, rows of letters for a sprite. How fences work, and every place they play, is on [markdown components](/docs/markdown/).
 
 ## chess
 

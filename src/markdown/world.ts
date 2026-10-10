@@ -17,8 +17,7 @@
  *   world({ places: [{ code: "sfo", label: "us west" }, { lat: 52.52, lon: 13.4, label: "berlin" }] })
  */
 import { fail, fnv1a32, hash, mulberry32, suggest } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { ACCENT, INK, MARK, QUIET, SOFT, clean, component, progress, statements, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, INK, MARK, QUIET, SOFT, clean, component, progress, show, statements, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A place on the map: an airport's code from AIRPORTS, or a latitude and longitude, and the words the key gives it. */
 export interface WorldPlace {
@@ -178,7 +177,7 @@ function parse(source: string): WorldData {
   for (const s of statements(source, "world")) {
     const where = `world's line ${s.line}`;
     const key = Object.keys(s.attrs)[0];
-    if (key !== undefined) fail(`${where} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii world ${key}=${s.attrs[key] || "..."}`);
+    if (key !== undefined) fail(`${where} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii world ${key}=${s.attrs[key] && s.attrs[key].length <= 40 ? s.attrs[key] : "..."}`);
     if (s.words[0]?.toLowerCase() === "route") {
       const names = s.tokens.slice(1).map((t) => ("word" in t ? t.word : "text" in t ? t.text : ""));
       if (names.length !== 2) fail(`${where} routes ${names.length === 1 ? "from one place" : names.length ? `${names.length} places` : "nowhere"}: a route joins two places, as route sfo fra`);

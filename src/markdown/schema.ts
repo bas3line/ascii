@@ -19,8 +19,7 @@
  *   schema({ tables: [{ name: "users", columns: ["id*", "name"] }], refs: [] })
  */
 import { fail, suggest } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { ACCENT, INK, QUIET, SOFT, clean, component, linesOf, progress, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, INK, QUIET, SOFT, clean, component, linesOf, progress, show, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A data model as data: what a fence's body says, for tables already in JavaScript. */
 export interface SchemaData {

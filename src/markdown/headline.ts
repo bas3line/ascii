@@ -13,9 +13,9 @@
  *   headline({ words: "ascii.rest", line: "animated ascii art for web pages" })
  */
 import { fail } from "../kit/core.ts";
-import { show, wordOf } from "../kit/recipes/checks.ts";
+import { wordOf } from "../kit/recipes/checks.ts";
 import { banner, drawable as inFont, fonts, shadows, type Font, type FontName, type ShadowName } from "../banner.ts";
-import { ACCENT, GLINT, INK, QUIET, SOFT, clean, component, progress, shown, statements, wrap, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, GLINT, INK, QUIET, SOFT, clean, component, progress, show, shown, statements, wrap, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A headline as data: what a fence's body says, for words already in JavaScript. */
 export interface HeadlineData {
@@ -50,7 +50,7 @@ function parse(source: string): HeadlineData {
   let words: string | undefined, line: string | undefined;
   for (const s of lines) {
     const key = Object.keys(s.attrs)[0];
-    if (key !== undefined) fail(`headline's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii headline ${key}=${s.attrs[key] || "..."}`);
+    if (key !== undefined) fail(`headline's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii headline ${key}=${s.attrs[key] && s.attrs[key].length <= 40 ? s.attrs[key] : "..."}`);
     if (s.words.length) {
       if (words !== undefined) fail(`headline's big line is one line, and line ${s.line} has words too: ${show(s.words.join(" "))}`);
       words = s.words.join(" ");

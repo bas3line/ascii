@@ -17,8 +17,7 @@
  *   pinout({ rows: [["gnd", "vcc"], ["trig", null]] })
  */
 import { fail } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { ACCENT, GLINT, INK, MARK, QUIET, SOFT, clean, component, progress, statements, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, GLINT, INK, MARK, QUIET, SOFT, clean, component, progress, show, statements, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A chip as data: what a fence's body says, for pins already in JavaScript. */
 export interface PinoutData {
@@ -43,7 +42,7 @@ function parse(source: string): PinoutData {
   const rows: [string | null, string | null][] = [];
   for (const s of statements(source, "pinout")) {
     const key = Object.keys(s.attrs)[0];
-    if (key !== undefined) fail(`pinout's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii pinout ${key}=${s.attrs[key] || "..."}`);
+    if (key !== undefined) fail(`pinout's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii pinout ${key}=${s.attrs[key] && s.attrs[key].length <= 40 ? s.attrs[key] : "..."}`);
     const pins = s.tokens.map((k) => ("word" in k ? (k.word === "-" ? null : k.word) : "text" in k ? k.text : ""));
     if (pins.length !== 2) fail(`pinout's line ${s.line} has ${pins.length} pin${pins.length === 1 ? "" : "s"}, ${show(s.raw)}: a line is a row of the chip, its left pin and its right pin, - for none, as gnd vcc`);
     rows.push([pins[0], pins[1]]);

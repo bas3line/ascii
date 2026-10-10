@@ -19,8 +19,8 @@
  *   sprite({ frames: [["#a#", "###"], ["#a#", "#.#"]] }, { fps: 2 })
  */
 import { fail } from "../kit/core.ts";
-import { numberOf, show } from "../kit/recipes/checks.ts";
-import { ACCENT, BAD, GOOD, INK, QUIET, SOFT, VIOLET, WARN, blocks, clean, component, type Common, type MarkdownPiece } from "./core.ts";
+import { numberOf } from "../kit/recipes/checks.ts";
+import { ACCENT, BAD, GOOD, INK, QUIET, SOFT, VIOLET, WARN, blocks, clean, component, show, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A sprite as data: what a fence's body says, for art already in JavaScript. */
 export interface SpriteData {

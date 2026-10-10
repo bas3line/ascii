@@ -63,7 +63,9 @@ test("spans: runs of a tone in classes, the ink bare, everything escaped, a mark
 test("html and figure: the still as a page's <pre>, its sentence its label", () => {
   const p = headline(SOURCE);
   const out = figure(p, { attrs: { "data-x": 'a"b' } });
-  assert.match(out, /^<pre class="ascii-md" role="img" aria-label="headline: ascii\.rest, animated ascii art\." style="--cols: 42; --rows: 8" data-x="a&quot;b">/);
+  assert.match(out, /^<pre class="ascii-md" role="img" aria-label="headline: ascii\.rest, animated ascii art\." style="--cols: 42; --rows: 8" data-md="headline" data-x="a&quot;b">/);
+  // a QR code's rows sit flush, by its kind, so no seam between its half blocks stops a phone reading it
+  assert.match(STYLE, /\.ascii-md\[data-md=qr\]\{line-height:1\}/);
   assert.match(out, /<span class="md-quiet">╗<\/span>/);
   // the spaces after a run join it, so a line is one span
   assert.match(out, /<span class="md-soft">animated ascii art {24}<\/span><\/pre>$/);
@@ -76,9 +78,25 @@ test("html and figure: the still as a page's <pre>, its sentence its label", () 
 test("make and fromFence find a figure by name; a name that is none says which there are", () => {
   assert.equal(make("headline", "ok").kind, "headline");
   assert.equal(fromFence("ascii headline width=50", "ok").meta.cols, 50);
-  assert.throws(() => make("headlin", "ok"), /there is no markdown figure "headlin" \(did you mean "headline"\?\): there are headline/);
+  assert.throws(() => make("headlin", "ok"), /there is no markdown component "headlin" \(did you mean "headline"\?\): there are headline/);
   assert.throws(() => fromFence("js headline", "ok"), /language is ascii/);
-  assert.throws(() => fromFence("ascii", "ok"), /names its figure/);
+  assert.throws(() => fromFence("ascii", "ok"), /names its component/);
+});
+
+test("errors quote at most 40 characters of a line, so one bad fence of thousands can't flood a build's log", () => {
+  const long = `${"x".repeat(5000)} "${"y".repeat(5000)}" k=${"z".repeat(5000)}`;
+  const drew: string[] = [];
+  for (const kind of KINDS) {
+    try {
+      make(kind, long);
+      drew.push(kind);
+    } catch (error) {
+      const message = String((error as Error).message);
+      assert.ok(message.length < 400, `${kind}: ${message.length} characters: ${message.slice(0, 200)}`);
+    }
+  }
+  // a sigil is a fingerprint of any text, however long; every other one says what is wrong
+  assert.deepEqual(drew, ["sigil"]);
 });
 
 test("markup: the still with what start() needs to play it", () => {
@@ -95,6 +113,16 @@ test("render: every ascii fence in a document drawn as text, the rest as it was"
   assert.match(out, /```ts\nconst a = 1;\n```/);
   assert.doesNotMatch(out, /```ascii/);
   assert.match(render(doc, { ascii: true }), /\+- top -+\+/);
+});
+
+test("render: a drawing whose line is a run of backticks gets a longer fence, and a qr fence won't draw in + - |", () => {
+  // typing's still is ``` alone: the fence round it is one longer, so it can't close early and swallow what follows
+  assert.equal(render('```ascii typing\n"```"\n```\n\nafter\n'), "````\n```\n````\n\nafter\n");
+  assert.equal(render('~~~ascii typing\n"~~~~"\n~~~\n'), "~~~~~\n~~~~\n~~~~~\n");
+  // a run inside a line is no fence, so the fence stays as it was
+  assert.equal(render('```ascii typing\nok "a```b"\n```\n'), "```\nok a```b\n```\n");
+  assert.throws(() => render("```ascii qr\nhttps://ascii.rest\n```\n", { ascii: true }), /qr needs its blocks to scan, and ascii has none: the fence on line 1/);
+  assert.match(render("```ascii qr\nhttps://ascii.rest\n```\n"), /▀▀▀▀▀▀▀/);
 });
 
 test("render: an ascii fence shown as an example inside another fence stays as written; a longer fence closes one", () => {
@@ -118,7 +146,12 @@ test("paint: a lower frame rate keeps the figure's pace, each frame taking the t
     const p = headline(SOURCE);
     const el = element();
     const stop = paint(el, p, { fps: 5, style: false });
+    // the still stays until it is seen, so find, print and a full-page capture read every drawing below the screen
+    assert.equal(el.innerHTML, html(p));
+    b.observers[0].see(false);
+    assert.equal(el.innerHTML, html(p));
     b.observers[0].see(true);
+    assert.equal(el.innerHTML, html(p, { t: 0 }));
     // at 5 frames a second, 12 frames 200 ms apart are 2.4 seconds of it, its build and more of its cycle, as at 30
     b.run(200, 12);
     assert.equal(el.innerHTML, html(p, { t: 2.4 }));

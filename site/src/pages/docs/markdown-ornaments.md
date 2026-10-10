@@ -1,10 +1,10 @@
 ---
 layout: ../../layouts/Docs.astro
 title: ornaments
-description: Markdown figures that dress a document, a rule that moves, confetti, a turning shape, a creature with a balloon and the rings round a hub, built with ascii.rest's kit.
+description: Markdown components that dress a document, a rule that moves, confetti, a turning shape, a creature with a balloon and the rings round a hub, built with ascii.rest's kit.
 ---
 
-Figures that dress a document: a rule that moves, a burst of confetti, a 3D shape turning, a creature with something to say, and the things around a project. They are built with ascii.rest's kit, its particles, its 3D renderer and its seeded randomness, so each one draws the same everywhere. Each one is an `ascii` fence, drawn in text: it builds in when you scroll to it, keeps moving while it is in view, and prints as the same text for a README. How fences work, and every place they play, is on [markdown figures](/docs/markdown/).
+Components that dress a document: a rule that moves, a burst of confetti, a 3D shape turning, a creature with something to say, and the things around a project. They are built with ascii.rest's kit, its particles, its 3D renderer and its seeded randomness, so each one draws the same everywhere. Each one is an `ascii` fence, drawn in text: it builds in when you scroll to it, keeps moving while it is in view, and prints as the same text for a README. How fences work, and every place they play, is on [markdown components](/docs/markdown/).
 
 ## divider
 
@@ -173,30 +173,30 @@ In React it is `<Solid>`.
 A little creature with a balloon of words over it, after the old Unix cowsay and cowthink: a README's friendly footer, an agent's sign-off.
 
 ```ascii say
-a fence in, a figure out.
+a fence in, a drawing out.
 ```
 
 The creature appears, the balloon opens and its words type in. Then the creature idles once every 4 seconds while it is in view: the cat blinks. Its still is the creature at rest and every word.
 
 ````md
 ```ascii say
-a fence in, a figure out.
+a fence in, a drawing out.
 ```
 ````
 
 Its plain text:
 
 ```text
-╭───────────────────────────╮
-│ a fence in, a figure out. │
-╰──┬────────────────────────╯
+╭────────────────────────────╮
+│ a fence in, a drawing out. │
+╰──┬─────────────────────────╯
     ╲
      /\_/\
     ( o.o )
      > ^ <
 ```
 
-The whole body is the balloon's words as written, wrapped at 28 columns, or to the `width`; a blank line starts a new paragraph in the balloon. It has no frame unless you ask for one.
+The whole body is the balloon's words as written, or the words inside the quotes when the body is one quoted text, wrapped at 28 columns, or to the `width`; a blank line starts a new paragraph in the balloon. It has no frame unless you ask for one.
 
 | option | what it does | default |
 | --- | --- | --- |
@@ -266,7 +266,7 @@ Its plain text:
                 · · · · · · · · · ·
 ```
 
-The first line is the hub, a word or words in quotes. Each line after it is a ring, from the inside out, its satellites as words or words in quotes: 1 to 3 rings, of 1 to 6 each. The rings are ellipses of dots seen at a tilt, each clearing the one inside it, so the figure is as wide as its outer ring. It has no frame, and no options of its own.
+The first line is the hub, a word or words in quotes. Each line after it is a ring, from the inside out, its satellites as words or words in quotes: 1 to 3 rings, of 1 to 6 each. The rings are ellipses of dots seen at a tilt, each clearing the one inside it, so it is as wide as its outer ring. It has no frame, and no options of its own.
 
 ```ts
 // around.ts

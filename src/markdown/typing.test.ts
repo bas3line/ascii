@@ -19,17 +19,17 @@ const toned = (p: MarkdownPiece, t: number) => {
 const at = (p: MarkdownPiece, t: number) => plain(p, { t });
 // The cycle's rounds for the catalog's example: a hold of 1.6 s, an erase at 30 a second, a beat of 0.25 s, then
 // the next word typed at 18 a second.
-const ROUND = [1.6 + 6 / 30 + 0.25 + 7 / 18, 1.6 + 7 / 30 + 0.25 + 7 / 18, 1.6 + 7 / 30 + 0.25 + 6 / 18];
+const ROUND = [1.6 + 6 / 30 + 0.25 + 7 / 18, 1.6 + 7 / 30 + 0.25 + 10 / 18, 1.6 + 10 / 30 + 0.25 + 6 / 18];
 
 test("typing: the catalog's example draws its still, the first word typed and no cursor, through plain() and a fence", () => {
   const p = typing(SOURCE);
-  assert.equal(SOURCE, 'ascii.rest draws "scenes" "banners" "figures"');
+  assert.equal(SOURCE, 'ascii.rest draws "scenes" "banners" "components"');
   assert.equal(plain(p), STILL);
   assert.equal(plain(drawn("ascii typing", SOURCE)), STILL);
   // unframed, one row, as wide as its longest line and a column for the cursor
-  assert.equal(p.meta.cols, "ascii.rest draws banners".length + 1);
+  assert.equal(p.meta.cols, "ascii.rest draws components".length + 1);
   assert.equal(p.meta.rows, 1);
-  assert.equal(p.says, "typing: ascii.rest draws scenes, banners, figures.");
+  assert.equal(p.says, "typing: ascii.rest draws scenes, banners, components.");
   assert.equal(p.kind, "typing");
 });
 
@@ -64,7 +64,7 @@ test("typing: each word holds with its glint and the cursor blinking, is erased 
   assert.equal(at(p, intro + 1.9), "ascii.rest draws ▌");
   assert.equal(at(p, intro + 2.05 + 0.25), "ascii.rest draws bann▌");
   assert.equal(at(p, intro + ROUND[0] + 0.1), "ascii.rest draws banners");
-  assert.equal(at(p, intro + ROUND[0] + ROUND[1] + 0.1), "ascii.rest draws figures");
+  assert.equal(at(p, intro + ROUND[0] + ROUND[1] + 0.1), "ascii.rest draws components");
   // a glint crosses the word as it lands, never in the still
   const glints = [0.05, 0.15, 0.25, 0.35].some((u) => toned(p, intro + u).color.includes(GLINT));
   assert.ok(glints);
@@ -79,7 +79,7 @@ test("typing: each word holds with its glint and the cursor blinking, is erased 
 });
 
 test("typing: takes its words as data too, and a line whose word never changes types once and blinks", () => {
-  assert.equal(plain(typing({ before: "ascii.rest draws", turns: ["scenes", "banners", "figures"] })), STILL);
+  assert.equal(plain(typing({ before: "ascii.rest draws", turns: ["scenes", "banners", "components"] })), STILL);
   const fixed = typing("hello world");
   assert.equal(plain(fixed), "hello world");
   assert.equal(fixed.says, "typing: hello world.");
@@ -106,20 +106,20 @@ test("typing: the quoted words take turns where they are written, the words afte
   assert.equal(p.says, "typing: fast, small by default.");
 });
 
-test("typing: its own options, and the options every figure takes", () => {
+test("typing: its own options, and the options every component takes", () => {
   // hold: each word holds longer, and the cycle with it
   const slow = typing(SOURCE, { hold: 3 });
   assert.ok(Math.abs(slow.motion!.seconds - typing(SOURCE).motion!.seconds - 3 * 1.4) < 1e-9);
   // no cursor: a column narrower, and never a ▌
   const bare = typing(SOURCE, { cursor: false });
-  assert.equal(bare.meta.cols, "ascii.rest draws banners".length);
+  assert.equal(bare.meta.cols, "ascii.rest draws components".length);
   for (const t of [0.3, 1, 2, 3, 4, 5]) assert.doesNotMatch(at(bare, t), /▌/);
   // a width, a frame and a title
   const framed = typing(SOURCE, { width: 40, frame: "rounded", title: "tagline" });
   assert.equal(framed.meta.cols, 40);
   assert.deepEqual(plain(framed).split("\n"), [`╭─ tagline ${"─".repeat(28)}╮`, `│ ${STILL.padEnd(36)} │`, `╰${"─".repeat(38)}╯`]);
   // from a fence, its options as a fence writes them
-  assert.equal(drawn("ascii typing hold=0.5 cursor=false", SOURCE).meta.cols, 24);
+  assert.equal(drawn("ascii typing hold=0.5 cursor=false", SOURCE).meta.cols, 27);
   // a long line types faster, done within 3 seconds
   const long = typing(`${"word ".repeat(28).trim()} "end" "stop"`);
   assert.ok(long.meta.still! <= 3 + 1e-9, String(long.meta.still));
@@ -137,7 +137,7 @@ test("typing: says what is wrong, the kit's way, and never draws what it can't",
   assert.throws(() => typing("ascii.rest draws \u{1F600}"), /typing takes characters every monospace face draws one cell wide/);
   assert.throws(() => typing('ascii.rest draws ""'), /typing's turn 1 is empty/);
   assert.throws(() => typing("x".repeat(200)), /typing types one line of up to 155 characters and its cursor, and "x{40}\.\.\." needs 200/);
-  assert.throws(() => typing(SOURCE, { width: 20 }), /typing needs 25 columns for "ascii\.rest draws scenes" and its longest word and its cursor, and its width is 20/);
+  assert.throws(() => typing(SOURCE, { width: 20 }), /typing needs 28 columns for "ascii\.rest draws scenes" and its longest word and its cursor, and its width is 20/);
   assert.throws(() => typing(SOURCE, { hold: 0 }), /typing's hold takes a number from 0\.2 to 10, not 0/);
   assert.throws(() => typing(SOURCE, { cursor: "yes" as never }), /typing's cursor takes true or false, not "yes"/);
   assert.throws(() => typing(SOURCE, { holds: 2 } as never), /typing\(\) has no option "holds" \(did you mean "hold"\?\)/);

@@ -10,7 +10,7 @@ import { fromFence } from "./index.ts";
 import { ticket } from "./ticket.ts";
 
 const SOURCE = entryOf("ticket").source;
-// A fence's figure.
+// What a fence draws.
 const viaFence = (info: string, body: string): MarkdownPiece => fromFence(info, body);
 
 const STILL = [
@@ -20,9 +20,9 @@ const STILL = [
   "│ █ █ █ █   ███    >    █ █ █ █   ██          │",
   "│  █  █ █     █          █  █ █     █         │",
   "│  █  ███ █   █          █  ███ █ ██          │",
-  "│ markdown figures                            │",
+  "│ markdown components                         │",
   "├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤",
-  "│ gate npm  seat 1A  time 18:00   ▌▐▐▌▍▍█▍▌▐▍ │",
+  "│ gate npm  seat 1A  time 18:00   ▍█▌▍▍▍▐▌▌█▍ │",
   "╰─────────────────────────────────────────────╯",
 ].join("\n");
 
@@ -41,14 +41,14 @@ function whole(p: MarkdownPiece) {
 
 test("ticket: the catalog's example draws its still, through plain() and a fence", () => {
   const p = ticket(SOURCE);
-  assert.equal(SOURCE, 'v0.4 v0.5 "markdown figures"\ngate=npm seat=1A time=18:00');
+  assert.equal(SOURCE, 'v0.4 v0.5 "markdown components"\ngate=npm seat=1A time=18:00');
   assert.equal(plain(p), STILL);
   assert.equal(plain(viaFence("ascii ticket", SOURCE)), STILL);
   assert.equal(p.meta.cols, 47);
   assert.equal(p.meta.rows, 10);
-  assert.equal(p.says, "ticket: v0.4 to v0.5, markdown figures, gate npm, seat 1A, time 18:00.");
+  assert.equal(p.says, "ticket: v0.4 to v0.5, markdown components, gate npm, seat 1A, time 18:00.");
   // the barcode: bar i is bits 2i and 2i + 1 of fnv1a32 of the ends and the line
-  const h = fnv1a32("v0.4 v0.5 markdown figures");
+  const h = fnv1a32("v0.4 v0.5 markdown components");
   const bars = Array.from({ length: 11 }, (_, i) => "▌▐█▍"[(h >>> (2 * i)) & 3]).join("");
   assert.equal(STILL.split("\n")[8].slice(34, 45), bars);
 });
@@ -109,10 +109,10 @@ test("ticket: one end is an admission, and it takes data, pairs and a width", ()
   letters.forEach((l, y) => assert.equal(one[1 + y].slice(2, 2 + l.length), l));
   assert.equal(ticket("v1.0").says, "ticket: v1.0.");
   // fields on the first line too, and in order with repeats
-  assert.equal(plain(ticket('v0.4 v0.5 "markdown figures" gate=npm\nseat=1A time=18:00')), STILL);
+  assert.equal(plain(ticket('v0.4 v0.5 "markdown components" gate=npm\nseat=1A time=18:00')), STILL);
   // data: a record or pairs, the same pass
-  assert.equal(plain(ticket({ ends: ["v0.4", "v0.5"], line: "markdown figures", fields: { gate: "npm", seat: "1A", time: "18:00" } })), STILL);
-  assert.equal(plain(ticket({ ends: ["v0.4", "v0.5"], line: "markdown figures", fields: [["gate", "npm"], ["seat", "1A"], ["time", "18:00"]] })), STILL);
+  assert.equal(plain(ticket({ ends: ["v0.4", "v0.5"], line: "markdown components", fields: { gate: "npm", seat: "1A", time: "18:00" } })), STILL);
+  assert.equal(plain(ticket({ ends: ["v0.4", "v0.5"], line: "markdown components", fields: [["gate", "npm"], ["seat", "1A"], ["time", "18:00"]] })), STILL);
   // a value with spaces, in quotes; a key with no value
   assert.match(plain(ticket('v1 v2\nwhere="the docs" vip=')), /where the docs {2}vip/);
   // no fields: the stub is the barcode alone
@@ -144,7 +144,7 @@ test("ticket: says what is wrong, the kit's way", () => {
   assert.throws(() => ticket("café"), /ascii\.rest: ticket takes characters every monospace face draws one cell wide/);
   assert.throws(() => ticket('a "open'), /ticket's line 1 opens a quote it doesn't close/);
   assert.throws(() => ticket(SOURCE, { width: 30 }), /ticket needs 39 columns for "v0\.4 v0\.5" and its stub, and its width is 30: give it a width of 39 or more/);
-  assert.throws(() => ticket("x".repeat(60)), /ticket needs 239 columns for "x{60}" in slim letters, past the 156 it can take: shorter ends/);
+  assert.throws(() => ticket("x".repeat(60)), /ticket needs 239 columns for "x{40}\.\.\." in slim letters, past the 156 it can take: shorter ends/);
   assert.throws(() => ticket({ ends: [] }), /ticket's ends take one end or two, such as \["v0\.4", "v0\.5"\], not \[\]/);
   assert.throws(() => ticket({ ends: ["a", ""] }), /ticket's end 2 takes words/);
   assert.throws(() => ticket({ ends: ["a"], fields: [["k"]] } as never), /ticket's fields take a key and a value of words each/);

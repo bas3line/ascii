@@ -1,10 +1,10 @@
 ---
 layout: ../../layouts/Docs.astro
 title: inside a system
-description: Markdown figures of what is inside a program or a machine, a flame graph, a bit layout, a chip's pinout and an ER diagram, each read from the notation its field already writes.
+description: Markdown components of what is inside a program or a machine, a flame graph, a bit layout, a chip's pinout and an ER diagram, each read from the notation its field already writes.
 ---
 
-Figures of what is inside a program or a machine: a profile, a binary layout, a chip's pins, a data model. Each reads the notation its field already writes, a profiler's folded stacks, a datasheet's bit mask, a pin list and relational notation, so you can paste what you have. How fences work, and every place they play, is on [markdown figures](/docs/markdown/).
+Components of what is inside a program or a machine: a profile, a binary layout, a chip's pins, a data model. Each reads the notation its field already writes, a profiler's folded stacks, a datasheet's bit mask, a pin list and relational notation, so you can paste what you have. How fences work, and every place they play, is on [markdown components](/docs/markdown/).
 
 ## flame
 

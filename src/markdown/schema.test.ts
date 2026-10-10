@@ -184,7 +184,7 @@ test("schema: never draws garbage, however long or odd its input", () => {
   wellDrawn(chain, [0, 0.5, 1, 2, chain.meta.still!]);
   // too wide or too tall for a figure says so
   const wide = Array.from({ length: 12 }, (_, i) => `t${i}(id*, ${i ? `p${i}_id` : "x"})${i ? `\nref t${i}.p${i}_id t${i - 1}.id` : ""}`).join("\n");
-  assert.throws(() => schema(wide), /schema needs \d+ columns for this, past the 160 a figure can take/);
+  assert.throws(() => schema(wide), /schema needs \d+ columns for this, past the 160 a component can take/);
   const tall = Array.from({ length: 30 }, (_, i) => `t${i}(a, b, c)`).join("\n");
   assert.throws(() => schema(tall), /schema draws \d+ rows, past the 120 a piece can have/);
   // typographic quotes fold to plain ones, which a name can't hold

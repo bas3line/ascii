@@ -56,7 +56,7 @@ const entries: Omit<Entry, "group">[] = [
     for: ["readme"],
     moves: "types in, holds, erases its quoted words and types the next",
     options: {},
-    source: 'ascii.rest draws "scenes" "banners" "figures"',
+    source: 'ascii.rest draws "scenes" "banners" "components"',
   },
   {
     kind: "flap",
@@ -72,7 +72,7 @@ const entries: Omit<Entry, "group">[] = [
     for: ["readme", "docs"],
     moves: "slides in from the right, then scrolls round and round",
     options: {},
-    source: '"markdown figures" "a fence in, a picture out" "npx ascii.rest add markdown"',
+    source: '"markdown components" "drawn in text" "npx ascii.rest add markdown"',
   },
   // ornaments
   {
@@ -105,7 +105,7 @@ const entries: Omit<Entry, "group">[] = [
     for: ["readme", "agent"],
     moves: "the balloon opens and its words type, then the creature idles",
     options: {},
-    source: "a fence in, a figure out.",
+    source: "a fence in, a drawing out.",
   },
   {
     kind: "orbit",
@@ -118,11 +118,11 @@ const entries: Omit<Entry, "group">[] = [
   // machines
   {
     kind: "sequence",
-    about: "messages between actors, each travelling its arrow",
+    about: "who says what to whom in a protocol, in order",
     for: ["docs", "issue", "agent"],
     moves: "a dot runs each message from its sender to its receiver, in turn",
-    options: { title: "list users" },
-    source: 'browser -> api "GET /users"\napi -> db "select users"\ndb --> api "12 rows"\napi --> browser "200 ok"',
+    options: { title: "oauth" },
+    source: 'app -> auth "sign in"\nauth --> app "code"\napp -> auth "code for a token"\nauth --> app "token"',
   },
   {
     kind: "git",
@@ -224,7 +224,7 @@ const entries: Omit<Entry, "group">[] = [
     for: ["changelog"],
     moves: "prints out of a slot, the > flying between its ends",
     options: {},
-    source: 'v0.4 v0.5 "markdown figures"\ngate=npm seat=1A time=18:00',
+    source: 'v0.4 v0.5 "markdown components"\ngate=npm seat=1A time=18:00',
   },
   // games
   {

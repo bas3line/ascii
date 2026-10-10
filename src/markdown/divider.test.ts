@@ -134,7 +134,7 @@ test("divider: says what is wrong, the kit's way, and never draws a broken row",
   assert.throws(() => divider('waves "part two'), /divider's line 1 opens a quote it doesn't close/);
   assert.throws(() => divider('waves "café"'), /divider takes characters every monospace face draws one cell wide/);
   assert.throws(() => divider('waves "go → there"'), /not "→"/);
-  assert.throws(() => divider(`waves "${"w".repeat(151)}"`), /divider needs 157 columns for "w+", past the 156 it can take: fewer words/);
+  assert.throws(() => divider(`waves "${"w".repeat(151)}"`), /divider needs 157 columns for "w{40}\.\.\.", past the 156 it can take: fewer words/);
   assert.throws(() => divider('waves "part two now"', { width: 16 }), /divider needs 18 columns for "part two now", and its width is 16: give it a width of 18 or more/);
   assert.equal(plain(divider('waves "part two"', { width: 16 })), "_.  part two  -.");
   assert.throws(() => divider("train", { width: 20 }), /divider needs 22 columns for its train/);

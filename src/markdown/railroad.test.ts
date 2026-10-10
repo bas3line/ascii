@@ -137,7 +137,7 @@ test("railroad: never crashes on empty, long, unicode or broken input, and says 
   assert.throws(() => railroad({ usages: [3] } as never), /railroad's usage 1 takes a usage line/);
   assert.throws(() => railroad(7 as never), /railroad\(\) takes a usage line/);
   // one word too long to fit in any row
-  assert.throws(() => railroad(`ls ${"x".repeat(160)}`), /railroad needs 166 columns for "x{160}", past the 156 it has: split it into shorter usages/);
+  assert.throws(() => railroad(`ls ${"x".repeat(160)}`), /railroad needs 166 columns for "x{40}\.\.\.", past the 156 it has: split it into shorter usages/);
   // a part wider than the 96 a row wraps at takes a row of its own
   const own = plain(railroad(`ls ${"x".repeat(100)} -l`, { frame: "none" })).split("\n");
   assert.deepEqual(own.map((l) => l.length), [8, 8, 106, 106, 8]);

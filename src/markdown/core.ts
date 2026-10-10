@@ -1,5 +1,5 @@
 /*
- * ascii.rest/markdown, core: what every markdown figure shares. The lines a
+ * ascii.rest/markdown, core: what every markdown component shares. The lines a
  * fence holds, read into statements; the frame they are drawn in; the ten
  * tones they are coloured with; and component(), which turns a body that
  * draws itself over time into a piece. A figure builds in once, when it is
@@ -23,7 +23,17 @@
  */
 import type { Piece } from "../types.ts";
 import { MAX, Surface, colorOf, fail, mix, piece, type ColorLike, type KitPiece } from "../kit/core.ts";
-import { loopOf, optionsOf, show, speedOf, wholeOf, wordOf, type Speed } from "../kit/recipes/checks.ts";
+import { loopOf, optionsOf, show as whole, speedOf, wholeOf, wordOf, type Speed } from "../kit/recipes/checks.ts";
+
+/**
+ * A value as an error message quotes it, the kit's way, cut to its first 40 characters and ... so one bad line of
+ * thousands doesn't flood a build's log: "users(id*, name, ...".
+ */
+export function show(v: unknown): string {
+  if (typeof v === "string") return whole(v.length > 40 ? `${v.slice(0, 40)}...` : v);
+  const s = whole(v);
+  return s.length > 60 ? `${s.slice(0, 60)}...` : s;
+}
 
 // --- the family ---------------------------------------------------------------------------
 
@@ -130,7 +140,7 @@ export function clean(text: string, what = "this"): string {
     const f = FOLD[ch];
     if (f !== undefined) out += f;
     else if (drawable(ch) || ch === "\n") out += ch;
-    else fail(`${what} takes characters every monospace face draws one cell wide: ASCII, the box drawing characters and · ° • ●, not ${JSON.stringify(ch)} in ${show(text.length > 40 ? text.slice(0, 40) + "..." : text)}`);
+    else fail(`${what} takes characters every monospace face draws one cell wide: ASCII, the box drawing characters and · ° • ●, not ${JSON.stringify(ch)} in ${show(text)}`);
   }
   return out;
 }
@@ -179,7 +189,7 @@ const KEY = /^([A-Za-z_][\w.-]*)=/;
  * so typographic quotes fold to ". No character has a meaning of its own beyond these: ! and -> stay inside the words
  * they are written in. Throws, naming the line, for a quote left open.
  *
- *   statements('browser -> api "GET /users"\ngate=npm seat="1 A"')
+ *   statements('app -> auth "sign in"\ngate=npm seat="1 A"')
  */
 export function statements(source: string, what = "this"): Statement[] {
   const out: Statement[] = [];
@@ -198,7 +208,7 @@ export function statements(source: string, what = "this"): Statement[] {
         } else if (raw[j] === '"') return [text, j + 1];
         else text += raw[j];
       }
-      return fail(`${what}'s line ${line} opens a quote it doesn't close: ${show(raw.length > 40 ? raw.slice(0, 40) + "..." : raw)}`);
+      return fail(`${what}'s line ${line} opens a quote it doesn't close: ${show(raw)}`);
     };
     let i = 0;
     while (i < raw.length) {
@@ -483,7 +493,7 @@ export interface Body {
   draw(s: Surface, t: number, at: At): void;
 }
 
-/** A markdown figure: a kit piece, and what it is. */
+/** A markdown component: a kit piece, and what it is. */
 export interface MarkdownPiece extends KitPiece {
   /** The figure it is: "headline". */
   readonly kind: Kind | (string & {});
@@ -499,7 +509,7 @@ export interface MarkdownPiece extends KitPiece {
 }
 
 /**
- * Makes a markdown figure: checks the options every figure takes and the figure's `own`, lays its body out in the
+ * Makes a markdown component: checks the options every one takes and the component's `own`, lays its body out in the
  * room the width leaves, and returns a piece that draws the frame, its title (with a glint passing over it as it
  * comes into view), its labels and the body over time. With play "once" it builds in, then plays its cycle or holds,
  * its still the finished figure; "loop" builds, holds and comes round on a loop that divides a minute; "still" never
@@ -531,7 +541,7 @@ export function component<O extends object>(
   if (!(Number.isInteger(body.cols) && body.cols >= 1 && Number.isInteger(body.rows) && body.rows >= 1)) fail(`${kind} laid out a body of ${body.cols} by ${body.rows}: a body is whole columns and rows, 1 or more`);
   if (width !== undefined && body.cols > width - 2 * pad) fail(`${kind} needs ${body.cols + 2 * pad} columns for this, and its width is ${width}: give it a width of ${body.cols + 2 * pad} or more, or less to show`);
   // Sizing itself, a body past the widest a figure can take would lose what is past it: say so, as rows do.
-  if (body.cols + 2 * pad > WIDEST) fail(`${kind} needs ${body.cols + 2 * pad} columns for this, past the ${WIDEST} a figure can take: give it less to show, or shorter words`);
+  if (body.cols + 2 * pad > WIDEST) fail(`${kind} needs ${body.cols + 2 * pad} columns for this, past the ${WIDEST} a component can take: give it less to show, or shorter words`);
   if (body.cycle !== undefined && !(Number.isFinite(body.cycle) && body.cycle > 0)) fail(`${kind} laid out a cycle of ${body.cycle} seconds: a cycle is a number of seconds above 0, or none`);
 
   const title = o.title === false || asked === "" ? undefined : (asked ?? body.title);

@@ -1,81 +1,81 @@
 ---
 layout: ../../layouts/Docs.astro
 title: machines
-description: Markdown figures of how things run, a sequence of messages, a git history, a command's railroad and a rule as logic gates, each written in its own field's notation.
+description: Markdown components of how things run, a protocol's messages, a git history, a command's railroad and a rule as logic gates, each written in its own field's notation.
 ---
 
-Figures of how things run: messages moving between the parts of a system, a branching history, a command's syntax, a rule as logic gates. Each is written in the notation its own field already uses, PlantUML's arrows, git's commands, a man page's usage line and boolean algebra, and each one moves the way the thing it draws does. How fences work, and every place they play, is on [markdown figures](/docs/markdown/).
+Components of how things run: who says what to whom in a protocol, a branching history, a command's syntax, a rule as logic gates. Each is written in the notation its own field already uses, PlantUML's arrows, git's commands, a man page's usage line and boolean algebra, and each one moves the way the thing it draws does. How fences work, and every place they play, is on [markdown components](/docs/markdown/).
 
 ## sequence
 
-Messages between actors, top to bottom in time, each one travelling its arrow: how a request moves through a system, for docs, an issue or an agent's explanation.
+Who says what to whom, in order, top to bottom in time, each message travelling its arrow: a protocol's exchange, a handshake or a conversation between parties, for docs, an issue or an agent's explanation.
 
-```ascii sequence title="list users"
-browser -> api "GET /users"
-api -> db "select users"
-db --> api "12 rows"
-api --> browser "200 ok"
+```ascii sequence title=oauth
+app -> auth "sign in"
+auth --> app "code"
+app -> auth "code for a token"
+auth --> app "token"
 ```
 
 The heads and lifelines draw down, then a dot runs each message from its sender to its receiver, drawing the arrow behind it as its words type. Then, while it is in view, a dot runs the messages again in turn.
 
 ````md
-```ascii sequence title="list users"
-browser -> api "GET /users"
-api -> db "select users"
-db --> api "12 rows"
-api --> browser "200 ok"
+```ascii sequence title=oauth
+app -> auth "sign in"
+auth --> app "code"
+app -> auth "code for a token"
+auth --> app "token"
 ```
 ````
 
 Its plain text:
 
 ```text
-╭─ list users ────────────────────────────╮
-│ ╭─────────╮     ╭─────╮          ╭────╮ │
-│ │ browser │     │ api │          │ db │ │
-│ ╰────┬────╯     ╰──┬──╯          ╰─┬──╯ │
-│      │ GET /users  │               │    │
-│      ├────────────>│               │    │
-│      │             │ select users  │    │
-│      │             ├──────────────>│    │
-│      │             │       12 rows │    │
-│      │             │<┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤    │
-│      │      200 ok │               │    │
-│      │<┄┄┄┄┄┄┄┄┄┄┄┄┤               │    │
-╰──────────────────────────── 4 messages ─╯
+╭─ oauth ──────────────────────╮
+│ ╭─────╮             ╭──────╮ │
+│ │ app │             │ auth │ │
+│ ╰──┬──╯             ╰──┬───╯ │
+│    │ sign in           │     │
+│    ├──────────────────>│     │
+│    │              code │     │
+│    │<┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤     │
+│    │ code for a token  │     │
+│    ├──────────────────>│     │
+│    │             token │     │
+│    │<┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤     │
+╰───────────────── 4 messages ─╯
 ```
 
-It is written in PlantUML's notation, a message a line: `a -> b "words"` is a call, drawn solid; `a --> b "words"` is a reply, drawn dashed; and `a -> a "words"` is a call to itself, a loop on its lifeline. The actors stand in the order they first appear, spaced so every message's words fit over its arrow. It has no options of its own. A call to itself:
+A line is a message: an arrow as PlantUML draws it, then the message's words in quotes, which every message has. `a -> b "words"` is a call, drawn solid; `a --> b "words"` is a reply, drawn dashed; and `a -> a "words"` is a call to itself, a loop on its lifeline. The actors stand in the order they first appear, spaced so every message's words fit over its arrow. It has no options of its own. A TLS handshake, with a call to itself:
 
 ```ascii sequence
-browser -> api "GET /users"
-api -> api "check the token"
-api --> browser "200 ok"
+client -> server "hello"
+server -> server "pick a cipher"
+server --> client "hello, and a certificate"
 ```
 
 ```text
-╭──────────────────────────────────────────╮
-│ ╭─────────╮     ╭─────╮                  │
-│ │ browser │     │ api │                  │
-│ ╰────┬────╯     ╰──┬──╯                  │
-│      │ GET /users  │                     │
-│      ├────────────>│                     │
-│      │             ├──╮ check the token  │
-│      │             │<─╯                  │
-│      │      200 ok │                     │
-│      │<┄┄┄┄┄┄┄┄┄┄┄┄┤                     │
-╰───────────────────────────── 3 messages ─╯
+╭─────────────────────────────────────────────────────╮
+│ ╭────────╮                  ╭────────╮              │
+│ │ client │                  │ server │              │
+│ ╰───┬────╯                  ╰───┬────╯              │
+│     │ hello                     │                   │
+│     ├──────────────────────────>│                   │
+│     │                           ├──╮ pick a cipher  │
+│     │                           │<─╯                │
+│     │  hello, and a certificate │                   │
+│     │<┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤                   │
+╰──────────────────────────────────────── 3 messages ─╯
 ```
 
 ```ts
-// request.ts
+// handshake.ts
 import { sequence } from "ascii.rest/markdown";
 
 export default sequence({
   messages: [
-    { from: "browser", to: "api", text: "GET /users" },
-    { from: "api", to: "browser", text: "200 ok", reply: true },
+    { from: "app", to: "auth", text: "sign in" },
+    { from: "auth", to: "app", text: "code", reply: true },
   ],
 });
 ```
@@ -133,7 +133,7 @@ Its plain text:
 ╰─────────────────────────────────── 2 branches, 6 commits ─╯
 ```
 
-A line is a command with `git` left off: `commit "message"`, `branch <name>`, `switch <name>` (or `checkout <name>`), `switch -c <name>`, `merge <name>` with a message in quotes if you like, always a merge commit as `--no-ff` makes one, and `tag <name>`. The lanes are laid out by a port of git's own graph drawing, so the figure is what git prints for the same history. Each commit's short hash is seeded from its parents and its message, and HEAD is where the last line leaves you.
+A line is a command with `git` left off: `commit "message"`, `branch <name>`, `switch <name>` (or `checkout <name>`), `switch -c <name>`, `merge <name>` with a message in quotes if you like, always a merge commit as `--no-ff` makes one, and `tag <name>`. The lanes are laid out by a port of git's own graph drawing, so it draws what git prints for the same history. Each commit's short hash is seeded from its parents and its message, and HEAD is where the last line leaves you.
 
 | option | what it does | default |
 | --- | --- | --- |

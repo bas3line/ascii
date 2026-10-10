@@ -1,9 +1,9 @@
 /*
  * ascii.rest/markdown/remark: a remark plugin that draws every ```ascii fence
- * in a markdown or MDX page as its figure, for Astro, Next.js with MDX, or
- * anything built on remark. Each fence becomes the figure's still in a
+ * in a markdown or MDX page as its component, for Astro, Next.js with MDX, or
+ * anything built on remark. Each fence becomes the component's still in a
  * <pre class="ascii-md">, so the page is whole before any script runs; start()
- * from ascii.rest/markdown then plays each one as it is scrolled to. A figure
+ * from ascii.rest/markdown then plays each one as it is scrolled to. Each one
  * is handed on as HTML elements, not a string of HTML, so MDX takes it as it
  * is, with no rehype-raw. No dependencies: it walks the markdown tree remark
  * hands it. Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT
@@ -35,18 +35,18 @@ interface Node {
 type Html = { type: "text"; value: string } | { type: "element"; tagName: "span"; properties: { className: string[] }; children: [{ type: "text"; value: string }] };
 
 export interface RemarkOptions {
-  /** The fence's language that names a figure: "ascii", as in ```ascii headline. */
+  /** The fence's language that names a component: "ascii", as in ```ascii headline. */
   lang?: string;
-  /** Options every figure takes, under the fence's own: { width: 56 }. */
+  /** Options every component takes, under the fence's own: { width: 56 }. */
   defaults?: FenceOptions;
-  /** A class on every figure's <pre>, besides ascii-md. */
+  /** A class on every component's <pre>, besides ascii-md. */
   class?: string;
 }
 
 /**
- * The plugin: remarkPlugins: [ascii] or [[ascii, { defaults: { width: 56 } }]]. A fence that names no figure, or
+ * The plugin: remarkPlugins: [ascii] or [[ascii, { defaults: { width: 56 } }]]. A fence that names no component, or
  * gives one an option it doesn't take, fails the build with the kit's error and the fence's first line, so a typo
- * never ships as a broken figure. Only fences are drawn: the rest of the page is left as it is.
+ * never ships as a broken drawing. Only fences are drawn: the rest of the page is left as it is.
  */
 export default function remarkAscii(o: RemarkOptions = {}) {
   const lang = o.lang ?? "ascii";

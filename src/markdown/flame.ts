@@ -18,8 +18,7 @@
  *   flame({ stacks: [{ frames: ["main", "draw", "paint"], samples: 18 }] })
  */
 import { fail } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { ACCENT, BAD, INK, MARK, SOFT, VIOLET, WARN, clean, commas, component, linesOf, progress, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, BAD, INK, MARK, SOFT, VIOLET, WARN, clean, commas, component, linesOf, progress, show, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A profile as data: what a fence's body says, for stacks already in JavaScript. */
 export interface FlameData {

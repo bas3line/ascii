@@ -1,5 +1,5 @@
 /*
- * ascii.rest/markdown, html: a markdown figure as text on a page, in colour.
+ * ascii.rest/markdown, html: a markdown component as text on a page, in colour.
  * mount() draws a coloured piece on a canvas, or in a <pre> in one ink; a
  * figure from a fence wants to stay text, to select, to find on the page and
  * to read in the page's own face. So these draw a frame as runs of text, each
@@ -15,8 +15,7 @@
  */
 import type { Piece } from "../types.ts";
 import { fail } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { COLORS, MARK, TONES, type MarkdownPiece } from "./core.ts";
+import { COLORS, MARK, TONES, show, type MarkdownPiece } from "./core.ts";
 
 // Every character a frame holds is escaped, and the only markup is a span whose class is one of TONES: what paint()
 // writes into an element can't carry markup from a source.
@@ -26,7 +25,7 @@ const attr = (s: string) => esc(s).replace(/"/g, "&quot;");
 /**
  * A frame's text as HTML: each run of one tone in a <span class="md-<tone>">, the ink's runs bare, every character
  * escaped. `color` is the palette index of each cell, row by row, as a piece writes env.color; `size` is how many
- * colours a theme has (10 for a markdown figure), so a dark page's index finds the same tone.
+ * colours a theme has (10 for a markdown component), so a dark page's index finds the same tone.
  */
 export function spans(text: string, color: ArrayLike<number> | null, size: number = TONES.length): string {
   if (!color) return esc(text);
@@ -83,13 +82,15 @@ export function html(p: Piece, o: { t?: number } = {}): string {
 }
 
 /**
- * A figure as a whole <pre>, ready for a page: class "ascii-md", its size as --cols and --rows for CSS to fit it, its
- * sentence as the label a screen reader reads (the box drawing itself is not read out), and its still inside, so the
- * page is whole before any script runs. `attrs` adds attributes of your own, such as data-md for start() to find.
+ * A component as a whole <pre>, ready for a page: class "ascii-md", data-md its kind, its size as --cols and --rows
+ * for CSS to fit it, its sentence as the label a screen reader reads (the box drawing itself is not read out), and its
+ * still inside, so the page is whole before any script runs. `attrs` adds attributes of your own, such as
+ * data-md-source for start() to play it by.
  */
 export function figure(p: MarkdownPiece | Piece, o: { t?: number; class?: string; attrs?: Record<string, string> } = {}): string {
   const says = (p as MarkdownPiece).says ?? p.meta.note;
-  const extra = Object.entries(o.attrs ?? {})
+  const kind = (p as MarkdownPiece).kind;
+  const extra = Object.entries({ ...(typeof kind === "string" ? { "data-md": kind } : {}), ...o.attrs })
     .map(([k, v]) => ` ${k}="${attr(v)}"`)
     .join("");
   return `<pre class="ascii-md${o.class ? ` ${attr(o.class)}` : ""}" role="img" aria-label="${attr(says)}" style="--cols: ${p.meta.cols}; --rows: ${p.meta.rows}"${extra}>${html(p, o)}</pre>`;
@@ -98,10 +99,12 @@ export function figure(p: MarkdownPiece | Piece, o: { t?: number; class?: string
 /**
  * The tones' colours for any page, as CSS: each md-<tone> class in its colour for a light page and a dark one by the
  * page's color-scheme (light-dark()), and md-mark inverted, the page's text colour behind it. A page sets its own
- * with --md-<tone> custom properties, such as --md-accent: #0969da. paint() adds it to the page once.
+ * with --md-<tone> custom properties, such as --md-accent: #0969da. A QR code's rows sit flush, line-height 1, so no
+ * seam between its half blocks stops a phone reading it. paint() adds it to the page once.
  */
 export const STYLE =
   ".ascii-md{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,\"Liberation Mono\",\"ascii.rest mono\",monospace;line-height:1.2;letter-spacing:0;white-space:pre;font-variant-ligatures:none;tab-size:2}" +
+  ".ascii-md[data-md=qr]{line-height:1}" +
   TONES.filter((t) => t !== "ink" && t !== "mark")
     .map((t) => `.ascii-md .md-${t}{color:var(--md-${t},light-dark(${COLORS[t].light},${COLORS[t].dark}))}`)
     .join("") +
@@ -131,10 +134,11 @@ export interface PaintOptions {
 
 /**
  * Plays a piece in an element as text in colour: the frame's runs as spans, redrawn only when they change. Its time
- * runs only while the element is on screen and the tab is open, so a figure builds in when it is first scrolled to,
- * and one with a cycle keeps moving only while it is in view. A reader who prefers reduced motion gets the still, the
- * finished figure, at once, unless `motion`; a piece that shows the time still shows it, redrawn once a second. A
- * figure that is built and has nothing left to move stops drawing. Returns a function that stops it.
+ * runs only while the element is on screen and the tab is open, so a component builds in when it is first scrolled
+ * to, and one with a cycle keeps moving only while it is in view. Until it is first seen it shows its still, the
+ * finished drawing, so finding in the page, printing and a full-page capture read every one. A reader who prefers
+ * reduced motion gets the still and keeps it, unless `motion`; a piece that shows the time still shows it, redrawn
+ * once a second. One that is built and has nothing left to move stops drawing. Returns a function that stops it.
  *
  *   const stop = paint(document.querySelector("pre")!, headline(source));
  */
@@ -153,16 +157,13 @@ export function paint(el: HTMLElement, p: Piece, { motion = false, fps, style = 
     if (out !== last) el.innerHTML = last = out;
   };
   const reduced = !motion && typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!meta.fps || (reduced && !meta.clock)) {
-    draw(still);
-    return () => {};
-  }
-  let t = 0, raf = 0, at = 0, seen = false, done = false;
+  draw(still);
+  if (!meta.fps || (reduced && !meta.clock)) return () => {};
+  let t = 0, raf = 0, at = 0, seen = false, done = false, first = true;
   const every = 1000 / (reduced ? 1 : (fps ?? meta.fps));
-  // A frame moves the figure on by the time since the last, so its pace is the same at any frame rate; a stall past
-  // two frames' worth (100 ms at the least) counts as that, so a figure doesn't jump to its end.
+  // A frame moves it on by the time since the last, so its pace is the same at any frame rate; a stall past two
+  // frames' worth (100 ms at the least) counts as that, so it doesn't jump to its end.
   const most = Math.max(100, 2 * every);
-  draw(reduced ? still : 0);
   const tick = (now: number) => {
     raf = requestAnimationFrame(tick);
     const dt = now - at;
@@ -190,6 +191,11 @@ export function paint(el: HTMLElement, p: Piece, { motion = false, fps, style = 
   };
   const io = new IntersectionObserver((entries) => {
     seen = entries[entries.length - 1].isIntersecting;
+    // the first time it is seen, its build starts from its first frame
+    if (seen && first) {
+      first = false;
+      if (!reduced) draw(0);
+    }
     run();
   });
   io.observe(el);

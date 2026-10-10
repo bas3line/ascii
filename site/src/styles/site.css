@@ -1170,12 +1170,14 @@ pre.code {
   color: var(--muted);
 }
 
-/* --- markdown figures --------------------------------------------------- */
+/* --- markdown components ------------------------------------------------ */
 
 /*
- * A figure an ```ascii fence drew, a <pre class="ascii-md">: text in the art's face, set close so its box lines join,
- * its tones in the site's own colours, and the one thing it marks with ink behind it, as the site marks the current
- * page. In a well it takes the largest size that fits, as a piece does; in the docs, the code's size.
+ * A component an ```ascii fence drew, a <pre class="ascii-md">: text in the art's face, set close so its box lines
+ * join, its tones in the site's own colours, and the one thing it marks with ink behind it, as the site marks the
+ * current page. In a well it takes the largest size that fits, as a piece does; in the docs, the code's size, or
+ * smaller on a narrow screen so it fits its column rather than scrolling. A QR code's rows sit flush, so no seam
+ * between its half blocks stops a phone reading it.
  */
 pre.ascii-md {
   margin: 0;
@@ -1195,6 +1197,19 @@ pre.ascii-md {
   color: var(--ink);
   font-family: var(--art);
   line-height: 1.2;
+}
+
+/* its columns and the snippet's padding, 2ch and 10ch for [copy], in the snippet's width */
+.docs .snippet:has(> pre.ascii-md) {
+  container-type: inline-size;
+}
+
+.docs .snippet > pre.ascii-md {
+  font-size: min(0.8125rem, calc(100cqi / (var(--cols) + 12) / 0.6));
+}
+
+pre.ascii-md[data-md="qr"] {
+  line-height: 1;
 }
 
 .ascii-md .md-soft {

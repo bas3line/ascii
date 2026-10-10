@@ -15,8 +15,8 @@
  *   qr({ text: "npx ascii.rest add markdown" }, { caption: false })
  */
 import { fail, hash, fnv1a32 } from "../kit/core.ts";
-import { boolOf, show, wordOf } from "../kit/recipes/checks.ts";
-import { ACCENT, INK, SOFT, clean, component, linesOf, progress, shown, statements, wrap, type Common, type MarkdownPiece } from "./core.ts";
+import { boolOf, wordOf } from "../kit/recipes/checks.ts";
+import { ACCENT, INK, SOFT, clean, component, linesOf, progress, show, shown, statements, wrap, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A QR code as data: the text it holds. */
 export interface QrData {
@@ -346,7 +346,7 @@ function parse(source: string): QrData {
     if (s.tokens.length === 1 && s.texts.length === 1) return { text: s.texts[0] };
   }
   const option = /^([a-z]+)=(\S*)$/.exec(raw);
-  if (option && (OWN as readonly string[]).includes(option[1])) fail(`qr's line 1 is ${show(raw)}: its options go on the fence, as \`\`\`ascii qr ${raw}`);
+  if (option && (OWN as readonly string[]).includes(option[1])) fail(`qr's line 1 is ${show(raw)}: its options go on the fence, as \`\`\`ascii qr ${raw.length > 40 ? `${option[1]}=...` : raw}`);
   return { text: raw };
 }
 

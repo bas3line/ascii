@@ -21,8 +21,7 @@
  *   git({ steps: [{ commit: "init" }, { switch: "feat", create: true }, { commit: "draw fences" }] })
  */
 import { fail, fnv1a32, suggest } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { ACCENT, GOOD, INK, MARK, SOFT, VIOLET, WARN, clean, component, statements, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, GOOD, INK, MARK, SOFT, VIOLET, WARN, clean, component, show, statements, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A step of a history, as git's commands make one. */
 export type GitStep =
@@ -65,7 +64,7 @@ function parse(source: string): Step[] {
   return lines.map((s) => {
     const at = `git's line ${s.line}`;
     const key = Object.keys(s.attrs)[0];
-    if (key !== undefined) fail(`${at} has ${key}=${show(s.attrs[key])}: git's options go on the fence, as \`\`\`ascii git ${key}=${s.attrs[key] || "..."}`);
+    if (key !== undefined) fail(`${at} has ${key}=${show(s.attrs[key])}: git's options go on the fence, as \`\`\`ascii git ${key}=${s.attrs[key] && s.attrs[key].length <= 40 ? s.attrs[key] : "..."}`);
     const words = s.words[0] === "git" ? s.words.slice(1) : s.words;
     const [command = "", ...rest] = words;
     const flags = rest.filter((w) => w.startsWith("-"));

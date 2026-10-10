@@ -14,8 +14,7 @@
  *   flap({ rows: ["now boarding", "v0.5 gate npm"] }, { width: 41 })
  */
 import { fail } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { ACCENT, INK, QUIET, SOFT, clean, component, linesOf, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, INK, QUIET, SOFT, clean, component, linesOf, show, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A sign as data: what a fence's body says, for rows already in JavaScript. */
 export interface FlapData {

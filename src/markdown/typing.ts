@@ -7,15 +7,15 @@
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
  *   ```ascii typing
- *   ascii.rest draws "scenes" "banners" "figures"
+ *   ascii.rest draws "scenes" "banners" "components"
  *   ```
  *
- *   typing('ascii.rest draws "scenes" "banners" "figures"', { hold: 2 })
- *   typing({ before: "ascii.rest draws", turns: ["scenes", "banners", "figures"] })
+ *   typing('ascii.rest draws "scenes" "banners" "components"', { hold: 2 })
+ *   typing({ before: "ascii.rest draws", turns: ["scenes", "banners", "components"] })
  */
 import { fail } from "../kit/core.ts";
-import { boolOf, numberOf, show } from "../kit/recipes/checks.ts";
-import { ACCENT, GLINT, INK, clean, component, shown, statements, type Common, type MarkdownPiece } from "./core.ts";
+import { boolOf, numberOf } from "../kit/recipes/checks.ts";
+import { ACCENT, GLINT, INK, clean, component, show, shown, statements, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A typing line as data: what a fence's body says, for words already in JavaScript. */
 export interface TypingData {
@@ -52,7 +52,7 @@ function parse(source: string): TypingData {
   if (lines.length > 1) fail(`typing types one line, and line ${lines[1].line} is a second one: ${show(cut(lines[1].raw))}. Give it a fence of its own`);
   const s = lines[0];
   const key = Object.keys(s.attrs)[0];
-  if (key !== undefined) fail(`typing's line has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii typing ${key}=${s.attrs[key] || "..."}`);
+  if (key !== undefined) fail(`typing's line has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii typing ${key}=${s.attrs[key] && s.attrs[key].length <= 40 ? s.attrs[key] : "..."}`);
   const before: string[] = [], turns: string[] = [], after: string[] = [];
   for (const token of s.tokens) {
     if ("text" in token) {
@@ -91,7 +91,7 @@ function check(data: TypingData): { before: string; turns: string[]; after: stri
  * blinking, is erased at 30 a second and the next typed. With one quoted word or none it types once, then only its
  * cursor blinks. Its still is the line with its first word typed and no cursor.
  *
- *   typing('ascii.rest draws "scenes" "banners" "figures"')
+ *   typing('ascii.rest draws "scenes" "banners" "components"')
  *   typing('"fast" "small" "plain" by default', { hold: 1, cursor: false })
  */
 export function typing(source: string | TypingData, options?: TypingOptions): MarkdownPiece {

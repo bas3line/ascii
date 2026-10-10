@@ -14,8 +14,8 @@
  *   logic({ outputs: { ready: "built and (tested or not skipped)" } })
  */
 import { fail } from "../kit/core.ts";
-import { numberOf, show } from "../kit/recipes/checks.ts";
-import { ACCENT, INK, QUIET, SOFT, clean, component, progress, statements, type Common, type MarkdownPiece } from "./core.ts";
+import { numberOf } from "../kit/recipes/checks.ts";
+import { ACCENT, INK, QUIET, SOFT, clean, component, progress, show, statements, type Common, type MarkdownPiece } from "./core.ts";
 
 /** Logic as data: each output and the expression it is, in order. */
 export interface LogicData {

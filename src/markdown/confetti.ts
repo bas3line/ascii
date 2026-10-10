@@ -15,9 +15,9 @@
  *   confetti({ lines: ["thank you"] }, { count: 30 })
  */
 import { fail, fnv1a32, mulberry32 } from "../kit/core.ts";
-import { show, wholeOf } from "../kit/recipes/checks.ts";
+import { wholeOf } from "../kit/recipes/checks.ts";
 import { streak } from "../kit/particles.ts";
-import { ACCENT, GLINT, GOOD, INK, VIOLET, WARN, clean, component, progress, statements, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, GLINT, GOOD, INK, VIOLET, WARN, clean, component, progress, show, statements, type Common, type MarkdownPiece } from "./core.ts";
 
 /** Confetti as data: what a fence's body says, for words already in JavaScript. */
 export interface ConfettiData {
@@ -45,7 +45,7 @@ function parse(source: string): ConfettiData {
   const lines: string[] = [];
   for (const s of statements(source, "confetti")) {
     const key = Object.keys(s.attrs)[0];
-    if (key !== undefined) fail(`confetti's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii confetti ${key}=${s.attrs[key] || "..."}`);
+    if (key !== undefined) fail(`confetti's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii confetti ${key}=${s.attrs[key] && s.attrs[key].length <= 40 ? s.attrs[key] : "..."}`);
     if (s.texts.length && s.words.length) fail(`confetti's line ${s.line} has words outside its quotes, ${show(s.words.join(" "))}: put the message in quotes, a line in each`);
     if (s.texts.length) lines.push(...s.texts);
     else lines.push(s.words.join(" "));

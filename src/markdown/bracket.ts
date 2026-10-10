@@ -16,8 +16,7 @@
  *   bracket({ rounds: [["block", "slim"], ["block"]] })
  */
 import { fail, type Surface } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { ACCENT, GLINT, INK, MARK, QUIET, SOFT, clean, component, progress, shown, statements, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, GLINT, INK, MARK, QUIET, SOFT, clean, component, progress, show, shown, statements, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A bracket as data: what a fence's body says, for rounds already in JavaScript. */
 export interface BracketData {
@@ -45,7 +44,7 @@ function parse(source: string): BracketData {
   return {
     rounds: lines.map((s) => {
       const key = Object.keys(s.attrs)[0];
-      if (key !== undefined) fail(`bracket's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii bracket ${key}=${s.attrs[key] || "..."}`);
+      if (key !== undefined) fail(`bracket's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii bracket ${key}=${s.attrs[key] && s.attrs[key].length <= 40 ? s.attrs[key] : "..."}`);
       return s.tokens.map((k) => ("word" in k ? k.word : "text" in k ? k.text : ""));
     }),
   };

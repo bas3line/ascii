@@ -200,9 +200,9 @@ Every option of [banner()](https://ascii.rest/docs/banners/) and [svg()](https:/
 
 [ascii.rest/make](https://ascii.rest/make/) turns your own logo or a photo into animated ascii. It takes an SVG, PNG, JPG, WebP or GIF, and works in your browser, so nothing is uploaded. You get an embed for any page, two SVGs for a README, and a piece file to add to the library. [Image to ascii](https://ascii.rest/docs/images/) in the docs.
 
-### Markdown figures
+### Markdown components
 
-Write an `ascii` fence in your markdown, and `ascii.rest/markdown` draws it in text: on a site through its remark plugin, built in as it is scrolled to, and in a README as a plain fenced block or an animated SVG. There are 25 figures, among them a headline in banner letters, a sequence of messages, a git graph, a flame graph, a chip's pinout, a QR code, a chess board and a map of the world, each one an ascii.rest piece that plays in React, MDX, any page, an SVG and a terminal.
+Write an `ascii` fence in your markdown, and `ascii.rest/markdown` draws it in text: on a site through its remark plugin, built in as it is scrolled to, and in a README as a plain fenced block or an animated SVG. There are 25 components, among them a headline in banner letters, a protocol's messages, a git graph, a flame graph, a chip's pinout, a QR code, a chess board and a map of the world, each one an ascii.rest piece that plays in React, MDX, any page, an SVG and a terminal.
 
 ````md
 ```ascii headline
@@ -225,46 +225,46 @@ npx ascii.rest md README.src.md --out README.md
 animated ascii art for web pages
 ```
 
-Messages between the parts of a system, in PlantUML's arrows, each one travelling its arrow on a page:
+Who says what to whom in a protocol, an OAuth handshake here, each message travelling its arrow on a page:
 
 ````md
-```ascii sequence title="list users"
-browser -> api "GET /users"
-api -> db "select users"
-db --> api "12 rows"
-api --> browser "200 ok"
+```ascii sequence title=oauth
+app -> auth "sign in"
+auth --> app "code"
+app -> auth "code for a token"
+auth --> app "token"
 ```
 ````
 
 ```text
-╭─ list users ────────────────────────────╮
-│ ╭─────────╮     ╭─────╮          ╭────╮ │
-│ │ browser │     │ api │          │ db │ │
-│ ╰────┬────╯     ╰──┬──╯          ╰─┬──╯ │
-│      │ GET /users  │               │    │
-│      ├────────────>│               │    │
-│      │             │ select users  │    │
-│      │             ├──────────────>│    │
-│      │             │       12 rows │    │
-│      │             │<┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤    │
-│      │      200 ok │               │    │
-│      │<┄┄┄┄┄┄┄┄┄┄┄┄┤               │    │
-╰──────────────────────────── 4 messages ─╯
+╭─ oauth ──────────────────────╮
+│ ╭─────╮             ╭──────╮ │
+│ │ app │             │ auth │ │
+│ ╰──┬──╯             ╰──┬───╯ │
+│    │ sign in           │     │
+│    ├──────────────────>│     │
+│    │              code │     │
+│    │<┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤     │
+│    │ code for a token  │     │
+│    ├──────────────────>│     │
+│    │             token │     │
+│    │<┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤     │
+╰───────────────── 4 messages ─╯
 ```
 
-And a cat with something to say, from an `ascii say` fence holding `a fence in, a figure out.`:
+And a cat with something to say, from an `ascii say` fence holding `a fence in, a drawing out.`:
 
 ```text
-╭───────────────────────────╮
-│ a fence in, a figure out. │
-╰──┬────────────────────────╯
+╭────────────────────────────╮
+│ a fence in, a drawing out. │
+╰──┬─────────────────────────╯
     ╲
      /\_/\
     ( o.o )
      > ^ <
 ```
 
-[Markdown figures](https://ascii.rest/docs/markdown/) in the docs, and `npx ascii.rest add markdown` copies them into your project.
+[Markdown components](https://ascii.rest/docs/markdown/) in the docs, and `npx ascii.rest add markdown` copies them into your project.
 
 ## In a terminal
 

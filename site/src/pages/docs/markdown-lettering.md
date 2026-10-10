@@ -1,10 +1,10 @@
 ---
 layout: ../../layouts/Docs.astro
 title: lettering
-description: Markdown figures made of letters, drawn in ascii.rest's own banner fonts and built in as you scroll to them.
+description: Markdown components made of letters, drawn in ascii.rest's own banner fonts and built in as you scroll to them.
 ---
 
-Figures made of letters, for the top of a README or a release post. Each one is an `ascii` fence, drawn in text: it builds in when you scroll to it, keeps moving while it is in view, and prints as the same text for a README. How fences work, and every place they play, is on [markdown figures](/docs/markdown/).
+Components made of letters, for the top of a README or a release post. Each one is an `ascii` fence, drawn in text: it builds in when you scroll to it, keeps moving while it is in view, and prints as the same text for a README. How fences work, and every place they play, is on [markdown components](/docs/markdown/).
 
 ## headline
 
@@ -14,7 +14,7 @@ Words in ascii.rest's banner letters with their drop shadow, a glint passing ove
 ascii.rest "animated ascii art for web pages"
 ```
 
-Its columns drop in from the left, a glint crosses the letters and the small line types in, all in 1.2 seconds. Then the glint crosses again every 6 seconds while the figure is in view. The finished drawing, with no glint, is what a reader who asks for reduced motion sees, and what a README shows.
+Its columns drop in from the left, a glint crosses the letters and the small line types in, all in 1.2 seconds. Then the glint crosses again every 6 seconds while it is in view. The finished drawing, with no glint, is what a reader who asks for reduced motion sees, and what a README shows.
 
 ````md
 ```ascii headline
@@ -35,7 +35,7 @@ Its plain text, for a README:
 animated ascii art for web pages
 ```
 
-The words written bare are the big line, in block letters: the letters A to Z, the digits 0 to 9, spaces, and `. , ! ? ' : - + = / _`. Lower case letters are drawn as capitals, except in the `mixed` font, and any other character stops the build with a message that names it. Words in quotes are the small line under them, wrapped if they are wider than the figure. There is no frame unless you ask for one.
+The words written bare are the big line, in block letters: the letters A to Z, the digits 0 to 9, spaces, and `. , ! ? ' : - + = / _`. Lower case letters are drawn as capitals, except in the `mixed` font, and any other character stops the build with a message that names it. Words in quotes are the small line under them, wrapped if they are wider than the letters. There is no frame unless you ask for one.
 
 | option | what it does | default |
 | --- | --- | --- |
@@ -43,10 +43,10 @@ The words written bare are the big line, in block letters: the letters A to Z, t
 | `shadow` | The drop shadow's lines: `double`, `single`, `heavy`, `rounded`, `ascii` or `none`. | `double` |
 | `align` | Where the letters and the line sit in a `width` wider than they are: `left` or `center`. | `left` |
 
-It takes [the options every figure takes](/docs/markdown/#options-every-figure-takes) too. In slim letters, centred in a frame of 40 columns with a title:
+It takes [the options every component takes](/docs/markdown/#options-every-component-takes) too. In slim letters, centred in a frame of 40 columns with a title:
 
 ```ascii headline font=slim align=center width=40 frame=rounded title=release
-v0.5 "markdown figures"
+v0.5 "markdown components"
 ```
 
 Its plain text:
@@ -60,7 +60,7 @@ Its plain text:
 │             █║ ███║█╗██╔╝            │
 │             ╚╝ ╚══╝╚╝╚═╝             │
 │                                      │
-│           markdown figures           │
+│         markdown components          │
 ╰──────────────────────────────────────╯
 ```
 
@@ -93,14 +93,14 @@ As data, `headline({ words: "ascii.rest", line: "animated ascii art for web page
 A line that types itself behind a cursor, then erases its words in quotes and types the next, round and round: the tagline under a README's title that keeps changing its word.
 
 ```ascii typing
-ascii.rest draws "scenes" "banners" "figures"
+ascii.rest draws "scenes" "banners" "components"
 ```
 
 It types the line at 18 characters a second behind a `▌` cursor. Then, while it is in view, each word in quotes holds for 1.6 seconds while a glint crosses it and the cursor blinks, is erased, and the next one types. Its still is the line with its first word typed and no cursor.
 
 ````md
 ```ascii typing
-ascii.rest draws "scenes" "banners" "figures"
+ascii.rest draws "scenes" "banners" "components"
 ```
 ````
 
@@ -131,7 +131,7 @@ fast by default
 // tagline.ts
 import { typing } from "ascii.rest/markdown";
 
-export default typing({ before: "ascii.rest draws", turns: ["scenes", "banners", "figures"] });
+export default typing({ before: "ascii.rest draws", turns: ["scenes", "banners", "components"] });
 ```
 
 In React it is `<Typing>`.
@@ -192,14 +192,14 @@ In React it is `<Flap>`.
 A ticker: its items scroll past behind a window, a dot in the accent between each, round and round. The latest news at the top of a README, a banner across docs.
 
 ```ascii marquee
-"markdown figures" "a fence in, a picture out" "npx ascii.rest add markdown"
+"markdown components" "drawn in text" "npx ascii.rest add markdown"
 ```
 
 The items slide in from the right in 0.8 seconds and come to rest. Then, while it is in view, they scroll left 8 cells a second, round and round. At rest it shows as many whole items as fit, from the first, so its plain text never cuts a word.
 
 ````md
 ```ascii marquee
-"markdown figures" "a fence in, a picture out" "npx ascii.rest add markdown"
+"markdown components" "drawn in text" "npx ascii.rest add markdown"
 ```
 ````
 
@@ -207,7 +207,7 @@ Its plain text:
 
 ```text
 ╭──────────────────────────────────────────────╮
-│ markdown figures · a fence in, a picture out │
+│ markdown components · drawn in text          │
 ╰──────────────────────────────────────────────╯
 ```
 
@@ -221,7 +221,7 @@ Each item is in quotes, side by side or a line each, and a line with no quotes i
 // news.ts
 import { marquee } from "ascii.rest/markdown";
 
-export default marquee({ items: ["markdown figures", "a fence in, a picture out"] });
+export default marquee({ items: ["markdown components", "drawn in text"] });
 ```
 
 In React it is `<Marquee>`.

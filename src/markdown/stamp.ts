@@ -16,9 +16,9 @@
  *   stamp({ word: "shipped", line: "v0.5, 2026-10-11" })
  */
 import { fail, fnv1a32, hash } from "../kit/core.ts";
-import { show, wordOf } from "../kit/recipes/checks.ts";
+import { wordOf } from "../kit/recipes/checks.ts";
 import { banner, drawable as inFont } from "../banner.ts";
-import { ACCENT, BAD, GOOD, QUIET, VIOLET, WARN, clean, component, progress, statements, wrap, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, BAD, GOOD, QUIET, VIOLET, WARN, clean, component, progress, show, statements, wrap, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A stamp as data: its word, and the small line under it. */
 export interface StampData {
@@ -52,7 +52,7 @@ function parse(source: string): StampData {
   let word: string | undefined, line: string | undefined;
   for (const s of lines) {
     const key = Object.keys(s.attrs)[0];
-    if (key !== undefined) fail(`stamp's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii stamp ${key}=${s.attrs[key] || "..."}`);
+    if (key !== undefined) fail(`stamp's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii stamp ${key}=${s.attrs[key] && s.attrs[key].length <= 40 ? s.attrs[key] : "..."}`);
     if (s.words.length) {
       if (word !== undefined) fail(`stamp's word is one line, and line ${s.line} has words too: ${show(s.words.join(" "))}`);
       word = s.words.join(" ");

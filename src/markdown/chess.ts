@@ -15,8 +15,8 @@
  *   chess({ fen: "start", moves: ["e2e4", "c7c5"] })
  */
 import { fail, type Surface } from "../kit/core.ts";
-import { boolOf, show } from "../kit/recipes/checks.ts";
-import { ACCENT, INK, MARK, QUIET, SOFT, clean, component, statements, type At, type Common, type MarkdownPiece } from "./core.ts";
+import { boolOf } from "../kit/recipes/checks.ts";
+import { ACCENT, INK, MARK, QUIET, SOFT, clean, component, show, statements, type At, type Common, type MarkdownPiece } from "./core.ts";
 
 /** A chess game as data: what a fence's body says, for a position already in JavaScript. */
 export interface ChessData {
@@ -84,7 +84,7 @@ function parse(source: string): ChessData {
   const words: string[] = [];
   for (const s of lines) {
     const key = Object.keys(s.attrs)[0];
-    if (key !== undefined) fail(`chess's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii chess ${key}=${s.attrs[key] || "..."}`);
+    if (key !== undefined) fail(`chess's line ${s.line} has ${key}=${show(s.attrs[key])}: its options go on the fence, as \`\`\`ascii chess ${key}=${s.attrs[key] && s.attrs[key].length <= 40 ? s.attrs[key] : "..."}`);
     if (s.texts.length) fail(`chess's line ${s.line} has words in quotes, ${show(s.texts[0])}: chess reads a FEN and moves in UCI, such as e2e4, and nothing else`);
     words.push(...s.words);
   }

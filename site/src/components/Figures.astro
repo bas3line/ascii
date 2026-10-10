@@ -1,11 +1,11 @@
 ---
 /*
- * The markdown figures on the home page, after the scenes: a card for each
- * figure, its catalog example drawn in its well as the remark plugin draws a
+ * The markdown components on the home page, after the scenes: a card for each
+ * one, its catalog example drawn in its well as the remark plugin draws a
  * fence, so the page is whole before any script runs, then built in as the
- * section nears the screen. Each card goes to the figure's docs. The script
- * sits inside the section, so the next category is still a section right
- * after this one, spaced as the others are.
+ * section nears the screen. Each card goes to the component's docs. The
+ * script sits inside the section, so the next category is still a section
+ * right after this one, spaced as the others are.
  */
 import { catalog, markup } from "ascii.rest/markdown";
 ---
@@ -27,8 +27,9 @@ import { catalog, markup } from "ascii.rest/markdown";
   </div>
 
   <script>
-    // The figures build in once the section nears the screen. They hold still, as the pieces do, when the system asks
-    // for reduced motion, unless the reader chose to play them anyway.
+    // The components build in once the section nears the screen. They hold still, as the pieces do, when the system
+    // asks for reduced motion, unless the reader chose to play them anyway; the header's [play anyway] and
+    // [hold still] say "ascii-motion", and they start again that way.
     const section = document.getElementById("markdown");
     if (section) {
       const io = new IntersectionObserver(
@@ -40,7 +41,13 @@ import { catalog, markup } from "ascii.rest/markdown";
             motion = localStorage.getItem("ascii-motion") === "play";
           } catch {}
           import("ascii.rest/markdown").then(
-            ({ start }) => start(section, { style: false, motion }),
+            ({ start }) => {
+              let stop = start(section, { style: false, motion });
+              addEventListener("ascii-motion", (e) => {
+                stop();
+                stop = start(section, { style: false, motion: (e as CustomEvent<boolean>).detail });
+              });
+            },
             // the module's file is gone: the page is from an older build (the script at the top of <head>)
             () => (window as Window & { asciiReload?: () => void }).asciiReload?.(),
           );

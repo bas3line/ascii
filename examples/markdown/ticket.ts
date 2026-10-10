@@ -6,6 +6,6 @@
 import { ticket } from "../../src/markdown/index.ts";
 
 export default ticket(`
-  v0.4 v0.5 "markdown figures"
+  v0.4 v0.5 "markdown components"
   gate=npm seat=1A time=18:00
 `);

@@ -1,10 +1,10 @@
 ---
 layout: ../../layouts/Docs.astro
 title: tokens
-description: Markdown figures that stand for something, a QR code a phone reads, a text's fingerprint, a rubber stamp and a pass in banner letters, each seeded so it draws the same everywhere.
+description: Markdown components that stand for something, a QR code a phone reads, a text's fingerprint, a rubber stamp and a pass in banner letters, each seeded so it draws the same everywhere.
 ---
 
-Figures that stand for something: a QR code, a fingerprint of a name, a rubber stamp, a pass. The QR code is a real one, encoded here, and the rest are seeded from their own words with the kit's `fnv1a32()`, so the same words always draw the same token, on a page, in an SVG and as plain text. How fences work, and every place they play, is on [markdown figures](/docs/markdown/).
+Components that stand for something: a QR code, a fingerprint of a name, a rubber stamp, a pass. The QR code is a real one, encoded here, and the rest are seeded from their own words with the kit's `fnv1a32()`, so the same words always draw the same token, on a page, in an SVG and as plain text. How fences work, and every place they play, is on [markdown components](/docs/markdown/).
 
 ## qr
 
@@ -192,7 +192,7 @@ In React it is `<Stamp>`.
 A pass for a release or an event: its two ends in banner's slim letters with a `>` flying between them, or one end for an admission, a line under them, a perforation, and a stub with the details and a barcode.
 
 ```ascii ticket
-v0.4 v0.5 "markdown figures"
+v0.4 v0.5 "markdown components"
 gate=npm seat=1A time=18:00
 ```
 
@@ -200,7 +200,7 @@ It prints out a row at a time, the `>` flies across, the line types and the bars
 
 ````md
 ```ascii ticket
-v0.4 v0.5 "markdown figures"
+v0.4 v0.5 "markdown components"
 gate=npm seat=1A time=18:00
 ```
 ````
@@ -214,9 +214,9 @@ Its plain text:
 │ █ █ █ █   ███    >    █ █ █ █   ██          │
 │  █  █ █     █          █  █ █     █         │
 │  █  ███ █   █          █  ███ █ ██          │
-│ markdown figures                            │
+│ markdown components                         │
 ├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤
-│ gate npm  seat 1A  time 18:00   ▌▐▐▌▍▍█▍▌▐▍ │
+│ gate npm  seat 1A  time 18:00   ▍█▌▍▍▍▐▌▌█▍ │
 ╰─────────────────────────────────────────────╯
 ```
 
@@ -244,7 +244,7 @@ where=online time=18:00
 // pass.ts
 import { ticket } from "ascii.rest/markdown";
 
-export default ticket({ ends: ["v0.4", "v0.5"], line: "markdown figures", fields: { gate: "npm" } });
+export default ticket({ ends: ["v0.4", "v0.5"], line: "markdown components", fields: { gate: "npm" } });
 ```
 
 In React it is `<Ticket>`.

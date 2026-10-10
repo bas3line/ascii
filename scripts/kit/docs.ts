@@ -1,6 +1,6 @@
 // npm run kit:docs [-- --frames]
 // Checks every TypeScript block in the kit's docs pages (site/src/pages/docs/kit*.md),
-// the markdown figures' pages (markdown*.md), and the README's kit and markdown
+// the markdown components' pages (markdown*.md), and the README's kit and markdown
 // blocks against the built package, as a user's project would import it:
 // "ascii.rest/kit" and the rest resolve to dist/ through package.json's exports.
 // Each page's blocks are written to a folder of their own, a block whose first line
@@ -10,7 +10,7 @@
 // block is its frame as the page shows it: it must be the frame the piece draws, in
 // one ink, at the time its caption names ("at 2.5 seconds"), blank rows at either
 // end and spaces at line ends aside; with no time named, that is 1 second, or for a
-// markdown figure its still, the finished figure, as plain() prints it. When it
+// markdown component its still, its finished drawing, as plain() prints it. When it
 // isn't, the real frame is printed to paste in. Every ```ascii fence a markdown page
 // draws is checked the same way: it must draw, and the next ```text block in its
 // section must be its still. With --frames it prints each piece's frame at 1
@@ -28,7 +28,7 @@ if (!existsSync(join(root, "dist/kit/index.js"))) {
   process.exit(1);
 }
 
-// The pages, and the README's blocks that use the kit or the markdown figures.
+// The pages, and the README's blocks that use the kit or the markdown components.
 const docs = join(root, "site/src/pages/docs");
 const sources = readdirSync(docs)
   .filter((f) => /^kit(-[a-z0-9]+)?\.md$/.test(f) || /^markdown(-[a-z0-9]+)?\.md$/.test(f))
@@ -126,7 +126,7 @@ for (const paper of [false, true]) for (const mono of [false, true]) for (const 
 console.log(meta.name + "  " + meta.cols + "x" + meta.rows + "  " + meta.fps + "fps" + (meta.loop ? "  loop " + meta.loop + "s" : ""));
 if (process.argv[3] === "--frames") console.log(snapshot(p, 1, { mono: true }).text.split("\\n").map((l) => "    |" + l + "|").join("\\n"));
 // The frame at the time its page shows, between markers and saying when, for the page's frame to be checked against.
-// With no time named it is 1 second, or for a markdown figure (it has a kind and says) its still, as plain() prints.
+// With no time named it is 1 second, or for a markdown component (it has a kind and says) its still, as plain() prints.
 if (process.argv[4] !== undefined) {
   const named = process.argv[4] !== "unnamed";
   if (typeof p.kind === "string" && typeof p.says === "string") {
@@ -167,7 +167,7 @@ rmSync(dir, { recursive: true, force: true });
 
 // Every ```ascii fence a markdown page draws, as its remark plugin draws it: it must draw, and the first ```text block
 // after it in its section must be its still, as plain() prints it. A fence shown inside another (a ````md block) is
-// that block's text, not a figure, and is left alone.
+// that block's text, not a component, and is left alone.
 const { fencesOf, fromFence, plain } = (await import(pathToFileURL(join(root, "dist/markdown/index.js")).href)) as typeof import("../../src/markdown/index.ts");
 let fenced = 0;
 for (const { name, text } of sources.filter((s) => s.name.startsWith("markdown"))) {

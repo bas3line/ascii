@@ -5,4 +5,4 @@
  */
 import { typing } from "../../src/markdown/index.ts";
 
-export default typing(`ascii.rest draws "scenes" "banners" "figures"`);
+export default typing(`ascii.rest draws "scenes" "banners" "components"`);

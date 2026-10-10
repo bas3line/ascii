@@ -1,6 +1,6 @@
 /*
  * say: a little creature with a balloon, after the old Unix cowsay and
- * cowthink. The creature is the figure: one of six of ascii.rest's own (a cat,
+ * cowthink. The creature is the drawing: one of six of ascii.rest's own (a cat,
  * an owl, a fox, a ghost, a robot, a crab), each with an idle of its own, and
  * one balloon of words over it, said or thought. A README's friendly footer,
  * an agent's sign-off.
@@ -10,12 +10,12 @@
  *   where did i put that fence?
  *   ```
  *
- *   say("a fence in, a figure out.")
+ *   say("a fence in, a drawing out.")
  *   say({ text: "beep. all tests pass." }, { creature: "robot" })
  */
 import { fail } from "../kit/core.ts";
-import { show, wordOf } from "../kit/recipes/checks.ts";
-import { ACCENT, INK, QUIET, SOFT, clean, component, linesOf, progress, shown, wrap, type Common, type MarkdownPiece } from "./core.ts";
+import { wordOf } from "../kit/recipes/checks.ts";
+import { ACCENT, INK, QUIET, SOFT, clean, component, linesOf, progress, show, shown, wrap, type Common, type MarkdownPiece } from "./core.ts";
 
 /** The creatures: each ascii.rest's own art, at most 4 rows, with an idle of its own. */
 export const CREATURES = ["cat", "owl", "fox", "ghost", "robot", "crab"] as const;
@@ -94,7 +94,8 @@ const APPEAR = 0.05, OPEN = 0.15, OPEN_FOR = 0.25, TYPE = 30, LONGEST = 2.5;
 // The cycle: the creature's idle, once in 4 seconds.
 const CYCLE = 4;
 
-// The fence's body: free text, its lines joined by a space, a blank line a new paragraph.
+// The fence's body: free text, its lines joined by a space, a blank line a new paragraph. A body that is one quoted
+// text is the words inside the quotes, as qr and sigil read one; quotes inside the words stay.
 function parse(source: string): SayData {
   const paras: string[][] = [[]];
   for (const line of linesOf(source)) {
@@ -102,7 +103,9 @@ function parse(source: string): SayData {
       if (paras[paras.length - 1].length) paras.push([]);
     } else paras[paras.length - 1].push(line.trim());
   }
-  return { text: paras.filter((p) => p.length).map((p) => p.join(" ")).join("\n\n") };
+  const text = paras.filter((p) => p.length).map((p) => p.join(" ")).join("\n\n");
+  const quoted = /^["“]((?:[^"“”\\]|\\")*)["”]$/.exec(text);
+  return { text: quoted ? quoted[1].replace(/\\"/g, '"') : text };
 }
 
 // Data, checked: words, cleaned, spaces in a row as one, paragraphs kept.
@@ -114,7 +117,7 @@ function check(data: SayData): string {
     .map((p) => p.replace(/\s+/g, " ").trim())
     .filter(Boolean)
     .join("\n\n");
-  if (!text) fail(`say takes the words for its balloon, such as a fence in, a figure out.`);
+  if (!text) fail(`say takes the words for its balloon, such as a fence in, a drawing out.`);
   return text;
 }
 
@@ -125,7 +128,7 @@ function check(data: SayData): string {
  * blinks, the owl turns its head, the fox flicks an ear, the ghost bobs, the robot's antenna light blinks, the crab
  * snaps its claws. Its still is the creature at rest and every word.
  *
- *   say("a fence in, a figure out.")
+ *   say("a fence in, a drawing out.")
  *   say("where did i put that fence?", { creature: "owl", balloon: "think" })
  */
 export function say(source: string | SayData, options?: SayOptions): MarkdownPiece {

@@ -5,4 +5,4 @@
  */
 import { marquee } from "../../src/markdown/index.ts";
 
-export default marquee(`"markdown figures" "a fence in, a picture out" "npx ascii.rest add markdown"`);
+export default marquee(`"markdown components" "drawn in text" "npx ascii.rest add markdown"`);

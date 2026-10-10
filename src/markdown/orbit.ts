@@ -16,8 +16,7 @@
  *   orbit({ hub: "ascii.rest", rings: [["react", "mdx", "svg"], ["readme", "terminal"]] })
  */
 import { fail } from "../kit/core.ts";
-import { show } from "../kit/recipes/checks.ts";
-import { ACCENT, INK, QUIET, SOFT, clean, component, progress, shown, statements, type Common, type MarkdownPiece } from "./core.ts";
+import { ACCENT, INK, QUIET, SOFT, clean, component, progress, show, shown, statements, type Common, type MarkdownPiece } from "./core.ts";
 
 /** An orbit as data: what a fence's body says, for names already in JavaScript. */
 export interface OrbitData {

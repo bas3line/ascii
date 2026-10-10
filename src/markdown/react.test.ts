@@ -100,6 +100,26 @@ test("react: every other prop is an option; options as an object under them; its
   assert.equal(host!.props.dangerouslySetInnerHTML.__html, html(p));
 });
 
+test("react: the page's own props, id, tabIndex, role, data-* and aria-*, go on the <pre>, never to the options", { skip }, async () => {
+  const { Headline } = await load();
+  const onClick = () => {};
+  const { host } = render(React.createElement(Headline, { id: "x", tabIndex: 0, "data-testid": "hero", "aria-hidden": true, onClick, title: "top", children: "ok" }));
+  const p = headline("ok", { title: "top" });
+  assert.equal(host!.type, "pre");
+  assert.equal(host!.props.id, "x");
+  assert.equal(host!.props.tabIndex, 0);
+  assert.equal(host!.props["data-testid"], "hero");
+  assert.equal(host!.props["aria-hidden"], true);
+  assert.equal(host!.props.onClick, onClick);
+  assert.equal(host!.props["data-md"], "headline");
+  // title is the frame's, an option
+  assert.equal(host!.props.dangerouslySetInnerHTML.__html, html(p));
+  // a role or a label of the page's own wins over the drawing's
+  const { host: own } = render(React.createElement(Headline, { role: "presentation", "aria-label": "the logo", children: "ok" }));
+  assert.equal(own!.props.role, "presentation");
+  assert.equal(own!.props["aria-label"], "the logo");
+});
+
 test("react: the effect paints the figure into the <pre>, and returns its stop", { skip }, async () => {
   const { Headline } = await load();
   // a still figure, so paint draws it at once with no observer: what node can run
@@ -120,7 +140,7 @@ test("react: what it can't draw renders nothing, and the console says why", { sk
     assert.equal(render(React.createElement(Headline, { titel: "x", children: "ok" })).host, null);
     assert.match(String(warned[0][1]), /has no option "titel" \(did you mean "title"\?\)/);
     assert.equal(render(React.createElement(Markdown, { kind: "headlin" as "headline", children: "ok" })).host, null);
-    assert.match(String(warned[1][1]), /there is no markdown figure "headlin"/);
+    assert.match(String(warned[1][1]), /there is no markdown component "headlin"/);
     assert.equal(render(React.createElement(Headline, {})).host, null);
     assert.match(String(warned[2][1]), /takes its fence's body as children, a string in braces, or as source/);
   } finally {

@@ -2,10 +2,12 @@
 // DOM, so the tag is played on a stand-in host with the few methods it calls; the browser check is in the hosts' report.
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { catalog } from "./catalog.ts";
 import { COMMON, plain } from "./core.ts";
 import { AsciiMarkdown, define } from "./element.ts";
 import { headline } from "./headline.ts";
 import { figure, html } from "./html.ts";
+import { make } from "./index.ts";
 
 // A stand-in for the element a page would make: attributes, text, and innerHTML that makes a <pre> to paint into.
 function host(attrs: Record<string, string>, text: string) {
@@ -122,8 +124,23 @@ test("element: a body it can't draw stays as it is, and the console says why", a
     none.connectedCallback();
     await settle();
     assert.equal(none.html, "");
-    assert.match(String(warned[1]?.[1]), /there is no markdown figure "headlin"/);
+    assert.match(String(warned[1]?.[1]), /there is no markdown component "headlin"/);
   } finally {
     console.warn = warn;
+  }
+});
+
+test("element: it watches every option every component takes, so a change to any of them draws it again", () => {
+  // each component names the options it takes when it is given one it doesn't: "it takes title, frame, ... and pulse"
+  for (const e of catalog) {
+    let said = "";
+    try {
+      make(e.kind, e.source, { ...e.options, zzzz: 1 } as never);
+    } catch (error) {
+      said = String((error as Error).message);
+    }
+    const list = /it takes (.+)$/.exec(said)?.[1];
+    assert.ok(list, `${e.kind}: ${said}`);
+    for (const name of list!.split(/, | and /)) assert.ok(AsciiMarkdown.observedAttributes.includes(name), `${e.kind}'s ${name}`);
   }
 });
