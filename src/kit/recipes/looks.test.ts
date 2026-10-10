@@ -257,8 +257,10 @@ test("scale, palette, ramp, size and name are options every look takes", () => {
 });
 
 test("options are checked when the look is made, saying what to change", () => {
-  assert.throws(() => sea({ colour: "ocean" } as never), /sea\(\) has no option "colour": it takes palette, speed, period/);
-  assert.throws(() => plasma({ speed: "quick" as never }), /plasma\(\)'s speed takes "still", "slow", "normal" or "fast", or a number from 0 to 100, not "quick"/);
+  assert.throws(() => sea({ colour: "ocean" } as never), /sea\(\) has no option "colour" \(did you mean "palette"\?\): it takes palette, speed, period/);
+  assert.throws(() => sea({ size: "large" } as never), /sea\(\) has no option "size" \(did you mean "scale"\?\)/);
+  assert.throws(() => waves({ direction: "left" } as never), /waves\(\) has no option "direction" \(did you mean "to"\?\)/);
+  assert.throws(() => plasma({ speed: "quick" as never }), /plasma\(\)'s speed takes "still", "slow", "normal" or "fast", or a number from 0 to 100, not "quick" \(did you mean "fast"\?\)/);
   assert.throws(() => plasma({ period: 0 }), /plasma\(\)'s period takes a number from 0.05 to 60, not 0/);
   assert.throws(() => plasma({ scale: 0 }), /scale takes a number above 0/);
   assert.throws(() => plasma({ palette: "oceanic" }), /plasma\(\)'s palette takes a palette's name/);

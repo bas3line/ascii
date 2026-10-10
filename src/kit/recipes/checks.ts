@@ -7,7 +7,7 @@
  * and pieceOf() for recipes of your own.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  */
-import { checkMeta, colorOf as inkOf, fail } from "../core.ts";
+import { checkMeta, colorOf as inkOf, fail, suggest } from "../core.ts";
 import type { Piece } from "../../types.ts";
 import { ease as eases, type EaseName } from "../math.ts";
 import type { Area, Part } from "../materials.ts";
@@ -87,7 +87,7 @@ const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typ
 export function optionsOf<T extends object>(what: string, o: T | undefined, keys: readonly string[]): T {
   if (o === undefined) return {} as T;
   if (!isObject(o)) fail(`${what} takes its options as an object, such as { ${keys[0]}: ... }, not ${show(o)}`);
-  for (const [k, v] of Object.entries(o)) if (v !== undefined && !keys.includes(k)) fail(`${what} has no option ${JSON.stringify(k)}: it takes ${and(keys)}`);
+  for (const [k, v] of Object.entries(o)) if (v !== undefined && !keys.includes(k)) fail(`${what} has no option ${JSON.stringify(k)}${suggest(k, keys)}: it takes ${and(keys)}`);
   return o;
 }
 
@@ -110,7 +110,7 @@ export function wholeOf(what: string, v: unknown, def: number, lo: number, hi = 
 /** One of a list of words, or its default. */
 export function wordOf<W extends string>(what: string, v: unknown, words: readonly W[], def: W): W {
   if (v === undefined) return def;
-  if (!words.includes(v as W)) fail(`${what} takes ${quoted(words)}, not ${show(v)}`);
+  if (!words.includes(v as W)) fail(`${what} takes ${quoted(words)}, not ${show(v)}${suggest(v, words)}`);
   return v as W;
 }
 
@@ -143,7 +143,7 @@ export function sizeOf<W extends string>(what: string, v: unknown, words: Readon
   if (v === undefined) return typeof def === "number" ? def : words[def];
   if (typeof v === "string" && Object.hasOwn(words, v)) return words[v as W];
   if (typeof v !== "number" || !Number.isFinite(v) || v < lo || v > hi)
-    fail(`${what} takes ${quoted(Object.keys(words))}, or a number${hi === Infinity ? ` of ${lo} or more` : ` from ${lo} to ${hi}`}, not ${show(v)}`);
+    fail(`${what} takes ${quoted(Object.keys(words))}, or a number${hi === Infinity ? ` of ${lo} or more` : ` from ${lo} to ${hi}`}, not ${show(v)}${suggest(v, Object.keys(words))}`);
   return v;
 }
 

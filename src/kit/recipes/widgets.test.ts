@@ -375,7 +375,7 @@ test("typewriter, marquee and countdown: words that move", () => {
 });
 
 test("widgets check their options and say what to change", () => {
-  assert.throws(() => progressBar({ colour: "#ff0000" } as never), /progressBar\(\) has no option "colour": it takes value, min, max, label, width, style, percent, seconds, color, name and note/);
+  assert.throws(() => progressBar({ colour: "#ff0000" } as never), /progressBar\(\) has no option "colour" \(did you mean "color"\?\): it takes value, min, max, label, width, style, percent, seconds, color, name and note/);
   assert.throws(() => gauge({ color: "red" }), /gauge's color takes a colour as #rrggbb, \{ light, dark \}, or a palette's name such as "ocean", "fire" or "cola" \(see schemes and materialColors\), not "red"/);
   assert.throws(() => typewriter(""), /typewriter\(\) takes words to type/);
   assert.equal(panel(asPiece("x"), { color: { light: "#000000", dark: "#ffffff" } }).meta.palette!.length >= 2, true);

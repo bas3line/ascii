@@ -106,7 +106,12 @@ export type Emitter =
   | { line: readonly [readonly [number, number], readonly [number, number]] }
   | { area: Region }
   | { edge: Edge }
-  | { text: Source; at?: Place };
+  | { text: Source; at?: Place }
+  /**
+   * Every cell of particles()'s front or back art that holds this character, such as "^" typed where a chimney's top
+   * is: particles are born there, and the mark itself is drawn as a blank, so no one counts columns.
+   */
+  | { mark: string };
 
 /** The way particles are thrown, by name: "out" is every way at once, as a burst. */
 export type Direction = "up" | "down" | "left" | "right" | "up-left" | "up-right" | "down-left" | "down-right" | "out";
@@ -281,6 +286,17 @@ export interface System {
 /** One system or several, drawn in order, each over the last. */
 export type Systems = System | readonly System[];
 
+/**
+ * A system as you write it, given back as it is: for one declared before it is passed, so its options are checked
+ * where they are written, and [1, 2] reads as a range with no `as const`.
+ *
+ *   const smoke = system({ emitter: { mark: "^" }, direction: "up", speed: [1, 2] });
+ *   export default particles({ front: cabin }, smoke);
+ */
+export function system(s: System): System {
+  return s;
+}
+
 /** What drawParticles() takes besides the systems. */
 export interface DrawOptions {
   /**
@@ -383,7 +399,9 @@ type Emit =
   | { line: readonly [readonly [number, number], readonly [number, number]] }
   | { area: Region | null }
   | { edge: Edge }
-  | { letters: Letters };
+  | { letters: Letters }
+  // A mark in particles()'s front or back art, before particles() finds where it is and makes it letters.
+  | { mark: string };
 
 // Colours by age for both themes: a plain list is the same on both.
 interface Fade {
@@ -529,7 +547,7 @@ function fadeOf(given: PaletteLike, steps: number, what: string): Fade {
 
 // The emitter words and what each stands for.
 const WORDS = [...EDGES, "everywhere", "center"] as const;
-const KINDS = ["point", "line", "area", "edge", "text"];
+const KINDS = ["point", "line", "area", "edge", "text", "mark"];
 
 const isPiece = (v: unknown): v is Piece => !!v && typeof v === "object" && "meta" in v && typeof (v as { default?: unknown }).default === "function";
 const isSource = (v: unknown): v is Source => typeof v === "string" || v instanceof Surface || isPiece(v);
@@ -585,9 +603,14 @@ function checkEmitter(e: unknown, what: string): Emit {
   }
   if (!e || typeof e !== "object") fail(`${what}.emitter takes ${quoted(WORDS)}, or { point }, { line }, { area }, { edge } or { text }, not ${JSON.stringify(e)}`);
   const keys = Object.keys(e).filter((k) => KINDS.includes(k));
-  if (keys.length !== 1) fail(`${what}.emitter takes one of point, line, area, edge and text, not ${keys.length ? and(keys) : JSON.stringify(e)}`);
+  if (keys.length !== 1) fail(`${what}.emitter takes one of point, line, area, edge, text and mark, not ${keys.length ? and(keys) : JSON.stringify(e)}`);
   const em = e as Record<string, unknown>;
   if (keys[0] === "text") return { letters: lettersOf(em.text, em.at, what) };
+  if (keys[0] === "mark") {
+    if (typeof em.mark !== "string" || em.mark.length !== 1 || em.mark === " ") fail(`${what}.emitter.mark takes one character other than a space, such as "^", not ${JSON.stringify(em.mark)}`);
+    code(em.mark);
+    return { mark: em.mark };
+  }
   if (keys[0] === "point") {
     const p = em.point;
     if (typeof p === "function") {
@@ -1173,13 +1196,13 @@ function birthplace(pl: Plan, u: number, v: number, born: number, box: Box) {
     const r = e.area;
     if (r) (out[0] = r.x + r.cols * u), (out[1] = r.y + r.rows * v);
     else (out[0] = box.x0 + (box.x1 - box.x0) * u), (out[1] = box.y0 + (box.y1 - box.y0) * v);
-  } else {
+  } else if ("edge" in e) {
     const x = box.x0 + (box.x1 - box.x0) * u, y = box.y0 + (box.y1 - box.y0) * u;
     if (e.edge === "top") (out[0] = x), (out[1] = box.y0);
     else if (e.edge === "bottom") (out[0] = x), (out[1] = box.y1 - IN);
     else if (e.edge === "left") (out[0] = box.x0), (out[1] = y);
     else (out[0] = box.x1 - IN), (out[1] = y);
-  }
+  } else (out[0] = box.x0), (out[1] = box.y0);
 }
 
 // --- drawing ------------------------------------------------------------------------
@@ -1520,6 +1543,8 @@ export function drawParticles(s: Surface, systems: Systems, t: number, o: DrawOp
   if (r !== undefined && (!r || typeof r !== "object" || ![r.x, r.y, r.cols, r.rows].every(num))) fail(`drawParticles()'s region takes { x, y, cols, rows }, not ${JSON.stringify(r)}`);
   const box: Box = r ? { x0: Math.max(0, r.x), x1: Math.min(s.cols, r.x + r.cols), y0: Math.max(0, r.y), y1: Math.min(s.rows, r.y + r.rows) } : { x0: 0, x1: s.cols, y0: 0, y1: s.rows };
   const plans = plansOf(systems, "drawParticles()");
+  const marked = plans.find((pl) => "mark" in pl.emitter);
+  if (marked) fail(`${marked.what}.emitter.mark finds its cells in particles()'s front or back art: give the system to particles() with the art, or use { point } here`);
   if (box.x1 <= box.x0 || box.y1 <= box.y0) return;
   const time = Number.isFinite(t) ? t : 0;
   for (const pl of plans) drawPlan(s, pl, time, period, box);
@@ -1749,7 +1774,27 @@ export function particles<O extends Options = Options>(
     if (options !== undefined) fail("particles() takes options third only for a preset: put them in the systems you give");
     made = systems;
   }
+  // A system born on a mark in the art is planned for this piece alone, the mark's cells found in its art below.
+  const marked = (sys: unknown) => !!sys && typeof sys === "object" && !!(sys as System).emitter && typeof (sys as System).emitter === "object" && "mark" in ((sys as System).emitter as object);
+  made = Array.isArray(made) ? made.map((sys) => (marked(sys) ? { ...sys } : sys)) : marked(made) ? { ...(made as System) } : made;
+  const back = artOf(spec?.back, size, "particles()'s back");
+  const front = artOf(spec?.front, size, "particles()'s front");
+  const arts = [back, front].filter((a): a is Art => !!a);
   const plans = plansOf(made, "particles()");
+  for (const pl of plans) {
+    if (!("mark" in pl.emitter)) continue;
+    const mark = pl.emitter.mark, k = mark.charCodeAt(0);
+    const dx: number[] = [], dy: number[] = [];
+    for (const a of arts)
+      for (let j = 0; j < a.at.length; j++)
+        if (a.ch[j] === k) {
+          dx.push(a.at[j] % cols), dy.push(Math.floor(a.at[j] / cols));
+          // the mark is where it comes from, not part of the picture: a blank, as the art's other spaces
+          a.ch[j] = 32;
+        }
+    if (!dx.length) fail(`${pl.what}.emitter.mark is ${JSON.stringify(mark)}, and particles()'s front and back art have none: type it in the art where the particles come from`);
+    pl.emitter = { letters: { w: cols, h: rows, at: "top-left", dx: Int32Array.from(dx), dy: Int32Array.from(dy), codes: new Uint16Array(dx.length).fill(k), chars: dx.map(() => mark) } };
+  }
   if (period) {
     // What would stop it repeating: left to the default, the piece then just doesn't loop; asked for, it throws.
     const odd = plans.find((pl) => unlike(pl, period));
@@ -1761,9 +1806,6 @@ export function particles<O extends Options = Options>(
     fit(pl, { x0: 0, x1: cols, y0: 0, y1: rows }, full.cell ?? 2);
     checkAlive(pl, period);
   }
-  const back = artOf(spec?.back, size, "particles()'s back");
-  const front = artOf(spec?.front, size, "particles()'s front");
-  const arts = [back, front].filter((a): a is Art => !!a);
   // A picture in more colours than leave room for the particles' keeps fewer of its own, a quarter fewer at a time.
   const plain = arts.some((a) => a.plain);
   const crowded = () => total(distinct(pairsFor(plans, full.palette, arts.flatMap((a) => a.pairs), plain, "particles()"))) > 64;

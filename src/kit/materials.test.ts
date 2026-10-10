@@ -190,7 +190,7 @@ test("inside fills a vessel's room to a level, inside its walls", () => {
   assert.ok(half.level !== undefined && half.room !== undefined);
   // any area: taken in by a column at the sides and a row at the bottom
   assert.equal(count(inside(area.rect(0, 0, 6, 4)), 6, 4), 12);
-  assert.throws(() => inside(tumbler, { fill: "lots" as never }), /inside's fill takes "low", "half", "high", "full" and "brim"/);
+  assert.throws(() => inside(tumbler, { fill: "lots" as never }), /inside's fill takes "low", "half", "high", "full" or "brim"/);
 });
 
 test("shapes are placed by anchor words, sizes, within, on and offsets, and flip mirrors them", () => {
@@ -350,7 +350,7 @@ test("water rests at its level, its waves move, and it bends what is behind it",
   assert.equal(bent[2].indexOf("|"), 12, "above the water it is where it is");
   assert.ok(bent.slice(8).some((l) => l.indexOf("|") !== 12 && l.includes("|")), "under the water it is bent");
   for (const l of straight.slice(8)) assert.equal(l.indexOf("|"), 12, "with bend 0 it is straight");
-  assert.throws(() => water({ waves: "huge" as never }), /water\.waves takes "still", "gentle", "slosh" and "rough", not "huge"/);
+  assert.throws(() => water({ waves: "huge" as never }), /water\.waves takes "still", "gentle", "slosh" or "rough", not "huge"/);
   assert.throws(() => water({ wave: "gentle" } as never), /water\(\) has no option "wave"/);
 });
 
@@ -486,7 +486,10 @@ test("pattern repeats its tile and scrolls one tile a period", () => {
   assert.equal(lines(own, 0)[0], "abab");
   assert.equal(lines(own, 1)[0], "baba");
   assert.ok(Object.keys(patterns).length >= 10);
-  assert.throws(() => pattern("plaid" as never), /pattern takes a name, one of bricks/);
+  assert.throws(() => pattern("plaid" as never), /pattern takes a name, bricks, .* or shingles, or rows of text, not "plaid"/);
+  assert.throws(() => pattern("brick" as never), /not "brick" \(did you mean "bricks"\?\)/);
+  // the options form a reader reaches for names the patterns and says to give the name first
+  assert.throws(() => pattern({ tile: "bricks" } as never), /pattern takes a name, bricks, .* or rows of text, one or more, not \{"tile":"bricks"\}: give the name first, pattern\("bricks"\)/);
 });
 
 test("material() runs your function on every cell, with its colours by index", () => {
@@ -779,7 +782,7 @@ test("emission(): particles of your own, born where it comes from, the same for 
   assert.equal(drawn(picture([emit(emission((q) => [q.x, q.y, "*"], { rate: 0 }))], { cols: 10, rows: 4 }), 1).size, 0);
   assert.equal(drawn(picture([emit(bubbles({ rate: 0 }), { inside: area.rect(0, 0, 10, 4) })], { cols: 10, rows: 4 }), 1).size, 0);
   assert.throws(() => emission(3 as never), /emission takes a function/);
-  assert.throws(() => emission((q) => [q.x, q.y, "*"], { birth: "side" as never }), /emission\.birth takes "top", "bottom" and "anywhere", not "side"/);
+  assert.throws(() => emission((q) => [q.x, q.y, "*"], { birth: "side" as never }), /emission\.birth takes "top", "bottom" or "anywhere", not "side"/);
   assert.throws(() => emission((q) => [q.x, q.y, "*"], { life: 0 }), /emission\.life takes a number from 0\.05 to 60, not 0/);
   const bad = picture([emit(emission(() => [1, 1] as never))], { cols: 4, rows: 4 });
   assert.throws(() => snapshot(bad, 1), /emission gave \[1, 1\]: an emission's function returns \[x, y, character\]/);
@@ -989,4 +992,38 @@ test("edge cases: a one-cell picture, a shape bigger than the picture, a room wi
   const empty = picture([shape(inside(area.rect(0, 0, 2, 2)), water()), emit(bubbles(), { inside: inside(area.rect(0, 0, 2, 2)) })], { cols: 4, rows: 4 });
   contract(empty);
   assert.deepEqual(lines(empty), ["    ", "    ", "    ", "    "]);
+});
+
+test("parts placed against each other by name: area.at(), and emit's at and toward, with no counting", () => {
+  const body = area.rect(24, 10, 16, 4);
+  // a wheel's centre on the body's bottom-left corner, wherever the body is
+  const wheel = ball({ at: body.at("bottom-left"), rows: 2 });
+  const w = wheel.place(64, 24);
+  assert.deepEqual([(w.x0 + w.x1) / 2, (w.y0 + w.y1) / 2], [24, 14]);
+  const t = body.at("top-right").place(64, 24);
+  assert.deepEqual(t, [40, 10]);
+  assert.throws(() => body.at("middle" as never), /at\(\) takes an anchor word, .* or "bottom-right", not "middle" \(did you mean "center"\?\)/);
+  // an exhaust: smoke from the body's left side, leaning hard left, so all of it is left of the body
+  const car = picture([shape(body, solid()), emit(smoke(), { from: body, at: "left", toward: "left" })], { cols: 64, rows: 24 });
+  let left = 0, right = 0;
+  for (const k of [0, 0.5, 1, 1.5, 2, 3]) for (const cell of drawn(car, k)) {
+    const [x, y] = cell.split(",").map(Number);
+    if (y < 10 || (x < 24 && y < 14)) (x < 24 ? left++ : right++);
+  }
+  assert.ok(left > 20 && right === 0, `${left} cells of smoke to the left, ${right} to the right`);
+  // up from a chimney's top by default, as before; toward right leans it right
+  const chimney = area.rect(30, 12, 2, 4);
+  const up = picture([emit(smoke({ wind: "none" }), { from: chimney })], { cols: 64, rows: 24 });
+  const xs = [...drawn(up, 1)].map((c) => +c.split(",")[0]);
+  assert.ok(xs.every((x) => Math.abs(x - 31) <= 6), `a column over the chimney: ${xs}`);
+  const blown = picture([emit(smoke(), { from: chimney, toward: "right" })], { cols: 64, rows: 24 });
+  const blownXs = [0, 1, 2].flatMap((k) => [...drawn(blown, k)].map((c) => +c.split(",")[0]));
+  assert.ok(blownXs.some((x) => x > 37) && blownXs.every((x) => x >= 29), `leaning hard right: ${blownXs}`);
+  // smoke and fire take words, and say which
+  for (const s of [smoke({ wind: "strong", spread: "narrow", height: "low" }), smoke({ wind: "none", spread: "wide", height: "high" })]) contract(picture([emit(s, { from: chimney })], { cols: 64, rows: 24 }));
+  contract(picture([shape(flame({ at: "center" }), fire({ glow: "strong", heat: "fierce" }))], { cols: 30, rows: 12 }));
+  assert.throws(() => smoke({ wind: "gale" as never }), /smoke\.wind takes "none", "light" or "strong", or a number from -4 to 4, not "gale"/);
+  assert.throws(() => fire({ glow: "bright" as never }), /fire\.glow takes "none", "soft", "medium" or "strong", or a number from 0 to 6, not "bright"/);
+  assert.throws(() => emit(smoke(), { at: "left" }), /emit's at is a place on the area it comes from: give from an area too/);
+  assert.throws(() => emit(smoke(), { from: body, toward: "down" as never }), /emit's toward takes "up", "left" or "right", not "down"/);
 });

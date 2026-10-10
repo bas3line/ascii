@@ -48,6 +48,7 @@ import {
   smoothstep,
   specOf,
   spread,
+  suggest,
   type ColorName,
   type KitPiece,
   type MakerSpec,
@@ -79,9 +80,12 @@ function show(v: unknown): string {
 function optionsOf<T extends object>(what: string, o: T | undefined, keys: readonly string[]): T {
   if (o === undefined) return {} as T;
   if (!isObject(o)) fail(`${what} takes an options object, such as { ${keys[0]}: ... }, not ${show(o)}`);
-  for (const k of Object.keys(o)) if (!keys.includes(k)) fail(`${what} has no option ${JSON.stringify(k)}: it takes ${and(keys.map((x) => JSON.stringify(x)))}`);
+  for (const k of Object.keys(o)) if (!keys.includes(k)) fail(`${what} has no option ${JSON.stringify(k)}${suggest(k, keys)}: it takes ${and(keys.map((x) => JSON.stringify(x)))}`);
   return o;
 }
+
+// Words as a sentence offers them: "a, b or c".
+const or = (words: readonly string[]) => (words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : (words[0] ?? ""));
 
 // A number option between lo and hi, or its default.
 function numberOf(what: string, v: unknown, def: number, lo = -Infinity, hi = Infinity, words = ""): number {
@@ -93,6 +97,15 @@ function numberOf(what: string, v: unknown, def: number, lo = -Infinity, hi = In
   return v;
 }
 
+// A word that stands for a number, or the number itself from lo to hi, or its default.
+function wordOrNumber(what: string, v: unknown, words: Readonly<Record<string, number>>, def: number, lo: number, hi: number): number {
+  if (typeof v === "string") {
+    if (Object.hasOwn(words, v)) return words[v];
+    fail(`${what} takes ${or(Object.keys(words).map((w) => JSON.stringify(w)))}, or a number from ${lo} to ${hi}, not ${JSON.stringify(v)}${suggest(v, Object.keys(words))}`);
+  }
+  return numberOf(what, v, def, lo, hi);
+}
+
 // A period in seconds, above 0 and at most 60.
 function periodOf(what: string, v: unknown, def: number): number {
   const p = numberOf(what, v, def, 0, 60, " of seconds above 0, up to 60");
@@ -102,7 +115,7 @@ function periodOf(what: string, v: unknown, def: number): number {
 
 function wordOf<W extends string>(what: string, v: unknown, words: readonly W[], def: W): W {
   if (v === undefined) return def;
-  if (!words.includes(v as W)) fail(`${what} takes ${and(words.map((w) => JSON.stringify(w)))}, not ${show(v)}`);
+  if (!words.includes(v as W)) fail(`${what} takes ${or(words.map((w) => JSON.stringify(w)))}, not ${show(v)}${suggest(v, words)}`);
   return v as W;
 }
 
@@ -130,7 +143,7 @@ function rampOf(what: string, v: unknown, def: string): string {
   if (v === undefined) return def;
   if (typeof v === "string" && Object.hasOwn(ramps, v)) return ramps[v as RampName];
   if (typeof v !== "string" || v.length < 2 || /[\u0000-\u001f\u007f-\u009f\ud800-\udfff]/.test(v))
-    fail(`${what} takes a ramp's name, ${and(Object.keys(ramps))}, or two or more characters of your own, not ${show(v)}`);
+    fail(`${what} takes a ramp's name, ${or(Object.keys(ramps))}, or two or more characters of your own, not ${show(v)}`);
   return v;
 }
 
@@ -218,9 +231,40 @@ export interface Area {
    * shape() draws them, each outlined on its own, so a roof keeps its eaves and a mug's side runs past its handle.
    */
   readonly pieces?: readonly Area[];
+  /**
+   * A point on it by an anchor word: "top", "bottom-left", "center" and the rest, on the edge or corner of the box it
+   * fills. Give it as another shape's `at`, so the shape sits there, or as emit()'s `from`, so smoke comes out there:
+   * parts placed against each other with no counting.
+   *
+   *   const body = box({ size: "small" });
+   *   const wheel = ball({ at: body.at("bottom-left"), size: "tiny" });
+   */
+  at(anchor?: Anchor): PointOn;
+}
+
+/** A point on an area by an anchor word, found once the picture's size is known: what area.at() gives. */
+export interface PointOn {
+  readonly kind: "spot";
+  /** The point in a picture `cols` by `rows`, in cells: x across, y down. */
+  place(cols: number, rows: number): Point;
 }
 
 const isArea = (v: unknown): v is Area => isObject(v) && v.kind === "area" && typeof v.place === "function";
+const isPointOn = (v: unknown): v is PointOn => isObject(v) && v.kind === "spot" && typeof v.place === "function";
+
+// A point on an area's box by an anchor: its edges and corners, or its middle.
+function spotOf(area: Area, anchor: Anchor = "center"): PointOn {
+  if (!ANCHORS.includes(anchor)) fail(`at() takes an anchor word, ${or(ANCHORS.map((a) => JSON.stringify(a)))}, not ${show(anchor)}${suggest(anchor, ANCHORS)}`);
+  return {
+    kind: "spot",
+    place(cols, rows) {
+      const p = area.place(cols, rows);
+      const x = anchor.endsWith("left") ? p.x0 : anchor.endsWith("right") ? p.x1 : (p.x0 + p.x1) / 2;
+      const y = anchor.startsWith("top") ? p.y0 : anchor.startsWith("bottom") ? p.y1 : (p.y0 + p.y1) / 2;
+      return [x, y];
+    },
+  };
+}
 
 // An area from a layout function, worked out once for each picture size.
 function makeArea(place: (cols: number, rows: number) => Placed, more: { material?: () => Material; extent?: { cols: number; rows: number }; pieces?: readonly Area[] } = {}): Area {
@@ -231,6 +275,9 @@ function makeArea(place: (cols: number, rows: number) => Placed, more: { materia
       const k = `${cols}x${rows}`;
       if (k !== key || !last) (last = place(cols, rows)), (key = k);
       return last;
+    },
+    at(anchor?: Anchor) {
+      return spotOf(this, anchor);
     },
     ...more,
   };
@@ -248,10 +295,11 @@ function areaOf(what: string, v: unknown): Area {
 export interface Placement {
   /**
    * Where it goes in its room: an anchor word ("center", "bottom", "top-left" and the rest), its edge or corner
-   * against the room's, or a point [x, y] in cells for its centre. Each shape has its own default, "center" for most and
-   * "bottom" for those that stand on something, such as a cup or a house.
+   * against the room's, a point [x, y] in cells for its centre, or a point on another shape, body.at("bottom-left"),
+   * for its centre to sit on. Each shape has its own default, "center" for most and "bottom" for those that stand on
+   * something, such as a cup or a house.
    */
-  at?: Anchor | Point;
+  at?: Anchor | Point | PointOn;
   /** Another area to place it in instead of the picture: at and size are then in that area's box. */
   within?: Area;
   /** Another area to stand it on: its bottom on that area's top, centred across it. Over `at`. */
@@ -274,14 +322,14 @@ const PLACE_KEYS = ["at", "within", "on", "x", "y", "size", "cols", "rows", "fli
 
 // Checks a Placement, now, for the shape called `what`.
 function checkPlace(what: string, o: Placement): void {
-  if (o.at !== undefined && !ANCHORS.includes(o.at as Anchor) && !(Array.isArray(o.at) && o.at.length === 2 && o.at.every((v) => Number.isFinite(v))))
-    fail(`${what}.at takes ${and(ANCHORS.map((a) => JSON.stringify(a)))}, or a point [x, y] in cells, not ${show(o.at)}`);
+  if (o.at !== undefined && !ANCHORS.includes(o.at as Anchor) && !isPointOn(o.at) && !(Array.isArray(o.at) && o.at.length === 2 && o.at.every((v) => Number.isFinite(v))))
+    fail(`${what}.at takes ${or(ANCHORS.map((a) => JSON.stringify(a)))}, a point [x, y] in cells, or a point on another shape such as body.at("bottom-left"), not ${show(o.at)}${suggest(o.at, ANCHORS)}`);
   if (o.within !== undefined) areaOf(`${what}.within`, o.within);
   if (o.on !== undefined) areaOf(`${what}.on`, o.on);
   numberOf(`${what}.x`, o.x, 0);
   numberOf(`${what}.y`, o.y, 0);
   if (o.size !== undefined && !(typeof o.size === "string" && Object.hasOwn(SIZES, o.size)) && !(typeof o.size === "number" && o.size > 0 && o.size <= 1))
-    fail(`${what}.size takes ${and(Object.keys(SIZES).map((s) => JSON.stringify(s)))}, or a share of the room's height above 0, up to 1, not ${show(o.size)}`);
+    fail(`${what}.size takes ${or(Object.keys(SIZES).map((s) => JSON.stringify(s)))}, or a share of the room's height above 0, up to 1, not ${show(o.size)}${suggest(o.size, Object.keys(SIZES))}`);
   numberOf(`${what}.cols`, o.cols, 1, 1, 320, " of cells from 1 to 320");
   numberOf(`${what}.rows`, o.rows, 1, 1, 120, " of cells from 1 to 120");
   boolOf(`${what}.flip`, o.flip, false);
@@ -319,9 +367,10 @@ function boxOf(o: Placement,ratio: number, cols: number, rows: number, def: { si
     const p = o.on.place(cols, rows);
     x0 = (p.x0 + p.x1) / 2 - w / 2;
     y0 = p.y0 - h;
-  } else if (Array.isArray(o.at)) {
-    x0 = o.at[0] - w / 2;
-    y0 = o.at[1] - h / 2;
+  } else if (Array.isArray(o.at) || isPointOn(o.at)) {
+    const [px, py] = isPointOn(o.at) ? o.at.place(cols, rows) : (o.at as Point);
+    x0 = px - w / 2;
+    y0 = py - h / 2;
   } else {
     const a = (o.at as Anchor | undefined) ?? def.at;
     x0 = a.endsWith("left") ? f.x0 : a.endsWith("right") ? f.x1 - w : f.x0 + (fw - w) / 2;
@@ -647,7 +696,7 @@ const FILLS = { low: 0.3, half: 0.5, high: 0.75, full: 0.9, brim: 1 } as const;
 export function inside(vessel: Area, o?: { fill?: Fill; wall?: number; base?: number }): Area {
   areaOf("inside", vessel);
   const p = optionsOf("inside()", o, ["fill", "wall", "base"]);
-  const fill = typeof p.fill === "string" ? (Object.hasOwn(FILLS, p.fill) ? FILLS[p.fill] : fail(`inside's fill takes ${and(Object.keys(FILLS).map((f) => JSON.stringify(f)))}, or a share from 0 to 1, not ${JSON.stringify(p.fill)}`)) : numberOf("inside's fill", p.fill, 1, 0, 1);
+  const fill = typeof p.fill === "string" ? (Object.hasOwn(FILLS, p.fill) ? FILLS[p.fill] : fail(`inside's fill takes ${or(Object.keys(FILLS).map((f) => JSON.stringify(f)))}, or a share from 0 to 1, not ${JSON.stringify(p.fill)}${suggest(p.fill, Object.keys(FILLS))}`)) : numberOf("inside's fill", p.fill, 1, 0, 1);
   const wall = numberOf("inside's wall", p.wall, 1, 0, 40), base = numberOf("inside's base", p.base, 1, 0, 40);
   return makeArea((cols, rows) => {
     const v = vessel.place(cols, rows);
@@ -1542,19 +1591,22 @@ export function glass(o?: MaterialOptions & {
 export function fire(o?: MaterialOptions & {
   /** Seconds for the flicker to come round: 2. */
   period?: number;
-  /** How fierce, 0.2 to 2: 1. */
-  heat?: number;
+  /** How fierce: "gentle" (0.6), "normal" (1, the default) or "fierce" (1.6), or 0.2 to 2. */
+  heat?: "gentle" | "normal" | "fierce" | number;
   /** A ramp from no flame (its first character, left empty) to the hottest: " .:^*#%@", or a name such as "blocks". */
   ramp?: RampName | (string & {});
-  /** A glow of "." round it, this many columns deep, where nothing else is drawn, as round a candle's flame: 0. */
-  glow?: number;
+  /**
+   * A glow of "." round it, where nothing else is drawn, as round a candle's flame: "none" (the default), "soft" (1
+   * column deep), "medium" (2) or "strong" (4), or columns.
+   */
+  glow?: "none" | "soft" | "medium" | "strong" | number;
 }): Material {
   const p = optionsOf("fire()", o, ["colors", "period", "heat", "ramp", "glow"]);
   const colors = colorsOf("fire.colors", p.colors, "fire", 5);
   const period = periodOf("fire.period", p.period, 2);
-  const heat = numberOf("fire.heat", p.heat, 1, 0.2, 2);
+  const heat = wordOrNumber("fire.heat", p.heat, { gentle: 0.6, normal: 1, fierce: 1.6 }, 1, 0.2, 2);
   const chars = rampOf("fire.ramp", p.ramp, " .:^*#%@");
-  const glow = numberOf("fire.glow", p.glow, 0, 0, 6);
+  const glow = wordOrNumber("fire.glow", p.glow, { none: 0, soft: 1, medium: 2, strong: 4 }, 0, 0, 6);
   return makeMaterial("fire", colors, period, (c) => {
     const { cols } = c;
     const h = Math.max(1, c.y1 - c.y0), md = Math.max(1, c.maxDepth);
@@ -1613,12 +1665,15 @@ export interface SmokeOptions extends MaterialOptions {
   period?: number;
   /** As a material: a ramp from none (its first character, left empty) to the thickest, " .:-~=o", or a name such as "dots". */
   ramp?: RampName | (string & {});
-  /** As an emission: how many rows the column rises, 8. */
-  height?: number;
-  /** As an emission: how many columns each side moves out a row as it rises, 0.3. */
-  spread?: number;
-  /** As an emission: how many columns a row the wind leans it, right (left below 0): 0.3. */
-  wind?: number;
+  /** As an emission: how many rows the column rises, "low" (4), "medium" (8, the default) or "high" (14), or rows. */
+  height?: "low" | "medium" | "high" | number;
+  /** As an emission: how far it opens out as it rises, "narrow" (0.15), "medium" (0.3, the default) or "wide" (0.6), or columns each side a row. */
+  spread?: "narrow" | "medium" | "wide" | number;
+  /**
+   * As an emission: how hard the wind leans it, "none" (0), "light" (0.3, the default) or "strong" (1), to the right, or
+   * columns a row (left below 0). emit()'s toward: "left" turns it round.
+   */
+  wind?: "none" | "light" | "strong" | number;
   /** As an emission: its seed, 1. */
   seed?: number;
 }
@@ -2174,9 +2229,10 @@ export function pattern(tile: keyof typeof patterns | readonly string[], o?: Mat
   /** Seconds for it to scroll one tile: 2. */
   period?: number;
 }): Material {
-  const rowsOf = typeof tile === "string" ? (Object.hasOwn(patterns, tile) ? patterns[tile] : fail(`pattern takes a name, one of ${and(Object.keys(patterns))}, or rows of text, not ${JSON.stringify(tile)}`)) : tile;
+  const names = Object.keys(patterns);
+  const rowsOf = typeof tile === "string" ? (Object.hasOwn(patterns, tile) ? patterns[tile] : fail(`pattern takes a name, ${or(names)}, or rows of text, not ${JSON.stringify(tile)}${suggest(tile, names)}`)) : tile;
   if (!Array.isArray(rowsOf) || !rowsOf.length || !rowsOf.every((r) => typeof r === "string" && r.length && !/[\u0000-\u001f\ud800-\udfff]/.test(r)))
-    fail(`pattern takes a name or rows of text, one or more, not ${JSON.stringify(tile)}`);
+    fail(`pattern takes a name, ${or(names)}, or rows of text, one or more, not ${JSON.stringify(tile)}${isObject(tile) && "tile" in tile ? `: give the name first, pattern(${JSON.stringify((tile as unknown as { tile: unknown }).tile)})` : ""}`);
   const p = optionsOf("pattern()", o, ["colors", "move", "period"]);
   const colors = colorsOf("pattern.colors", p.colors, "ink", 2);
   const move = wordOf("pattern.move", p.move, ["none", "left", "right", "up", "down"] as const, "none");
@@ -2363,6 +2419,8 @@ export interface Spring {
   /** The picture's size. */
   readonly cols: number;
   readonly rows: number;
+  /** Which way it goes, as emit() was asked: smoke and steam lean hard that way. "up" when not asked. */
+  readonly toward?: "up" | "left" | "right";
 }
 
 /**
@@ -2465,9 +2523,9 @@ function springPoint(sp: Spring, side: "top" | "bottom"): Point | null {
 // out as it rises, and breaking up towards the top: smoke() as an emission.
 function plume(name: string, p: SmokeOptions): Emission {
   const colors = colorsOf(`${name}.colors`, p.colors, "smoke", 3);
-  const height = numberOf(`${name}.height`, p.height, 8, 1, 120);
-  const spread = numberOf(`${name}.spread`, p.spread, 0.3, 0, 3);
-  const wind = numberOf(`${name}.wind`, p.wind, 0.3, -4, 4);
+  const height = wordOrNumber(`${name}.height`, p.height, { low: 4, medium: 8, high: 14 }, 8, 1, 120);
+  const spread = wordOrNumber(`${name}.spread`, p.spread, { narrow: 0.15, medium: 0.3, wide: 0.6 }, 0.3, 0, 3);
+  const given = wordOrNumber(`${name}.wind`, p.wind, { none: 0, light: 0.3, strong: 1 }, 0.3, -4, 4);
   const period = periodOf(`${name}.period`, p.period, 4);
   const seed = seedOf(`${name}.seed`, p.seed, 1);
   const phase = hash(seed, 7) * TAU;
@@ -2479,6 +2537,8 @@ function plume(name: string, p: SmokeOptions): Emission {
     emits(sp) {
       const { cols, rows } = sp;
       const from = springPoint(sp, "top") ?? [cols / 2, rows];
+      // Sent left or right, it leans hard that way, as an exhaust's smoke does, whatever the wind; up, the wind leans it.
+      const wind = sp.toward === "left" ? -Math.max(1.5, Math.abs(given)) : sp.toward === "right" ? Math.max(1.5, Math.abs(given)) : given;
       return (t, pt) => {
         const { s } = pt;
         const w = (TAU * t) / period;
@@ -3060,18 +3120,34 @@ export function shape(where: Area, what?: Material | PartOptions, o?: PartOption
 
 /** Where an emission comes from and lives. */
 export interface EmitOptions {
-  /** Where it comes from: an area (smoke and steam rise from its top, rain and snow fall from its bottom), an anchor word in the picture, or a point [x, y]. */
-  from?: Area | Anchor | Point;
+  /**
+   * Where it comes from: an area (smoke and steam rise from its top, rain and snow fall from its bottom), an anchor
+   * word in the picture, a point [x, y], or a point on a shape, chimney.at("top").
+   */
+  from?: Area | Anchor | Point | PointOn;
+  /**
+   * Where on the `from` area it comes out, by an anchor word: car.at's "bottom-left" for an exhaust, "right" for a
+   * spout. The area's own place (its top for smoke) by default.
+   */
+  at?: Anchor;
+  /** Which way it goes, for smoke and steam: "up" (the default), or "left" or "right", leaning hard that way as an exhaust's does. */
+  toward?: "up" | "left" | "right";
   /** The area it lives in: bubbles are born along its bottom and pop where it ends. */
   inside?: Area;
 }
 
-/** An emission as a part of a picture: emit(bubbles(), { inside: drink }), emit(smoke(), { from: chimney }). */
+/**
+ * An emission as a part of a picture: emit(bubbles(), { inside: drink }), emit(smoke(), { from: chimney }),
+ * emit(smoke(), { from: car, at: "bottom-left", toward: "left" }) for an exhaust.
+ */
 export function emit(what: Emission, o?: EmitOptions): Part {
   if (!isEmission(what)) fail(`emit takes an emission first, such as bubbles(), smoke(), sparks(), rain(), steam() or snow(), not ${show(what)}`);
-  const p = optionsOf("emit()'s options", o, ["from", "inside"]);
-  if (p.from !== undefined && !isArea(p.from) && !ANCHORS.includes(p.from as Anchor) && !(Array.isArray(p.from) && p.from.length === 2 && p.from.every(Number.isFinite)))
-    fail(`emit's from takes an area, an anchor word (${and(ANCHORS.map((a) => JSON.stringify(a)))}) or a point [x, y], not ${show(p.from)}`);
+  const p = optionsOf("emit()'s options", o, ["from", "at", "toward", "inside"]);
+  if (p.from !== undefined && !isArea(p.from) && !isPointOn(p.from) && !ANCHORS.includes(p.from as Anchor) && !(Array.isArray(p.from) && p.from.length === 2 && p.from.every(Number.isFinite)))
+    fail(`emit's from takes an area, an anchor word (${or(ANCHORS.map((a) => JSON.stringify(a)))}), a point [x, y], or a point on a shape such as chimney.at("top"), not ${show(p.from)}${suggest(p.from, ANCHORS)}`);
+  const at = p.at === undefined ? undefined : wordOf("emit's at", p.at, ANCHORS, "center");
+  if (at !== undefined && !isArea(p.from)) fail(`emit's at is a place on the area it comes from: give from an area too, such as { from: car, at: "bottom-left" }`);
+  const toward = wordOf("emit's toward", p.toward, ["up", "left", "right"] as const, "up");
   if (p.inside !== undefined) areaOf("emit's inside", p.inside);
   return {
     kind: "part",
@@ -3080,11 +3156,13 @@ export function emit(what: Emission, o?: EmitOptions): Part {
       const f = p.from;
       let point: Point | null = null;
       if (Array.isArray(f)) point = [f[0], f[1]];
+      else if (isPointOn(f)) point = f.place(cols, rows);
+      else if (isArea(f) && at) point = spotOf(f, at).place(cols, rows);
       else if (typeof f === "string") {
         const a = f as Anchor;
         point = [a.endsWith("left") ? 0.5 : a.endsWith("right") ? cols - 0.5 : cols / 2, a.startsWith("top") ? 0 : a.startsWith("bottom") ? rows : rows / 2];
       }
-      const draw = what.emits({ from: isArea(f) ? cellsOf(f, cols, rows) : null, point, inside: p.inside ? cellsOf(p.inside, cols, rows) : null, cols, rows });
+      const draw = what.emits({ from: isArea(f) && !at ? cellsOf(f, cols, rows) : null, point, inside: p.inside ? cellsOf(p.inside, cols, rows) : null, cols, rows, toward });
       return (t, pt) => draw(lap(t, what.period), pt);
     },
   };

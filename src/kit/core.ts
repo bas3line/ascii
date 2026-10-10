@@ -453,22 +453,59 @@ export function colorOf(v: ColorLike | unknown, what = "color"): { light: string
 // The names nearest one that is not a palette's, for an error to offer: "oceans" is one letter from "ocean".
 function didYouMean(word: string): string {
   const all = [...new Set([...Object.keys(schemes), ...Object.keys(materialColors)])];
-  const far = (a: string, b: string) => {
-    const d = Array.from({ length: b.length + 1 }, (_, j) => j);
-    for (let i = 1; i <= a.length; i++) {
-      let prev = d[0];
-      d[0] = i;
-      for (let j = 1; j <= b.length; j++) {
-        const keep = d[j];
-        d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
-        prev = keep;
-      }
+  const near = nearWords(word, all);
+  return near.length ? `did you mean ${near.map((n) => JSON.stringify(n)).join(" or ")}?` : `a colour of your own is #rrggbb, and the names are ${and(all)}`;
+}
+
+// How many letters apart two words are: Levenshtein's distance.
+function lettersApart(a: string, b: string): number {
+  const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = d[0];
+    d[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const keep = d[j];
+      d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = keep;
     }
-    return d[b.length];
-  };
+  }
+  return d[b.length];
+}
+
+// Words people reach for that the kit says another way, each with the kit's words for the same thing.
+const SYNONYMS: Readonly<Record<string, readonly string[]>> = {
+  middle: ["center", "middle"], centre: ["center"], centred: ["center"], mid: ["center", "middle"],
+  colour: ["color", "colors", "palette"], colours: ["colors", "palette", "color"], palette: ["colors", "color"], colors: ["palette", "color"], color: ["colors", "palette"],
+  size: ["scale", "size"], scale: ["size", "scale"], dir: ["to", "toward", "way"], direction: ["to", "toward", "way", "direction"], heading: ["to"], towards: ["toward", "to"],
+  big: ["large", "strong", "big"], large: ["huge", "large", "strong"], little: ["small", "subtle"], tiny: ["small", "subtle", "tiny"], huge: ["huge", "large"],
+  quick: ["fast"], quickly: ["fast"], rapid: ["fast"], slowly: ["slow"], medium: ["normal", "medium"], normal: ["medium", "normal"],
+  light: ["subtle", "light"], heavy: ["strong", "heavy"], weak: ["subtle"], soft: ["subtle", "soft"], hard: ["strong"],
+  duration: ["period", "seconds"], time: ["period", "seconds"], length: ["period", "seconds", "length"], loop: ["period", "loop"], delay: ["first", "start", "delay"],
+  text: ["label", "title", "text"], title: ["label", "title"], label: ["title", "label"], caption: ["label", "title"],
+  width: ["cols", "width"], height: ["rows", "height"], columns: ["cols", "columns"],
+  speed: ["speed", "period"], rate: ["speed", "rate"], amount: ["amount", "size"], strength: ["amount"], intensity: ["amount"],
+};
+
+// The kit's words a word that is not one of them most likely meant: its synonyms that are, then those a letter or two
+// away, at most three.
+function nearWords(word: string, words: readonly string[]): string[] {
   const w = word.toLowerCase().slice(0, 40);
-  const near = all.filter((n) => far(w, n) <= (w.length <= 4 ? 1 : 2));
-  return near.length ? `did you mean ${near.slice(0, 3).map((n) => JSON.stringify(n)).join(" or ")}?` : `a colour of your own is #rrggbb, and the names are ${and(all)}`;
+  const same = (SYNONYMS[w] ?? []).filter((s) => words.includes(s) && s !== word);
+  const close = words.filter((n) => !same.includes(n) && lettersApart(w, n.toLowerCase()) <= (w.length <= 4 ? 1 : 2));
+  return [...same, ...close].slice(0, 3);
+}
+
+/**
+ * A hint for an error, when `word` is not one of `words`: the kit's word for it when it is a synonym ("center" for
+ * "middle", "color" for "colour"), or the nearest by spelling, as ` (did you mean "center"?)`; "" when none is near.
+ * For makers of your own, after the word in their own "has no option" or "takes ... not" message.
+ *
+ *   fail(`glow() has no option ${JSON.stringify(k)}${suggest(k, keys)}: it takes ${and(keys)}`);
+ */
+export function suggest(word: unknown, words: readonly string[]): string {
+  if (typeof word !== "string") return "";
+  const near = nearWords(word, words);
+  return near.length ? ` (did you mean ${near.map((n) => JSON.stringify(n)).join(" or ")}?)` : "";
 }
 
 /**

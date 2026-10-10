@@ -553,7 +553,8 @@ test("every option is checked when the piece is made, saying what to change", ()
   bad({ direction: "up", spread: 400 }, /spread takes degrees from 0 to 360, not 400/);
   bad({ spread: 30 }, /spread fans out round a direction: give one too/);
   bad({ angle: 1, spread: 30 }, /spread goes with a direction: with an angle, give \[low, high\] instead/);
-  bad({ emitter: { point: [1, 1], edge: "top" } }, /emitter takes one of point, line, area, edge and text, not point and edge/);
+  bad({ emitter: { point: [1, 1], edge: "top" } }, /emitter takes one of point, line, area, edge, text and mark, not point and edge/);
+  bad({ emitter: { mark: "^^" } }, /emitter\.mark takes one character other than a space, such as "\^", not "\^\^"/);
   bad({ emitter: { point: [1] } }, /emitter\.point takes a place such as "center", \[column, row\], or a function of the time, not \[1\]/);
   bad({ emitter: { point: () => "x" } }, /emitter\.point as a function takes the time and returns \[column, row\]/);
   bad({ emitter: { line: [[1, 1]] } }, /emitter\.line takes two points/);
@@ -953,6 +954,38 @@ test("fireworks fit a bigger sky: more sparks a shell, more shells across a wide
   assert.ok(Math.abs(wide.every - 1.12) < 1e-9, `${wide.every}`);
   assert.equal(burst(320, 120).count, 80);
   assert.equal(presets.fireworks({ cols: 120, rows: 36 }, { every: 3, count: 9 })[0].burst!.every, 3);
+});
+
+test("a mark in the art is where particles are born, and is drawn as a blank: no columns counted", () => {
+  const cabin = `
+      ^
+     _|______
+    /        \\
+   /__________\\
+   |  []  [] |
+   |_________|`;
+  const smoke: System = { emitter: { mark: "^" }, direction: "up", speed: [1, 2], life: 3, glyphs: "()." };
+  const p = particles({ cols: 30, rows: 12, front: cabin, period: 4 }, smoke);
+  // where the mark is, from the same art drawn with nothing born on it
+  const plain = particles({ cols: 30, rows: 12, front: cabin }, { emitter: { point: [0, 0] }, glyphs: " " }).default()(0);
+  const row = plain.split("\n").findIndex((l) => l.includes("^")), col = plain.split("\n")[row].indexOf("^");
+  assert.ok(row > 0 && col > 0, plain);
+  let seen = 0;
+  for (let i = 0; i < 40; i++) {
+    const lines = p.default()(i * 0.1).split("\n");
+    assert.ok(!lines.join("").includes("^"), "the mark is a blank");
+    lines.forEach((l, r) =>
+      [...l].forEach((ch, c) => {
+        if (!"().".includes(ch) || r >= row + 1) return;
+        seen++;
+        assert.ok(r <= row && Math.abs(c - col) <= 6, `smoke at ${c}, ${r}: the chimney is at ${col}, ${row}`);
+      }),
+    );
+  }
+  assert.ok(seen > 20, `${seen} puffs over the chimney`);
+  // a mark the art doesn't have says so, and drawParticles() has no art to find one in
+  assert.throws(() => particles({ cols: 30, rows: 12, front: cabin }, { emitter: { mark: "*" } }), /particles\(\)\.emitter\.mark is "\*", and particles\(\)'s front and back art have none: type it in the art where the particles come from/);
+  assert.throws(() => drawParticles(new Surface(10, 5), { emitter: { mark: "^" } }, 1), /emitter\.mark finds its cells in particles\(\)'s front or back art/);
 });
 
 test("a system is read once, the first time it is drawn: changing it after changes nothing", () => {
