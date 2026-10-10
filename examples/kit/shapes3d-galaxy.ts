@@ -6,6 +6,6 @@
  */
 import { points, scene } from "../../src/kit/shapes3d.ts";
 
-export default scene({ name: "galaxy", cols: 64, rows: 24, period: 12, ramp: " .·:+*#@", colors: ["#6d28d9", "#f5d0fe"], camera: { tilt: 1 } }, [
+export default scene({ name: "galaxy", cols: 64, rows: 24, period: 8, ramp: " .·:+*#@", colors: ["#6d28d9", "#f5d0fe"], camera: { tilt: 1 } }, [
   points("galaxy", { spin: [0, 0.5, 0] }),
 ]);

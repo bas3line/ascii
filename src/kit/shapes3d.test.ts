@@ -5,7 +5,7 @@ import { svg } from "../svg.ts";
 import { still } from "../terminal.ts";
 import type { Piece } from "../types.ts";
 import { Surface, TAU, piece, snapshot } from "./core.ts";
-import { cone, cube, cylinder, mesh, orbit, parametric, plane, points, render3d, scene, sphere, textures, torus, type Shape3d, type Vec3 } from "./shapes3d.ts";
+import { cone, cube, cylinder, group, lines, mesh, orbit, parametric, plane, points, render3d, scene, sphere, textures, torus, type Shape3d, type Vec3 } from "./shapes3d.ts";
 
 // The checks scripts/check.ts makes of a frame: rows lines of cols characters, colours inside the palette, the same
 // frame for the same t, on paper and on a dark page, in colour and in one ink.
@@ -144,22 +144,22 @@ test("textures stay 0 to 1, repeat round u, and the named ones are the defaults"
     let lo = 1, hi = 0;
     for (let j = 0; j <= 40; j++)
       for (let i = 0; i <= 80; i++) {
-        const v = tex(i / 80, j / 40);
+        const v = tex(i / 80, j / 40, 0);
         lo = Math.min(lo, v);
         hi = Math.max(hi, v);
         // u 0 and u 1 are the same place on a shape that goes round
-        if (i === 0) assert.ok(Math.abs(v - tex(1, j / 40)) < 1e-9, "meets itself round u");
+        if (i === 0) assert.ok(Math.abs(v - tex(1, j / 40, 0)) < 1e-9, "meets itself round u");
       }
     assert.ok(lo >= 0 && hi <= 1, `in 0..1: ${lo}..${hi}`);
     assert.ok(hi - lo > 0.3, `shows a pattern: ${lo}..${hi}`);
   }
-  assert.equal(textures.stripes(2)(0.25, 0.5), 1);
-  assert.equal(textures.stripes(2)(0.75, 0.5), 0.45);
-  assert.notEqual(textures.checker(2, 2)(0.25, 0.25), textures.checker(2, 2)(0.75, 0.25));
+  assert.equal(textures.stripes(2)(0.25, 0.5, 0), 1);
+  assert.equal(textures.stripes(2)(0.75, 0.5, 0), 0.45);
+  assert.notEqual(textures.checker(2, 2)(0.25, 0.25, 0), textures.checker(2, 2)(0.75, 0.25, 0));
   // seeds move the coastlines
   const a = textures.spots(5, 1), b = textures.spots(5, 2);
   let differ = 0;
-  for (let i = 0; i < 100; i++) if (a(i / 100, 0.5) !== b(i / 100, 0.5)) differ++;
+  for (let i = 0; i < 100; i++) if (a(i / 100, 0.5, 0) !== b(i / 100, 0.5, 0)) differ++;
   assert.ok(differ > 20, "another seed, other continents");
   // a texture by name is that texture with its default count: the same frame
   const named = drawn([sphere({ texture: "bands", spin: [0, 1, 0] })], 1).frame();
@@ -282,13 +282,46 @@ test("points add up their light, hide behind surfaces and not behind each other"
 });
 
 test("a cube's faces are flat and lit apart; a mesh's faces show whichever way they wind", () => {
-  const box = drawn([cube({ rotate: [-0.6, 0.7, 0] })], 0, { ambient: 0.15 }).frame();
+  const box = drawn([cube({ rotate: [-0.6, 0.7, 0], edges: false })], 0, { ambient: 0.15 }).frame();
   // three faces in view, each one character
   const seen = new Set(box.replace(/[\n ]/g, ""));
   assert.equal(seen.size, 3, `faces: ${[...seen].join("")}`);
-  const tri = (faces: number[][]) => drawn([mesh([[0, 1, 0], [-1, -1, 0], [1, -1, 0]], faces)], 0, { camera: { zoom: 6 } }).frame();
+  const tri = (faces: number[][]) => drawn([mesh([[0, 1, 0], [-1, -1, 0], [1, -1, 0]], faces, { edges: false })], 0, { camera: { zoom: 6 } }).frame();
   assert.equal(tri([[0, 1, 2]]), tri([[0, 2, 1]]));
   assert.ok(extent(tri([[0, 1, 2]])).n > 20);
+});
+
+test("edges: a cube's twelve as lines by their slope over its faces, only the ones in view, and none inside a flat face", () => {
+  const o = { ambient: 0.15 };
+  const plain = drawn([cube({ rotate: [-0.6, 0.7, 0], edges: false })], 0, o).frame();
+  const lined = drawn([cube({ rotate: [-0.6, 0.7, 0] })], 0, o).frame();
+  const slopes = (text: string) => new Set(text.replace(/[^-|/\\]/g, ""));
+  // the faces' characters are the same, and lines are drawn over their borders
+  assert.ok(slopes(lined).size >= 3, `edges in several slopes: ${[...slopes(lined)].join("")}`);
+  assert.ok([...new Set(plain.replace(/[\n ]/g, ""))].every((c) => lined.includes(c)), "every face still shows");
+  // the same outline: an edge never draws past the faces by more than a cell
+  const a = extent(plain), b = extent(lined);
+  assert.ok(Math.abs(a.c0 - b.c0) <= 1 && Math.abs(a.c1 - b.c1) <= 1 && Math.abs(a.r0 - b.r0) <= 1 && Math.abs(a.r1 - b.r1) <= 1, `${JSON.stringify(a)} against ${JSON.stringify(b)}`);
+  // seen square on, one face: only its border, a box of - and | with + at its corners, nothing drawn across it, so the
+  // edges behind it are hidden
+  const square = drawn([cube()], 0, { camera: { zoom: 6, distance: 40 }, light: [0, 0, -1] }).frame().split("\n").filter((l) => l.trim());
+  assert.match(square[0].trim(), /^\+-+\+$/);
+  assert.match(square.at(-1)!.trim(), /^\+-+\+$/);
+  for (const l of square.slice(1, -1)) assert.match(l.trim(), /^\|@+\|$/, l);
+  // a rim curves on round: no + along it
+  assert.doesNotMatch(drawn([cylinder({ rotate: [0.5, 0, 0] })]).frame(), /\+/);
+  // a quad mesh cut into two triangles has no line across it, and two coplanar faces none between them
+  const quad = drawn([mesh([[-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0]], [[0, 1, 2, 3]])], 0, { camera: { zoom: 6, distance: 40 }, light: [0, 0, -1] }).frame();
+  const halves = drawn([mesh([[-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0]], [[0, 1, 2], [0, 2, 3]])], 0, { camera: { zoom: 6, distance: 40 }, light: [0, 0, -1] }).frame();
+  assert.equal(halves, quad);
+  assert.doesNotMatch(quad.split("\n")[10], /[/\\]/);
+  // a cylinder's rims, a cone's rim and a plane's border are drawn; a sphere and a torus have none
+  for (const shape of [cylinder({ rotate: [0.5, 0, 0] }), cone({ rotate: [0.5, 0, 0] }), plane({ rotate: [0.6, 0, 0] })]) assert.ok(slopes(drawn([shape]).frame()).size >= 2, shape.kind);
+  assert.equal(drawn([sphere()]).frame(), drawn([sphere({ edges: false })]).frame());
+  // an edge hidden behind a nearer shape stays hidden
+  const behind = drawn([sphere({ at: [0, 0, -2], radius: 1.5 }), cube({ at: [0, 0, 2] })], 0, { camera: { zoom: 5 }, light: [0, 0, -1] }).frame();
+  assert.equal(at(behind, 20, 10), "@");
+  assert.throws(() => cube({ edges: 1 as unknown as boolean }), /ascii\.rest: cube's edges takes true or false, not 1/);
 });
 
 test("parametric surfaces draw, and one of t moves", () => {
@@ -301,6 +334,120 @@ test("parametric surfaces draw, and one of t moves", () => {
   // a point that isn't numbers is taken as the centre, never a crash
   const holey = parametric((u, v) => (u > 0.5 ? [Number.NaN, 0, 0] : [u * 2 - 1, v * 2 - 1, 0]));
   assert.ok(extent(drawn([holey]).frame()).n > 0);
+});
+
+test("lines: paths drawn by their slope or in one character, closed or not, hidden behind nearer surfaces", () => {
+  const o = { camera: { zoom: 4, distance: 40 } };
+  // one path, or a list of paths, is the same
+  assert.equal(drawn([lines([[-2, 0, 0], [2, 0, 0]])], 0, o).frame(), drawn([lines([[[-2, 0, 0], [2, 0, 0]]])], 0, o).frame());
+  const one = (a: Vec3, b: Vec3, extra = {}) => drawn([lines([a, b], extra)], 0, o).frame().replace(/[\n ]/g, "");
+  assert.match(one([-2, 0, 0], [2, 0, 0]), /^-+$/);
+  assert.match(one([0, -2, 0], [0, 2, 0]), /^\|+$/);
+  assert.match(one([-1, -2, 0], [1, 2, 0]), /^\/+$/);
+  assert.match(one([-1, 2, 0], [1, -2, 0]), /^\\+$/);
+  assert.match(one([-2, 0, 0], [2, 0, 0], { char: "=" }), /^=+$/);
+  // a square path: three sides open, four closed, and no + where they meet
+  const square: Vec3[] = [[-1, -1, 0], [1, -1, 0], [1, 1, 0], [-1, 1, 0]];
+  const open = drawn([lines(square)], 0, o).frame(), shut = drawn([lines(square, { closed: true })], 0, o).frame();
+  assert.ok(extent(shut).n > extent(open).n);
+  assert.doesNotMatch(shut, /\+/);
+  // behind a sphere hidden, in front of it drawn, whichever is drawn first
+  const across = lines([[-3, 0, 0], [3, 0, 0]], { char: "=" });
+  for (const z of [-3, 3]) {
+    const line = lines([[-3, 0, z], [3, 0, z]], { char: "=" });
+    for (const list of [[sphere(), line], [line, sphere()]]) assert.equal(at(drawn(list, 0, o).frame(), 20, 10) === "=", z < 0, `a line at z ${z}`);
+  }
+  // a function of t moves it, and a point that isn't numbers breaks its path there
+  const hand = lines((t) => [[0, 0, 0], [Math.cos(t), Math.sin(t), 0]]);
+  assert.notEqual(drawn([hand], 0, o).frame(), drawn([hand], 1, o).frame());
+  const broken = lines((t) => [[-2, 0, 0], t ? [Number.NaN, 0, 0] : [0, 0, 0], [2, 0, 0]] as Vec3[], { char: "=" });
+  assert.ok(extent(drawn([broken], 1, o).frame()).n === 0 && extent(drawn([broken], 0, o).frame()).n > 10);
+  // a line reaching behind the camera is cut where it passes it, not left out
+  assert.ok(extent(drawn([lines([[0, -1, 0], [0, -1, -60]])], 0, o).frame()).n > 3);
+  // coloured, in its colour's full shade
+  const p = scene({ cols: 30, rows: 10 }, [across, lines([[0, -2, 0], [0, 2, 0]], { color: "#22c55e" })]);
+  const { color } = snapshot(p, 0);
+  assert.ok(color!.some((c) => p.meta.palette![c] === "#22c55e"));
+  const bad: [() => unknown, RegExp][] = [
+    [() => lines("x" as unknown as Vec3[]), /ascii\.rest: lines\(\) takes a list of points, each \[x, y, z\], a list of such lists/],
+    [() => lines([[0, 0, 0], [1, 1]] as unknown as Vec3[]), /lines' path 0, point 1, takes \[x, y, z\]/],
+    [() => lines([[0, 0, 0]], { char: "ab" }), /lines' char takes one character that isn't a space/],
+    [() => lines([[0, 0, 0]], { closed: 1 as unknown as boolean }), /lines' closed takes true or false, not 1/],
+    [() => lines([[0, 0, 0]], { texture: "bands" }), /lines\(\) takes no texture/],
+  ];
+  for (const [make, message] of bad) assert.throws(make, message);
+});
+
+test("group: shapes placed, turned and spun as one, groups in groups, colours passed down", () => {
+  const o = { camera: { zoom: 4, distance: 40 } };
+  const ball = sphere({ at: [3, 0, 0], radius: 0.6 });
+  // turned half round about y, the ball on the right is on the left; moved, everything moves with it
+  const right = extent(drawn([group([ball])], 0, o).frame()), left = extent(drawn([group([ball], { rotate: [0, Math.PI, 0] })], 0, o).frame());
+  assert.ok(right.c0 > 20 && left.c1 < 20, `${right.c0} and ${left.c1}`);
+  assert.equal(drawn([group([sphere()], { at: [3, 0, 0] })], 0, o).frame(), drawn([sphere({ at: [3, 0, 0] })], 0, o).frame());
+  // its scale sizes what is in it and their places
+  assert.equal(drawn([group([sphere({ at: [1, 0, 0], radius: 0.5 })], { scale: 2 })], 0, o).frame(), drawn([sphere({ at: [2, 0, 0] })], 0, o).frame());
+  // a moon round a planet that goes round a sun: the moon is where both orbits put it
+  const moon = sphere({ radius: 0.1, at: orbit({ radius: 1, period: 2 }) });
+  const system = scene({ cols: 60, rows: 30, camera: { zoom: 4, distance: 40 }, fit: false }, [group([moon], { at: orbit({ radius: 4, period: 8 }) })]);
+  const lone = (t: number) => {
+    const sun = orbit({ radius: 4, period: 8 })(t), m = orbit({ radius: 1, period: 2 })(t);
+    return snapshot(scene({ cols: 60, rows: 30, camera: { zoom: 4, distance: 40 }, fit: false }, [sphere({ radius: 0.1, at: [sun[0] + m[0], sun[1] + m[1], sun[2] + m[2]] })]), 0).text;
+  };
+  for (const t of [0, 1.5, 3.25]) assert.equal(snapshot(system, t).text, lone(t), `t=${t}`);
+  // the loop: a spin of the group and an orbit in it, a turn in 2 s and an orbit of 3 s, meet at 6 s
+  assert.ok(Math.abs(scene({}, [group([moon, sphere({ at: orbit({ radius: 2, period: 3 }) })], { spin: [0, Math.PI, 0] })]).meta.loop! - 6) < 1e-9);
+  // and an orbit inside a group is checked against the period
+  assert.throws(() => scene({ period: 5 }, [group([moon])]), /an orbit going round every 2 seconds doesn't go round a whole number of times/);
+  // colours: the group's for the shapes with none, their own for the rest; the shape itself is left as it was
+  const plain = sphere({ at: [-2, 0, 0] });
+  const p = scene({ cols: 40, rows: 20 }, [group([plain, sphere({ at: [2, 0, 0], color: "#ff0000" })], { color: "#0000ff" })]);
+  assert.equal(p.meta.palette!.length, 2 * 2 * 4, "two colours, four shades, two pages, and no ink: every shape has a colour");
+  assert.equal(scene({}, [plain]).meta.palette, undefined);
+  // fitted, a spinning group stays inside the frame
+  const spun = scene({ cols: 40, rows: 20, period: 4 }, [group([cube({ at: [2, 0, 0], size: 1 }), sphere({ at: [-2, 0, 0], radius: 0.5 })], { spin: [0.3, 1, 0] })]);
+  const f = spun.default();
+  for (let i = 0; i < 40; i++) {
+    const e = extent(f(i / 10));
+    assert.ok(e.c0 >= 1 && e.c1 <= 38 && e.r0 >= 1 && e.r1 <= 18, `t=${i / 10}: ${JSON.stringify(e)}`);
+  }
+  contract(spun);
+  assert.throws(() => group("x" as unknown as Shape3d[]), /ascii\.rest: group\(\) takes a list of shapes/);
+  assert.throws(() => group([sphere(), {} as Shape3d]), /group\(\) takes shapes made by/);
+  assert.throws(() => group([sphere()], { texture: "bands" }), /group\(\) takes no texture/);
+});
+
+test("the near plane cuts what reaches behind the camera, so a floor to the horizon draws", () => {
+  const floor = plane({ at: [0, -1, 0], width: 60, depth: 60, texture: textures.checker(30, 30) });
+  const s = drawn([floor], 0, { camera: { tilt: 0.35, zoom: 6 } }, 40, 16);
+  const lines = s.frame().split("\n");
+  // the bottom rows, nearest the camera, are covered from side to side
+  for (const l of lines.slice(-4)) assert.equal(l.trim().length, 40, l);
+  // and the checks shrink towards the horizon: more changes of character a row far away than near
+  const changes = (l: string) => [...l].filter((c, i) => i && c !== l[i - 1]).length;
+  assert.ok(changes(lines.at(-1)!) < changes(lines[Math.floor(lines.length / 2)]), "perspective");
+});
+
+test("spin as one number turns about y; a texture of t moves; a shape alone is a list of one", () => {
+  const a = scene({ cols: 30, rows: 12, period: 4 }, [cube({ spin: 1.2 })]), b = scene({ cols: 30, rows: 12, period: 4 }, [cube({ spin: [0, 1.2, 0] })]);
+  for (const t of [0, 1, 2.5]) assert.equal(snapshot(a, t).text, snapshot(b, t).text);
+  assert.throws(() => cube({ spin: Number.NaN }), /ascii\.rest: cube's spin takes radians a second about y, or \[x, y, z\] about each, not NaN/);
+  const lava = scene({ cols: 30, rows: 12, period: 2 }, [sphere({ texture: (u, v, t) => 0.5 + 0.5 * Math.sin(TAU * (u * 4 + t / 2)) })]);
+  assert.notEqual(snapshot(lava, 0).text, snapshot(lava, 0.5).text);
+  assert.equal(lava.meta.fps, 30);
+  assert.equal(snapshot(scene({ cols: 30, rows: 12 }, torus()), 0).text, snapshot(scene({ cols: 30, rows: 12 }, [torus()]), 0).text);
+});
+
+test("a scene with a huge spinning surface is made quickly: it counts as its ball", () => {
+  const start = performance.now();
+  const p = scene({ period: 60 }, [parametric((u, v) => [Math.cos(u * TAU) * (1 + v), v, Math.sin(u * TAU)], { segments: 512, spin: [1, 0.3, 0] })]);
+  const ms = performance.now() - start;
+  assert.ok(ms < 1500, `made in ${ms.toFixed(0)} ms`);
+  const f = p.default();
+  for (let i = 0; i < 20; i++) {
+    const e = extent(f(i * 3));
+    assert.ok(e.c0 >= 1 && e.c1 <= 62 && e.r0 >= 1 && e.r1 <= 22, JSON.stringify(e));
+  }
 });
 
 // --- scenes -----------------------------------------------------------------------
@@ -338,7 +485,7 @@ test("scene() makes a normal piece: 64 by 24, shapes category, 30 fps moving, a 
     [() => scene({ camera: { zoom: 0 } }, [sphere()]), /camera's zoom takes a number above 0, not 0/],
     [() => scene({ camera: { tilt: Number.NaN } }, [sphere()]), /camera's tilt takes a number, not NaN/],
     [() => scene({ camera: [] as unknown as {} }, [sphere()]), /camera takes \{ distance, zoom, tilt, spin \}/],
-    [() => scene({}, "torus" as unknown as Shape3d[]), /scene\(\) takes a list of shapes, such as \[torus\(\)\], or a function of t that gives one, not "torus"/],
+    [() => scene({}, "torus" as unknown as Shape3d[]), /scene\(\) takes a shape, a list of shapes, such as \[torus\(\)\], or a function of t that gives a list, not "torus"/],
     [() => scene({}, [{ kind: "torus" }]), /a scene takes shapes made by torus\(\), sphere\(\)/],
     [() => scene({ cols: 0 }, [sphere()]), /cols takes a whole number from 1 to 320, not 0/],
     [() => scene({ period: 5 }, [sphere({ at: orbit({ radius: 2, period: 2 }) })]), /an orbit going round every 2 seconds doesn't go round a whole number of times in the scene's period of 5: make the period a multiple of 2/],
@@ -484,7 +631,11 @@ test("render3d draws over what is in a surface, inside any piece, and keeps its 
   render3d(s, [once[0]], 2, { ambient: 0.1 });
   assert.equal(s.frame(), first);
   assert.throws(() => render3d({} as Surface, once, 0), /ascii\.rest: render3d\(\) takes the surface to draw into first/);
-  assert.throws(() => render3d(s, "x" as unknown as Shape3d[], 0), /render3d\(\) takes a list of shapes/);
+  assert.throws(() => render3d(s, "x" as unknown as Shape3d[], 0), /render3d\(\) takes a shape or a list of shapes/);
+  // one shape is a list of one
+  s.clear();
+  render3d(s, once[0], 2, { ambient: 0.1 });
+  assert.equal(s.frame(), first);
   assert.throws(() => render3d(s, once, 0, null as unknown as {}), /render3d\(\) takes its options as an object/);
   // a time that isn't a number is taken as 0
   s.clear();
@@ -501,6 +652,8 @@ test("a frame depends only on t: drawn out of order, it is the same", () => {
     sphere({ radius: 0.3, at: orbit({ radius: 2.5, period: 3, tilt: 0.4 }), texture: "spots" }),
     points("helix", { spin: [0, 1, 0], scale: 0.5, at: [2.5, 0, 0] }),
     parametric((u, v, t) => [u * 2 - 1, 0.2 * Math.sin(6 * u + t), v * 2 - 1], { at: [-2.5, 0, 0], rotate: [0.6, 0, 0] }),
+    group([cube({ size: 0.6, spin: 2 }), lines((t) => [[0, 0, 0], [Math.cos(t), 1, 0]])], { at: orbit({ radius: 1.5, period: 6 }), spin: [1, 0, 0] }),
+    plane({ at: [0, -2, 0], width: 40, depth: 40, texture: (u, v, t) => 0.5 + 0.5 * Math.sin(TAU * (u * 8 + t / 6)) }),
   ]);
   const fresh = (t: number) => snapshot(p, t);
   const f = p.default();
@@ -539,7 +692,7 @@ test("frames are quick: under 4 ms at 64 by 24 and 10 ms at 200 by 100", () => {
 });
 
 test("the examples are pieces that pass the contract", async () => {
-  for (const name of ["donut", "cube", "planet", "crystal", "galaxy"]) {
+  for (const name of ["donut", "cube", "planet", "crystal", "galaxy", "orrery", "boing"]) {
     const p = (await import(`../../examples/kit/shapes3d-${name}.ts`)).default as Piece;
     assert.ok(p.meta.loop, `${name} loops`);
     contract(p);
