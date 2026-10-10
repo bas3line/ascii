@@ -129,6 +129,23 @@ test("logic: its hold, and its expressions as data", () => {
   assert.throws(() => logic(ENTRY.source, { hold: 0.1 }), /logic's hold takes a number from 0.5 to 10/);
 });
 
+test("logic: constructor, __proto__, toString and the other names every object has are names like any other", () => {
+  assert.equal(bare("ready is constructor"), "constructor 0 ────── ready 0");
+  assert.equal(bare("ready is __proto__ and toString"), bare("ready is aaaaaaaaa and bbbbbbbb").replace("aaaaaaaaa", "__proto__").replace("bbbbbbbb", "toString"));
+  // as inputs and as outputs, fed on and stepped through their truth table
+  const p = logic("constructor is toString or valueOf\n__proto__ is not constructor\nhasOwnProperty is __proto__ xor toString", { frame: "none" });
+  assert.equal(p.says, "logic: constructor is toString or valueOf; __proto__ is not constructor; hasOwnProperty is __proto__ xor toString; with every input 0, constructor is 0, __proto__ is 1 and hasOwnProperty is 1.");
+  const rows = plain(p).split("\n");
+  assert.ok(rows.some((r) => / __proto__ 1$/.test(r)), rows.join("\n"));
+  // toString flips to 1 first: constructor goes to 1, __proto__ to 0, and hasOwnProperty stays 1
+  const after = plain(p, { t: p.meta.still! + 1.5 + 0.2 }).split("\n");
+  assert.ok(after.some((r) => / constructor 1$/.test(r)), after.join("\n"));
+  assert.ok(after.some((r) => / __proto__ 0$/.test(r)), after.join("\n"));
+  assert.ok(after.some((r) => / hasOwnProperty 1$/.test(r)), after.join("\n"));
+  sane(p);
+  assert.equal(plain(logic({ outputs: { toString: "constructor and not __proto__" } })), plain(logic("toString is constructor and not __proto__")));
+});
+
 test("logic: never crashes on empty, long, unicode or broken input, and says what is wrong the kit's way", () => {
   assert.throws(() => logic(""), /ascii\.rest: logic takes expressions, one a line/);
   assert.throws(() => logic("ready built and tested"), /logic's line 1 reads "ready built and tested": a line is an output, is, and an expression/);

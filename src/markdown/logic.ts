@@ -31,7 +31,8 @@ type Op = "and" | "or" | "xor" | "not";
 /** An expression, read: a name, or a gate and what goes into it. */
 type Expr = { name: string } | { op: Op; kids: Expr[]; grouped?: boolean };
 
-const PREC: Record<string, number> = { or: 1, xor: 2, and: 3 };
+// A Map, so a name every object has, constructor or toString, never reads as an operator.
+const PREC = new Map<string | undefined, number>([["or", 1], ["xor", 2], ["and", 3]]);
 const WORDS = ["and", "or", "xor", "not", "is"];
 const NAME = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
 // A gate's box is this wide, gates of one depth this far apart.
@@ -66,7 +67,7 @@ function read(text: string, at: string): { output: string; expr: Expr; text: str
       return "op" in e ? { ...e, grouped: true } : e;
     }
     if (t === ")") fail(`${at} has a ) where a name goes: ${show(text)}`);
-    if (PREC[word(t)!] || word(t) === "is") fail(`${at} has ${show(t)} where a name goes: ${word(t)} takes something on each side`);
+    if (PREC.has(word(t)) || word(t) === "is") fail(`${at} has ${show(t)} where a name goes: ${word(t)} takes something on each side`);
     if (!NAME.test(t)) fail(`${at} has ${show(t)}: a name is one word of letters, digits and _ . -, starting with a letter`);
     i++;
     return { name: t };
@@ -75,10 +76,11 @@ function read(text: string, at: string): { output: string; expr: Expr; text: str
     let left = atom();
     for (;;) {
       const t = word(toks[i]);
-      if (t === undefined || !PREC[t] || PREC[t] <= min) break;
+      const prec = PREC.get(t);
+      if (prec === undefined || prec <= min) break;
       i++;
       const op = t as Op;
-      const right = expr(PREC[op]);
+      const right = expr(prec);
       left = "op" in left && left.op === op && !left.grouped ? { op, kids: [...left.kids, right] } : { op, kids: [left, right] };
     }
     return left;
@@ -170,9 +172,10 @@ export function logic(source: string | LogicData, options?: LogicOptions): Markd
 
   return component("logic", options, ["hold"], (o) => {
     const hold = numberOf("logic's hold", o.hold, 1.5, 0.5, 10);
-    // every value, with the inputs as given: each line in turn, an earlier output feeding a later line
+    // every value, with the inputs as given: each line in turn, an earlier output feeding a later line. The values sit
+    // on an object with no prototype, so an output named __proto__ is a value like any other.
     const evaluate = (env: Record<string, number>): Record<string, number> => {
-      const v = { ...env };
+      const v: Record<string, number> = Object.assign(Object.create(null), env);
       const of = (e: Expr): number => ("name" in e ? v[e.name] : e.op === "not" ? 1 - of(e.kids[0]) : e.op === "and" ? +e.kids.every((k) => of(k)) : e.op === "or" ? +e.kids.some((k) => of(k)) : e.kids.reduce((a, k) => a ^ of(k), 0));
       for (const l of lines) v[l.output] = of(l.expr);
       return v;
