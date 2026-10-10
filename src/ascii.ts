@@ -11,7 +11,8 @@
  *
  * Attributes:
  *   piece    a piece's file name: "donut", "night-coast"
- *   src      or the URL of any module that follows the piece contract
+ *   src      or the URL of any module that follows the piece contract, or whose
+ *            default export is a piece, as a kit file's is
  *   fps      overrides the piece's frame rate
  *   options  JSON overriding the piece's option defaults: '{"text":"hello"}'
  *   label    what the picture shows, for screen readers; the piece's name otherwise
@@ -24,7 +25,7 @@
  */
 import { banner, type BannerOptions } from "./banner.ts";
 import { isPiece, load } from "./library.ts";
-import { mount, type MountOptions } from "./mount.ts";
+import { mount, pieceIn, type MountOptions } from "./mount.ts";
 import type { Piece } from "./types.ts";
 
 // :where gives these no specificity, so any rule of the page's own wins. Where the system monospace face lacks the box
@@ -74,7 +75,8 @@ export class AsciiArt extends Base {
     let piece: Piece;
     let options: MountOptions;
     try {
-      if (src) piece = (await import(/* @vite-ignore */ /* webpackIgnore: true */ new URL(src, document.baseURI).href)) as Piece;
+      // A kit file's piece is its default export; a library piece's module is the piece.
+      if (src) piece = pieceIn(await import(/* @vite-ignore */ /* webpackIgnore: true */ new URL(src, document.baseURI).href), src);
       else if (isPiece(name)) piece = await load[name]();
       else return;
       options = JSON.parse(this.getAttribute("options") || "{}") as MountOptions;

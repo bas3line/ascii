@@ -242,7 +242,9 @@ Any file that follows the piece contract plays in `<ascii-art>`. Put its URL in 
 
 `src` works like a link: a relative URL starts from the page's own. A file on another site must allow cross-origin requests (CORS).
 
-If the file can't load, the tag keeps what it showed before. The console logs `<ascii-art> could not load`, then the `src` you gave and the browser's reason.
+A file made with the [kit](/docs/kit/) plays too: its piece is its default export, `export default sea()`. Like any module a page loads, its imports must load in the browser, so build it with your bundler first.
+
+If the file can't load, or has no piece in it, the tag keeps what it showed before. The console logs `<ascii-art> could not load`, then the `src` you gave and the browser's reason.
 
 Every field of `meta` is in [Fill in its meta](/docs/pieces/#fill-in-its-meta). How to add colour is in [Draw it in colour](/docs/pieces/#draw-it-in-colour).
 

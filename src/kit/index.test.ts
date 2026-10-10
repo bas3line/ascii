@@ -145,6 +145,34 @@ test("npx ascii.rest play and svg take a file of your own: its default export", 
   }
 });
 
+test("<ascii-art src> plays a kit file, its default export a piece, and a module that exports meta itself", async () => {
+  const { mkdtempSync, writeFileSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { pieceIn } = await import("../mount.ts");
+  const index = fileURLToPath(new URL("./index.ts", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "kit-tag-"));
+  try {
+    // A kit file's module has only a default export: the tag read its meta off the module, undefined, and threw.
+    writeFileSync(join(dir, "sea.ts"), `import { sea } from ${JSON.stringify(index)};\nexport default sea({ cols: 30, rows: 8 });\n`);
+    const kitFile = (await import(pathToFileURL(join(dir, "sea.ts")).href)) as Record<string, unknown>;
+    assert.equal((kitFile as { meta?: unknown }).meta, undefined);
+    const sea = pieceIn(kitFile, "sea.ts");
+    assert.equal(sea, kitFile.default);
+    assert.deepEqual([sea.meta.name, sea.meta.cols, sea.meta.rows], ["sea", 30, 8]);
+    // a library piece's module exports meta and a default function, and is the piece itself
+    const donut = (await import("../pieces/donut.ts")) as Record<string, unknown>;
+    assert.equal(pieceIn(donut, "donut.js"), donut);
+    // a module with neither says so
+    writeFileSync(join(dir, "none.ts"), "export const x = 1;\n");
+    const none = await import(pathToFileURL(join(dir, "none.ts")).href);
+    assert.throws(() => pieceIn(none, "art/none.js"), /^Error: ascii\.rest: art\/none\.js has no piece: export one as its default, export default sea\(\), or export meta and a default function$/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("npx ascii.rest play --watch plays every save, an editor's that writes a new file over the old one too", async () => {
   const { spawn } = await import("node:child_process");
   const { mkdtempSync, renameSync, writeFileSync, rmSync } = await import("node:fs");
