@@ -175,47 +175,52 @@ test("<ascii-art src> plays a kit file, its default export a piece, and a module
 
 test("npx ascii.rest play --watch plays every save, an editor's that writes a new file over the old one too", async () => {
   const { spawn } = await import("node:child_process");
-  const { mkdtempSync, renameSync, writeFileSync, rmSync } = await import("node:fs");
+  const { mkdirSync, mkdtempSync, renameSync, symlinkSync, writeFileSync, rmSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
   const { fileURLToPath } = await import("node:url");
   const cli = fileURLToPath(new URL("../cli.ts", import.meta.url));
   const index = fileURLToPath(new URL("./index.ts", import.meta.url));
-  const dir = mkdtempSync(join(tmpdir(), "kit-watch-"));
-  const file = join(dir, "sea.ts");
   // Each version says so on stderr as it loads.
   const version = (v: string) => `import { sea } from ${JSON.stringify(index)};\nprocess.stderr.write("loaded ${v}\\n");\nexport default sea({ cols: 30, rows: 8 });\n`;
-  // As most editors save: the new text written to a file of its own, then renamed over the old one.
-  const save = (v: string) => {
-    writeFileSync(`${file}.tmp`, version(v));
-    renameSync(`${file}.tmp`, file);
-  };
-  writeFileSync(file, version("a"));
-  // play draws only on a terminal, so this one is told stdout is one.
-  const tty = `data:text/javascript,${encodeURIComponent("process.stdout.isTTY = true;")}`;
-  const child = spawn(process.execPath, ["--import", tty, cli, "play", "sea.ts", "--watch"], { cwd: dir, stdio: ["ignore", "pipe", "pipe"] });
-  child.stdout.resume();
-  let said = "";
-  child.stderr.on("data", (d: Buffer) => (said += d));
-  const loaded = async (v: string) => {
-    for (const end = Date.now() + 10_000; !said.includes(`loaded ${v}\n`); ) {
-      if (Date.now() > end || child.exitCode !== null) assert.fail(`${v} never played: ${said}`);
-      await new Promise((r) => setTimeout(r, 20));
+  // The file played, and a symlink to it from another folder: the file is watched where it is, not where the link is.
+  for (const linked of [false, true]) {
+    const dir = mkdtempSync(join(tmpdir(), "kit-watch-"));
+    const file = join(dir, "real", "sea.ts"), played = join(dir, linked ? "linked" : "real");
+    mkdirSync(join(dir, "real"));
+    // As most editors save: the new text written to a file of its own, then renamed over the old one.
+    const save = (v: string) => {
+      writeFileSync(`${file}.tmp`, version(v));
+      renameSync(`${file}.tmp`, file);
+    };
+    writeFileSync(file, version("a"));
+    if (linked) mkdirSync(played), symlinkSync(file, join(played, "sea.ts"));
+    // play draws only on a terminal, so this one is told stdout is one.
+    const tty = `data:text/javascript,${encodeURIComponent("process.stdout.isTTY = true;")}`;
+    const child = spawn(process.execPath, ["--import", tty, cli, "play", "sea.ts", "--watch"], { cwd: played, stdio: ["ignore", "pipe", "pipe"] });
+    child.stdout.resume();
+    let said = "";
+    child.stderr.on("data", (d: Buffer) => (said += d));
+    const loaded = async (v: string) => {
+      for (const end = Date.now() + 10_000; !said.includes(`loaded ${v}\n`); ) {
+        if (Date.now() > end || child.exitCode !== null) assert.fail(`${linked ? "through a symlink, " : ""}${v} never played: ${said}`);
+        await new Promise((r) => setTimeout(r, 20));
+      }
+    };
+    try {
+      await loaded("a");
+      save("b");
+      await loaded("b");
+      // The watch on the file itself was left on the old one by the first save, so this one was missed.
+      save("c");
+      await loaded("c");
+      // and a save that writes the file in place still plays
+      writeFileSync(file, version("d"));
+      await loaded("d");
+    } finally {
+      child.kill("SIGKILL");
+      rmSync(dir, { recursive: true, force: true });
     }
-  };
-  try {
-    await loaded("a");
-    save("b");
-    await loaded("b");
-    // The watch on the file itself was left on the old one by the first save, so this one was missed.
-    save("c");
-    await loaded("c");
-    // and a save that writes the file in place still plays
-    writeFileSync(file, version("d"));
-    await loaded("d");
-  } finally {
-    child.kill("SIGKILL");
-    rmSync(dir, { recursive: true, force: true });
   }
 });
 
