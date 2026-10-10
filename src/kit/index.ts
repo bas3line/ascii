@@ -57,12 +57,14 @@ export {
   turbulence,
   vortex,
   waves,
+  type LookDef,
   type LookFn,
   type LookKit,
   type LookOptions,
   type LookRecipe,
   type Mask,
   type MaskLike,
+  type NoiseSize,
 } from "./recipes/looks.ts";
 export {
   blinking,

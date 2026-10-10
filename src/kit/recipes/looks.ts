@@ -535,6 +535,14 @@ function sizeOf(what: string, o: { cols?: unknown; rows?: unknown }, def: { cols
  */
 export type LookFn = Fn;
 
+/** A noise feature's size by name, for LookKit's noise(): fine, small, medium, large or huge. */
+export type NoiseSize = "fine" | "small" | "medium" | "large" | "huge";
+
+// What the noise words stand for, in the units of x and y (the shorter side of the picture is 2 of them).
+const NOISE_SIZES: Readonly<Record<NoiseSize, number>> = { fine: 0.15, small: 0.3, medium: 0.6, large: 1, huge: 1.6 };
+const TRAVELS = { up: [0, -2], down: [0, 2], left: [-2, 0], right: [2, 0] } as const;
+const CHANGES = { slowly: 0.5, steadily: 1, quickly: 2 } as const;
+
 /** What look() hands a look's body: its options worked out, and helpers that keep it looping. */
 export interface LookKit {
   /** The scale asked for as a number: 1 for "medium", 1.6 for "large". Divide x and y by it. */
@@ -546,11 +554,13 @@ export interface LookKit {
   /** Where in its loop t is, 0 up to 1, always 0 when still: TAU * phase(t) in a sine, times a whole number, loops. */
   phase(t: number): number;
   /**
-   * Noise that loops with the look: `travel` [x, y] is how far it slides in one loop, or `change` how many times it
-   * turns into new shapes in place (1); `size`, `kind`, `detail` and `seed` as math's noise(), in the units of x and
-   * y. It holds still when the look does.
+   * Noise that loops with the look: `travel` is the way it slides, "up", "down", "left" or "right" (a picture's height
+   * a loop), or [x, y], how far in one loop; or `change` how often it turns into new shapes in place, "slowly",
+   * "steadily" (the default) or "quickly", or times a loop. `size` is "fine", "small", "medium" (the default), "large"
+   * or "huge", or as math's noise() in the units of x and y, as are `kind`, `detail` and `seed`. It holds still when
+   * the look does.
    */
-  noise(o?: NoiseOptions & { travel?: readonly [number, number]; change?: number }): (x: number, y: number, t: number) => number;
+  noise(o?: Omit<NoiseOptions, "size"> & { size?: NoiseOptions["size"] | NoiseSize; travel?: readonly [number, number] | "up" | "down" | "left" | "right"; change?: number | "slowly" | "steadily" | "quickly" }): (x: number, y: number, t: number) => number;
   /** The column x falls in, as a fraction, 0 at the left edge: Math.floor() it for the cell. */
   column(x: number, at: FieldCell): number;
   /** The row y falls in, as a fraction, 0 at the top edge. */
@@ -578,19 +588,32 @@ export interface LookRecipe {
   options?: readonly string[];
 }
 
+/** A look of your own in one object: its name, how it looks by default, and its body. What look()'s first form takes. */
+export interface LookDef<O extends LookOptions = LookOptions> extends LookRecipe {
+  name: string;
+  /** Given a LookKit and the options once, returns what each cell is, (x, y, t) => 0 to 1, or null for nothing. */
+  body: (k: LookKit, o: O) => LookFn;
+}
+
 /**
- * A look of your own, made the way every look here is: a name, the options its user passed, how it looks by default,
- * and a body that is given a LookKit and the options once and returns what each cell is. speed, scale, palette, ramp,
- * size, name and note are worked out and checked for you, and the result chains like any look.
+ * A look of your own, made the way every look here is: a name, how it looks by default, and a body that is given a
+ * LookKit and the options once and returns what each cell is. speed, scale, palette, ramp, size, name and note are
+ * worked out and checked for you, and the result chains like any look. In one object with the options a user passed
+ * second, or as name, options, how and body.
  *
- *   export const embers = (o?: LookOptions) =>
- *     look("embers", o, { palette: "fire", period: 4 }, (k) => {
- *       const n = k.noise({ size: [0.3, 0.3], travel: [0, -3] });
- *       return (x, y, t) => n(x, y, t) * (0.5 + 0.5 * y);
- *     });
+ *   export const embers = look({ name: "embers", palette: "fire", period: 4, body: (k) => k.noise({ travel: "up", size: "small" }) });
+ *   export const glow = (o?: LookOptions) => look({ name: "glow", palette: "gold", body: (k) => (x, y) => 1 - Math.hypot(x, y) }, o);
+ *   export const fire = (o?: LookOptions) => look("embers", o, { palette: "fire", period: 4 }, (k) => k.noise({ travel: "up" }));
  */
-export function look<O extends LookOptions>(name: string, o: O | undefined, how: LookRecipe, body: (k: LookKit, o: O) => LookFn): Look {
-  if (typeof name !== "string" || !name.trim()) fail(`look() takes a name first, such as "embers", not ${show(name)}`);
+export function look<O extends LookOptions>(def: LookDef<O>, o?: O): Look;
+export function look<O extends LookOptions>(name: string, o: O | undefined, how: LookRecipe, body: (k: LookKit, o: O) => LookFn): Look;
+export function look<O extends LookOptions>(first: string | LookDef<O>, o?: O, recipe?: LookRecipe, maker?: (k: LookKit, o: O) => LookFn): Look {
+  if (first !== null && typeof first === "object" && !Array.isArray(first)) {
+    const { name: given, body: drawn, ...rest } = first;
+    return look(given, o, rest, drawn);
+  }
+  const name = first, how = recipe as LookRecipe, body = maker as (k: LookKit, o: O) => LookFn;
+  if (typeof name !== "string" || !name.trim()) fail(`look() takes a name first, such as "embers", or { name, body }, not ${show(name)}`);
   if (how === null || typeof how !== "object" || Array.isArray(how)) fail(`look() takes how it looks third, such as { palette: "fire", period: 4 }, not ${show(how)}`);
   if (typeof body !== "function") fail(`look() takes a body last: (k, options) => (x, y, t) => a value 0 to 1, not ${show(body)}`);
   const what = `${name}()`;
@@ -614,7 +637,12 @@ export function look<O extends LookOptions>(name: string, o: O | undefined, how:
     period,
     phase: period ? (t) => fract(t / period) : () => 0,
     noise: (n = {}) => {
-      const { travel, change, ...rest } = n;
+      const { travel: way, change: often, size: big, ...more } = n;
+      // Words for the size, the way it slides and how often it changes.
+      const size = typeof big === "string" ? (Object.hasOwn(NOISE_SIZES, big) ? [NOISE_SIZES[big as NoiseSize], NOISE_SIZES[big as NoiseSize]] as const : fail(`${what}'s noise size takes ${Object.keys(NOISE_SIZES).map((w) => JSON.stringify(w)).join(", ")}, or a number, not ${show(big)}`)) : big;
+      const travel = typeof way === "string" ? (Object.hasOwn(TRAVELS, way) ? TRAVELS[way] : fail(`${what}'s noise travel takes "up", "down", "left" or "right", or [x, y], not ${show(way)}`)) : way;
+      const change = typeof often === "string" ? (Object.hasOwn(CHANGES, often) ? CHANGES[often] : fail(`${what}'s noise change takes "slowly", "steadily" or "quickly", or times a loop, not ${show(often)}`)) : often;
+      const rest = { ...more, ...(size !== undefined ? { size } : {}) } as NoiseOptions;
       if (!period) return noise({ ...rest, morph: 0 });
       if (travel) {
         // At least one feature a loop: a larger scale makes larger features, and a band that slides round shorter than

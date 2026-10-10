@@ -217,6 +217,25 @@ test("sea's horizon is half way down by default, so above(\"half\") is its sky, 
   assert.ok(rows.slice(0, 12).some((l) => l.trim()), "stars above");
 });
 
+test("a look of your own in one object, its noise in words", () => {
+  const embers = look({ name: "embers", palette: "fire", period: 4, body: (k) => k.noise({ travel: "up", size: "small" }) });
+  assert.equal(embers.meta.name, "embers");
+  assert.equal(embers.meta.loop, 4);
+  contract(embers);
+  assert.equal(text(embers, 0.5), text(embers, 4.5), "it loops");
+  // options a user passes, as any look takes them
+  const make = (o?: Parameters<typeof plasma>[0]) => look({ name: "glow", palette: "gold", body: (k) => (x, y) => Math.max(0, 1 - Math.hypot(x, y) / k.scale) }, o);
+  assert.equal(make({ cols: 20, rows: 6 }).meta.cols, 20);
+  assert.notEqual(text(make({ scale: "large" }), 0), text(make(), 0));
+  // words for how it changes, each a noise that loops
+  for (const change of ["slowly", "steadily", "quickly"] as const) {
+    const p = look({ name: "x", period: 4, body: (k) => k.noise({ change, size: "large" }) });
+    assert.equal(text(p, 1), text(p, 5), change);
+  }
+  assert.throws(() => look({ name: "x", body: (k) => k.noise({ travel: "sideways" as never }) }), /x\(\)'s noise travel takes "up", "down", "left" or "right"/);
+  assert.throws(() => look({ name: "x", body: (k) => k.noise({ size: "tiny" as never }) }), /x\(\)'s noise size takes "fine", "small"/);
+});
+
 test("blur works out each sample once a frame: blurs chained cost about one look each", () => {
   const time = (p: Look) => {
     const f = p.default({});
