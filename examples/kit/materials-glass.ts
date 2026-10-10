@@ -5,7 +5,7 @@
  */
 import { bubbles, cup, emit, glass, inside, picture, shape, water } from "../../src/kit/materials.ts";
 
-const tumbler = cup();
+const tumbler = cup({ size: "huge", at: "center" });
 const drink = inside(tumbler, { fill: "half" });
 
 export default picture(

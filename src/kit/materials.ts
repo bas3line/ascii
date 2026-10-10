@@ -147,9 +147,10 @@ export interface Duo {
  * [drop, splash]; snow [flake, star].
  */
 export const palettes = {
-  water: { light: ["#0c4a6e", "#075985", "#0369a1", "#0284c7"], dark: ["#1e40af", "#2563eb", "#38bdf8", "#bae6fd"] },
+  water: { light: ["#1e3a8a", "#1d4ed8", "#60a5fa", "#0369a1"], dark: ["#2563eb", "#60a5fa", "#a5d8ff", "#e0f2fe"] },
   sea: { light: ["#134e4a", "#115e59", "#0f766e", "#0d9488"], dark: ["#0f766e", "#14b8a6", "#2dd4bf", "#ccfbf1"] },
-  cola: { light: ["#2b1408", "#431d0b", "#5c2a10", "#92400e"], dark: ["#7c3a12", "#9a4a1c", "#c07a3e", "#ecc89c"] },
+  cola: { light: ["#2b1408", "#431d0b", "#7c3a12", "#92400e"], dark: ["#5a250c", "#74351a", "#94532a", "#ead0a8"] },
+  lemonade: { light: ["#854d0e", "#a16207", "#ca8a04", "#a16207"], dark: ["#ca8a04", "#eab308", "#fde047", "#fef9c3"] },
   coffee: { light: ["#3b2314", "#4a2c18", "#5b3a24", "#7c4a2a"], dark: ["#7b5135", "#946446", "#b8875e", "#e2c9a6"] },
   tea: { light: ["#713f12", "#854d0e", "#a16207", "#b45309"], dark: ["#b45309", "#d97706", "#f59e0b", "#fde68a"] },
   juice: { light: ["#9a3412", "#c2410c", "#ea580c", "#c2410c"], dark: ["#c2410c", "#ea580c", "#fb923c", "#fed7aa"] },
@@ -422,9 +423,10 @@ function unitShape(what: string, o: Placement | undefined, keys: readonly string
     if (!more.vessel) return placedOf(b, test);
     const base = Math.max(1, more.vessel.base(b.h));
     const open = more.vessel.open;
-    // Inside the walls and off the base; under the vessel itself, or for an open one in its top row, its mouth, so a
-    // bottle's shoulders stay walls instead of opening to the sky.
-    const cavity = (x: number, y: number) => test(x, y) && test(x - 1, y) && test(x + 1, y) && test(x, y + base) && (test(x, y - 1) || (open && y - 1 < b.y0));
+    // Inside the walls and above the base, so its floor is flat however round the base's corners are; under the vessel
+    // itself, or for an open one in its top row, its mouth, so a bottle's shoulders stay walls instead of opening to the sky.
+    const floor = b.y0 + b.h - base;
+    const cavity = (x: number, y: number) => y < floor && test(x, y) && test(x - 1, y) && test(x + 1, y) && (test(x, y - 1) || (open && y - 1 < b.y0));
     return placedOf(b, test, { cavity: { test: cavity, x0: b.x0, y0: b.y0, x1: b.x0 + b.w, y1: b.y0 + b.h }, open: more.vessel.open });
   }, { material: more.material });
 }
@@ -733,9 +735,12 @@ export function inside(vessel: Area, o?: { fill?: Fill; wall?: number; base?: nu
 
 type ShapeOpts<E = object> = Placement & E;
 
-/** A tumbler, wider at the rim than the base by `taper` (0 to 0.6: 0.15), with a thick glass base. Glass by default; a vessel for inside(). */
+/**
+ * A tumbler with a thick glass base: straight sides that run unbroken from the rim to the base, or wider at the rim by
+ * `taper` (0 to 0.6: 0). Glass by default; a vessel for inside().
+ */
 export function cup(o?: ShapeOpts<{ taper?: number }>): Area {
-  const taper = numberOf("cup.taper", o?.taper, 0.15, 0, 0.6);
+  const taper = numberOf("cup.taper", o?.taper, 0, 0, 0.6);
   const ratio = 0.72, hw = ratio / 2;
   return unitShape("cup", o, ["taper"], ratio, { size: "large", at: "bottom" }, (px, py) => {
     const w = hw * (1 - taper * (py + 0.5));
@@ -743,7 +748,7 @@ export function cup(o?: ShapeOpts<{ taper?: number }>): Area {
     // round the bottom corners a little
     const r = 0.1, cy = 0.5 - r, cx = w - r;
     return py < cy || Math.abs(px) < cx || Math.hypot(Math.abs(px) - cx, py - cy) <= r;
-  }, { material: () => glass(), vessel: { open: true, base: (h) => Math.max(1, Math.round(h * 0.15)) } });
+  }, { material: () => glass(), vessel: { open: true, base: (h) => Math.max(1, Math.round(h * 0.16)) } });
 }
 
 /** A mug with a handle on the right (`flip` puts it on the left). Ceramic by default; a vessel for inside(), the handle left out. */
@@ -1373,10 +1378,25 @@ export interface MaterialOptions {
 /** How a liquid's surface moves. */
 export type Waves = "still" | "gentle" | "slosh" | "rough";
 
+// The cells a glass's highlight streak is on, for each grid it draws in, with the character it drew there. The streak
+// is a reflection on the glass's near side, so a liquid drawn after the glass leaves a cell that still holds that
+// character in front of itself rather than bending it. Checking the character, not only the cell, means a liquid drawn
+// before the glass in a frame is never changed by the glass's mark from the frame before.
+const highlights = new WeakMap<Surface, Uint16Array>();
+
+// The shades a liquid's body is drawn in, deepest first, and the surface's colour after them.
+const SHADES = 6;
+// A liquid's body, from just under its surface to the bottom: lighter characters high up, denser low down, so the
+// depth reads in one ink as well as in colour.
+const BODY = ".-~~≈≈";
+
 /**
- * Water, or any liquid: a surface of waves, darker with depth, that shows what is behind it bent a little, as water
- * does a straw. In a vessel's inside() it rests at the level and sloshes against the walls; on any other area its
- * surface is the area's top.
+ * Water, or any liquid: a body that fills its area, pale under the surface and denser and darker toward the bottom,
+ * slow ripples drifting through it, and a surface of waves that curls up against the walls. What is behind it (a
+ * straw, a backdrop, a glass's far wall) shows through in its tint, bent toward the middle, as water bends a straw; a
+ * glass's highlight stays in front. In a vessel's inside() it rests at the level and sloshes against the walls; on any
+ * other area its surface is the area's top. Name a drink as `colors`: "water", "cola", "juice", "tea", "lemonade",
+ * "milk", "coffee", "wine".
  */
 export function water(o?: MaterialOptions & {
   /** "still", "gentle" (the default), "slosh" (the whole surface tilting side to side) or "rough". */
@@ -1385,20 +1405,22 @@ export function water(o?: MaterialOptions & {
   period?: number;
   /** How far, in columns, what is behind the water is shifted below its surface: 1. 0 shows it straight. */
   bend?: number;
-  /** How much texture the water shows where nothing is behind it, 0 (clear) to 1: 0.5. */
+  /** How strongly ripples move through the body, 0 (smooth shading by depth, still) to 1: 0.5. */
   texture?: number;
 }): Material {
   const p = optionsOf("water()", o, ["colors", "waves", "period", "bend", "texture"]);
-  const colors = colorsOf("water.colors", p.colors, "water", 4);
+  const colors = colorsOf("water.colors", p.colors, "water", SHADES);
   const waves = wordOf("water.waves", p.waves, ["still", "gentle", "slosh", "rough"] as const, "gentle");
   const period = periodOf("water.period", p.period, 4);
   const bend = numberOf("water.bend", p.bend, 1, 0, 8);
   const texture = numberOf("water.texture", p.texture, 0.5, 0, 1);
-  return makeMaterial("water", colors, waves === "still" && texture === 0 ? undefined : period, (c) => {
+  const moves = waves !== "still" || texture > 0;
+  const body = Array.from(BODY, code);
+  return makeMaterial("water", colors, moves ? period : undefined, (c) => {
     const room = c.room ?? c;
     // the surface rests mid row, so small waves stay one wavy line instead of breaking over two rows
     const level = Math.floor(c.level ?? c.y0) + 0.5;
-    const { cols } = c;
+    const { cols, rows } = c;
     const surface = new Float32Array(cols);
     const xs: number[] = [];
     for (let x = room.x0; x < room.x1; x++) if (room.top[x] >= 0) xs.push(x);
@@ -1406,9 +1428,12 @@ export function water(o?: MaterialOptions & {
     const depthRows = Math.max(1, room.y1 - level);
     const amp = waves === "still" ? 0 : waves === "gentle" ? 0.45 : waves === "rough" ? 1 : Math.min(2.2, Math.max(0.8, depthRows * 0.25));
     const wl = TAU / Math.max(6, (xb - xa) * 0.6);
+    // each row's middle, which what is behind the water is drawn in toward
+    const middle = new Float32Array(rows);
+    for (let y = 0; y < rows; y++) middle[y] = room.left[y] >= 0 ? (room.left[y] + room.right[y] + 1) / 2 : cols / 2;
     return (t, pt) => {
       const { s } = pt;
-      const w = (TAU * t) / period;
+      const w = moves ? (TAU * t) / period : 0;
       for (const x of xs) {
         const k = x + 0.5;
         let h = 0;
@@ -1418,31 +1443,44 @@ export function water(o?: MaterialOptions & {
         surface[x] = level - h;
       }
       const under = pt.under;
+      const front = highlights.get(s);
       for (const i of room.list) {
         const x = i % cols, y = (i - x) / cols;
         const sy = surface[x];
         if (y + 1 <= sy) continue;
         let ch: number, col: number;
         if (y <= sy) {
-          // the cell the surface crosses: lower in the cell is a lower line
+          // the cell the surface crosses: lower in the cell is a lower line; against a wall with room above it to climb
+          // into, it curls up, the meniscus
           const f = sy - y;
-          ch = code(f < 0.25 ? "-" : f < 0.7 ? "~" : "_");
-          col = pt.color(3);
+          const wall = y > 0 && room.inside[i - cols] === 1 && (x === 0 || x === cols - 1 || !room.inside[i - 1] || !room.inside[i + 1]);
+          ch = wall ? code(f < 0.85 ? "‾" : "-") : code(f < 0.25 ? "-" : f < 0.7 ? "~" : "_");
+          col = pt.color(SHADES - 1);
+        } else if (front && front[i] !== EMPTY && front[i] === under.chars[i]) {
+          // a glass's highlight is on its near side, in front of the liquid: it stays as it is
+          (ch = under.chars[i]), (col = under.colors[i]);
         } else {
-          const d = y - sy;
-          // what is behind, bent sideways below the surface; never the walls round the room
-          const dx = Math.round(bend * (1 + 0.5 * Math.sin(y * 1.3 + w)));
-          const bi = room.inside[i + dx] && x + dx < cols && x + dx >= 0 ? i + dx : i;
-          const behind = under.chars[bi];
+          // what is behind, seen through the water drawn in toward the middle, more so in some rows than others: the
+          // far side of the wall round the room too, a column or two in from it, as a glass's walls look under water
+          let behind = EMPTY;
+          if (bend > 0) {
+            const dx = Math.round(bend * (1 + 0.9 * Math.sin(y * 1.7 + w)));
+            const inward = x + 0.5 < middle[y] ? 1 : -1, sx = x - inward * dx, j = y * cols + sx;
+            if (sx >= 0 && sx < cols && !(front && front[j] !== EMPTY && front[j] === under.chars[j]) && (room.inside[j] || (inward < 0 && room.inside[j + inward]))) behind = under.chars[j];
+          } else behind = under.chars[i];
+          // the body: deeper is denser and darker, scattered so the depth fades rather than steps, with ripples
+          // drifting through it in wavy streaks
+          const d = clamp((y + 0.5 - sy) / depthRows);
+          const ripple = Math.sin(x * 0.45 + 1.5 * Math.sin(y * 0.7 + w) - w) * Math.sin(y * 1.1 - x * 0.12 + w);
+          const v = clamp(0.2 + 0.74 * d + texture * 0.3 * ripple + 0.24 * (hash(x, y, 5) - 0.5), 0, 0.999);
+          const shade = Math.round((1 - v) * (SHADES - 2));
           if (behind !== EMPTY && behind !== SPACE) {
+            // seen through the liquid, it takes the liquid's tint, so it shows by its shape and sits in the liquid
             ch = behind;
-            col = under.colors[bi];
+            col = pt.color(shade);
           } else {
-            // ripples drifting in the body, sparser and darker with depth
-            const r = Math.sin(x * 0.55 - y * 1.7 + w) * Math.sin(x * 0.23 + y * 0.9 - 2 * w);
-            const sparkle = hash(x, y, 7) < 0.04 * texture && fract(t / period + hash(x, y, 9)) < 0.4;
-            ch = r > 1 - 0.5 * texture ? code("~") : r > 1 - 0.7 * texture ? code("-") : sparkle ? code("·") : SPACE;
-            col = pt.color(d < 1.5 ? 2 : d < depthRows * 0.6 ? 1 : 0);
+            ch = body[Math.floor(v * body.length)];
+            col = pt.color(shade);
           }
         }
         s.put(i, ch, col);
@@ -1452,8 +1490,10 @@ export function water(o?: MaterialOptions & {
 }
 
 /**
- * Glass: see-through, so what is behind it shows. It draws the outline in the glass's colour, a vessel's open rim and
- * thick base, and a highlight streak down one side like a reflection, a glint running down it now and then.
+ * Glass: see-through, so what is behind it shows. It draws the outline in the glass's colour and a highlight streak
+ * down one side like a reflection, a glint running down it now and then. An open vessel such as cup() gets a rim seen
+ * from a little above, an ellipse of its back and front edges, walls that run unbroken to a thick solid base, and its
+ * streak from the rim to the floor: a liquid drawn after it shows the streak through itself, bent, as water does.
  */
 export function glass(o?: MaterialOptions & {
   /** The highlight streak: true. */
@@ -1468,8 +1508,12 @@ export function glass(o?: MaterialOptions & {
   return makeMaterial("glass", colors, highlight ? period : undefined, (c) => {
     const { cols } = c;
     const cav = c.cavity;
-    // The fixed cells: the outline, an open vessel's rim, the top of a thick base, and the rest of the walls blank.
+    const vessel = !!(c.open && cav && cav.list.length);
+    // The fixed cells: the outline, an open vessel's rim, its solid base, and the rest of the walls blank.
     const cells: number[] = [], chars: number[] = [], roles: number[] = [];
+    const add = (i: number, ch: string | number, role: number) => {
+      cells.push(i), chars.push(typeof ch === "string" ? code(ch) : ch), roles.push(role);
+    };
     const line = c.outline();
     line.cells.forEach((i, k) => {
       const x = i % cols, y = (i - x) / cols;
@@ -1478,40 +1522,76 @@ export function glass(o?: MaterialOptions & {
       // room (a bottle's neck over its shoulders) is still a wall
       if (c.open && cav && !c.inside[i] && (cav.inside[i + cols] || (c.fringe[i] && cav.top[x] >= 0 && cav.top[x] <= y + 1))) return;
       const rim = c.open && cav && c.border[i] && y === c.top[x] && c.ny[i] > 0.3;
-      cells.push(i), chars.push(rim ? code(".") : line.chars[k]), roles.push(0);
+      // an open vessel's foot: one line under its base, its corners turned in
+      const foot = vessel && c.border[i] && y === c.y1 - 1;
+      add(i, rim ? "." : foot ? (x === c.left[y] ? "\\" : x === c.right[y] ? "/" : "_") : line.chars[k], 0);
     });
+    // The rim of an open vessel wide enough to show one, seen from a little above: its back edge across the mouth's
+    // row, and its front edge curving down through the row under it, "'-.____.-'".
+    let floor = -1, rimRows = 0;
+    if (cav) for (let x = cav.x0; x < cav.x1; x++) floor = Math.max(floor, cav.bottom[x]);
+    if (vessel && cav) {
+      const y = cav.y0, l = cav.left[y], r = cav.right[y];
+      if (l >= 0 && r - l + 1 >= 6 && floor - y >= 5 && cav.left[y + 1] >= 0) {
+        rimRows = 2;
+        for (let x = l; x <= r; x++) add(y * cols + x, "-", 0);
+        // from each end in: a "'" where it leaves the wall, a run of "-", one or two "." and "_" along the bottom
+        const l1 = cav.left[y + 1], r1 = cav.right[y + 1], n = r1 - l1 + 1;
+        const run = Math.max(1, Math.round(n * 0.14)), dots = n >= 14 ? 2 : 1;
+        for (let x = l1; x <= r1; x++) {
+          const k = Math.min(x - l1, r1 - x);
+          add((y + 1) * cols + x, k === 0 ? "'" : k <= run ? "-" : k <= run + dots ? "." : "_", 0);
+        }
+      }
+    }
     // a vessel's walls and base are solid glass; anything else (a pane) is see-through inside its outline
-    if (cav) {
-      let floor = -1;
-      for (let x = cav.x0; x < cav.x1; x++) floor = Math.max(floor, cav.bottom[x]);
+    if (cav && !vessel) {
       for (const i of c.list) {
         const y = (i - (i % cols)) / cols;
         if (cav.inside[i] || c.border[i]) continue;
-        cells.push(i), chars.push(y === floor + 1 ? code("_") : SPACE), roles.push(2);
+        add(i, y === floor + 1 ? "_" : SPACE, 2);
       }
     }
-    // the streak: a column in from the left wall, down the upper part of the room where it is wide, so a bottle's is
-    // down its body and not its neck
+    // an open vessel's base: a slab of solid glass from wall to wall under the floor, its sides turning in where the
+    // base rounds off toward the foot
+    if (vessel) {
+      for (let y = floor + 1; y < c.y1 - 1; y++) {
+        const l = c.left[y], r = c.right[y];
+        if (l < 0) continue;
+        add(y * cols + l, c.left[y + 1] > l ? "\\" : "|", 0);
+        add(y * cols + r, c.right[y + 1] < r ? "/" : "|", 0);
+        for (let x = l + 1; x < r; x++) add(y * cols + x, "=", 2);
+      }
+    }
+    // the streak: a column or two in from the left wall, where the room is wide, so a bottle's is down its body and not
+    // its neck: in a cup from under the rim to the floor, else down the upper part of the room
     const streak: number[] = [];
     const room = cav ?? c;
     if (highlight && room.x1 - room.x0 >= 5) {
       const h = room.y1 - room.y0;
       let widest = 0;
       for (let y = room.y0; y < room.y1; y++) if (room.left[y] >= 0) widest = Math.max(widest, room.right[y] - room.left[y] + 1);
-      for (let y = room.y0 + Math.max(1, Math.round(h * 0.15)); y < room.y0 + Math.round(h * 0.7); y++) {
+      const inset = vessel && widest >= 12 ? 2 : 1;
+      const from = vessel ? room.y0 + rimRows : room.y0 + Math.max(1, Math.round(h * 0.15));
+      const to = vessel ? floor + 1 : room.y0 + Math.round(h * 0.7);
+      for (let y = from; y < to; y++) {
         const l = room.left[y];
-        if (l >= 0 && room.right[y] - l + 1 >= widest * 0.6) streak.push(y * cols + l + 1);
+        if (l >= 0 && room.right[y] - l + 1 >= widest * 0.6) streak.push(y * cols + l + inset);
       }
     }
     return (t, pt) => {
       const { s } = pt;
       for (let k = 0; k < cells.length; k++) s.put(cells[k], chars[k], pt.color(roles[k]));
       if (!streak.length) return;
-      // a glint runs down the streak once a period
+      let mark = highlights.get(s);
+      if (!mark || mark.length !== s.chars.length) highlights.set(s, (mark = new Uint16Array(s.chars.length)));
+      // a glint runs down the streak once a period: on a vessel a bright line, on a pane a fainter dotted one
       const g = fract(t / period) * (streak.length + 6) - 3;
       streak.forEach((i, k) => {
         const near = Math.abs(k - g) < 0.75;
-        s.put(i, code(near ? "|" : "'"), pt.color(1));
+        const ch = code(vessel ? (near ? "!" : "|") : near ? "|" : "'");
+        s.put(i, ch, pt.color(1));
+        mark[i] = ch;
       });
     };
   });
@@ -1932,33 +2012,66 @@ export function lava(o?: MaterialOptions & {
   });
 }
 
-/** Ice: a clear block with a pale outline, a facet across its upper left, and a glint that comes and goes in it. */
+/**
+ * Ice: an irregular chunk, not a box: its area with the corners and edges chipped off by its seed, bright along its
+ * lit top and left edges, see-through inside so what is under it shows in the ice's pale tint, with a facet across its
+ * upper left and a glint that comes and goes in it.
+ */
 export function ice(o?: MaterialOptions & {
   /** Seconds between glints: 4. */
   period?: number;
+  /** Which chunk: a whole number, so two cubes of one size are chipped differently: 1. */
+  seed?: number;
 }): Material {
-  const p = optionsOf("ice()", o, ["colors", "period"]);
+  const p = optionsOf("ice()", o, ["colors", "period", "seed"]);
   const colors = colorsOf("ice.colors", p.colors, "ice", 3);
   const period = periodOf("ice.period", p.period, 4);
+  const seed = seedOf("ice.seed", p.seed, 1);
   return makeMaterial("ice", colors, period, (c) => {
-    const { cols } = c;
-    const h = Math.max(1, c.y1 - c.y0);
-    // the facet: the first inner cell of each of the upper rows, a step in from the last
+    const { cols, rows } = c;
+    const w = Math.max(1, c.x1 - c.x0), h = Math.max(1, c.y1 - c.y0);
+    // The chunk's outline: eight points round the area's box, each corner cut by its own amount and each edge's middle
+    // pushed in a little, so it reads as a broken piece of ice. Too small to chip, it is the area itself.
+    const r = (k: number, lo: number, hi: number) => lo + (hi - lo) * hash(seed, k, w * 31 + h);
+    const pts: Point[] = [
+      [c.x0 + w * r(1, 0.12, 0.4), c.y0], [c.x0 + w * r(2, 0.45, 0.6), c.y0 + h * r(3, 0, 0.12)], [c.x1 - w * r(4, 0.08, 0.3), c.y0],
+      [c.x1, c.y0 + h * r(5, 0.25, 0.5)], [c.x1 - w * r(6, 0.12, 0.3), c.y1], [c.x0 + w * r(7, 0.2, 0.4), c.y1],
+      [c.x0, c.y1 - h * r(8, 0.35, 0.6)], [c.x0 + w * r(9, 0, 0.06), c.y0 + h * r(10, 0.3, 0.5)],
+    ];
+    const chipped = w >= 5 && h >= 2;
+    const chunk = chipped ? cellsOf({ test: (x, y) => c.placed.test(x, y) && inPolygon(pts, x, y), x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 }, cols, rows) : c;
+    // only where the area itself may draw: in it, or on its outline
+    const own = new Uint8Array(cols * rows);
+    for (const i of c.list) own[i] = 1;
+    for (const i of c.outline().cells) own[i] = 1;
+    const line = chunk.outline();
+    const edge: number[] = [], edgeCh: number[] = [], lit: boolean[] = [];
+    const blank = new Set<number>();
+    line.cells.forEach((i, k) => {
+      if (!own[i]) return;
+      // an edge cell whose line the fringe beside it draws is see-through like the inside
+      if (line.chars[k] === SPACE) return void (chunk.inside[i] && blank.add(i));
+      edge.push(i), edgeCh.push(line.chars[k]);
+      // lit from the upper left: its top and left edges, and the fringe over its top
+      lit.push(chunk.inside[i] ? chunk.ny[i] > 0.3 || chunk.nx[i] > 0.3 : chunk.has(i % cols, (i - (i % cols)) / cols + 1));
+    });
+    const inner = Array.from(chunk.list).filter((i) => (!chunk.border[i] || blank.has(i)) && own[i]);
+    // the facet: a short slant across the upper left inside it
     const facet = new Set<number>();
-    for (let y = c.y0 + 1, k = 0; y < c.y0 + Math.max(2, h / 2); y++, k++) {
-      const l = c.left[y];
-      if (l >= 0 && l + 1 + k * 2 < c.right[y]) facet.add(y * cols + l + 1 + k * 2);
+    for (let k = 0; k < Math.max(1, Math.floor(h / 2)); k++) {
+      const y = chunk.y0 + 1 + k, l = chunk.left[y];
+      if (y < rows && l >= 0 && l + 2 + k * 2 < chunk.right[y]) facet.add(y * cols + l + 2 + k * 2);
     }
-    const line = c.outline();
     return (t, pt) => {
       const { s } = pt;
+      const under = pt.under;
       const glint = fract(t / period) < 0.2;
-      for (const i of c.list) {
-        if (c.border[i]) continue;
-        if (facet.has(i)) s.put(i, code(glint ? "*" : "`"), pt.color(glint ? 2 : 1));
-        else s.put(i, SPACE, pt.color(1));
+      // see-through: what is under it, in the ice's tint; nothing under, clear
+      for (const i of inner) {
+        if (facet.has(i)) s.put(i, code(glint ? "*" : "`"), pt.color(2));
+        else s.put(i, under.chars[i] !== EMPTY ? under.chars[i] : SPACE, pt.color(1));
       }
-      line.cells.forEach((i, k) => s.put(i, line.chars[k], pt.color(0)));
+      for (let k = 0; k < edge.length; k++) s.put(edge[k], edgeCh[k], pt.color(lit[k] ? 2 : 0));
     };
   });
 }
@@ -3209,10 +3322,13 @@ export function picture<O extends Options = Options>(parts: readonly Part[], spe
  */
 export function waterGlass(o?: { fill?: Fill; waves?: Waves; colors?: Colors; cols?: number; rows?: number }): KitPiece {
   const p = optionsOf("waterGlass()", o, ["fill", "waves", "colors", "cols", "rows"]);
-  const tumbler = cup({ size: "huge" });
+  const tumbler = cup({ size: "huge", at: "center" });
   const drink = inside(tumbler, { fill: p.fill ?? "half" });
+  // the bubbles in the drink's own palest colours, so a cola fizzes brown and a juice orange
+  const tint = colorsOf("waterGlass.colors", p.colors, "water", 4);
+  const fizz = { light: [tint.light[3], tint.light[2]], dark: [tint.dark[3], tint.dark[2]] };
   return picture(
-    [shape(tumbler, glass()), shape(drink, water({ waves: p.waves, colors: p.colors })), emit(bubbles(), { inside: drink })],
+    [shape(tumbler, glass()), shape(drink, water({ waves: p.waves, colors: p.colors })), emit(bubbles({ colors: fizz }), { inside: drink })],
     { name: "glass of water", note: "a glass of water, its surface rippling, bubbles rising", cols: p.cols ?? 32, rows: p.rows ?? 16 },
   );
 }

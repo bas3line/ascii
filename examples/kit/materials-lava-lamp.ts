@@ -5,7 +5,7 @@
  */
 import { glass, inside, lamp, lava, metal, picture, shape } from "../../src/kit/materials.ts";
 
-const l = lamp();
+const l = lamp({ size: "full" });
 
 export default picture([
   shape(l.globe, glass()),

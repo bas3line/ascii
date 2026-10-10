@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { svg } from "../svg.ts";
 import type { Piece } from "../types.ts";
-import { INK, Surface, isHex, piece, snapshot } from "./core.ts";
+import { INK, Surface, isHex, piece, rgb, snapshot } from "./core.ts";
 import {
   area,
   ball,
@@ -339,7 +339,7 @@ test("water rests at its level, its waves move, and it bends what is behind it",
   const still = picture([shape(drink, water({ waves: "still", texture: 0 }))], { cols: 30, rows: 14 });
   const level = Math.floor(drink.place(30, 14).level!);
   const rows = lines(still);
-  assert.match(rows[level], /^ *~+ *$/, "a still surface is one line of ~");
+  assert.match(rows[level], /^ *‾~+‾ *$/, "a still surface is one line of ~, curling up at the walls");
   for (let y = 0; y < level; y++) assert.equal(rows[y].trim(), "", "nothing above the level");
   const gentle = picture([shape(drink, water())], { cols: 30, rows: 14 });
   assert.notDeepEqual(lines(gentle, 0), lines(gentle, 1));
@@ -361,11 +361,92 @@ test("glass is see-through: it draws its walls and leaves the room and the mouth
   const p = picture([backdrop, shape(tumbler, glass({ highlight: false }))], { cols: 30, rows: 12 });
   const c = cellsOf(tumbler, 30, 12);
   const text = lines(p);
-  for (const i of c.cavity!.list) assert.equal(text[Math.floor(i / 30)][i % 30], "#", "the room shows what is behind");
+  // under the rim's two rows, its back and front edges, the room shows what is behind
+  const top = c.cavity!.y0;
+  for (const i of c.cavity!.list) if (Math.floor(i / 30) >= top + 2) assert.equal(text[Math.floor(i / 30)][i % 30], "#", "the room shows what is behind");
   const pane = picture([backdrop, shape(area.rect(2, 2, 10, 6), glass({ highlight: false }))], { cols: 14, rows: 10 });
   assert.equal(lines(pane)[4][6], "#", "a pane shows what is behind it too");
   const streak = picture([shape(tumbler, glass())], { cols: 30, rows: 12 });
   assert.match(lines(streak).join(""), /'/, "the highlight streak");
+});
+
+// The lightness of a colour, 0 to 1.
+const light = (hex: string) => {
+  const [r, g, b] = rgb(hex);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+};
+
+test("a glass of water: a rim, unbroken walls, a solid base, a filled body darker with depth, the streak in front, the far wall bent", () => {
+  const tumbler = cup({ rows: 14, at: "center" });
+  const drink = inside(tumbler, { fill: "half" });
+  const p = picture([shape(tumbler, glass()), shape(drink, water({ waves: "still", texture: 0 }))], { cols: 30, rows: 16 });
+  const text = lines(p);
+  const c = cellsOf(tumbler, 30, 16), cav = c.cavity!;
+  const level = Math.floor(drink.place(30, 16).level!);
+  let floor = 0;
+  for (let x = cav.x0; x < cav.x1; x++) floor = Math.max(floor, cav.bottom[x]);
+  const L = c.left[c.y0], R = c.right[c.y0];
+  // the rim, seen from a little above: its back edge across the mouth, its front edge curving under it
+  assert.match(text[c.y0], /^ *\.-+\. *$/);
+  assert.match(text[c.y0 + 1].slice(L, R + 1), /^\|'.*_+.*'\|$/);
+  // the walls are one straight line each from the rim to the base, through the waterline
+  for (let y = c.y0 + 1; y <= floor; y++) assert.deepEqual([text[y][L], text[y][R]], ["|", "|"], `row ${y}: ${text[y]}`);
+  // a solid base under the floor, and a foot with its corners turned in
+  assert.match(text[floor + 1], /^ *\\=+\/ *$/);
+  assert.match(text[c.y1 - 1], /^ *\\_+\/ *$/);
+  // the body fills the water: no blank cell between the walls below the surface
+  for (let y = level + 1; y <= floor; y++) assert.ok(!text[y].slice(L + 1, R).includes(" "), `row ${y} is filled: ${text[y]}`);
+  // denser low down in one ink, and darker on a dark page
+  const dense = (y: number) => [...text[y].slice(L + 1, R)].filter((ch) => ch === "≈").length;
+  assert.ok(dense(floor) > dense(level + 1), `${dense(floor)} at the bottom, ${dense(level + 1)} at the top`);
+  const shot = snapshot(p, 0), pal = p.meta.palette!;
+  const row = (y: number) => Array.from({ length: R - L - 1 }, (_, k) => light(pal[shot.color![y * 30 + L + 1 + k]]));
+  const mean = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length;
+  assert.ok(mean(row(floor)) < mean(row(level + 1)) - 0.1, "darker toward the bottom");
+  // the highlight streak runs from under the rim to the floor, in front of the water, the surface's line crossing it
+  const streak = text[c.y0 + 2].indexOf("|", L + 1);
+  assert.ok(streak > L && streak < R);
+  for (let y = c.y0 + 2; y <= floor; y++) assert.equal(text[y][streak], y === level ? "~" : "|", `the streak at row ${y}`);
+  // the far wall shows through the water bent in from the right wall, and only through the water
+  const between = (y: number) => text[y].slice(streak + 1, R);
+  for (let y = c.y0 + 2; y < level; y++) assert.equal(between(y).trim(), "", `nothing in the air at row ${y}`);
+  assert.ok(Array.from({ length: floor - level }, (_, k) => between(level + 1 + k)).some((s) => s.includes("|")), "the far wall bent under the water");
+  // with bend 0 nothing is bent, so no far wall shows
+  const straight = lines(picture([shape(tumbler, glass()), shape(drink, water({ waves: "still", texture: 0, bend: 0 }))], { cols: 30, rows: 16 }));
+  for (let y = level + 1; y <= floor; y++) assert.ok(!straight[y].slice(streak + 1, R).includes("|"), `row ${y} with bend 0`);
+});
+
+test("every drink tints its body: water, cola, juice, tea, lemonade and milk", () => {
+  const drink = inside(cup({ rows: 12, at: "center" }), { fill: "high" });
+  for (const name of ["water", "cola", "juice", "tea", "lemonade", "milk"] as const) {
+    const p = picture([shape(drink, water({ colors: name }))], { cols: 24, rows: 14 });
+    const pal = p.meta.palette!;
+    // its deepest and its surface colours, for each page, are the drink's own
+    for (const c of [palettes[name].light[0], palettes[name].light[3], palettes[name].dark[0], palettes[name].dark[3]]) assert.ok(pal.includes(c), `${name}: ${c}`);
+    const used = new Set(snapshot(p, 1).color!);
+    assert.ok(used.size >= 4, `${name} is drawn in ${used.size} colours`);
+  }
+  // the preset's bubbles take the drink's colours, not the water's blue
+  const cola = waterGlass({ colors: "cola" }).meta.palette!;
+  assert.ok(!cola.includes(palettes.bubbles.dark[0]) && cola.includes(palettes.cola.dark[3]));
+});
+
+test("ice is an irregular chunk: chipped corners, bright lit edges, see-through inside, and its seed picks the chunk", () => {
+  const backdrop = shape(area.all(), solid({ char: "#" }));
+  const cube = box({ cols: 10, rows: 4, at: "center" });
+  const p = picture([backdrop, shape(cube, ice())], { cols: 16, rows: 6 });
+  const text = lines(p);
+  const c = cellsOf(cube, 16, 6);
+  // a corner of its box is chipped off: the backdrop shows there
+  const corners = [[c.x0, c.y0], [c.x1 - 1, c.y0], [c.x0, c.y1 - 1], [c.x1 - 1, c.y1 - 1]];
+  assert.ok(corners.some(([x, y]) => text[y][x] === "#"), text.join("\n"));
+  // inside it, what is under it shows
+  assert.ok(text.slice(c.y0 + 1, c.y1 - 1).some((l) => l.slice(c.x0 + 2, c.x1 - 2).includes("#")), "see-through");
+  // its lit edges are its brightest colour, the rest of its outline its first
+  const pal = p.meta.palette!, used = new Set(Array.from(snapshot(p, 1).color!, (k) => pal[k]));
+  assert.ok(used.has(palettes.ice.dark[2]) && used.has(palettes.ice.dark[0]));
+  assert.notDeepEqual(lines(picture([shape(cube, ice({ seed: 2 }))], { cols: 16, rows: 6 })), lines(picture([shape(cube, ice())], { cols: 16, rows: 6 })));
+  assert.throws(() => ice({ seed: 1.5 }), /ice\.seed takes a whole number, not 1\.5/);
 });
 
 test("fire is fiercest low down and in the middle", () => {
