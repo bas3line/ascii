@@ -73,7 +73,7 @@ export const step = (edge: number, v: number): number => (v < edge ? 0 : 1);
 
 /** Radians in degrees. */
 export const degrees = (rad: number): number => (rad * 180) / Math.PI;
-/** Degrees in radians: the kit's angles are radians. */
+/** Degrees in radians, as maths, fields and SVG poses take angles. Drawing and placing take turns, 0 to 1, instead. */
 export const radians = (deg: number): number => (deg * Math.PI) / 180;
 
 // --- random numbers -------------------------------------------------------------------

@@ -35,20 +35,26 @@ $ npx ascii.rest add kit▌
 
 | effect | what it does | its options, with defaults |
 | --- | --- | --- |
-| `glint(src)` | a light band crosses the ink now and then, like the logos' glint | `every` 4, `sweep`, `first` 0.5, `width` 3, `slant` 1, `chars`, `color` |
-| `typeIn(src)` | typed in a character at a time behind a cursor | `speed` 40, `start` 0, `cursor` `"▌"`, `order` `"reading"`, `hold`, `seed` |
+| `glint(src)` | a light band crosses the ink now and then, like the logos' glint | `every` 4, `sweep`, `speed`, `first` 0.5, `width` 3, `slant` 1, `chars`, `color` |
+| `typeIn(src)` | typed in a character at a time behind a cursor | `speed` 40 characters a second, or `"slow"`, `"normal"`, `"fast"`; `start` 0, `cursor` `"▌"`, `order` `"reading"`, `hold`, `seed` |
 | `dissolve(src)` | comes and goes through noise, in blobs | `period` 6, `mode` `"inout"`, `blob` 7, `edge`, `seed` |
 | `fade(src)` | every character steps down a ramp to nothing and back | `period` 6, `mode` `"inout"`, `ramp` `"auto"` |
 | `scan(src)` | a line sweeps across it, or reveals it | `period` 3, `direction` `"down"`, `char`, `color`, `reveal` false |
 | `glitch(src)` | rows slide and cells turn to junk, for a moment | `every` 2.5, `length` 0.35, `first` 0.5, `amount` 0.5, `chars`, `seed` |
-| `wave(src)` | each row sways on a sine, or each column bobs | `amplitude` 2, `wavelength` 12, `period` 2, `axis` `"rows"` |
-| `rainbow(src)` | its ink in bands of colour that run across it | `colors` (12 hues), `steps` 12, `period` 3, `cycles` 1, `direction` `"x"` |
+| `wave(src)` | each row sways on a sine, or each column bobs | `amplitude` 2, or `amount` in words; `wavelength` 12, `period` 2, or `speed` in words; `axis` `"rows"` |
+| `rainbow(src)` | its ink in bands of colour that run across it | `colors` (12 hues, or a palette's name), `steps` 12, `period` 3, `cycles` 1, `direction` `"x"` |
 | `hueCycle(src)` | the whole piece cycling through the hues | as `rainbow` |
 | `shake(src)` | jolts a cell or so each way now and then | `amount` 1, `every` 2, `length` 0.3, `first` 0.5, `seed` |
-| `outline(src)` | a box-drawing line round the outside of its ink | `style` `"single"`, `color`, `gap` 1 |
+| `outline(src)` | a box-drawing line round the outside of its ink | `style` `"single"`, `"double"`, `"rounded"`, `"heavy"`, `"ascii"` or 16 characters of your own; `color`, `gap` 1 |
 | `shadow(src)` | a drop shadow behind it | `dx` 1, `dy` 1, `char` `"░"`, `color`, `solid` true |
 
 Every effect also takes `name`, `note`, and `options` for its source. `mode` is `"in"`, `"out"` or `"inout"`. Times are in seconds. An option the effect doesn't have throws, and lists the ones it has.
+
+The numbers have words too: `every` is `"often"`, `"sometimes"` or `"rarely"` for `glint()`, `glitch()` and `shake()`; `amount` is `"subtle"`, `"medium"` or `"strong"` for `glitch()`, `shake()` and `wave()`; and `speed` is `"slow"`, `"normal"` or `"fast"` for `glint()`, `typeIn()` and `wave()`. So `glitch(rust, { every: "rarely", amount: "subtle" })` reads as it plays. A colour is `#rrggbb`, `{ light, dark }` or a palette's name.
+
+`hues` is the twelve colours `rainbow()` uses by default, `{ light, dark }`, deeper for a light page; `outlines` is `outline()`'s line styles, each 16 characters by the edges that meet in a cell (up 1, down 2, left 4, right 8), for a style of your own.
+
+Every effect is also a step on any piece the kit makes, so `gauge().glint({ every: "rarely" })` is `glint(gauge(), { every: "rarely" })`. A library piece or a `banner()` gets the steps through `pieceOf()` or `chained()`.
 
 Effects that grow the piece, like `wave`, `shake`, `outline` and `shadow`, add room round it so nothing is cut off. Between bursts, a glint, a glitch or a shake leaves the piece exactly its source.
 

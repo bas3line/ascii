@@ -19,13 +19,15 @@ It plays until you press any key. You need Node 18.3 or newer. There is nothing 
 | command | what it does |
 | --- | --- |
 | `npx ascii.rest <piece>` | plays a piece until you press a key |
+| `npx ascii.rest play <file.ts>` | plays a piece of your own, the file's default export |
+| `npx ascii.rest svg <file.ts>` | writes a piece of your own as an animated SVG |
 | `npx ascii.rest list` | prints every piece's name, by category |
 | `npx ascii.rest banner <text>` | prints your text in big block letters |
 | `npx ascii.rest add <name...>` | copies the TypeScript of pieces and components into your project |
 | `npx ascii.rest --help` | prints every command and flag |
 | `npx ascii.rest --version` | prints the version you ran |
 
-With no command, it prints the help. `banner` and `add` need version 0.4.0 or later. To see which version you have, run `npx ascii.rest --version`.
+With no command, it prints the help. `banner`, `add`, `play` and `svg` need version 0.4.0 or later. To see which version you have, run `npx ascii.rest --version`.
 
 ## Play a piece
 
@@ -258,6 +260,27 @@ This writes four files into `components/ascii/`, or `src/components/ascii/` if y
 
 Every item you can add, each flag's default, what `add` prints and when it stops are on [your own copy](/docs/copy/#add-files-without-shadcn).
 
+## Play a piece of your own
+
+A piece you made with [the kit](/docs/kit/), or by hand, plays from its file: the file's default export, or the file itself when it is a piece module, with `meta` and a default function, as the library's are:
+
+```sh
+npx ascii.rest play sea.ts
+npx ascii.rest play sea.ts --watch
+npx ascii.rest sea.ts
+```
+
+A path alone plays too, when a file is there. `--watch` plays it again each time you save the file, so you can write a piece and watch it change. Node runs a `.ts` file as it is from 22.18; on an older Node, `play` says so, and a `.js` file works anywhere. `play` takes `--mono`, `--light`, `--fps` and `--seconds` as a piece does.
+
+`svg` writes the same piece as an animated SVG, for a README:
+
+```sh
+npx ascii.rest svg sea.ts --out sea.svg
+npx ascii.rest svg sea.ts --dark --out sea.dark.svg
+```
+
+With no `--out` it prints the SVG. `--dark` makes the one for a dark page, `--fps` samples it at more or fewer frames a second (15 by default), and `--seconds` sets the length of a piece with no loop of its own. An SVG is kept to about a megabyte: past that, it is sampled at fewer frames a second, then a coloured piece's colours are folded, and if it is still big a line on stderr says why.
+
 ## Print the help and the version
 
 ```sh
@@ -277,12 +300,16 @@ npx ascii.rest@latest banner hello
 
 Each flag belongs to one or two commands. Every command refuses a flag that isn't its own, with an error and exit code 1.
 
-| flag | a piece | a banner | add |
-| --- | --- | --- | --- |
-| `--seconds`, `--light` | yes | yes | refused |
-| `--fps`, `--mono` | yes | refused | refused |
-| `--color`, `--tagline`, `--font`, `--shadow`, `--effect` | refused | yes | refused |
-| `--dir`, `--overwrite`, `--registry` | refused | refused | yes |
+| flag | a piece | play | svg | a banner | add |
+| --- | --- | --- | --- | --- | --- |
+| `--seconds` | yes | yes | yes | yes | refused |
+| `--light` | yes | yes | refused | yes | refused |
+| `--fps` | yes | yes | yes | refused | refused |
+| `--mono` | yes | yes | refused | refused | refused |
+| `--watch` | refused | yes | refused | refused | refused |
+| `--dark`, `--out` | refused | refused | yes | refused | refused |
+| `--color`, `--tagline`, `--font`, `--shadow`, `--effect` | refused | refused | refused | yes | refused |
+| `--dir`, `--overwrite`, `--registry` | refused | refused | refused | refused | yes |
 
 `list` uses none of these flags. It refuses the banner flags and the add flags, as a piece does. A flag the CLI doesn't know at all is an error for every command, `add` included.
 

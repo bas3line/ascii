@@ -114,7 +114,7 @@ A number or `[low, high]` gives each particle its own value between them. The fi
 
 | field | what it does | default |
 | --- | --- | --- |
-| `emitter` | where they are born: `"top"`, `"bottom"`, `"left"`, `"right"`, `"everywhere"`, `"center"`, `{ point }`, `{ line }`, `{ area }`, `{ edge }` or `{ text }` | required |
+| `emitter` | where they are born: `"top"`, `"bottom"`, `"left"`, `"right"`, `"everywhere"`, `"center"`, `{ point }`, `{ line }`, `{ area }`, `{ edge }`, `{ text }` or `{ mark }` | required |
 | `rate` | particles born a second | `20`, or fitted to a side |
 | `burst` | instead of a rate: `{ every, count }`, many at once every so many seconds | none |
 | `life` | seconds a particle lives | `[1, 2]`, or long enough to cross the grid from a side |
@@ -128,7 +128,7 @@ A number or `[low, high]` gives each particle its own value between them. The fi
 | `drag` | how fast it loses its speed | `0` |
 | `sway` | cells it drifts side to side, as a falling leaf | `0` |
 | `glyphs` | characters by age, the first at birth | `"*+."` |
-| `glyph` | or a function of the particle, for its character | none |
+| `glyph` | or a function of the particle, for its character, such as `streak` | none |
 | `colors` | colours by age, from birth to death | none: the ink |
 | `palettes` | several fades: each burst takes the next | none |
 | `color` | or a function of the particle, for its colour | none |
@@ -141,7 +141,49 @@ A number or `[low, high]` gives each particle its own value between them. The fi
 | `path` | or where it is, worked out your own way: `(p) => [column, row]` | none |
 | `seed` | a whole number: the same seed, the same particles | `1` |
 
-Give a list of systems to draw several, each over the last.
+Give a list of systems to draw several, each over the last. `system({ ... })` gives a system back as it is: written apart from `particles()`, it is checked where it is written, and `[1, 2]` reads as a range.
+
+## Born on a mark
+
+To say where in a picture particles come from without counting columns, type a mark there in the art and give the emitter `{ mark }`. The mark is drawn as a blank. `streak` is a `glyph` that points the way each particle goes, `-`, `\`, `|` or `/`:
+
+```ts
+// cabin.ts
+import { particles, streak, system } from "ascii.rest/kit";
+
+const cabin = `
+        ^
+       | |
+   ____|_|____
+  /           \\
+ /_____________\\
+  |  _     _  |
+  |_|_|___|_|_|`;
+
+const smoke = system({ emitter: { mark: "^" }, direction: "up", spread: 20, speed: [1, 2], sway: 1, life: [3, 5], glyphs: "()~-." });
+const rain = system({ emitter: "top", direction: "down", speed: [10, 14], wind: 8, glyph: streak, rate: 30 });
+
+export default particles({ name: "cabin in the rain", cols: 40, rows: 14, front: cabin }, [smoke, rain]);
+```
+
+At 1 second:
+
+```text
+    \        \\   \
+     \\                   \\
+     \ \  \ \                          \
+         \    \\\  ..             \
+                   -..  \
+        \\ \       ))~~   \
+         \\      \ ())
+                \ \( \  \  \       \
+               \   | |     \
+               ____|_|____        \  \
+              /           \  \
+             /_____________\
+              |  _     _  |  \
+              |_|_|___|_|_|   \ \ \\
+```
 
 ## Particles off a word
 

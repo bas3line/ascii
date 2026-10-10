@@ -35,8 +35,10 @@ const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
   --fps <n>         frames a second, instead of the piece's own
   --seconds <n>     stops after n seconds; for a banner, how long it moves
 
-  play and svg:
+  play:
   --watch           plays it again each time you save the file
+
+  svg, besides --fps and --seconds:
   --dark            the SVG for a dark page, as GitHub's dark theme
   --out <path>      where the SVG goes: printed by default
 
@@ -342,7 +344,7 @@ async function main() {
     throw new Usage(`--watch, --dark and --out are for a piece of your own: npx ascii.rest play sea.ts --watch`);
   if (own) {
     if ([values.color, values.tagline, values.font, values.shadow, values.effect, values.dir, values.overwrite, values.registry].some((v) => v !== undefined))
-      throw new Usage(`play and svg take --mono, --light, --fps, --seconds, --watch, --dark and --out`);
+      throw new Usage(`play takes --mono, --light, --fps, --seconds and --watch, and svg --dark, --out, --fps and --seconds`);
     return mine(positionals, values);
   }
   if (positionals[0] === "add" && [values.mono, values.light, values.fps, values.seconds, values.color, values.tagline, values.font, values.shadow, values.effect].some((v) => v !== undefined))

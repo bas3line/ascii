@@ -1,7 +1,7 @@
 ---
 layout: ../../layouts/Docs.astro
 title: introduction
-description: What ascii.rest is, five ways to use it, and what its 217 pieces are.
+description: What ascii.rest is, the ways to use it, and what its 217 pieces are.
 ---
 
 ascii.rest is a free, open-source library of animated ascii art: 217 small animations, called pieces, and block-letter banners for any text. You can play them on a web page, in a GitHub README or in a terminal.
@@ -134,8 +134,11 @@ If your agent can't read web pages, paste these rules into its prompt.
 - Colours are six-digit hex, like `#f97316`. `#fff` and `orange` don't work.
 - `banner()` throws on an option it can't take. `<Banner>` and `<ascii-banner>` then draw nothing and `console.warn` why.
 - To turn an image into ascii in code, use `fromImage()` from `ascii.rest/kit`: any image in a browser, PNG in Node. The page https://ascii.rest/make/ does the same with no code.
-- To make a new piece, use `ascii.rest/kit` (version 0.4.0 or later): `field()`, `scene()`, `particles()`, `fromSvg()`, effects such as `glint()`, layouts such as `grid()`, and `piece()` to draw on a grid. Everything it makes is a normal piece: pass it to `<Ascii piece={...}>`, `mount()`, `svg()` or `play()`.
-- In the kit, a frame should depend only on `t`. Use `random(seed)`, never `Math.random()`, and give `period` or `loop` so an SVG loops.
+- To make a new piece, use `ascii.rest/kit` (version 0.4.0 or later). Start with a recipe, one call by name with options in words: looks such as `sea({ palette: "ocean" })` or `plasma().mask("HI")`, motions such as `spinning(torus())` or `floating(heart())`, widgets such as `clockFace()`, `gauge({ label: "cpu", value: "64%" })` or `progressBar()`. Only when no recipe fits, go down to `field()`, `scene()`, `particles()`, `picture()`, `fromSvg()`, effects such as `glint()`, layouts such as `grid()`, or `piece()` to draw on a grid.
+- Everything the kit makes is a normal piece: pass it to `<Ascii piece={...}>`, `mount()`, `svg()` or `play()`. It also chains: `stars().behind(pulsing(heart())).named("love")`.
+- Kit options take words: `speed: "slow"`, `amount: "subtle"`, `every: "rarely"`, a look's `scale: "large"`. Wherever it takes colours it takes a palette's name, such as `"ocean"`, `"fire"` or `"cola"`, as well as `#rrggbb`. A misspelt option or word throws with the ones it takes and a "did you mean".
+- The kit's `barChart`, `gauge`, `sparkline`, `marquee`, `typewriter`, `heart` and others share names with library pieces. In one file, `import * as lib from "ascii.rest/pieces"` and use `lib.gauge` beside the kit's `gauge()`.
+- In the kit, a frame should depend only on `t`. Use `random(seed)`, never `Math.random()`, and give `period` or `loop` so an SVG loops. `npx ascii.rest play file.ts --watch` plays a file's default export in the terminal as you edit it.
 
 ## Next
 

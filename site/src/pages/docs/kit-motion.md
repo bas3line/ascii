@@ -20,8 +20,9 @@ import { bouncing } from "ascii.rest/kit";
 export default bouncing(banner("boing", { effect: "still" }));
 ```
 
-```text
+The top of a bounce, at 0.6 seconds, its shadow narrowed on the ground below:
 
+```text
 ▓▓▓▓▓▓╗     ▓▓▓▓╗   ▓▓╗ ▓▓╗     ▓▓╗   ▓▓▓▓▓▓╗
 ▓▓╔═══▓▓╗ ▓▓╔═══▓▓╗ ▓▓║ ▓▓▓▓╗   ▓▓║ ▓▓╔═════╝
 ▓▓▓▓▓▓╔═╝ ▓▓║   ▓▓║ ▓▓║ ▓▓╔═▓▓╗ ▓▓║ ▓▓║ ▓▓▓▓╗
@@ -33,10 +34,11 @@ export default bouncing(banner("boing", { effect: "still" }));
 
 
 
-             ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+
+               ▔▔▔▔▔▔▔▔▔▔▔▔▔▔
 ```
 
-That is the top of a bounce, its shadow narrowed on the ground below. Motions wrap each other, so `floating(spinning(cube()))` is a cube turning as it hovers.
+Motions wrap each other, so `floating(spinning(cube()))` is a cube turning as it hovers.
 
 ## Every motion
 
@@ -58,7 +60,7 @@ Every motion takes `speed` (`"slow"`, `"normal"`, `"fast"`, or times as fast), `
 | `slideOut(thing)` | holds, slides out to an edge, and comes back | `to`; `seconds`, `hold`, `ease` | `slideOut("bye", { to: "bottom" })` |
 | `planet()` | a whole world turning, with a moon and a ring if you like | `type`: `"gas"`, `"earth"`, `"mars"`, `"ice"`; `moon`, `rings`, `color` | `planet({ type: "earth", moon: true })` |
 
-`amount` is `"subtle"`, `"medium"` or `"strong"` in every motion that takes it, or a number of cells. `height` is in rows, `radius` in columns for a flat orbit, when you give a number.
+`amount` is `"subtle"`, `"medium"` or `"strong"` in every motion that takes it, or a number: cells for `swaying()` and `shaking()`, a share of its size for `pulsing()`, `0.1` growing it a tenth. `height` is in rows, `radius` in columns for a flat orbit, when you give a number.
 
 An easing, `ease`, says how a move starts and stops: `"steady"`, `"smooth"`, `"snappy"` (overshooting a little and settling), `"springy"` or `"bouncy"`, or any easing from [maths](/docs/kit-math/) by name, such as `"outCubic"`.
 
@@ -93,7 +95,7 @@ export default donut;
 
 Each motion is a few lines over the kit's own parts, so read one to write your own: `spinning()` is a `scene()` and a `group()` for a 3D shape, and `row()`, `flip()` and `effect()` for a coin; `drifting()` is `layer()` with a `move`; `shaking()` is the effect `shake()` with its numbers in words. Their source is in `src/kit/recipes/motion.ts`.
 
-`pieceOf(thing)` turns any thing a motion takes into a piece, and `loopFor([a, b])` works out the loop of things played together, so a motion of your own takes what these do:
+`pieceOf(thing)` turns any thing a motion takes into a piece, `loopFor([a, b])` works out the loop of things played together, and `withLoop(piece, seconds)` gives a piece the loop you worked out, so a motion of your own takes what these do:
 
 ```ts
 // wobble.ts

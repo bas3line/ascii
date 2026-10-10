@@ -73,6 +73,8 @@ Where a shape goes:
 | `x`, `y` | cells to move it after placing |
 | `flip` | mirror it left to right |
 
+Parts sit against each other by name, never by counting cells. Every shape has `.at(anchor)`, a point on it that another shape's `at` takes: `ball({ at: body.at("bottom-left") })` is a wheel under a car's back corner, wherever the car is.
+
 Other areas: `sky()` is the whole picture, `ground()` a band along the bottom, and `inside(vessel, { fill })` the room in a vessel up to a level: `"low"`, `"half"`, `"high"`, `"full"`, `"brim"` or a share. `union()`, `subtract()` and `intersect()` combine areas.
 
 When no shape fits, `area` has primitives in cells: `area.rect()`, `area.rounded()`, `area.circle()`, `area.ellipse()`, `area.polygon()`, `area.path()` for a thick line, `area.text("OPEN")`, `area.where(test)`, and `area.fit(outline)`, a shape of your own outline placed by words like the rest.
@@ -83,7 +85,7 @@ When no shape fits, `area` has primitives in cells: `area.rect()`, `area.rounded
 | --- | --- | --- |
 | `water()` | fills its area, denser and darker with depth, ripples through it, bending what is behind it | `waves`: `"still"`, `"gentle"`, `"slosh"`, `"rough"` |
 | `glass()` | see-through: a rim, walls, a base and a streak of light with a glint | the glint |
-| `fire()` | flames, hottest at the base, licking up | flickers. `heat`, `glow`. |
+| `fire()` | flames, hottest at the base, licking up | flickers. `heat`: `"gentle"`, `"normal"`, `"fierce"`; `glow`: `"none"`, `"soft"`, `"medium"`, `"strong"`. |
 | `smoke()` | drifting smoke | drifts |
 | `metal()` | shaded round, with a sheen | the sheen sweeps |
 | `wood()` | grain, `"planks"` or a log's `"rings"` | still |
@@ -94,17 +96,19 @@ When no shape fits, `area` has primitives in cells: `area.rect()`, `area.rounded
 | `neon()` | a bright tube with a glow | flickers |
 | `solid()` | one character, or shaded from the edge by a `ramp` | still |
 | `gradientFill()` | colours fading across, in a `direction` | still |
-| `pattern()` | a tile repeated: `"bricks"`, `"tiles"`, `"checks"`, `"waves"` and more | scrolls with `move` |
+| `pattern()` | a tile repeated, by name from `patterns`: `"bricks"`, `"tiles"`, `"checks"`, `"stripes"`, `"dots"`, `"waves"`, `"hatch"`, `"zigzag"`, `"scales"`, `"shingles"`; or rows of text of your own | scrolls with `move` |
 | `ceramic()` | opaque and glazed, shaded down one side | still |
 | `starfield()` | stars twinkling, for a night sky | twinkles |
 | `texture(piece)` | any piece playing inside the area: a screen showing the donut | plays |
 | `material(fn)` | one of your own: a function of each cell and `t` | as you like |
 
-Every material takes `colors`: a palette's name, one colour, or your own stops. The names include `water`, `sea`, `cola`, `coffee`, `tea`, `wine`, `fire`, `candle`, `lava`, `smoke`, `steel`, `gold`, `copper`, `wood`, `grass`, `sand`, `ice`, `neon`, `lamp`, `wax`, `moon`, `sunset` and `sky`. `palettes` lists them all, each a list for a light page and one for a dark page.
+Every material takes `colors`: a palette's name, one colour, or your own stops. The names include `water`, `sea`, `cola`, `coffee`, `tea`, `wine`, `fire`, `candle`, `lava`, `smoke`, `steel`, `gold`, `copper`, `wood`, `grass`, `sand`, `ice`, `neon`, `lamp`, `wax`, `moon`, `sunset` and `sky`. `materialColors` lists them all, each a list for a light page and one for a dark page, and the same names work wherever the kit takes colours: see [colours by name](/docs/kit/#colours-by-name).
 
 ## Emissions
 
-`emit(emission, { from, inside })` adds what something gives off. Smoke and steam rise from the top of `from`; bubbles are born at the bottom of `inside` and pop at its surface.
+`emit(emission, { from, inside })` adds what something gives off. Smoke and steam rise from the top of `from`; bubbles are born at the bottom of `inside` and pop at its surface. `at` says where on `from` it comes out, an anchor such as `"left"` or a point such as `body.at("left")`, and `toward` which way it goes, `"up"`, `"left"` or `"right"`: exhaust from a car is `emit(smoke(), { from: body, at: "left", toward: "left" })`.
+
+`smoke()` takes words: `height` is `"low"`, `"medium"` or `"high"`, `spread` `"narrow"`, `"medium"` or `"wide"`, and `wind` `"none"`, `"light"` or `"strong"`. Numbers work too, a negative `wind` blowing left.
 
 | emission | what it is |
 | --- | --- |
@@ -156,21 +160,20 @@ export default picture([
 ```
 
 ```text
-
 .----------------------------------------------.
 |                                              |
-|____~~~~----~~~~~~~~~~~_______~~~~~~~~~~-----~|
-|'                ~~o           O          o   |
-||             O           ~-              -~  |
-|'          ~~                      ~          |
-|'   ~          o    ~~      O                 |
-|'(          )       ..     _.---._            |
-|'(    )o    )      ) --\ /-       -\ o~~      |
-|(     )~~   (       ) )|-         o \         |
-|)      )   (   )~-  )--/ \_       _/          |
-|')~    ((  O   )  ) .- ((~ '-___-')      ~~   |
-| )     (  (~ o  )  ) ( ((          )          |
-|  )   ((  )      ) )~(((           (      °   |
+|-___~~~~----~~~~~~~~~~~_______~~~~~~~~~~-----‾|
+|-'---.-...-.-~-~~~-o.------.---O.-~~---~--o.|~|
+|~|.---~------~O-~~~--..--~~~-~~-~~--~--~~-~-.-|
+|-'~~~~~~~~~-~-~-~-~~---~--~-~~~~~~~~---~-~-~~~|
+|-'~~~~~~~~~~~~~o~~~~~~~-~~~~O~~---~~~~~~~~~~|~|
+|~(~-~~~~~~~~)~~~~~~~..~~~~-_.---._~~~~~~~~~~~||
+|~(~~~~)o≈~~~)~~~~~~)~--\~/-       -\~o~~~~~~~~|
+|('~~~~)≈~~~≈(≈~~~~~~)~)|-         o \~~~~~≈~~||
+|)'~~≈≈~)≈≈≈(≈≈≈)~~~~)--/≈\_       _/≈≈~~~~~≈|~|
+|~)~~≈~≈((≈≈O~~≈)≈≈)≈.-~((≈≈'-___-')≈~~~≈≈≈≈≈≈||
+|~)≈~≈≈≈(≈≈(≈≈o~≈)≈≈)≈(≈((≈≈≈≈≈≈≈≈≈≈)≈~~≈≈≈≈≈≈≈|
+|≈≈)≈≈≈((≈≈)≈≈≈≈≈~)≈)≈(((≈≈≈≈≈≈≈≈≈≈≈(≈≈≈≈≈≈°≈≈||
 |_.,..,,...,.,.o,,,,,,,_,__..,,..._._.,_.,_._..|
 | ::.:::~~ :..:::.:::. :~.:.::.:°  :::~~:.::: :|
 |______________________________________________|
@@ -243,7 +246,7 @@ export default picture([shape(area.rounded(2, 1, 28, 8, 2), checks)], { name: "c
 
 `picture(parts, spec?)` takes a piece's spec, every field optional. Its size is `cols` by `rows` if given, else just big enough when every part is in fixed cells, else 64 by 24. It holds up to 32 colours a page, and loops when its parts' periods come round together within a minute.
 
-`drawParts(s, parts, t)` draws parts into a piece of your own, with `partsPalette(parts)` as its palette. `waterGlass({ fill, waves, colors })` is the glass of water above in one call.
+`drawParts(s, parts, t)` draws parts into a piece of your own, with `partsPalette(parts)` as its palette. `cellsOf(area, cols, rows)` works an area out on a grid as a material sees it, each cell's depth and edge, and `edgeChar(cells, i)` is the outline character a material's `cell.edge` holds, for drawing an outline of your own. `waterGlass({ fill, waves, colors })` is the glass of water above in one call.
 
 ## Next
 

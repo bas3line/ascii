@@ -16,20 +16,30 @@ export default sun({ palette: "sunset" }).mask(above(0.55)).add(waves({ speed: 0
 A sun over the sea, at 1 second, in one ink:
 
 ```text
-                 .      .       .
-                  :     :      .
-          .        -   .+    ..
-             :.   ..#:--@-::+.       ..
-               .+::=*%@@@@@@=:.. ::
-               ..-+%@@@@@@@%%@#:.
-       ....:::::-=@@@@@@@@@@@%=:.
-               .:=%@@@@@@@@@@@=-:::::....
-@#*=-:-=*@@%*+++*#####**#%@@#+-::-=*%@@@@@@@%#*=
-         .:+%@@@%#*==----:.          :-+++++++*#
-             ...               ..
-#+=-----:.          :=+**+++**#%%%#+:
-+#@@@@@@@@%#+--:-+%@@#+==+*#######%@@%*=:::-+#@@
-  .:=+**+++**#%%%*=:           .....:=#%@@@@#+:.
+                    .            .             .
+                     ..         .:           ..
+                      :.        .:          ..
+                      .-.       :-        .:.
+         ..            .=.  ....--..     ::
+           ...          .+:.::::*=::....=:
+              .::    ...:-@===++@+==--=#:..         ....
+                 :=-..:-=+*%%@@@@@@%%@%=-:...   .::.
+                  ..=%*+#@%%@@@@@@@@@@%#+-:::==:.
+                 ..::=+@%@@@@@@@@@@@@%@@%@@=:..
+                 ..:-+%%%@@@@@@@@@@@@@@@%%+-:..
+      .....::--=+*#%@@@@@@@@@@@@@@@@@@@@%%*=::.
+                 .::=*%@@@@@@@@@@@@@@@@@@@@@%#*+=--::.....
+%%@@@@@#*=-:..............       ..:-+#%@@@@@%@@@@@@@%%##*******
+:--=+#%@@@%#*+===++***#####******#%@@@@%*+=-::::-=+#%@@@@@@@@@@@
+    ..-=*%@@@@@@@@@@@@@@@@@@@@@@@%%#*+-:.          .:-+*#%%%%%%%
+        .:=*#%%@@%%#*+==-::::::::...                   .:-======
+           .::-----:..                                     .....
+                                         ..:::-::..
+:::::..                  ..:--=====--===++**#####*+=:.
+*****++=-:..         .:-+*%@@@@@@@@@@@@@@@@@@@@@@@@@%*=-..
+@@@@@@@@%%#*+==----=+*%@@@%#*+=====++**###########%@@@@%#+=-::::
+%%%%%%%%%@@@@@@@@@@@@@%#+-:.          ..:::::::::--=+*#%@@@@%%%%
+======-----===++++++=-:.                            ..:-=+*#%%@%
 ```
 
 ## Every look
@@ -74,7 +84,7 @@ What every look takes:
 | `period` | the seconds of one loop, over `speed` | the look's own |
 | `scale` | how big its features are: `"small"`, `"medium"`, `"large"`, `"huge"`, or a number | `"medium"` |
 | `ramp` | its characters, faint to strong: a ramp's name, or your own | the look's own |
-| `dither` | ordered dithering between neighbouring characters | `false` |
+| `dither` | ordered dithering between neighbouring characters | the look's own: `true` for `sweep()`, `false` for the rest |
 | `cols`, `rows` | its size | 64 by 24 |
 | `name`, `note` | its name, and a line saying what it shows | the look's own |
 
@@ -82,7 +92,7 @@ Every look loops, so an SVG of it plays without a jump. A slower speed makes a l
 
 ## Chaining
 
-A look's methods each return a new look and leave the one they start from as it was, so a chain reads as a sentence:
+A look is a `Look`, a piece with methods of its own besides [the kit's steps](/docs/kit/#everything-chains). Each returns a new look and leaves the one it starts from as it was, so a chain reads as a sentence:
 
 | method | what it does |
 | --- | --- |
@@ -107,14 +117,14 @@ A combined look takes the first look's palette and characters. To keep each part
 
 `mask()` keeps a look inside a shape, and draws nothing outside it. A shape is any of:
 
-- `below(0.4)` and `above(0.3)`: the bottom or top share of the picture, or `"third"` and `"half"`;
+- `below(0.4)` and `above(0.3)`: the bottom or top share of the picture, or `"third"` and `"half"`; `sea()`'s `horizon` is at a third, a half or two thirds, so `above("half")` is its sky;
 - a word, `"HI"`, in big letters as large as fit, or `letters("HI", { big: 2 })` for a size;
 - a shape from [materials](/docs/kit-materials/): `heart()`, `ball()`, `star()`, `cup()`;
 - any piece or text: its inked cells, centred, moving with it if it moves;
 - `outside(shape)` for everywhere the shape is not;
 - a function `(x, y, t) => true` where to draw.
 
-Most looks leave dark parts empty, so inside a shape their dark parts make holes. A ramp with no space, `ramp: ".:-=+*#%@"`, fills the shape solid.
+A word or a materials shape is filled: every cell inside it is drawn, its darkest parts in the ramp's faintest character, so the shape reads whole. The other masks only cut: most looks leave dark parts empty, so there the dark parts stay holes. A mask turns, zooms, moves and bends with the look when `rotate()`, `zoom()`, `move()` or `warp()` comes after it.
 
 ## Every look in one file
 
@@ -156,31 +166,28 @@ export default open;
 
 ## A look of your own
 
-`look()` is how every look here is made, and it is yours to use. Give it a name, the options your user passed, how it looks when they ask for nothing, and a body. The body gets a kit of helpers and returns how much is at each cell, 0 to 1:
+`look()` is how every look here is made, and it is yours to use. Give it one object: a name, how it looks by default, and a body. The body gets a kit of helpers and returns how much is at each cell, 0 to 1:
 
 ```ts
 // embers.ts
 import { look, type LookOptions } from "ascii.rest/kit";
 
 export const embers = (o?: LookOptions) =>
-  look("embers", o, { palette: "fire", period: 4 }, (k) => {
-    const rising = k.noise({ size: [0.3, 0.3], travel: [0, -3] });
-    return (x, y, t) => rising(x, y, t);
-  });
+  look({ name: "embers", palette: "fire", period: 4, body: (k) => k.noise({ travel: "up", size: "small" }) }, o);
 
 export default embers({ speed: "slow", scale: "large" });
 ```
 
-Speed, period, scale, palette, ramp, size and name are checked and worked out for you, and the result chains like any look. The kit hands the body:
+The options a user passed go second. Speed, period, scale, palette, ramp, size and name are checked and worked out for you, and the result chains like any look. Besides `name` and `body`, the object takes `note`, `palette` (`"mono"` by default), `ramp` (`"standard"`), `light` (`true` for brightness that fills the picture, so its ramp turns round on a light page), `period` (8 seconds), `dither` (`false`) and `options`, the names of options of its own, so a misspelt one throws. `look(name, o, how, body)` is the same, in four arguments. The kit hands the body:
 
 | helper | what it is |
 | --- | --- |
-| `k.noise({ size, travel })` | noise that loops with the look: `travel` is how far it slides in one loop, or `change` how many times it turns into new shapes in place |
+| `k.noise({ size, travel, change })` | noise that loops with the look: `travel` is the way it slides, `"up"`, `"down"`, `"left"` or `"right"`; `change` how often it turns into new shapes in place, `"slowly"`, `"steadily"` or `"quickly"`; `size` is `"fine"`, `"small"`, `"medium"`, `"large"` or `"huge"`. Numbers work too. |
 | `k.phase(t)` | where in its loop `t` is, 0 up to 1 |
 | `k.scale`, `k.speed`, `k.period` | the options asked for, as numbers |
 | `k.column(x, at)`, `k.row(y, at)` | the cell a point falls in |
 
-`x` and `y` are as [fields](/docs/kit-field/) give them: 0, 0 in the middle, the shorter side from -1 to 1. Read any look's source in `src/kit/recipes/looks.ts` for a template: each is a few lines.
+`x` and `y` are as [fields](/docs/kit-field/) give them: 0, 0 in the middle, the shorter side from -1 to 1. Every look here is a few lines in [looks.ts](https://github.com/bas3line/ascii/blob/main/src/kit/recipes/looks.ts), a template for one of your own; a copy made with `npx ascii.rest add kit` has it at `components/ascii/kit/recipes/looks.ts`.
 
 ## Next
 

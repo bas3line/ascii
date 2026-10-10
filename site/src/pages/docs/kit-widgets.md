@@ -13,7 +13,7 @@ import { barChart } from "ascii.rest/kit";
 export default barChart({ mon: 3, tue: 5, wed: 4, thu: 8, fri: 6 });
 ```
 
-The bars grow in one after another, hold, and grow again. Grown:
+The bars grow in one after another, hold, and grow again, in a 5 second loop. Grown, at 3 seconds:
 
 ```text
                 8
@@ -37,18 +37,20 @@ Every widget takes `color`, as `#rrggbb`, `{ light, dark }` or a palette's name 
 | widget | what it is | its options | one line |
 | --- | --- | --- | --- |
 | `clockFace()` | a round dial, its hours numbered, three hands, a second hand going round once a minute | `time`: `"10:10"`; `real`: the viewer's own time; `size`: `"small"`, `"medium"`, `"large"`; `numbers`: `"all"`, `"quarters"`, `"none"`; `frame`, `title` | `clockFace({ title: "clock" })` |
-| `progressBar()` | a label, a bar and how far along. With no `value` it fills, turns green and fills again. | `value`: 0 to 1; `label`, `width`; `style`: `"blocks"`, `"ascii"`, `"dots"`; `percent`, `seconds` | `progressBar({ label: "downloading" })` |
-| `spinner(kind)` | the kind a terminal shows while it works | kinds: `"dots"`, `"line"`, `"arc"`, `"circle"`, `"bounce"`, `"blocks"`, `"grow"`, `"arrows"`, `"pulse"`; `label`, `speed` | `spinner("dots", { label: "installing" })` |
-| `gauge()` | a dial three quarters round, green, yellow or red by its reading. With no `value` it wanders. | `value`, `label`, `min`, `max`, `unit` | `gauge({ label: "cpu" })` |
-| `sparkline(data?)` | a small smooth line chart in braille, its latest number after it. With no numbers it is a live reading. | `label`, `width`, `height`, `fill` | `sparkline([3, 5, 2, 8, 6, 9], { label: "visits" })` |
+| `progressBar()` | a label, a bar and how far along. With no `value` it fills, turns green and fills again. | `value`; `min`, `max`; `label`, `width`; `style`: `"blocks"`, `"ascii"`, `"dots"`; `percent`, `seconds` | `progressBar({ label: "downloading", value: "64%" })` |
+| `spinner(kind)` | the kind a terminal shows while it works | kinds: `"dots"`, `"line"`, `"arc"`, `"circle"`, `"bounce"`, `"blocks"`, `"grow"`, `"arrows"`, `"pulse"`; `label`, `speed`, `period` | `spinner("dots", { label: "installing" })` |
+| `gauge()` | a dial three quarters round, green, yellow or red by its reading. With no `value` it wanders. | `value`, `label`, `min`, `max`, `unit`, `frame` | `gauge({ label: "cpu" })` |
+| `sparkline(data?)` | a small smooth line chart in braille, its latest number after it. With no numbers it is a live reading; a function is read every frame. | `label`, `width`, `height`, `fill` | `sparkline([3, 5, 2, 8, 6, 9], { label: "visits" })` |
 | `barChart(data)` | a bar for each value, each its own colour, growing in | `horizontal`, `size`, `max`, `values`, `seconds`, `hold` | `barChart({ rust: 42, go: 31 }, { horizontal: true })` |
 | `panel(thing?)` | a box with a title round anything, or an empty one of a size | `title`; `style`: `"rounded"`, `"single"`, `"double"`, `"heavy"`, `"ascii"`; `cols`, `rows` | `panel("hello", { title: "note" })` |
-| `card()` | a heading, a line under it, words wrapped to its width and a quiet footer | `title`, `text`, `footer`, `width`, `style` | `card({ title: "hi", text: "a card" })` |
+| `card()` | a heading, a line under it, words wrapped to its width and a quiet footer | `title`, `text`, `footer`, `width`, `style`, `frame` | `card({ title: "hi", text: "a card" })` |
 | `typewriter(words)` | words typed out behind a cursor, held, and typed again | `speed`, `width`, `cursor`, `hold` | `typewriter("Hello there.")` |
 | `marquee(words)` | words scrolling across, as a ticker does | `width`, `speed`; `to`: `"left"`, `"right"`; `big`: in block letters | `marquee("open late", { big: true })` |
 | `countdown()` | big numbers counting down, then words | `from`, `to`, `then`, `seconds`, `font`; `transition`: `"cut"`, `"fade"`, `"dissolve"`, `"wipe"` | `countdown({ from: 5, then: "liftoff" })` |
 
-A widget is a still unless it has something to show moving. To set a still one moving, give it to a motion: `floating(card({ title: "hi" }))`.
+A `value` is a share from 0 to 1 (or from `min` to `max`), a percentage such as `"64%"`, or a function that reads it, `() => cpu()`, called every frame for a live reading. A live widget has no loop, since what it shows is not known ahead. `frame: false` leaves off a widget's own box, for a `grid()` that draws a border round each part.
+
+A widget is a still unless it has something to show moving. To set a still one moving, give it to a motion: `floating(card({ title: "hi" }))`. A moving widget loops in a time that divides a minute, a spinner in 1 second, a progress bar or a chart in 5, a gauge or a sparkline in 12, so a dashboard of them always comes round together.
 
 ## Every widget in one file
 
@@ -102,7 +104,7 @@ export default piece({ name: "clock", cols: 41, rows: 21, fps: 4, loop: 60 }, (t
 });
 ```
 
-At 10 seconds:
+At 10 seconds, the hand a sixth of the way round:
 
 ```text
 ╭─ clock ───────────────────────────────╮

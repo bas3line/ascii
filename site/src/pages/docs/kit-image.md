@@ -42,7 +42,7 @@ In colour it is blue and yellow, as the logo is. It glints every 5 seconds.
 
 ## What it reads
 
-In a browser, `fromImage()` takes a URL, a `data:` URL, SVG markup, a `Blob` or `File` (from an `<input type="file">`, say), an `<img>`, an `ImageBitmap` or a canvas. It decodes PNG, JPG, WebP, GIF, AVIF, BMP and SVG. Nothing leaves the page. Another site's URL must allow it with CORS.
+In a browser, `fromImage()` takes a URL, a `data:` URL, SVG markup, a `Blob` or `File` (from an `<input type="file">`, say), an `<img>`, an `ImageBitmap` or a canvas. It reads any format the browser itself decodes, PNG, JPG, WebP, GIF and SVG among them. Nothing leaves the page. Another site's URL must allow it with CORS.
 
 In Node, it reads a **PNG**: a path, a `file:` URL like the one above, an `http(s)` URL, its bytes, or a `Blob`. It decodes the PNG itself, so a script that writes a README's SVG needs nothing else. For another format in Node, decode it with a library of your choice and pass the pixels to `fromPixels()`.
 
@@ -54,7 +54,7 @@ It returns a promise: `await` it.
 | --- | --- | --- |
 | `width` | the most columns, its margin included, 8 to 320 | `48` |
 | `height` | the most rows, its margin included | `120` |
-| `style` | `"logo"`: characters by the shape of the edge. `"shade"`: characters by brightness, for a photo. | by the image |
+| `style` | `"logo"`: characters by the shape of the edge. `"shade"`: characters by brightness, for a photo. `"pixels"`: pixel art, two pixels a cell in `▀`, `▄` and `█`, scaled by whole numbers so every pixel stays square, in its top 8 colours. | by the image |
 | `background` | `"remove"` takes a plain border colour out. `"keep"` draws it. | `"remove"` |
 | `color` | the image's own colours, up to 8. `false`: one ink. | `true` |
 | `glint` | the logos' glint, crossing every 5 seconds, or `{ every }` | `false` |
@@ -62,7 +62,7 @@ It returns a promise: `await` it.
 | `invert` | for `"shade"`: turn the ramp round. `"auto"` on a light page. | `"auto"` |
 | `name`, `note`, `category` | its name, its line, its category | `"image"`, from the name, `"logos"` |
 
-A photo is found by itself: an image with no plain background, or one whose tones change all through it. Pass `style` to choose.
+A photo is found by itself: an image with no plain background, or one whose tones change all through it. So is pixel art: an image of 16 colours or fewer, with no soft edges, small enough to draw at least twice its size. Pass `style` to choose.
 
 A small logo is sensitive to its width, since each cell is a large part of it. Try a few widths.
 
@@ -113,9 +113,41 @@ Your colours come first, so colour `0` is the text's ink and `1` its grey, on bo
 | function | what it does |
 | --- | --- |
 | `fromPixels(rgba, width, height, o?)` | RGBA pixels, as `ImageData.data` holds them, as a piece. Works anywhere. |
+| `fromPixels(rows, colors, o?)` | pixel art typed as rows of characters, each standing for a colour; `.` and a space are clear |
 | `drawing(rgba, width, height, o?)` | the same pixels as a drawing: its characters and colours, row by row, with no piece |
 | `fromDrawing(drawing, o?)` | a drawing as a piece |
-| `readPng(bytes)` | a PNG's bytes as `{ data, width, height }`, in Node or anywhere |
+| `readPng(bytes)` | a PNG's bytes as `{ data, width, height }`, in Node or anywhere. Up to 16384 pixels a side and 40 million in all: a bigger one, or one whose data inflates past its size, throws at once. |
+
+Pixel art can be typed:
+
+```ts
+// invader.ts
+import { fromPixels } from "ascii.rest/kit";
+
+export default fromPixels(
+  [
+    "..g.....g..",
+    "...g...g...",
+    "..ggggggg..",
+    ".gg.ggg.gg.",
+    "ggggggggggg",
+    "g.ggggggg.g",
+    "g.g.....g.g",
+    "...gg.gg...",
+  ],
+  { g: "#3fb950" },
+  { name: "invader", width: 24 },
+);
+```
+
+```text
+    ▀▄   ▄▀
+   ▄█▀███▀█▄
+  █▀███████▀█
+  ▀ ▀▄▄ ▄▄▀ ▀
+```
+
+A character in the rows with no colour throws, naming it.
 
 A drawing is plain data: `art` holds its rows of characters, so you can print a logo as text with no player at all:
 

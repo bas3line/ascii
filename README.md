@@ -77,7 +77,7 @@ import { clockFace, plasma, sea, spinning, torus } from "ascii.rest/kit";
 
 export const ocean = sea({ palette: "ocean" });
 export const donut = spinning(torus(), { speed: "slow" });
-export const hot = plasma({ palette: "fire", ramp: ".:-=+*#%@" }).mask("HOT");
+export const hot = plasma({ palette: "fire" }).mask("HOT");
 export default clockFace();
 ```
 
@@ -93,7 +93,7 @@ const glassOfWater = picture([shape(cup(), glass()), shape(drink, water()), emit
 writeFileSync("glass.svg", svg(glassOfWater));
 ```
 
-Everything the kit makes is a normal piece, so it plays in React, on a page, as an SVG and in a terminal. The recipes are made of parts you can use yourself, all the way down to the maths: [fields](https://ascii.rest/docs/kit-field/), [drawing](https://ascii.rest/docs/kit-draw/), [maths](https://ascii.rest/docs/kit-math/), [3D scenes](https://ascii.rest/docs/kit-shapes3d/), [particles](https://ascii.rest/docs/kit-particles/), [effects](https://ascii.rest/docs/kit-fx/), [layouts](https://ascii.rest/docs/kit-compose/), [images](https://ascii.rest/docs/kit-image/), [materials](https://ascii.rest/docs/kit-materials/) and [SVG drawings](https://ascii.rest/docs/kit-vector/). Start with [the kit](https://ascii.rest/docs/kit/) in the docs, or the [examples](examples/kit/).
+Everything the kit makes is a normal piece, so it plays in React, on a page, as an SVG and in a terminal. The recipes are made of parts you can use yourself, all the way down to the maths: [fields](https://ascii.rest/docs/kit-field/), [drawing](https://ascii.rest/docs/kit-draw/), [maths](https://ascii.rest/docs/kit-math/), [3D scenes](https://ascii.rest/docs/kit-shapes3d/), [particles](https://ascii.rest/docs/kit-particles/), [effects](https://ascii.rest/docs/kit-fx/), [layouts](https://ascii.rest/docs/kit-compose/), [images](https://ascii.rest/docs/kit-image/), [materials](https://ascii.rest/docs/kit-materials/) and [SVG drawings](https://ascii.rest/docs/kit-vector/). Start with [the kit](https://ascii.rest/docs/kit/) in the docs, or the [examples](examples/kit/). `npx ascii.rest play sea.ts --watch` plays a file's piece in your terminal as you write it, and `npx ascii.rest svg sea.ts --out sea.svg` writes its SVG.
 
 ## React and Next.js
 

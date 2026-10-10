@@ -4,7 +4,7 @@ title: drawing
 description: Draw on a piece's grid with text, lines, boxes, circles, polygons, stamps, braille plots and pixel art, with no maths.
 ---
 
-The drawing functions draw on the grid a [piece()](/docs/kit/#piece-draw-your-own) hands you. Each takes the grid first, then where, then an options object. Nothing needs maths: a clock's hands point a fraction of the way round, a box hands back its inside to draw in, and a plot scales itself.
+The drawing functions draw on the grid a [piece()](/docs/kit/#piece-draw-your-own) hands you. Each takes the grid first, then where, then an options object. Placing needs no geometry: a clock's hands point a fraction of the way round, a box hands back its inside to draw in, and a plot scales itself. What changes with time is your own arithmetic on `t`, as here, where `Math.floor(t) % 3` is which second of three it is.
 
 ```ts
 // status.ts
@@ -59,7 +59,7 @@ export default piece({ name: "status", cols: 36, rows: 7, loop: 3 }, (t, s) => {
 
 A line's `char` is `"auto"` by default: it picks `-`, `|`, `/`, `\` and runs of `_` by the slope as it goes. Or give one character as a brush, or `""` to clear. With `style` it is a box's line instead, and it joins the lines it meets with `┼`, `├` and the rest.
 
-`rect()`'s `style` is `"single"`, `"double"`, `"rounded"`, `"heavy"`, `"ascii"`, `"none"`, or 6 characters of your own: top left, top right, bottom left, bottom right, across, down. `fill` fills the inside, and `title` sits on the top edge. Two boxes sharing an edge join with `┬` and `┴`.
+`rect()`'s `style` is `"single"`, `"double"`, `"rounded"`, `"heavy"`, `"ascii"`, `"none"`, or 6 characters of your own: top left, top right, bottom left, bottom right, across, down. `boxes` holds the named ones, `boxes.rounded` being `"╭╮╰╯─│"`. `fill` fills the inside, and `title` sits on the top edge. Two boxes sharing an edge join with `┬` and `┴`.
 
 ## Circles and shapes
 

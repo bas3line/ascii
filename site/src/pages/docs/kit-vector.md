@@ -159,7 +159,9 @@ const markup = `<svg viewBox="0 0 40 48">
 export default fromSvg(markup, { name: "drawn glass", width: 36, "#water": water(), "#cup": glass() });
 ```
 
-Any piece can fill a part too, playing inside it: `"#screen": donut`.
+Any piece can fill a part too, playing inside it: `"#screen": donut`. A part's `color`, like the drawing's, takes `#rrggbb` or a palette's name, `"#roof": { color: "lava" }`.
+
+For a material of your own over SVG parts, `partCells(cover, cols, rows)` works a part's cells out from how much of each cell it covers, as the materials do an area's: which cells are in, its edge, which way is in there, and each cell's depth.
 
 ## Options
 
@@ -177,6 +179,8 @@ Any piece can fill a part too, playing inside it: `"#screen": donut`.
 | `fps`, `still`, `ground` | as a piece's | 30 when it moves, else 0 |
 
 Text, images and markers in the SVG are left out, and `parseSvg(markup).skipped` names the ones it found. Masks, clip paths and filters are not applied, and a gradient is drawn as the mean of its colours.
+
+An SVG that expands past 50,000 elements, 20,000 shapes or 200,000 line segments, as nested `<use>` elements can, throws at once rather than hanging: simplify it, or flatten its `<use>` elements first.
 
 ## drawSvg(): a drawing in your own piece
 

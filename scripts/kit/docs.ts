@@ -5,8 +5,12 @@
 // exports. Each page's blocks are written to a folder of their own, a block whose
 // first line is a comment naming a file (// sea.ts) under that name, so later
 // blocks can import it. Then tsc checks them all, and node runs each .ts block,
-// playing its default export, if it is a piece, through the frame contract. With
-// --frames it prints each piece's frame at 1 second. Run npm run build first.
+// playing its default export, if it is a piece, through the frame contract. A
+// ```text block after a block is its frame as the page shows it: it must be the
+// frame the piece draws, in one ink, at the time its caption names ("at 2.5
+// seconds"), 1 second by default, blank rows at either end and spaces at line
+// ends aside; when it isn't, the real frame is printed to paste in. With --frames
+// it prints each piece's frame at 1 second. Run npm run build first.
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -59,7 +63,11 @@ interface Block {
   n: number;
   file: string;
   ts: boolean;
+  // The frame the page shows after it, and the time its caption names: null for none.
+  shown: { text: string; at: number } | null;
 }
+// A frame as a page shows one: spaces at line ends and blank rows at either end left out.
+const tidy = (s: string) => s.split("\n").map((l) => l.replace(/\s+$/, "")).join("\n").replace(/^\n+|\n+$/g, "");
 const blocks: Block[] = [];
 for (const { name, text } of sources) {
   const fence = /```(ts|tsx)\n([\s\S]*?)```/g;
@@ -73,7 +81,14 @@ for (const { name, text } of sources) {
     const file = join(name, named ?? `block-${n}.${m[1]}`);
     mkdirSync(join(dir, dirname(file)), { recursive: true });
     writeFileSync(join(dir, file), code);
-    blocks.push({ page: name, n, file, ts: file.endsWith(".ts") });
+    // The text block that follows, before the next code block or heading, is its frame; its caption says when.
+    const rest = text.slice(fence.lastIndex);
+    const until = rest.search(/```(ts|tsx)\n|\n#{1,3} /);
+    const after = until < 0 ? rest : rest.slice(0, until);
+    const frame = /```text\n([\s\S]*?)```/.exec(after);
+    const caption = frame ? after.slice(0, frame.index) : "";
+    const when = /\bat (\d+(?:\.\d+)?) seconds?\b/i.exec(caption) ?? /\bat t ?= ?(\d+(?:\.\d+)?)/i.exec(caption);
+    blocks.push({ page: name, n, file, ts: file.endsWith(".ts"), shown: frame ? { text: tidy(frame[1]), at: when ? Number(when[1]) : 1 } : null });
   }
   // A picture for the blocks that read one: an image of the python logo, as ./logo.png.
   mkdirSync(join(dir, name), { recursive: true });
@@ -106,6 +121,8 @@ for (const paper of [false, true]) for (const mono of [false, true]) for (const 
 }
 console.log(meta.name + "  " + meta.cols + "x" + meta.rows + "  " + meta.fps + "fps" + (meta.loop ? "  loop " + meta.loop + "s" : ""));
 if (process.argv[3] === "--frames") console.log(snapshot(p, 1, { mono: true }).text.split("\\n").map((l) => "    |" + l + "|").join("\\n"));
+// The frame at the time its page shows, between markers, for the page's frame to be checked against.
+if (process.argv[4] !== undefined) console.log("<<<FRAME\\n" + snapshot(p, Number(process.argv[4]), { mono: true }).text + "\\nFRAME>>>");
 `,
 );
 for (const b of blocks) {
@@ -117,12 +134,20 @@ for (const b of blocks) {
     console.log(`--   ${label}: typechecked only (${skip})`);
     continue;
   }
-  const r = spawnSync(process.execPath, [runner, join(dir, b.file), ...(frames ? ["--frames"] : [])], { cwd: join(dir, b.page), encoding: "utf8" });
-  if (r.status === 0) console.log(`ok   ${label}: ${r.stdout.trim()}`);
-  else {
+  const r = spawnSync(process.execPath, [runner, join(dir, b.file), frames ? "--frames" : "", ...(b.shown ? [String(b.shown.at)] : [])], { cwd: join(dir, b.page), encoding: "utf8" });
+  if (r.status !== 0) {
     failed++;
     console.log(`FAIL ${label}:\n${(r.stderr || r.stdout).trim().split("\n").slice(0, 8).join("\n")}`);
+    continue;
   }
+  const out = r.stdout.replace(/<<<FRAME\n[\s\S]*?\nFRAME>>>\n?/, "").trim();
+  const real = /<<<FRAME\n([\s\S]*?)\nFRAME>>>/.exec(r.stdout)?.[1];
+  if (b.shown && real !== undefined && tidy(real) !== b.shown.text) {
+    failed++;
+    console.log(`FAIL ${label}: the frame the page shows is not the one it draws at ${b.shown.at} s, in one ink. The real one:\n${tidy(real)}`);
+    continue;
+  }
+  console.log(`ok   ${label}: ${out}${b.shown && real !== undefined ? `  frame at ${b.shown.at}s matches` : ""}`);
 }
 rmSync(dir, { recursive: true, force: true });
 console.log(`\n${blocks.length} blocks, ${failed ? `${failed} failed` : "all ok"}`);

@@ -36,6 +36,8 @@ export default grid(
 
 The grid is two a row, as square as four parts allow. Each chart keeps its own player and options, and its clip's `color` paints it in one colour for each page.
 
+These are the library's charts. The kit has recipes of the same names, `barChart()`, `gauge()` and `sparkline()`, made in one call with options of their own; to use both in one file, import the library as a whole, `import * as lib from "ascii.rest/pieces"`, and write `lib.gauge` beside the kit's `gauge()`. A part that draws its own box, a widget, sits in the whole cell with no second border round it.
+
 ## Side by side
 
 | function | what it makes |
@@ -45,7 +47,7 @@ The grid is two a row, as square as four parts allow. Each chart keeps its own p
 | `grid(parts, o?)` | parts in a grid of `columns` a row (as square as they allow), `gap` (`[2, 1]`), `align`, and a `border` round each cell |
 | `border(src, o?)` | a box round a piece: `style` (`"rounded"`), `title`, `color`, `pad` (`[0, 1]`) |
 
-`title: true` puts the piece's name on its box.
+`title: true` puts the piece's name on its box. `row()`, `column()` and `grid()` also take `name` and `note` for the whole, and a `loop`, in seconds, for parts whose own loops come round together only after more than a minute: their time wraps at it, as `repeat()` does, so the whole loops.
 
 ## Over each other
 
@@ -79,6 +81,9 @@ What a layer takes, besides `src`:
 | `move` | travel toward `"left"`, `"right"`, `"up"` or `"down"`, out one edge and back in the other. `{ to, period }` sets the seconds. | none |
 | `x`, `y` | columns right and rows down from there, or a function of `t` | `0` |
 | `mask` | what of it is see-through: `" "` its blank cells, or `null` for nothing, as a card | `" "` |
+| `halo` | cells cleared round its ink, 0 to 4, so it reads over a busy picture | `1` for words and banners over a part that moves, else `0` |
+
+`over()` also takes `name` and `note`. Words or a banner wider or taller than the part under them, and not moving across it, throw rather than being cut off, saying how much too big they are: give `banner()` a `max`, crop them, or lay them on something bigger.
 
 For an empty stage of your own size, make the first part a blank grid: `new Surface(80, 24)`.
 
@@ -105,6 +110,7 @@ export default sequence([rust, go, python], { seconds: 3 });
 | `overlap` | seconds a transition takes | `0.8` |
 | `loop` | the last step turns back into the first | `true` |
 | `seed` | the dissolve's pattern | `1` |
+| `name`, `note` | the whole's name, and a line saying what you see | its steps' names |
 
 ## Reshape and retime
 
@@ -121,6 +127,8 @@ export default sequence([rust, go, python], { seconds: 3 });
 | `named(src, name, o?)` | the same piece under another name, `note` and `category` |
 
 A whole loops when its parts do: its loop is the time after which they all come round together, up to 60 seconds. Its colours are its parts' merged, and past the 64 a piece can hold, the nearest ones are folded together.
+
+Each of these is also a step on any piece the kit makes, so `stars().behind(pulsing(heart()))`, `gauge().border({ title: true })` and `sea().speed(2).named("calm")` read left to right; `over()` and `behind()` lay one piece over another, centred.
 
 ## Next
 

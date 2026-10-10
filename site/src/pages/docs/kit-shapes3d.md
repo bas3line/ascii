@@ -38,7 +38,7 @@ export default scene({ name: "donut", cols: 40, rows: 22, period: 8 }, torus({ s
 
 That is the frame at 1 second, the torus seen nearly edge on.
 
-`spin` is radians a second about x, y and z. `period: 8` rounds each spin to whole turns in 8 seconds, so the SVG of it loops without a jump.
+`spin` is radians a second about x, y and z, or a word, `spin: "slow"`. `period: 8` rounds each spin to whole turns in 8 seconds, so the SVG of it loops without a jump.
 
 ## Shapes
 
@@ -54,17 +54,17 @@ That is the frame at 1 second, the torus seen nearly edge on.
 | `lines(paths)` | lines in 3D: a wireframe, axes, an orbit's path | `char`, `closed` |
 | `mesh(vertices, faces)` | a shape of your own from its corners and faces | none |
 | `parametric(fn)` | a surface of your own, `fn(u, v)` giving `[x, y, z]` | `segments` |
-| `group(shapes)` | shapes that move as one | none |
+| `group(shapes)` | shapes that move as one | `center: true` moves them together so the middle of the box they fill is the group's centre, so it turns about that: `group([cone({ rotate: "upside-down" }), sphere({ at: [0, 1.2, 0] })], { center: true })` |
 
 Every shape also takes these:
 
 | option | what it does | default |
 | --- | --- | --- |
 | `at` | where its centre is, `[x, y, z]`, or a function of `t` | `[0, 0, 0]` |
-| `rotate` | its angles about x, y and z in radians, or a function of `t` | `[0, 0, 0]` |
-| `spin` | radians a second about x, y and z. A number alone spins about y. | still |
+| `rotate` | how it is turned: `"upside-down"`, `"on-its-side"`, `"tipped"`, `"facing-left"`, `"facing-right"` or `"turned-round"`; or `{ turns: [x, y, z] }`, `{ degrees: [x, y, z] }`, radians as `[x, y, z]`, or a function of `t` | `[0, 0, 0]` |
+| `spin` | `"slow"`, `"normal"` or `"fast"` about y; radians a second, about y for a number alone or `[x, y, z]` about each; or `{ turns: [x, y, z] }` a second | still |
 | `scale` | its size, times | `1` |
-| `color` | its colour, `#rrggbb`: it is drawn in shades of it | the page's ink |
+| `color` | its colour, `#rrggbb`, `{ light, dark }` or a palette's name: it is drawn in shades of it | the page's ink |
 | `texture` | `"bands"`, `"stripes"`, `"checker"`, `"grid"`, `"spots"`, or `(u, v, t) => brightness` | none |
 | `edges` | draw its edges as lines | `true` |
 
@@ -127,9 +127,9 @@ export default scene({ name: "planet", cols: 64, rows: 24, period: 6, ambient: 0
 
 | option | what it does | default |
 | --- | --- | --- |
-| `camera` | `distance` (6), `zoom` (fitted), `tilt` (0: radians it looks down), `spin` (0: radians a second the whole scene turns) | |
+| `camera` | `distance` (6), `zoom` (fitted), `tilt` (`"level"`, `"above"`, `"high"`, `"below"`, or radians it looks down: 0), `spin` (0: radians a second the whole scene turns) | |
 | `light` | the way towards the light | `[-0.4, 1, -1]`, upper left |
-| `ambient` | light everywhere, 0 to 1, so the dark side still shows | `0` |
+| `ambient` | light everywhere, `"none"`, `"soft"`, `"bright"` or 0 to 1, so the dark side still shows | `0` |
 | `ramp` | characters from unlit to lit | `".,-~:;=!*#$@"` |
 | `invert` | turn the ramp round: `"auto"` on a light page | `"auto"` |
 | `colorBy` | what picks a coloured cell's shade: `"shape"`, `"light"` or `"depth"` | `"shape"` |

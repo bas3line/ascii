@@ -2,7 +2,7 @@
 
 Pieces made with [ascii.rest/kit](https://ascii.rest/docs/kit/), one a file. Each file's default export is a normal piece, so it plays in React, on a page, as an SVG and in a terminal. Each starts with a comment saying how it is made.
 
-They import the kit from `../../src/kit/index.ts`, the source in this repo. In your own project, import the same names from `ascii.rest/kit`.
+They import from the source in this repo: the kit from `../../src/kit/index.ts` or one of its modules beside it, such as `../../src/kit/fx.ts`, `banner()` from `../../src/banner.ts`, and library pieces from `../../src/pieces/`. In your own project, import the kit's names from `ascii.rest/kit`, whichever module they are in, `banner()` from `ascii.rest/banner`, and pieces from `ascii.rest/pieces`.
 
 The `recipe-` files come first: each is one line, by name, with no maths. The rest go deeper, one part of the kit each, and show the maths for when you want it.
 
@@ -24,7 +24,7 @@ npm run kit:examples
 | --- | --- |
 | [recipe-looks-sea.ts](recipe-looks-sea.ts) | `sea({ palette: "ocean" })`: the open sea to the horizon |
 | [recipe-looks-plasma.ts](recipe-looks-plasma.ts) | `plasma({ palette: "neon", speed: "slow" })` |
-| [recipe-looks-aurora.ts](recipe-looks-aurora.ts) | northern lights over a sparse sky: `aurora().add(stars())` |
+| [recipe-looks-aurora.ts](recipe-looks-aurora.ts) | northern lights over a sparse sky: `aurora().add(stars({ density: "sparse" }))` |
 | [recipe-looks-sunset.ts](recipe-looks-sunset.ts) | a sun over waves, each kept to its share with `above()` and `below()` |
 | [recipe-looks-heart.ts](recipe-looks-heart.ts) | plasma masked by the materials' `heart()` |
 | [recipe-looks-hot.ts](recipe-looks-hot.ts) | plasma in fire colours masked by a word: `.mask("HOT")` |
@@ -40,7 +40,7 @@ npm run kit:examples
 
 | file | what it is |
 | --- | --- |
-| [recipe-motion-donut.ts](recipe-motion-donut.ts) | `spinning(torus())`: the spinning donut |
+| [recipe-motion-donut.ts](recipe-motion-donut.ts) | `spinning(torus({ color: "#f97316" }))`: the spinning donut |
 | [recipe-motion-coin.ts](recipe-motion-coin.ts) | a banner turning like a coin |
 | [recipe-motion-bounce.ts](recipe-motion-bounce.ts) | a banner bouncing, its shadow on the ground |
 | [recipe-motion-heartbeat.ts](recipe-motion-heartbeat.ts) | `pulsing(heart(), { beat: "heart" })` |
@@ -59,7 +59,7 @@ npm run kit:examples
 
 | file | what it is |
 | --- | --- |
-| [recipe-widget-clock.ts](recipe-widget-clock.ts) | `clockFace()` |
+| [recipe-widget-clock.ts](recipe-widget-clock.ts) | `clockFace({ title: "clock" })` |
 | [recipe-widget-progress.ts](recipe-widget-progress.ts) | `progressBar({ label: "downloading" })` |
 | [recipe-widget-bars.ts](recipe-widget-bars.ts) | a bar chart from names and values |
 | [recipe-widget-card.ts](recipe-widget-card.ts) | a card, floating |
