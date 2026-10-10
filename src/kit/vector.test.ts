@@ -345,10 +345,10 @@ test("strokes: hairlines still show, wide ones are solid, round caps reach past 
 
 // --- parts and motion ----------------------------------------------------------------------------
 
-const MOTIONS = ["spin", "flip", "bob", "pulse", "sway", "blink", "glint", "ripple", "rise"] as const;
+const MOTIONS = ["spin", "flip", "bob", "pulse", "sway", "blink", "glint", "ripple", "rise", "trace"] as const;
 
 test("every motion word moves its part, the same frame for the same t, and repeats exactly at its period", () => {
-  const periods: Record<string, number> = { spin: 4, flip: 4, bob: 2, pulse: 1.6, sway: 4, blink: 4, glint: 4, ripple: 2, rise: 4 };
+  const periods: Record<string, number> = { spin: 4, flip: 4, bob: 2, pulse: 1.6, sway: 4, blink: 4, glint: 4, ripple: 2, rise: 4, trace: 4 };
   for (const m of MOTIONS) {
     const p = fromSvg(HEART, { width: 32, "#heart": m });
     assert.equal(p.meta.fps, 30, m);
@@ -367,6 +367,44 @@ test("every motion word moves its part, the same frame for the same t, and repea
     }
     contract(p, [0, 1.3]);
   }
+});
+
+test("trace draws a line from its start, holds it whole, then wipes it from its start; a fill is traced round, then filled", () => {
+  // The columns with ink in them, first and last, or null for none.
+  const span = (p: Piece, t: number) => {
+    const at = new Set<number>();
+    for (const l of lines(snapshot(p, t).text)) [...l].forEach((c, x) => c !== " " && at.add(x));
+    return at.size ? [Math.min(...at), Math.max(...at)] : null;
+  };
+  const line = fromSvg(`<svg viewBox="0 0 20 4"><path id="l" d="M0 2H20" stroke="#000" stroke-width="2"/></svg>`, { cols: 22, rows: 5, margin: 1, fit: "viewBox", "#l": "trace" });
+  assert.equal(line.meta.loop, 4);
+  assert.equal(span(line, 0), null);
+  // A quarter of the way round, half of it is traced, from its start at the left.
+  const half = span(line, 1)!;
+  assert.equal(half[0], 1);
+  assert.ok(half[1] >= 9 && half[1] <= 12, `${half}`);
+  assert.deepEqual(span(line, 2.6), [1, 20]);
+  // Then it is wiped from where it began, and gone as the next tracing starts.
+  const wiped = span(line, 3.6)!;
+  assert.ok(wiped[0] >= 10 && wiped[0] <= 12 && wiped[1] === 20, `${wiped}`);
+  assert.equal(span(line, 4), null);
+  // Its still for reduced motion is a moment it is whole.
+  assert.equal(line.meta.still, 2.6);
+  assert.equal(fromSvg(SQUARE, { "#sq": "trace", still: 0 }).meta.still, 0);
+  // A fill is a line round its edge while it is traced, and filled while it is held.
+  const plain = snapshot(fromSvg(SQUARE, { width: 24 })).text;
+  const sq = fromSvg(SQUARE, { width: 24, "#sq": "trace" });
+  assert.equal(snapshot(sq, 2.6).text, plain);
+  const tracing = lines(snapshot(sq, 1.2).text);
+  assert.equal(tracing[5][12], " ");
+  assert.ok(tracing.join("").trim().length > 0);
+  // In the outline style its lines are traced the same way.
+  const out = fromSvg(SQUARE, { width: 24, style: "outline", "#sq": "trace" });
+  const count = (t: number) => snapshot(out, t).text.replace(/\s/g, "").length;
+  assert.equal(snapshot(out, 2.6).text, snapshot(fromSvg(SQUARE, { width: 24, style: "outline" })).text);
+  assert.ok(count(1) > 0 && count(1) < count(2.6));
+  assert.equal(count(0), 0);
+  contract(out, [0, 1, 2.6, 3.6]);
 });
 
 test("motions take room: a spinning square never leaves its margin", () => {
@@ -447,7 +485,7 @@ test("a ripple moves a shape's top and keeps its bottom", () => {
 
 test("options and parts are checked when the piece is made, with errors that say what to change", () => {
   assert.throws(() => fromSvg(HEART, { "#hart": "spin" }), /part "#hart" names nothing in this svg: it has "#heart" and "#e11d48"/);
-  assert.throws(() => fromSvg(HEART, { "#heart": "twirl" as never }), /takes a motion, spin, flip, bob, pulse, sway, blink, glint, ripple and rise/);
+  assert.throws(() => fromSvg(HEART, { "#heart": "twirl" as never }), /takes a motion, spin, flip, bob, pulse, sway, blink, glint, ripple, rise and trace/);
   assert.throws(() => fromSvg(HEART, { wdth: 40 } as never), /fromSvg has no option named "wdth": it takes width/);
   assert.throws(() => fromSvg(HEART, { width: 2 }), /width takes a whole number from 3 to 320, not 2/);
   assert.throws(() => fromSvg(HEART, { width: 40, cols: 40 }), /width or cols, not both/);

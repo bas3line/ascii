@@ -14,9 +14,10 @@
  *
  * Every element is a part you can name by its id, its class or its colour, to
  * set it moving with a word (spin, flip, bob, pulse, sway, blink, glint,
- * ripple, rise) or a function of time of your own, about its centre or any
- * origin, or fill it with a material such as water() or glass(), or with any
- * piece, so a still drawing comes alive with no code beyond a map.
+ * ripple, rise, trace) or a function of time of your own, about its centre or
+ * any origin, or fill it with a material such as water() or glass(), or with
+ * any piece, so a still drawing comes alive with no code beyond a map. "trace"
+ * draws a line icon as a pen would, and `color` gives its currentColor yours.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
  *   import { fromSvg } from "ascii.rest/kit";
@@ -37,6 +38,7 @@ import {
   clamp,
   code,
   fail,
+  fract,
   hex,
   isHex,
   mergePalettes,
@@ -947,8 +949,11 @@ export function parseSvg(markup: string): Svg {
  * - glint: a light crosses it every `every` seconds (4), as the library's logos glint.
  * - ripple: its top ripples like water's surface, `amount` rows high (0.4), a wave every period (2 s).
  * - rise: rises `amount` rows (4) over a period (4 s) and starts again, as a bubble does; several share the period out.
+ * - trace: draws itself along its lines, as a pen would: traced over the first half of a period (4 s), held, then
+ *   wiped away from where it began. A stroke is traced as it runs; a fill round its edge, then filled. Line icons
+ *   (Lucide, Feather) look best so.
  */
-export type Motion = "spin" | "flip" | "bob" | "pulse" | "sway" | "blink" | "glint" | "ripple" | "rise";
+export type Motion = "spin" | "flip" | "bob" | "pulse" | "sway" | "blink" | "glint" | "ripple" | "rise" | "trace";
 
 /**
  * Where a part turns, grows and shuts about: its centre, a side or a corner of its box, or a point [x, y] in the svg's
@@ -990,7 +995,18 @@ const MOTIONS: Record<Motion, { period: number; amount: number; every?: boolean 
   glint: { period: 4, amount: 1, every: true },
   ripple: { period: 2, amount: 0.4 },
   rise: { period: 4, amount: 4 },
+  trace: { period: 4, amount: 1 },
 };
+
+// How much of a traced line shows at t, from `tail` to `head`, as shares of its length: traced over the first half of
+// the period, held whole until 0.8 of it, then wiped from its start, so it is gone as the next tracing begins.
+function traceWindow(period: number, offset: number, t: number): [number, number] {
+  const u = fract((t + offset) / period);
+  const ease = (k: number) => k * k * (3 - 2 * k);
+  return u < 0.5 ? [0, ease(u / 0.5)] : u < 0.8 ? [0, 1] : [ease((u - 0.8) / 0.2), 1];
+}
+// The moment in a trace's period it is held whole: the still a piece shows for reduced motion.
+const TRACE_HELD = 0.65;
 
 // --- materials ---------------------------------------------------------------------------------
 
@@ -1090,8 +1106,8 @@ export interface PartOptions {
   /** How it moves: a word, several, or a function of t giving its pose, for any motion the words don't have. */
   motion?: Motion | readonly Motion[] | PoseFn;
   /**
-   * Seconds a loop of its motion: spin 4, flip 4, bob 2, pulse 1.6, sway 4, ripple 2, rise 4. For a function, the
-   * seconds before it repeats, if it does: without, the piece has no loop.
+   * Seconds a loop of its motion: spin 4, flip 4, bob 2, pulse 1.6, sway 4, ripple 2, rise 4, trace 4. For a function,
+   * the seconds before it repeats, if it does: without, the piece has no loop.
    */
   period?: number;
   /** Seconds between blinks or glints: 4. */
@@ -1175,7 +1191,7 @@ export interface VectorOptions {
   category?: Category;
   /** Frames a second: 30 when something moves, 0 for a still. */
   fps?: number;
-  /** The moment to show held still, for reduced motion: 0. */
+  /** The moment to show held still, for reduced motion: 0, or with a part that traces, a moment it is drawn whole. */
   still?: number;
   /** The colour behind it, as #rrggbb; it is then drawn for that ground whatever the page. */
   ground?: string;
@@ -1258,10 +1274,24 @@ interface Paint {
   knock: boolean;
   movers: Mover[];
   ripple: Mover | null;
+  trace: Trace | null;
   part: number;
   fill: number;
   // The one character every cell of it takes, or 0 for the characters its edges match.
   char: number;
+}
+
+/**
+ * A traced paint: its rings are its line's pieces in order along it, then a fill's own rings, which show while it is
+ * held whole. In the outline style its rings are its lines as they are, and `pieces` is 0.
+ */
+interface Trace {
+  mover: Mover;
+  pieces: number;
+  from: Float64Array;
+  to: Float64Array;
+  quad: Uint8Array;
+  total: number;
 }
 
 /** A part filled by a material or a piece, as one play of the drawing fills it. */
@@ -1486,14 +1516,14 @@ function sortFirst(a: Float64Array, n: number) {
 }
 
 // A circle as a polygon, counter-clockwise on the page as every stroke's pieces are, so they unite under nonzero.
-function disc(out: Float64Array[], x: number, y: number, r: number) {
+function disc(x: number, y: number, r: number): Float64Array {
   const n = Math.max(8, Math.min(32, Math.ceil(r * 1.2)));
   const p = new Float64Array(2 * n);
   for (let i = 0; i < n; i++) {
     p[2 * i] = x + r * Math.cos((-i * TAU) / n);
     p[2 * i + 1] = y + r * Math.sin((-i * TAU) / n);
   }
-  out.push(p);
+  return p;
 }
 
 // A polygon turned so its signed area is negative, as disc() makes them.
@@ -1513,18 +1543,45 @@ function oriented(p: Float64Array): Float64Array {
   return q;
 }
 
-// A stroke as polygons: a quad along each line, a disc where it bends and, for round caps, at its ends.
-function strokeRings(subs: readonly Sub[], hw: number, cap: "butt" | "round" | "square"): Float64Array[] {
-  const out: Float64Array[] = [];
+/**
+ * A stroke as polygons in order along it, for drawing whole or tracing: a quad along each segment, a disc where it
+ * bends enough to leave a notch and, for round caps, at its ends. Each piece has where it starts and ends along the
+ * line, in samples (a disc sits at one place); subpaths follow one another. A quad's points 0 to 1, and 3 to 2, run
+ * the way the line does, whichever way round it is turned, so it can be cut short.
+ */
+interface Pieces {
+  rings: Float64Array[];
+  from: number[];
+  to: number[];
+  quad: boolean[];
+  total: number;
+}
+function strokePieces(subs: readonly Sub[], hw: number, cap: "butt" | "round" | "square"): Pieces {
+  const out: Pieces = { rings: [], from: [], to: [], quad: [], total: 0 };
+  let at = 0;
+  const add = (r: Float64Array, a: number, b: number, quad: boolean) => {
+    out.rings.push(r);
+    out.from.push(a);
+    out.to.push(b);
+    out.quad.push(quad);
+  };
   for (const { pts, closed } of subs) {
     const n = pts.length >> 1;
     if (n === 1) {
-      if (cap === "round") disc(out, pts[0], pts[1], hw);
-      else if (cap === "square") out.push(oriented(Float64Array.of(pts[0] - hw, pts[1] - hw, pts[0] + hw, pts[1] - hw, pts[0] + hw, pts[1] + hw, pts[0] - hw, pts[1] + hw)));
+      if (cap === "round") add(disc(pts[0], pts[1], hw), at, at, false);
+      else if (cap === "square") add(oriented(Float64Array.of(pts[0] - hw, pts[1] - hw, pts[0] + hw, pts[1] - hw, pts[0] + hw, pts[1] + hw, pts[0] - hw, pts[1] + hw)), at, at, false);
       continue;
     }
     const segs = closed ? n : n - 1;
+    // A disc at point i: a round cap at an open end, or a join where the line turns enough to leave a notch.
+    const joint = (i: number) => {
+      if (!closed && (i === 0 || i === n - 1)) return cap === "round";
+      const p = (i - 1 + n) % n, q = (i + 1) % n;
+      const ax = pts[2 * i] - pts[2 * p], ay = pts[2 * i + 1] - pts[2 * p + 1], bx = pts[2 * q] - pts[2 * i], by = pts[2 * q + 1] - pts[2 * i + 1];
+      return (ax * bx + ay * by) / (Math.hypot(ax, ay) * Math.hypot(bx, by) || 1) < 0.985;
+    };
     for (let i = 0; i < segs; i++) {
+      if (joint(i)) add(disc(pts[2 * i], pts[2 * i + 1], hw), at, at, false);
       const j = (i + 1) % n;
       let ax = pts[2 * i], ay = pts[2 * i + 1], bx = pts[2 * j], by = pts[2 * j + 1];
       const l = Math.hypot(bx - ax, by - ay);
@@ -1535,21 +1592,12 @@ function strokeRings(subs: readonly Sub[], hw: number, cap: "butt" | "round" | "
         if (i === segs - 1) (bx += ux * hw), (by += uy * hw);
       }
       const nx = -uy * hw, ny = ux * hw;
-      out.push(oriented(Float64Array.of(ax + nx, ay + ny, bx + nx, by + ny, bx - nx, by - ny, ax - nx, ay - ny)));
+      add(oriented(Float64Array.of(ax + nx, ay + ny, bx + nx, by + ny, bx - nx, by - ny, ax - nx, ay - ny)), at, at + l, true);
+      at += l;
     }
-    // Joins: a disc wherever the line turns enough to leave a notch.
-    for (let i = 0; i < n; i++) {
-      const end = !closed && (i === 0 || i === n - 1);
-      if (end) {
-        if (cap === "round") disc(out, pts[2 * i], pts[2 * i + 1], hw);
-        continue;
-      }
-      const p = (i - 1 + n) % n, q = (i + 1) % n;
-      const ax = pts[2 * i] - pts[2 * p], ay = pts[2 * i + 1] - pts[2 * p + 1], bx = pts[2 * q] - pts[2 * i], by = pts[2 * q + 1] - pts[2 * i + 1];
-      const cos = (ax * bx + ay * by) / (Math.hypot(ax, ay) * Math.hypot(bx, by) || 1);
-      if (cos < 0.985) disc(out, pts[2 * i], pts[2 * i + 1], hw);
-    }
+    if (!closed && joint(n - 1)) add(disc(pts[2 * n - 2], pts[2 * n - 1], hw), at, at, false);
   }
+  out.total = at;
   return out;
 }
 
@@ -1678,6 +1726,8 @@ interface Plan {
   moving: boolean;
   /** The periods of its motions, for the loop. */
   periods: number[];
+  /** A moment its first traced part is held whole, for the still, when a part traces. */
+  held: number | undefined;
   /** The parts a material or a piece fills, the backmost first. */
   textured: { part: number; material: Material; moves: boolean; first: number }[];
   draw: () => Drawer;
@@ -1841,9 +1891,11 @@ function plan(svg: Svg, o: PlanOptions): Plan {
       : { ox: g[0], oy: g[1] };
   const movers = shapes.map(() => [] as Mover[]);
   const ripples: (Mover | null)[] = shapes.map(() => null);
+  const traces: (Mover | null)[] = shapes.map(() => null);
   const glints = new Map<number, { every: number; offset: number }>();
-  // The periods of the motions, NaN for a function's that has none.
+  // The periods of the motions, NaN for a function's that has none; and when the first trace is held whole.
   const periods: number[] = [];
+  let held: number | undefined;
   for (const [, ow] of owners) {
     const p = o.parts[ow.part];
     const box = boxOf(ow.shapes);
@@ -1856,8 +1908,10 @@ function plan(svg: Svg, o: PlanOptions): Plan {
         glints.set(ow.part, { every: m.period, offset: m.offset });
         continue;
       }
+      if (m.motion === "trace") held ??= ((TRACE_HELD * m.period - mover.offset) % m.period + m.period) % m.period;
       for (const s of ow.shapes) {
         if (m.motion === "ripple") ripples[s] = mover;
+        else if (m.motion === "trace") traces[s] = mover;
         else movers[s].push(mover);
       }
     }
@@ -1987,7 +2041,8 @@ function plan(svg: Svg, o: PlanOptions): Plan {
     return seen.get(k)!;
   };
   const paints: Paint[] = [];
-  const raw: { shape: number; c: string; alpha: number; rings: Float64Array[]; lines: Sub[] | null; evenodd: boolean }[] = [];
+  // Each paint as drawn: its rings, or in the outline style its lines, and when it is traced, its line's pieces.
+  const raw: { shape: number; c: string; alpha: number; rings: Float64Array[]; lines: Sub[] | null; evenodd: boolean; pieces: Pieces | null }[] = [];
   const tol = 0.2;
   const outline = style === "outline";
   shapes.forEach((s, i) => {
@@ -1997,16 +2052,33 @@ function plan(svg: Svg, o: PlanOptions): Plan {
     const paint = (c: string) => recolor ?? (c === "currentColor" && o.ink ? o.ink : c);
     const subs = flatten(s.ops, toSamples, tol);
     const hwMin = (o.line * sx) / 2;
+    const traced = !!traces[i] && !outline;
     // In the outline style a shape is its edges, walked as lines: a fill's edges closed, a stroke as it runs.
     if (s.fill) {
       const c = paint(s.fill);
-      if (outline) raw.push({ shape: i, c, alpha: s.fillOpacity, rings: [], lines: subs.map((x) => ({ pts: x.pts, closed: true })), evenodd: false });
-      else raw.push({ shape: i, c, alpha: s.fillOpacity, rings: subs.map((x) => x.pts), lines: null, evenodd: s.fillRule === "evenodd" });
+      const closed = subs.map((x) => ({ pts: x.pts, closed: true }));
+      if (outline) raw.push({ shape: i, c, alpha: s.fillOpacity, rings: [], lines: closed, evenodd: false, pieces: null });
+      else {
+        // Traced, a fill is first a line a column wide round its edge, its own rings after the line's pieces. A fill
+        // with no area to speak of, as an open line's default black has, paints nothing, so it has no edge to trace.
+        const own = subs.map((x) => x.pts);
+        let area = 0;
+        for (const r of own) {
+          let a = 0;
+          for (let k = 0, n = r.length >> 1; k < n; k++) a += r[2 * k] * r[(2 * k + 3) % (2 * n)] - r[(2 * k + 2) % (2 * n)] * r[2 * k + 1];
+          area += Math.abs(a) / 2;
+        }
+        const pieces = traced ? strokePieces(area < sx * sy * 0.1 ? [] : closed, Math.max(hwMin, sx / 2), "butt") : null;
+        raw.push({ shape: i, c, alpha: s.fillOpacity, rings: pieces ? [...pieces.rings, ...own] : own, lines: null, evenodd: s.fillRule === "evenodd", pieces });
+      }
     }
     if (s.stroke) {
       const hw = Math.max(hwMin, (s.strokeWidth * fit.k * sx) / 2);
-      if (outline) raw.push({ shape: i, c: paint(s.stroke), alpha: s.strokeOpacity, rings: [], lines: subs, evenodd: false });
-      else raw.push({ shape: i, c: paint(s.stroke), alpha: s.strokeOpacity, rings: strokeRings(subs, hw, s.cap), lines: null, evenodd: false });
+      if (outline) raw.push({ shape: i, c: paint(s.stroke), alpha: s.strokeOpacity, rings: [], lines: subs, evenodd: false, pieces: null });
+      else {
+        const pieces = strokePieces(subs, hw, s.cap);
+        raw.push({ shape: i, c: paint(s.stroke), alpha: s.strokeOpacity, rings: pieces.rings, lines: null, evenodd: false, pieces: traced ? pieces : null });
+      }
     }
   });
 
@@ -2091,9 +2163,20 @@ function plan(svg: Svg, o: PlanOptions): Plan {
       group = groups.push(c) - 1;
       groupSlot.push(slot);
     }
-    const ms = movers[r.shape], rp = ripples[r.shape];
+    const ms = movers[r.shape], rp = ripples[r.shape], tr = traces[r.shape];
     let rings = r.lines ? r.lines.map((x) => x.pts) : r.rings;
-    if (rp) rings = subdivide(rings, sx, r.lines ? r.lines.map((x) => x.closed) : null);
+    // A ripple bends long edges cut short; a traced paint's quads stay quads, cut only where the tracing reaches.
+    if (rp && !r.pieces) rings = subdivide(rings, sx, r.lines ? r.lines.map((x) => x.closed) : null);
+    const trace: Trace | null = tr
+      ? {
+          mover: tr,
+          pieces: r.pieces ? r.pieces.rings.length : 0,
+          from: Float64Array.from(r.pieces?.from ?? []),
+          to: Float64Array.from(r.pieces?.to ?? []),
+          quad: Uint8Array.from(r.pieces?.quad ?? [], Number),
+          total: r.pieces?.total ?? 0,
+        }
+      : null;
     let part = -1;
     for (const p of partsOf[r.shape]) if (o.parts[p.part].material || glints.has(p.part) || o.parts[p.part].fill) part = p.part;
     const ownFill = last(r.shape, "fill") as string | null, ownChar = last(r.shape, "char") as string | null;
@@ -2109,21 +2192,24 @@ function plan(svg: Svg, o: PlanOptions): Plan {
       knock: !!knockable && r.c !== "currentColor" && white(final(r.c)) && !ownChar,
       movers: ms,
       ripple: rp,
+      trace,
       part,
       fill: ownFill ? ownFill.charCodeAt(0) : fillCode,
       char: ownChar ? ownChar.charCodeAt(0) : 0,
     });
   }
   if (paints.length > 65534) fail(`fromSvg can draw up to 65534 fills and strokes, not ${paints.length}: simplify the svg`);
-  const moving = paints.some((p) => p.moved) || glints.size > 0;
-  const firstMoving = paints.findIndex((p) => p.moved);
+  // What changes from frame to frame: paints that move or are traced, and glints.
+  const changes = (p: Paint) => !!p.moved || !!p.trace;
+  const moving = paints.some(changes) || glints.size > 0;
+  const firstMoving = paints.findIndex(changes);
 
   // The parts a material or a piece fills, the backmost first, and whether each moves.
   const textured: { part: number; material: Material; moves: boolean; first: number }[] = [];
   o.parts.forEach((pp, pi) => {
     if (!pp.material) return;
     const first = paints.findIndex((p) => p.part === pi);
-    if (first >= 0) textured.push({ part: pi, material: pp.material, moves: paints.some((p) => p.part === pi && !!p.moved), first });
+    if (first >= 0) textured.push({ part: pi, material: pp.material, moves: paints.some((p) => p.part === pi && changes(p)), first });
   });
   textured.sort((a, b) => a.first - b.first);
 
@@ -2208,6 +2294,48 @@ function plan(svg: Svg, o: PlanOptions): Plan {
       return p.moved!;
     };
 
+    // A traced paint at t: the pieces of its line between the tracing's tail and head, the quads it reaches into cut
+    // short; or, held whole, a fill's own rings (a stroke's are its pieces). Buffers for each paint, made once.
+    const traceBuffers = new Map<Paint, { cut: (Float64Array | undefined)[]; shown: Float64Array[]; ownOf: readonly Float64Array[] | null; own: Float64Array[] }>();
+    const traced = (p: Paint, rings: readonly Float64Array[], t: number): { rings: readonly Float64Array[]; evenodd: boolean } => {
+      const tr = p.trace!;
+      let b = traceBuffers.get(p);
+      if (!b) traceBuffers.set(p, (b = { cut: [], shown: [], ownOf: null, own: [] }));
+      const [tail, head] = traceWindow(tr.mover.period, tr.mover.offset, t);
+      if (tail <= 0 && head >= 1) {
+        if (tr.pieces >= rings.length) return { rings, evenodd: false };
+        if (b.ownOf !== rings) (b.ownOf = rings), (b.own = rings.slice(tr.pieces));
+        return { rings: b.own, evenodd: p.evenodd };
+      }
+      const lo = tail * tr.total, hi = head * tr.total, shown = b.shown;
+      shown.length = 0;
+      for (let k = 0; k < tr.pieces; k++) {
+        const a = tr.from[k], z = tr.to[k];
+        if (!tr.quad[k]) {
+          if (a >= lo && a <= hi && hi > lo) shown.push(rings[k]);
+          continue;
+        }
+        if (z <= lo || a >= hi) continue;
+        if (a >= lo && z <= hi) {
+          shown.push(rings[k]);
+          continue;
+        }
+        // Cut short where the tracing reaches into it: points 0 to 1, and 3 to 2, run the way the line does.
+        const f0 = Math.max(0, (lo - a) / (z - a)), f1 = Math.min(1, (hi - a) / (z - a));
+        const r = rings[k], c = (b.cut[k] ??= new Float64Array(8));
+        c[0] = r[0] + (r[2] - r[0]) * f0;
+        c[1] = r[1] + (r[3] - r[1]) * f0;
+        c[2] = r[0] + (r[2] - r[0]) * f1;
+        c[3] = r[1] + (r[3] - r[1]) * f1;
+        c[4] = r[6] + (r[4] - r[6]) * f1;
+        c[5] = r[7] + (r[5] - r[7]) * f1;
+        c[6] = r[6] + (r[4] - r[6]) * f0;
+        c[7] = r[7] + (r[5] - r[7]) * f0;
+        shown.push(c);
+      }
+      return { rings: shown, evenodd: false };
+    };
+
     const rasterise = (t: number) => {
       if (base && !based) {
         ids.fill(0);
@@ -2219,7 +2347,11 @@ function plan(svg: Svg, o: PlanOptions): Plan {
       else ids.fill(0);
       for (let i = Math.max(0, firstMoving); i < paints.length; i++) {
         const p = paints[i];
-        raster.fill(p.moved ? place(p, t) : p.rings, p.evenodd, i + 1);
+        const rings = p.moved ? place(p, t) : p.rings;
+        if (p.trace) {
+          const now = traced(p, rings, t);
+          raster.fill(now.rings, now.evenodd, i + 1);
+        } else raster.fill(rings, p.evenodd, i + 1);
       }
     };
 
@@ -2269,17 +2401,27 @@ function plan(svg: Svg, o: PlanOptions): Plan {
       };
       paints.forEach((p, i) => {
         const rings = p.moved ? place(p, t) : p.rings;
+        // How far along its line each point is, on the page, in columns: a buffer for each line, kept between frames.
+        let length = 0;
         rings.forEach((r, k) => {
-          const n = r.length >> 1;
-          const shut = p.closed ? p.closed[k] : true;
-          const segs = shut ? n : n - 1;
-          // How far along the line each point is, on the page, in columns: a buffer for each line, kept between frames.
+          const n = r.length >> 1, segs = (p.closed ? p.closed[k] : true) ? n : n - 1;
           let along = alongs.get(r);
           if (!along) alongs.set(r, (along = new Float64Array(n + 1)));
           for (let j = 0; j < segs; j++) {
             const q = (j + 1) % n;
             along[j + 1] = along[j] + Math.hypot((r[2 * q] - r[2 * j]) / sx, ((r[2 * q + 1] - r[2 * j + 1]) / sy) * aspect);
           }
+          length += along[segs];
+        });
+        // Traced, only the stretch between the tracing's tail and head is drawn, its lines one after another.
+        const win = p.trace ? traceWindow(p.trace.mover.period, p.trace.mover.offset, t) : null;
+        const lo = win ? win[0] * length : 0, hi = win ? win[1] * length : Infinity;
+        let before = 0;
+        rings.forEach((r, k) => {
+          const n = r.length >> 1;
+          const shut = p.closed ? p.closed[k] : true;
+          const segs = shut ? n : n - 1;
+          const along = alongs.get(r)!;
           const total = along[segs];
           // The point `d` columns along the line, round again on a closed one.
           const at = (d: number): [number, number] => {
@@ -2294,16 +2436,24 @@ function plan(svg: Svg, o: PlanOptions): Plan {
             return [(r[2 * lo] + (r[2 * q] - r[2 * lo]) * f) / sx, (r[2 * lo + 1] + (r[2 * q + 1] - r[2 * lo + 1]) * f) / sy];
           };
           for (let j = 0; j < segs; j++) {
+            const a0 = before + along[j], a1 = before + along[j + 1];
+            if (a1 <= lo || a0 >= hi) continue;
             const q = (j + 1) % n;
-            const x0 = r[2 * j] / sx, y0 = r[2 * j + 1] / sy, x1 = r[2 * q] / sx, y1 = r[2 * q + 1] / sy;
+            let x0 = r[2 * j] / sx, y0 = r[2 * j + 1] / sy, x1 = r[2 * q] / sx, y1 = r[2 * q + 1] / sy;
             let tx = x1 - x0, ty = y1 - y0;
             if (along[j + 1] - along[j] < 3 && total > 4) {
               const mid = (along[j] + along[j + 1]) / 2, a = at(mid - 1.5), b = at(mid + 1.5);
               tx = b[0] - a[0];
               ty = b[1] - a[1];
             }
+            // A segment the tracing reaches into is cut short there.
+            if (a0 < lo || a1 > hi) {
+              const f0 = Math.max(0, (lo - a0) / (a1 - a0)), f1 = Math.min(1, (hi - a0) / (a1 - a0)), dx = x1 - x0, dy = y1 - y0;
+              (x1 = x0 + dx * f1), (y1 = y0 + dy * f1), (x0 += dx * f0), (y0 += dy * f0);
+            }
             segment(x0, y0, x1, y1, tx, ty, i);
           }
+          before += total;
         });
       });
     };
@@ -2426,7 +2576,7 @@ function plan(svg: Svg, o: PlanOptions): Plan {
     };
   };
 
-  return { cols, rows, light, dark, runs, moving, periods, textured, draw };
+  return { cols, rows, light, dark, runs, moving, periods, held, textured, draw };
 }
 
 // The character for a cell's ink in its 2 by 4 blocks, by the style.
@@ -2747,6 +2897,7 @@ function fillParts(s: Surface, ox: number, oy: number, cols: number, rows: numbe
  * (with the parts the drawing has), and any option it can't take.
  *
  *   export default fromSvg(star, { width: 32, "#star": ["spin", "glint"] });
+ *   export default fromSvg(readFileSync("icons/rocket.svg", "utf8"), { style: "outline", color: "#f97316", "*": "trace" });
  *   export default fromSvg(drawingOfACup, { "#water": water(), "#cup": glass(), ".bubble": "rise" });
  *   export default fromSvg(pendulum, { "#bob": { motion: "sway", amount: 0.4, origin: "top" } });
  *   export default fromSvg(ball, { "#ball": (t) => ({ y: -6 * Math.abs(Math.sin(t * 3)) }) });
@@ -2811,7 +2962,8 @@ export function fromSvg(svg: string | Svg, options: VectorOptions = {}): KitPiec
       ...(palette ? { palette, ink: { light: inkIndex(true), dark: inkIndex(false) } } : {}),
       ...(opts.ground !== undefined ? { ground: opts.ground } : {}),
       ...(loop !== undefined ? { loop } : {}),
-      ...(still !== undefined ? { still } : {}),
+      // A traced drawing is held still drawn whole, not as the blank it starts from.
+      ...(still !== undefined ? { still } : p.held !== undefined ? { still: Math.round(p.held * 1000) / 1000 } : {}),
     },
     {
       setup: () => {
