@@ -547,6 +547,28 @@ test("a glint that comes more often than its sweep still repeats exactly", () =>
   assert.ok(glinted > 2 && glinted < 10, `glinting in ${glinted} of 10 frames`);
 });
 
+test("char draws every cell of a part in one character, in every style, and keeps a white part seen", () => {
+  const svg = `<svg viewBox="0 0 40 20"><rect id="sea" width="40" height="20" fill="#0284c7"/><circle class="b" cx="12" cy="10" r="3" fill="#ffffff"/><circle class="b" cx="28" cy="8" r="2" fill="#ffffff"/></svg>`;
+  const o = { width: 44, "#sea": { char: "~" }, ".b": { char: "o" } } as const;
+  const text = snapshot(fromSvg(svg, o)).text;
+  assert.deepEqual([...new Set(text.replace(/[\s\n]/g, ""))].sort(), ["o", "~"]);
+  // In one ink white is left out, unless a part gave it a character: the bubbles still show.
+  assert.ok(snapshot(fromSvg(svg, o), 0, { mono: true }).text.includes("o"));
+  assert.ok(!snapshot(fromSvg(svg, { width: 44 }), 0, { mono: true }).text.includes("o"));
+  // On paper a white given a character is darkened to be seen; without one it stays white, a cut-out.
+  const p = fromSvg(svg, o), plain = fromSvg(svg, { width: 44 });
+  const paper = snapshot(p, 0, { paper: true }), dark = snapshot(p, 0);
+  // A cell of a bubble, by where its "o" is: grid cells and the frame's characters line up once newlines are out.
+  const k = paper.text.replace(/\n/g, "").indexOf("o");
+  assert.notEqual(p.meta.palette![paper.color![k]], "#ffffff");
+  assert.equal(p.meta.palette![dark.color![k]], "#ffffff");
+  assert.equal(plain.meta.palette![snapshot(plain, 0, { paper: true }).color![k]], "#ffffff");
+  // Blocks, braille and outline take it too.
+  for (const style of ["blocks", "braille", "outline"] as const)
+    assert.deepEqual([...new Set(snapshot(fromSvg(svg, { ...o, style })).text.replace(/[\s\n]/g, ""))].sort(), ["o", "~"], style);
+  assert.throws(() => fromSvg(svg, { "#sea": { char: "~~" } }), /#sea's char takes one character other than a space/);
+});
+
 // --- hostile and awkward markup ---------------------------------------------------------------------
 
 test("markup nested however deep, uses of their own ancestors and uses that multiply out are handled", () => {

@@ -737,7 +737,7 @@ export function parseSvg(markup: string): Svg {
   const index = (n: XNode) => {
     if (n.attrs.id !== undefined && !ids.has(n.attrs.id)) ids.set(n.attrs.id, n);
     if (n.name === "style") stylesheet(n.text, rules);
-    if (n.name === "title" && title === null && n.text.trim()) title = entities(n.text.trim());
+    if (n.name === "title" && title === null && n.text.trim()) title = entities(n.text.trim().replace(/\s+/g, " "));
   };
   index(svgRoot);
   each(svgRoot, index);
@@ -1097,6 +1097,12 @@ export interface PartOptions {
   material?: Material;
   /** The character its solid cells take, instead of the drawing's ("8" unless `fill` says otherwise). */
   fill?: string;
+  /**
+   * One character for every cell it draws, edges and all, in any style: "o" for bubbles, "*" for stars, "~" for water.
+   * Small parts read better so than as the letters their edges match, and a white part given one still shows in one
+   * ink, where white is otherwise left out.
+   */
+  char?: string;
   /** Its colour, as #rrggbb, instead of its own. */
   color?: string;
   /** Left out of the drawing. */
@@ -1166,7 +1172,7 @@ export type DrawSvgOptions = Omit<VectorOptions, "width" | "cols" | "rows" | "na
 };
 
 const OPTIONS = ["width", "cols", "rows", "margin", "fit", "style", "fill", "color", "line", "name", "note", "category", "fps", "still", "ground", "region"];
-const PART_KEYS = new Set(["motion", "period", "every", "amount", "origin", "offset", "stagger", "material", "fill", "color", "hide"]);
+const PART_KEYS = new Set(["motion", "period", "every", "amount", "origin", "offset", "stagger", "material", "fill", "char", "color", "hide"]);
 const STYLES: readonly VectorStyle[] = ["logo", "outline", "blocks", "braille"];
 
 const whole = (v: unknown, name: string, lo: number, hi: number) =>
@@ -1191,6 +1197,7 @@ interface PartPlan {
   origin: Origin | null;
   material: Material | null;
   fill: string | null;
+  char: string | null;
   color: string | null;
   hide: boolean;
   rank: number;
@@ -1230,6 +1237,8 @@ interface Paint {
   ripple: Mover | null;
   part: number;
   fill: number;
+  // The one character every cell of it takes, or 0 for the characters its edges match.
+  char: number;
 }
 
 /** A part filled by a material or a piece, as one play of the drawing fills it. */
@@ -1320,11 +1329,12 @@ const white = (c: string) => {
 const PAPER = [255, 255, 255];
 /**
  * On paper a colour too pale to read as thin characters (a light grey glass, a pale yellow sun) is darkened until it
- * does, to 2 against white. A white is left as it is: on paper it reads as a cut-out, as the logos' white does.
+ * does, to 2 against white. A white is left as it is, as a cut-out, as the logos' white reads on paper, unless it is
+ * `shown`: a part gave it a character of its own to be seen in.
  */
-function sink(c: string): string {
+function sink(c: string, shown = false): string {
   const v = rgb(c);
-  if (white(c) || contrast(v, PAPER) >= 2) return c;
+  if ((white(c) && !shown) || contrast(v, PAPER) >= 2) return c;
   const [h, s, l] = toHsl(v);
   let k = l, out = v;
   while (contrast(out, PAPER) < 2 && k > 0.15) out = hslToRgb(h, s, (k -= 0.01)).map(Math.round) as [number, number, number];
@@ -1666,8 +1676,8 @@ interface Drawer {
 
 // Normalises what a part was given.
 function partOf(key: string, v: unknown, rank: number): PartPlan {
-  const plan: PartPlan = { key, motions: [], origin: null, material: null, fill: null, color: null, hide: false, rank };
-  const takes = `${key} takes a motion, ${and(Object.keys(MOTIONS))}, a function of t giving its pose, a material, or { motion, origin, material, fill, color, hide }`;
+  const plan: PartPlan = { key, motions: [], origin: null, material: null, fill: null, char: null, color: null, hide: false, rank };
+  const takes = `${key} takes a motion, ${and(Object.keys(MOTIONS))}, a function of t giving its pose, a material, or { motion, origin, material, fill, char, color, hide }`;
   const words = (w: unknown) => {
     const list = typeof w === "string" ? [w] : Array.isArray(w) ? w : fail(`${key}'s motion takes a word, ${and(Object.keys(MOTIONS))}, a list of them, or a function of t, not ${JSON.stringify(w)}`);
     for (const m of list) if (typeof m !== "string" || !Object.hasOwn(MOTIONS, m)) fail(`${takes}, not ${JSON.stringify(m)}`);
@@ -1722,6 +1732,7 @@ function partOf(key: string, v: unknown, rank: number): PartPlan {
     plan.material = o.material;
   }
   plan.fill = oneChar(o.fill, `${key}'s fill`) ?? null;
+  plan.char = oneChar(o.char, `${key}'s char`) ?? null;
   if (o.color !== undefined && !isHex(o.color)) fail(`${key}'s color takes #rrggbb, not ${JSON.stringify(o.color)}`);
   plan.color = o.color?.toLowerCase() ?? null;
   plan.hide = o.hide === true;
@@ -2016,10 +2027,12 @@ function plan(svg: Svg, o: PlanOptions): Plan {
   for (const c of colours) want(c);
   if (coloured && hasInk) want("currentcolor");
   const light: string[] = [], dark: string[] = [];
+  // The colours of parts given a character of their own, to be seen on paper even when white.
+  const shown = new Set(raw.filter((r) => last(r.shape, "char")).map((r) => (r.c === "currentColor" ? "currentcolor" : final(r.c))));
   if (coloured) {
     for (let run = 0; run < runs; run++)
       for (const c of used) {
-        const l = c === "currentcolor" ? INK.light : sink(c), d = c === "currentcolor" ? INK.dark : lift(c);
+        const l = c === "currentcolor" ? INK.light : sink(c, shown.has(c)), d = c === "currentcolor" ? INK.dark : lift(c);
         light.push(run ? tint(l, run * 0.35) : l);
         dark.push(run ? tint(d, run * 0.35) : d);
       }
@@ -2043,7 +2056,7 @@ function plan(svg: Svg, o: PlanOptions): Plan {
     if (rp) rings = subdivide(rings, sx, r.lines ? r.lines.map((x) => x.closed) : null);
     let part = -1;
     for (const p of partsOf[r.shape]) if (o.parts[p.part].material || glints.has(p.part) || o.parts[p.part].fill) part = p.part;
-    const ownFill = last(r.shape, "fill") as string | null;
+    const ownFill = last(r.shape, "fill") as string | null, ownChar = last(r.shape, "char") as string | null;
     paints.push({
       rings,
       closed: r.lines ? r.lines.map((x) => x.closed) : null,
@@ -2052,11 +2065,13 @@ function plan(svg: Svg, o: PlanOptions): Plan {
       slot,
       group,
       alpha: r.alpha,
-      knock: !!knockable && r.c !== "currentColor" && white(final(r.c)),
+      // White is left out in one ink, unless a part gave it a character of its own to be drawn in.
+      knock: !!knockable && r.c !== "currentColor" && white(final(r.c)) && !ownChar,
       movers: ms,
       ripple: rp,
       part,
       fill: ownFill ? ownFill.charCodeAt(0) : fillCode,
+      char: ownChar ? ownChar.charCodeAt(0) : 0,
     });
   }
   if (paints.length > 65534) fail(`fromSvg can draw up to 65534 fills and strokes, not ${paints.length}: simplify the svg`);
@@ -2090,13 +2105,14 @@ function plan(svg: Svg, o: PlanOptions): Plan {
     const chars = new Uint16Array(cols * rows), slots = new Int16Array(cols * rows), owner = new Int16Array(cols * rows);
     const cover = Array.from({ length: nParts }, () => new Float32Array(cols * rows));
     const alpha = new Float32Array(paints.length + 1), knock = new Uint8Array(paints.length + 1), slotOf = new Int16Array(paints.length + 1);
-    const partOfPaint = new Int16Array(paints.length + 1).fill(-1), fillOf = new Uint16Array(paints.length + 1);
+    const partOfPaint = new Int16Array(paints.length + 1).fill(-1), fillOf = new Uint16Array(paints.length + 1), charOf = new Uint16Array(paints.length + 1);
     paints.forEach((p, i) => {
       alpha[i + 1] = p.alpha;
       knock[i + 1] = p.knock ? 1 : 0;
       slotOf[i + 1] = p.slot;
       partOfPaint[i + 1] = p.part;
       fillOf[i + 1] = p.fill;
+      charOf[i + 1] = p.char;
     });
     const groupOf = new Uint16Array(paints.length + 1);
     paints.forEach((p, i) => (groupOf[i + 1] = p.group));
@@ -2198,7 +2214,7 @@ function plan(svg: Svg, o: PlanOptions): Plan {
           const k = ty0 * cols + tx0;
           if (!exact && sure[k] === stamp) continue;
           if (exact) sure[k] = stamp;
-          set(tx0, ty0, up ? 95 : lineChar(slope, rising, at), i);
+          set(tx0, ty0, charOf[i + 1] || (up ? 95 : lineChar(slope, rising, at)), i);
         }
       };
       paints.forEach((p, i) => {
@@ -2284,8 +2300,9 @@ function plan(svg: Svg, o: PlanOptions): Plan {
             slots[k] = -1;
             continue;
           }
-          // The winning colour's ink, block by block, and the solid character of what it is.
-          let solid = 0;
+          // The winning colour's ink, block by block, the solid character of what it is, and its one character if a
+          // part gave it one.
+          let solid = 0, one = 0;
           for (let by = 0; by < 4; by++)
             for (let bx = 0; bx < 2; bx++) {
               let sum = 0;
@@ -2294,11 +2311,12 @@ function plan(svg: Svg, o: PlanOptions): Plan {
                   const id = ids[i];
                   if (!id || groupOf[id] !== best || (mono && knock[id])) continue;
                   sum += alpha[id];
-                  if (!solid) solid = fillOf[id];
+                  if (!solid) (solid = fillOf[id]), (one = charOf[id]);
                 }
               v[by * 2 + bx] = sum / per;
             }
-          chars[k] = pick(v, style, solid || fillCode);
+          const picked = pick(v, style, solid || fillCode);
+          chars[k] = one && picked !== EMPTY ? one : picked;
           slots[k] = chars[k] === EMPTY ? -1 : groupSlot[best];
         }
     };
@@ -2702,7 +2720,9 @@ const keyOf = (o: Record<string, unknown>, s: Surface, region: Region) =>
 /**
  * Draws an SVG into a grid you already have, at t seconds: fitted inside `region` (all of it by default) and centred,
  * its colours found in the grid's palette (the nearest of them), or in the grid's one ink. Parts move and fill as in
- * fromSvg(). The svg is read and fitted once for each drawing and options, then reused, so call it every frame.
+ * fromSvg(). The svg is read and fitted once for each drawing and options, then reused, so call it every frame. A
+ * motion function is told apart by which function it is, so make it once, outside the drawing: one written inside it
+ * is a new function each frame, and the drawing is fitted again each time.
  *
  *   piece({ name: "badge", cols: 40, rows: 12, palette: ["#e11d48"] }, (t, s) => drawSvg(s, heart, t, { "#heart": "pulse" }));
  */
