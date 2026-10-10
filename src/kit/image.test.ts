@@ -318,6 +318,38 @@ test("a photo keeps being shaded with its background kept; a logo on a plain gro
   assert.equal(drawing(disc, 60, 60, { width: 30, background: "keep" }).style, "logo");
 });
 
+test("an image whose tones change all through it is a photo, on a plain ground or a clear one; flat colours and fades are a logo", () => {
+  // a disc of greys changing every 4 pixels, as a photo's do, and one of flat colours and of a smooth fade
+  const noise = mulberry32(3);
+  const cells = Array.from({ length: 64 * 64 }, () => 100 + Math.floor(noise() * 60));
+  const disc = (x: number, y: number) => Math.hypot(x - 127.5, y - 127.5) < 100;
+  const grey = (x: number, y: number): RGBA => {
+    const v = cells[(y >> 2) * 64 + (x >> 2)];
+    return [v, v, v, 255];
+  };
+  const onWhite = image(256, 256, (x, y) => (disc(x, y) ? grey(x, y) : [255, 255, 255, 255]));
+  const cutOut = image(256, 256, (x, y) => (disc(x, y) ? grey(x, y) : CLEAR));
+  const flat = image(256, 256, (x, y) => (disc(x, y) ? (x < 128 ? [48, 105, 152, 255] : [255, 212, 59, 255]) : CLEAR));
+  const fade = image(256, 256, (x, y) => (disc(x, y) ? [48 + x / 6, 105 + x / 5, 152 + x / 4, 255] : [255, 255, 255, 255]));
+  const style = (px: Uint8Array, o = {}) => drawing(px, 256, 256, { width: 32, ...o }).style;
+  assert.equal(style(onWhite), "shade");
+  assert.equal(drawing(onWhite, 256, 256, { width: 32 }).ground, "#ffffff");
+  assert.equal(style(cutOut), "shade");
+  assert.equal(style(onWhite, { background: "keep" }), "shade");
+  assert.equal(style(flat), "logo");
+  assert.equal(style(fade), "logo");
+  // asked for, the style is what was asked
+  assert.equal(style(onWhite, { style: "logo" }), "logo");
+  assert.equal(style(flat, { style: "shade" }), "shade");
+  // too little solid ink to tell is a logo: 10 by 10 pixels whose greys change at every one, and 12 by 12 is enough
+  const patch = (n: number) => image(20, 20, (x, y) => {
+    const v = 100 + ((x * 7 + y * 13) % 40);
+    return inside(x, y, 5, 5, 5 + n, 5 + n) ? [v, v, v, 255] : CLEAR;
+  });
+  assert.equal(drawing(patch(10), 20, 20).style, "logo");
+  assert.equal(drawing(patch(12), 20, 20).style, "shade");
+});
+
 test("an image of one brightness is shaded by how bright it is, not all in one end of the ramp", () => {
   const flat = (v: number) => image(40, 40, () => [v, v, v, 255]);
   const row = (v: number) => drawing(flat(v), 40, 40, { style: "shade", background: "keep", width: 12 }).art[2].trim();
@@ -696,7 +728,9 @@ test("every option is checked when the piece is made, with what to change", () =
     [{ glint: { every: Infinity } }, /glint\.every takes/],
     [{ invert: "on" }, /invert takes true, false or "auto", not "on"/],
     [{ name: "  " }, /name takes a line of text/],
+    [{ name: "my\nlogo" }, /name takes a line of text, such as "my logo", not "my\\nlogo"/],
     [{ note: "x".repeat(73) }, /note takes one line of 1 to 72 characters/],
+    [{ note: "a\tb" }, /note takes one line of 1 to 72 characters, not "a\\tb"/],
     [{ ramp: "x" }, /a ramp takes a name/],
     [{ category: "pictures" }, /category takes one of/],
     // an option it doesn't take is named, and the one meant where it is near
@@ -710,6 +744,7 @@ test("every option is checked when the piece is made, with what to change", () =
     assert.throws(() => drawing(sq, 64, 64, o as never), /ascii\.rest: /, JSON.stringify(o));
   }
   assert.throws(() => fromPixels(sq, 64, 64, "big" as never), /an image takes an options object/);
+  assert.throws(() => fromPixels(sq, 64, 64, [{ width: 40 }] as never), /an image takes an options object, such as \{ width: 48 \}, not an array of 1/);
   // every message starts the kit's way
   assert.throws(() => fromPixels(sq, 64, 64, { width: 7 }), /^Error: ascii\.rest: /);
 });
@@ -800,6 +835,13 @@ test("readPng says what is wrong with bytes it can't read", async () => {
   const two = { width: 2, height: 2, depth: 8, type: 0, at: () => [5] };
   await assert.rejects(readPng(short(two, Uint8Array.from([0, 5, 5]))), /its image data is cut short/);
   await assert.rejects(readPng(short(two, Uint8Array.from([7, 5, 5, 0, 5, 5]))), /a row has filter 7, which PNG has none of/);
+  // a few bytes that claim a huge image are turned away before anything is inflated
+  const ihdr = new Uint8Array(13);
+  new DataView(ihdr.buffer).setUint32(0, 8193);
+  new DataView(ihdr.buffer).setUint32(4, 8192);
+  ihdr.set([8, 6, 0, 0, 0], 8);
+  const huge = concat([Uint8Array.from(SIGNATURE), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(new Uint8Array(64))), chunk("IEND", new Uint8Array(0))]);
+  await assert.rejects(readPng(huge), /at 8193 by 8192 pixels it is too large to read here, past 8192 by 8192: make it smaller first/);
   // image data that inflates to far more than its rows: the rows are read, and the rest never is
   const rows = Uint8Array.from([0, 5, 6, 0, 7, 8]);
   const long = new Uint8Array(32 << 20);
@@ -833,7 +875,11 @@ test("fromImage in Node reads a PNG by its path, a file: URL, a Blob or a data: 
     // a JPEG takes a decoder of your own here, and SVG a page to draw it on
     const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0]);
     writeFileSync(join(dir, "photo.jpg"), jpeg);
-    await assert.rejects(fromImage(join(dir, "photo.jpg")), /reads only PNG where there is no browser to decode an image, as in Node: .* fromPixels\(\)/);
+    await assert.rejects(fromImage(join(dir, "photo.jpg")), /reads only PNG where there is no browser to decode an image, as in Node, and this is a JPEG: decode it yourself .* fromPixels\(\)$/);
+    // other kinds are named too, and a file that is no image is said to be none
+    await assert.rejects(fromImage(new TextEncoder().encode("GIF89a......")), /and this is a GIF: decode it yourself/);
+    await assert.rejects(fromImage(new TextEncoder().encode("RIFF\0\0\0\0WEBPVP8 ")), /and this is a WebP: decode it yourself/);
+    await assert.rejects(fromImage(new TextEncoder().encode('{ "name": "x" }')), /and this is not a PNG, nor any image it knows$/);
     await assert.rejects(fromImage('<svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg>'), /draws SVG on a page, so not in Node or a worker/);
     writeFileSync(join(dir, "logo.svg"), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>');
     await assert.rejects(fromImage(join(dir, "logo.svg")), /draws SVG on a page/);
@@ -842,6 +888,18 @@ test("fromImage in Node reads a PNG by its path, a file: URL, a Blob or a data: 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("in Node, a PNG past 4096 pixels across is drawn down first, as a browser's canvas draws it, and comes out as the whole one does", async () => {
+  // a red ellipse, 4200 by 420, as a palette PNG with a clear ground
+  const W = 4200, H = 420;
+  const p: Png = { width: W, height: H, depth: 8, type: 3, plte: [[0, 0, 0], [220, 30, 30]], trns: [0, 255], at: (x, y) => [((x - 2100) / 2000) ** 2 + ((y - 210) / 200) ** 2 < 1 ? 1 : 0] };
+  const big = await fromImage(writePng(p), { width: 64 });
+  const whole = drawing(expected(p), W, H, { width: 64 });
+  assert.deepEqual([big.drawing.cols, big.drawing.rows], [whole.cols, whole.rows]);
+  let same = 0;
+  whole.art.forEach((l, y) => [...l].forEach((ch, x) => (same += +(big.drawing.art[y][x] === ch))));
+  assert.ok(same >= 0.97 * whole.cols * whole.rows, `${same} of ${whole.cols * whole.rows} cells the same`);
 });
 
 // A PNG beside the kit's examples, read.
@@ -858,7 +916,9 @@ test("the example assets: the python logo in its two colours, the moon in greys"
   // its two eyes are holes in the snakes: blank cells inside the ink of the top rows
   assert.match(d.art[3], /8\S*\s+\S*8/);
   const moon = await asset("moon.png");
-  const m = drawing(moon.data, moon.width, moon.height, { width: 64, style: "shade" });
+  const m = drawing(moon.data, moon.width, moon.height, { width: 64 });
+  // a photo, though its ground is plain: shaded without being asked
+  assert.equal(m.style, "shade");
   // its black sky taken out
   assert.ok(m.ground && Math.max(...[1, 3, 5].map((i) => parseInt(m.ground!.slice(i, i + 2), 16))) < 16, `ground ${m.ground}`);
   assert.deepEqual([m.cols, m.rows], [64, 32]);
@@ -880,12 +940,14 @@ test("the examples: each exports a piece as its default, which keeps the frame c
   assert.deepEqual([photo.meta.cols, photo.meta.rows, photo.meta.fps], [64, 32, 0]);
   // the badge: the logo at its top left, then a line typed and answered, over again every 5 seconds
   const python = (await asset("python.png")) as { data: Uint8ClampedArray; width: number; height: number };
-  const small = drawing(python.data, python.width, python.height, { width: 32 });
+  const small = drawing(python.data, python.width, python.height, { width: 30 });
   const at = (t: number) => snapshot(badge, t, { mono: true }).text.split("\n");
   small.mono.forEach((l, y) => assert.equal(at(4)[y].slice(0, small.cols), l, `row ${y}`));
-  assert.equal(at(0.5)[8].slice(34).trim(), "");
+  assert.equal(at(0.5)[8].slice(32).trim(), "");
   assert.match(at(0.5)[7], />>> print\('_ *$/);
-  assert.equal(at(4)[8].slice(34).trim(), "hello, ascii");
+  // the whole line fits
+  assert.match(at(1.6)[7], />>> print\('hello, ascii'\) ?$/);
+  assert.equal(at(4)[8].slice(32).trim(), "hello, ascii");
   assert.deepEqual(at(9), at(4));
 });
 

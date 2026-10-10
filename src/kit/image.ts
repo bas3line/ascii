@@ -36,8 +36,9 @@ export interface ImageOptions {
   /**
    * "logo": each cell the character whose shape best matches the image's edge through it, 8 where it is solid, as the
    * library's logos are drawn. "shade": each cell a character of `ramp` as dense as the image is bright there, which
-   * suits a photo. By default "logo", or "shade" for an image with no transparency and no plain background (a photo),
-   * as /make/ chooses.
+   * suits a photo. By default "shade" for a photo, "logo" for anything else: a photo is an image with no transparency
+   * and no plain background, as /make/ takes one, or one whose tones change all through it, such as the Moon on a black
+   * sky or a cut-out on a clear ground, which would otherwise be a block of 8s.
    */
   style?: ImageStyle;
   /**
@@ -141,6 +142,8 @@ const SOLID = "8dbqpPYOo0"; // what the glint turns to slashes in the logo style
 const SLASH = 47; // "/"
 
 type RGB = [number, number, number];
+// The part of an image its ink is in, in pixels.
+type Box = { x: number; y: number; w: number; h: number };
 
 interface Settings {
   width: number;
@@ -159,6 +162,8 @@ interface Settings {
 // --- options ----------------------------------------------------------------------
 
 const whole = (v: unknown, lo: number, hi: number) => typeof v === "number" && Number.isInteger(v) && v >= lo && v <= hi;
+// A newline, a tab or another control character, which a line of text can't hold.
+const CONTROL = /[\u0000-\u001f\u007f-\u009f]/;
 
 // A value as an error message shows it: short, whatever it is, so a Buffer or a long array isn't printed whole.
 function shown(v: unknown): string {
@@ -199,7 +204,7 @@ const checkInvert = (invert: unknown) => {
 // Every option checked, with its default, the moment a piece is asked for.
 function settings(o: ImageOptions | undefined): Settings {
   if (o === undefined || o === null) o = {};
-  if (typeof o !== "object") fail(`an image takes an options object, such as { width: 48 }, not ${shown(o)}`);
+  if (typeof o !== "object" || Array.isArray(o)) fail(`an image takes an options object, such as { width: 48 }, not ${shown(o)}`);
   known(o, OPTIONS, "an image");
   const { width = 48, height = MAX.rows, style, background = "remove", color = true, glint = false, ramp = RAMP, invert = "auto", name = "image", note, category = "logos" } = o;
   if (!whole(width, 8, MAX.cols)) fail(`width takes a whole number of columns from 8 to ${MAX.cols}, not ${String(width)}`);
@@ -209,8 +214,9 @@ function settings(o: ImageOptions | undefined): Settings {
   if (typeof color !== "boolean") fail(`color takes true (the image's colours) or false (one ink), not ${JSON.stringify(color)}`);
   const every = glintEvery(glint);
   checkInvert(invert);
-  if (typeof name !== "string" || !name.trim()) fail(`name takes a line of text, such as "my logo", not ${JSON.stringify(name)}`);
-  if (note !== undefined && (typeof note !== "string" || !note || note.length > 72)) fail(`note takes one line of 1 to 72 characters, not ${JSON.stringify(note)}`);
+  // A title and a screen reader's label: one line each.
+  if (typeof name !== "string" || !name.trim() || CONTROL.test(name)) fail(`name takes a line of text, such as "my logo", not ${JSON.stringify(name)}`);
+  if (note !== undefined && (typeof note !== "string" || !note || note.length > 72 || CONTROL.test(note))) fail(`note takes one line of 1 to 72 characters, not ${JSON.stringify(note)}`);
   // The category is checked as a piece's meta is, so drawing() turns away the same ones as fromPixels().
   checkMeta({ name, category, note: name.slice(0, 72), cols: 1, rows: 1, fps: 0 });
   return { width, height, style, keep: background === "keep", color, every, ramp: rampOf(ramp), invert, name: name.trim(), note, category };
@@ -243,11 +249,9 @@ function draw(rgba: PixelArray, W: number, H: number, set: Settings): Drawing {
   checkPixels(rgba, W, H);
   const found = clearGround(rgba, W, H, !set.keep);
   const data = found.data;
-  // A photo: opaque, with no plain ground, whether or not a ground would have been taken out.
-  const photo = found.opaque && !found.plain;
-  const style: ImageStyle = set.style ?? (photo ? "shade" : "logo");
-  const ground = found.ground ?? null;
   const box = trim(data, W, H);
+  const style: ImageStyle = set.style ?? (box && photo(rgba, W, H, found, box) ? "shade" : "logo");
+  const ground = found.ground ?? null;
   if (!box) {
     const { cols, rows } = size(W / H, set.width, set.height);
     const blank = Array.from({ length: rows }, () => " ".repeat(cols));
@@ -426,7 +430,7 @@ function taps(n: number, step: number, off: number, drawn: number, length: numbe
 }
 
 // The box of an image's ink, as sharp's trim with a threshold of 1 finds it; null when it has none.
-function trim(data: PixelArray, W: number, H: number) {
+function trim(data: PixelArray, W: number, H: number): Box | null {
   let x0 = W, y0 = H, x1 = -1, y1 = -1;
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++)
@@ -437,6 +441,63 @@ function trim(data: PixelArray, W: number, H: number) {
         y1 = y;
       }
   return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+/**
+ * Whether an image is a photo, which the shade style suits: opaque with no plain ground, as /make/ takes one, or with
+ * tones that change all through it, such as the Moon on a black sky or a cut-out on a clear ground, which drawn as a
+ * logo would be a block of 8s. A plain ground that is kept is left out of that, as if it had been taken out.
+ */
+function photo(src: PixelArray, W: number, H: number, found: { data: PixelArray; opaque: boolean; plain: boolean; ground?: string }, box: Box): boolean {
+  if (found.opaque && !found.plain) return true;
+  if (!found.plain || found.ground) return textured(found.data, W, box);
+  const bare = clearGround(src, W, H, true).data, inked = trim(bare, W, H);
+  return !!inked && textured(bare, W, inked);
+}
+
+/**
+ * Whether an image's tones change all through it, as a photo's do, rather than lying in flat areas and smooth fades
+ * with sharp edges between them, as a logo's do. Its ink is averaged over squares, about 128 along its longer side, and
+ * neighbouring solid squares are compared: in a logo nearly all are the same, or differ sharply where two colours meet;
+ * in a photo a good share of them differ a little. Measured on 33 logos (SVGs drawn at 2400 pixels, a PNG and a JPEG)
+ * and 5 photos on a plain ground (the Moon and the Earth), the logos came to 9% at most and the photos to 37% at least.
+ */
+function textured(data: PixelArray, W: number, box: Box): boolean {
+  const side = Math.max(1, Math.ceil(Math.max(box.w, box.h) / 128));
+  // Up to 4 by 4 of each square's pixels: enough to average a JPEG's noise away, and quick on a large image.
+  const step = Math.max(1, Math.floor(side / 4));
+  const gw = Math.ceil(box.w / side), gh = Math.ceil(box.h / side);
+  // Each square's brightness, 0 to 1, or -1 where it isn't solid.
+  const lum = new Float32Array(gw * gh);
+  for (let gy = 0; gy < gh; gy++)
+    for (let gx = 0; gx < gw; gx++) {
+      let a = 0, l = 0, n = 0;
+      const y1 = Math.min(box.h, (gy + 1) * side), x1 = Math.min(box.w, (gx + 1) * side);
+      for (let y = gy * side; y < y1; y += step)
+        for (let x = gx * side; x < x1; x += step) {
+          const o = ((box.y + y) * W + box.x + x) * 4, al = data[o + 3];
+          a += al;
+          l += al * (0.2126 * data[o] + 0.7152 * data[o + 1] + 0.0722 * data[o + 2]);
+          n++;
+        }
+      lum[gy * gw + gx] = a > 0.99 * 255 * n ? l / (a * 255) : -1;
+    }
+  let pairs = 0, some = 0;
+  const compare = (a: number, b: number) => {
+    if (a < 0 || b < 0) return;
+    pairs++;
+    const d = Math.abs(a - b);
+    // a little: more than noise, less than an edge between two colours
+    if (d > 0.02 && d <= 0.16) some++;
+  };
+  for (let gy = 0; gy < gh; gy++)
+    for (let gx = 0; gx < gw; gx++) {
+      const i = gy * gw + gx;
+      if (gx + 1 < gw) compare(lum[i], lum[i + 1]);
+      if (gy + 1 < gh) compare(lum[i], lum[i + gw]);
+    }
+  // Too little solid ink to tell, as in a wordmark's thin letters, is a logo.
+  return pairs >= 200 && some > 0.2 * pairs;
 }
 
 /**
@@ -528,7 +589,7 @@ const d2 = (a: ArrayLike<number>, b: ArrayLike<number>) => 0.3 * (a[0] - b[0]) *
  * count as a third; past half a million of them, an even spread of about that many. The pixels are counted by colour
  * first, which gives the same means as going through them one by one, in a fraction of the time.
  */
-function quantize(data: PixelArray, W: number, box: { x: number; y: number; w: number; h: number }, k = 8): RGB[] {
+function quantize(data: PixelArray, W: number, box: Box, k = 8): RGB[] {
   const px: RGB[] = [];
   const counts = new Map<number, number>();
   let total = 0;
@@ -990,14 +1051,15 @@ async function load(url: string): Promise<Blob> {
 
 async function blob(b: Blob): Promise<PixelData> {
   const named = (b as File).name;
-  const head = new Uint8Array(await b.slice(0, PNG.length).arrayBuffer());
+  const head = new Uint8Array(await b.slice(0, 12).arrayBuffer());
   const png = PNG.every((v, i) => head[i] === v);
   const isSvg = !png && (b.type === "image/svg+xml" || (typeof named === "string" && /\.svg$/i.test(named)) || (!b.type && isMarkup(await b.slice(0, 512).text())));
   if (isSvg) return svg(await b.text());
-  // With nothing to decode with, as in Node, the kit reads a PNG itself.
+  // With nothing to decode with, as in Node, the kit reads a PNG itself, drawn down as a browser's canvas would be.
   if (typeof createImageBitmap !== "function") {
-    if (png) return readPng(new Uint8Array(await b.arrayBuffer()));
-    fail("fromImage() reads only PNG where there is no browser to decode an image, as in Node: decode a JPEG, WebP or GIF yourself (sharp does) and pass its pixels to fromPixels()");
+    if (png) return shrink(await readPng(new Uint8Array(await b.arrayBuffer())), LARGEST);
+    const kind = format(head);
+    fail(`fromImage() reads only PNG where there is no browser to decode an image, as in Node, and ${kind ? `this is ${kind}: decode it yourself (sharp does) and pass its pixels to fromPixels()` : "this is not a PNG, nor any image it knows"}`);
   }
   let bitmap: ImageBitmap;
   try {
@@ -1090,6 +1152,55 @@ function drawn(src: CanvasImageSource, w: number, h: number): PixelData {
 
 // --- without a browser ----------------------------------------------------------------
 
+// The kind of image a file's first 12 bytes say it is, for an error to name; null for none it knows.
+function format(head: Uint8Array): string | null {
+  const text = String.fromCharCode(...head);
+  if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return "a JPEG";
+  if (text.startsWith("GIF8")) return "a GIF";
+  if (text.startsWith("RIFF") && text.slice(8) === "WEBP") return "a WebP";
+  if (/^....ftypavi[fs]/.test(text)) return "an AVIF";
+  if (text.startsWith("BM")) return "a BMP";
+  return null;
+}
+
+/**
+ * Pixels drawn down to `side` along their longer side, each new pixel the average of the ones it covers, as a canvas
+ * draws a large image down in a browser; as they are when they fit. Bounds the work a huge PNG makes in Node.
+ */
+function shrink(px: PixelData, side: number): PixelData {
+  const { data, width: W, height: H } = px;
+  const k = side / Math.max(W, H);
+  if (k >= 1) return px;
+  const w = Math.max(1, Math.round(W * k)), h = Math.max(1, Math.round(H * k));
+  const tx = taps(w, 1, 0, w, W), ty = taps(h, 1, 0, h, H);
+  const out = new Uint8ClampedArray(w * h * 4);
+  // one row of sums: colour premultiplied by alpha, then alpha
+  const sum = new Float64Array(w * 4);
+  for (let j = 0; j < h; j++) {
+    sum.fill(0);
+    for (let p = ty.from[j]; p < ty.from[j + 1]; p++) {
+      const wy = ty.w[p], row = ty.at[p] * W;
+      for (let i = 0; i < w; i++)
+        for (let q = tx.from[i]; q < tx.from[i + 1]; q++) {
+          const o = (row + tx.at[q]) * 4, a = data[o + 3] * tx.w[q] * wy;
+          sum[i * 4] += a * data[o];
+          sum[i * 4 + 1] += a * data[o + 1];
+          sum[i * 4 + 2] += a * data[o + 2];
+          sum[i * 4 + 3] += a;
+        }
+    }
+    for (let i = 0, o = j * w * 4; i < w; i++, o += 4) {
+      const a = sum[i * 4 + 3];
+      if (!a) continue;
+      out[o] = sum[i * 4] / a;
+      out[o + 1] = sum[i * 4 + 1] / a;
+      out[o + 2] = sum[i * 4 + 2] / a;
+      out[o + 3] = a;
+    }
+  }
+  return { data: out, width: w, height: h };
+}
+
 // Node's file system, reached through process rather than an import, so a bundle for the browser never sees it; null
 // on a page or wherever there is none.
 const files = () =>
@@ -1119,9 +1230,9 @@ const CHANNELS = [1, 0, 3, 1, 2, 0, 4];
 /**
  * A PNG file's bytes as pixels, in Node or anywhere: what fromImage() reads a PNG with where there is no browser to
  * decode it, for a script that wants drawing() rather than a piece. Every kind of PNG: grey, colour or a palette, with
- * or without alpha (tRNS included), 1 to 16 bits a channel, interlaced or not. 16 bits are cut to 8; a colour profile
- * or gamma, if it has one, is not applied, as a browser would. Rejects, saying why, for bytes that aren't a PNG it can
- * read.
+ * or without alpha (tRNS included), 1 to 16 bits a channel, interlaced or not, up to 8192 by 8192 pixels or as many.
+ * 16 bits are cut to 8; a colour profile or gamma, if it has one, is not applied, as a browser would. Rejects, saying
+ * why, for bytes that aren't a PNG it can read.
  *
  *   const { data, width, height } = await readPng(readFileSync("logo.png"));
  *   const { art } = drawing(data, width, height, { width: 40 });
@@ -1154,7 +1265,8 @@ export async function readPng(bytes: Uint8Array | ArrayBuffer): Promise<PixelDat
   if (interlace > 1) bad(`interlace method ${interlace} is not a PNG one`);
   if (type === 3 && !plte) bad("it has a palette's indices but no palette");
   if (!idat.length) bad("it has no image data");
-  if (width * height > 1 << 28) bad(`at ${width} by ${height} pixels it is too large to read here`);
+  // A few bytes can claim a huge image: past 8192 by 8192 (256 MB of pixels), it is turned away before it is inflated.
+  if (width * height > 1 << 26) bad(`at ${width} by ${height} pixels it is too large to read here, past 8192 by 8192: make it smaller first`);
 
   const all = new Uint8Array(idat.reduce((n, c) => n + c.length, 0));
   idat.reduce((at, c) => (all.set(c, at), at + c.length), 0);
