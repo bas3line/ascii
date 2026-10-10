@@ -201,14 +201,15 @@ function tones(accent?: { light: string; dark: string }, more: readonly { light:
   return { light: list.map((c) => c.light), dark: list.map((c) => c.dark) };
 }
 
-// Text as a grid in one colour, for a maker that takes a source: one colour for both pages or one for each. Throws,
-// in `what`'s words, for text that wraps past the 120 rows a piece can have, rather than cutting it short.
-function inked(what: string, str: string, color: { light: string; dark: string } | undefined, width?: number, asked = width): Surface {
+// Text as a grid in one colour, for a maker that takes a source: one colour for both pages or one for each, wrapped to
+// `width` in a grid `cols` wide, so a typewriter's cursor has a column past the words. Throws, in `what`'s words, for
+// text that wraps past the 120 rows a piece can have, rather than cutting it short.
+function inked(what: string, str: string, color: { light: string; dark: string } | undefined, width?: number, cols = width): Surface {
   const lines = str.replace(/\r\n?/g, "\n");
   const scratch = new Surface(width ?? Math.max(1, ...lines.split("\n").map((l) => l.length)), 121);
   const box = text(scratch, 0, 0, lines, width ? { width } : {});
-  if (box.rows > 120) fail(`${what}'s words wrap past the 120 rows a piece can have${asked ? ` at ${asked} columns` : ""}: give it fewer words${asked ? " or more width" : ""}`);
-  const s = new Surface(Math.max(1, width ?? box.cols), Math.max(1, box.rows), { palette: color ? new Palette({ light: [color.light], dark: [color.dark] }) : null });
+  if (box.rows > 120) fail(`${what}'s words wrap past the 120 rows a piece can have${width ? ` at ${width} columns` : ""}: give it fewer words${width ? " or more width" : ""}`);
+  const s = new Surface(Math.max(1, cols ?? box.cols), Math.max(1, box.rows), { palette: color ? new Palette({ light: [color.light], dark: [color.dark] }) : null });
   text(s, 0, 0, lines, { ...(width ? { width } : {}), ...(color ? { color: 0 } : {}) });
   return s;
 }
@@ -814,8 +815,8 @@ export function typewriter(words: string, o?: TypewriterOptions): KitPiece {
   if (asked !== undefined && typing + asked > 60)
     fail(`typewriter() takes ${+typing.toFixed(1)} seconds to type these words at this speed, past the minute a loop can be: give it fewer words, more speed, or hold: "forever"`);
   const hold = asked === undefined ? undefined : loopOf(typing + asked, true) - typing;
-  // a column more than the words, for the cursor to blink in at the end of the longest line
-  const page = inked("typewriter()", words, themed("typewriter's color", p.color), width + (cursor ? 1 : 0), width);
+  // wrapped to the width, and a column more for the cursor to blink in at the end of the longest line
+  const page = inked("typewriter()", words, themed("typewriter's color", p.color), width, width + (cursor ? 1 : 0));
   const first = words.trim().split("\n")[0].slice(0, 40);
   return typeIn(page, { speed, cursor: cursor ? "▌" : false, ...(hold !== undefined ? { hold } : {}), ...naming(p, first, `${first}, typed out`) });
 }

@@ -361,6 +361,13 @@ test("typewriter, marquee and countdown: words that move", () => {
   assert.ok(frame(t, 0.95).includes("world"));
   assert.ok(loopOf(t).every > 1);
   assert.ok(ink(frame(typewriter("hello world", { speed: "fast" }), 0.4)) > ink(frame(typewriter("hello world"), 0.4)), "faster types sooner");
+  // It wraps at its width, the cursor's column on top: it wrapped a column later, so six letters sat in five columns'
+  // room with none left for the cursor, and "ab cd" did not wrap at 4.
+  const word = typewriter("abcdef", { width: 5, hold: "forever" });
+  assert.deepEqual([word.meta.cols, word.meta.rows], [6, 2]);
+  assert.deepEqual(rows(word, 5).map((l) => l.replace("▌", " ").trimEnd()), ["abcde", "f"]);
+  assert.equal(typewriter("ab cd", { width: 4 }).meta.rows, 2);
+  assert.equal(typewriter("abcdef", { width: 5, cursor: false }).meta.cols, 5, "no cursor, no column for it");
 
   const m = marquee("news", { width: 20 });
   assert.equal(m.meta.cols, 20);
