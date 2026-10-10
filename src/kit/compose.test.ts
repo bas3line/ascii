@@ -8,7 +8,7 @@ import * as galaxy from "../pieces/galaxy.ts";
 import * as gauge from "../pieces/gauge.ts";
 import * as oceanSunset from "../pieces/ocean-sunset.ts";
 import * as rust from "../pieces/rust.ts";
-import { svg } from "../svg.ts";
+import { loopOf, svg } from "../svg.ts";
 import { still } from "../terminal.ts";
 import type { Piece } from "../types.ts";
 import {
@@ -476,6 +476,25 @@ test("time: speed, delay, repeat and freeze", () => {
   const typed = banner("hi", { effect: "type" });
   assert.equal(delay(typed, 1).meta.still, (typed.meta.still ?? 0) + 1);
   for (const p of [speed(clock, 2), late, again, held]) contract(p);
+});
+
+test("a typed banner still plays once with its time changed or reshaped, so its SVG types once and holds", () => {
+  const typed = banner("hi", { effect: "type" });
+  const { seconds } = typed.motion;
+  // delay()'s own example: it waits its second, types, and holds. It played its first 4 seconds over and over.
+  assert.deepEqual(loopOf(delay(typed, 1)), { every: 1 + seconds, from: 0, once: true });
+  assert.match(svg(delay(typed, 1)), /step-end 1 forwards/);
+  assert.deepEqual(loopOf(speed(typed, 2)), { every: seconds / 2, from: 0, once: true });
+  // a clip's own speed and offset count too
+  assert.deepEqual(loopOf(named({ src: typed, speed: 2 }, "hi")), { every: seconds / 2, from: 0, once: true });
+  assert.deepEqual(loopOf(speed({ src: typed, offset: 0.2 }, 1)), { every: seconds - 0.2, from: 0, once: true });
+  for (const p of [crop(typed, { x: 0, y: 0, cols: 8, rows: 3 }), pad(typed, 1), scale(typed, 2), flip(typed, "x"), border(typed)])
+    assert.deepEqual(loopOf(p), loopOf(typed), p.meta.name);
+  // repeat() asks for it over and over, and freeze() for a still
+  assert.deepEqual(loopOf(repeat(typed, 2)), { every: 2, from: 0 });
+  assert.equal(loopOf(freeze(typed, 1)).every, 0);
+  // a glint loops as it did, on its meta's loop
+  assert.deepEqual(loopOf(speed(banner("hi"), 2)), { every: banner("hi").meta.loop! / 2, from: 0 });
 });
 
 test("named renames a piece and keeps the rest, a banner's motion too", () => {

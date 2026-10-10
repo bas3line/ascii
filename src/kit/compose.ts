@@ -801,7 +801,7 @@ export function border(src: Source | Clip, o: BorderOptions = {}): KitPiece {
   const cols = p.cols + 2 * px + 2, rows = p.rows + 2 * py + 2;
   const m = merge([p], b.color ?? [], !b.color);
   const title = titleOf(b, p.meta.name);
-  return build(fn, { ...single(p), cols, rows }, m, (options) => {
+  const boxed = build(fn, { ...single(p), cols, rows }, m, (options) => {
     const play = player(p, m.maps[0], options);
     const ink = borderInk(m, 1, b);
     return (t, s, ctx) => {
@@ -809,6 +809,8 @@ export function border(src: Source | Clip, o: BorderOptions = {}): KitPiece {
       s.paste(play(t, ctx.paper, ctx.mono), px + 1, py + 1);
     };
   });
+  // A piece that plays once, a typed banner, still does in its box.
+  return withMotion(boxed, playedOnce(p));
 }
 
 // --- layouts -------------------------------------------------------------------------------
@@ -1024,13 +1026,39 @@ const single = (p: Prepared): Whole => ({
   options: optionsOf(p),
 });
 
-// A whole of one part, `cols` by `rows`, drawn from the part's grid each frame. It takes the part's options.
+// What svg() reads off a banner, or a piece fx made, to choose the loop it plays: `seconds` from `from`, or one play of
+// `seconds` that holds its last frame when `once`.
+interface Motion {
+  seconds: number;
+  from: number;
+  once: boolean;
+}
+
+/**
+ * A source that plays once, as a typed banner does, still played once in a whole of it: from the whole's start to where
+ * the source's play ends in the whole's time, the whole running it `lag` seconds late and `rate` times as fast before its
+ * clip's own speed and offset. None for a source that doesn't play once, or one whose play ends past the minute an SVG
+ * plays once in.
+ */
+function playedOnce(p: Prepared, lag = 0, rate = 1): Motion | undefined {
+  const m = (p.piece as { motion?: Partial<Motion> }).motion;
+  if (!m?.once || !finite(m.seconds) || !finite(m.from)) return undefined;
+  const end = lag + (m.from + m.seconds - p.offset) / (rate * p.speed);
+  return end <= 60 ? { seconds: Math.max(0, end), from: 0, once: true } : undefined;
+}
+
+// A whole with the motion svg() reads, when it has one, as fx gives its effects theirs.
+const withMotion = (whole: KitPiece, motion: Motion | undefined): KitPiece => (motion ? Object.assign(whole, { motion }) : whole);
+
+// A whole of one part, `cols` by `rows`, drawn from the part's grid each frame. It takes the part's options, and a part
+// that plays once still does.
 function reshape(fn: string, p: Prepared, cols: number, rows: number, draw: (g: Surface, s: Surface) => void): KitPiece {
   const m = merge([p]);
-  return build(fn, { ...single(p), cols, rows }, m, (options) => {
+  const whole = build(fn, { ...single(p), cols, rows }, m, (options) => {
     const play = player(p, m.maps[0], options);
     return (t, s, ctx) => draw(play(t, ctx.paper, ctx.mono), s);
   });
+  return withMotion(whole, playedOnce(p));
 }
 
 /**
@@ -1362,27 +1390,30 @@ type Timing = Partial<Pick<Meta, "fps" | "loop" | "still" | "name" | "note" | "c
  * A source with its time changed: `time` takes the whole's t to the source's, before its clip's own speed and offset,
  * and `timing` gives the meta's frame rate, loop and still (left out, there are none). Frames pass straight through,
  * so its colours and everything else are the source's own, and it takes the source's options; a clip with a colour of
- * its own is drawn through a player instead, which paints it.
+ * its own is drawn through a player instead, which paints it. `motion` is the one svg() plays, for a source that plays
+ * once: playedOnce() in the new time.
  */
-function retime(fn: string, p: Prepared, time: (t: number) => number, timing: Timing): KitPiece {
+function retime(fn: string, p: Prepared, time: (t: number) => number, timing: Timing, motion?: Motion): KitPiece {
   const given = Object.fromEntries(Object.entries(timing).filter(([, v]) => v !== undefined));
   if (p.tint) {
     const m = merge([p]);
-    return build(fn, { ...single(p), loop: undefined, still: undefined, ...given }, m, (options) => {
+    const painted = build(fn, { ...single(p), loop: undefined, still: undefined, ...given }, m, (options) => {
       const play = player(p, m.maps[0], options);
       return (t, s, ctx) => s.paste(play(time(t), ctx.paper, ctx.mono), 0, 0);
     });
+    return withMotion(painted, motion);
   }
   const { loop: _loop, still: _still, ...rest } = p.meta;
   const options = optionsOf(p);
   const meta: Meta = checkMeta({ ...rest, ...(options ? { options } : {}), ...given } as Meta);
-  return chained({
+  const retimed = chained({
     meta,
     default(o?: Partial<Options>): Frame {
       const frame = p.piece.default({ ...meta.options, ...o });
       return (t, env) => frame(Math.max(0, time(Number.isFinite(t) ? t : 0) * p.speed + p.offset), env);
     },
   });
+  return withMotion(retimed, motion);
 }
 
 // The source's still moment in the whole's time, as its part's speed and offset run it.
@@ -1398,11 +1429,12 @@ export function speed(src: Source | Clip, factor: number): KitPiece {
   if (!finite(factor) || factor <= 0) fail(`speed takes a number above 0, 2 for twice as fast, not ${shown(factor)}`);
   const p = prepare("speed", src);
   const loop = period(p), still = stillAt(p);
-  return retime("speed", p, (t) => t * factor, { loop: playable(loop ? loop / factor : undefined), still: still && still / factor });
+  return retime("speed", p, (t) => t * factor, { loop: playable(loop ? loop / factor : undefined), still: still && still / factor }, playedOnce(p, 0, factor));
 }
 
 /**
- * A piece that waits `seconds` on its first frame before it plays. It no longer repeats exactly, so it has no loop.
+ * A piece that waits `seconds` on its first frame before it plays. It no longer repeats exactly, so it has no loop; one
+ * that plays once, a typed banner, still plays once, the wait first, so its SVG waits, types and holds.
  *
  *   delay(banner("hi", { effect: "type" }), 1)
  */
@@ -1410,7 +1442,7 @@ export function delay(src: Source | Clip, seconds: number): KitPiece {
   const wait = duration(seconds, "delay", 0, true);
   const p = prepare("delay", src);
   const still = stillAt(p);
-  return retime("delay", p, (t) => t - wait, { still: still !== undefined ? still + wait : undefined });
+  return retime("delay", p, (t) => t - wait, { still: still !== undefined ? still + wait : undefined }, playedOnce(p, wait));
 }
 
 /**
@@ -1452,13 +1484,19 @@ export function named(src: Source | Clip, name: string, o: { note?: string; cate
   const p = prepare("named", src);
   // Played as it was, it keeps what else it carries, such as a banner's motion, which svg() reads, and its own loop.
   const asItWas = p.speed === 1 && !p.offset && !p.tint && !Object.keys(p.options).length;
-  const renamed = retime("named", p, (t) => t, {
-    fps: p.meta.fps,
-    loop: asItWas ? p.meta.loop : playable(period(p)),
-    still: stillAt(p),
-    name: name.trim(),
-    note: opts.note ?? short(name.trim()),
-    category: opts.category ?? p.meta.category,
-  });
+  const renamed = retime(
+    "named",
+    p,
+    (t) => t,
+    {
+      fps: p.meta.fps,
+      loop: asItWas ? p.meta.loop : playable(period(p)),
+      still: stillAt(p),
+      name: name.trim(),
+      note: opts.note ?? short(name.trim()),
+      category: opts.category ?? p.meta.category,
+    },
+    playedOnce(p),
+  );
   return asItWas ? chained({ ...p.piece, meta: renamed.meta, default: renamed.default }) : renamed;
 }
