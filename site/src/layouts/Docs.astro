@@ -3,7 +3,8 @@
  * A docs page: the site's shell with the docs' index in the sidebar instead of
  * the pieces, the page's own headings above it, its Markdown, and the pages
  * before and after it. Code blocks get a [copy] button, and the tags from
- * ascii.rest/element are defined, so a page can show <ascii-banner> live.
+ * ascii.rest/element are defined, so a page can show <ascii-banner> live. A
+ * component an ```ascii fence drew plays as it is scrolled to.
  */
 import type { MarkdownLayoutProps } from "astro";
 import Layout from "./Layout.astro";
@@ -74,8 +75,11 @@ const sections = headings.filter((h) => h.depth === 2);
 <script>
   import "ascii.rest/element";
 
-  // Each code block gets a [copy] button, as the rest of the site's code does.
+  // Each code block gets a [copy] button, as the rest of the site's code does. A component's copies its still, the
+  // finished drawing as plain() prints it for a README, spaces at line ends left out: the page holds it until start()
+  // below plays it, so it is taken now, never the frame the component is on when the button is clicked.
   document.querySelectorAll<HTMLPreElement>(".docs pre").forEach((pre) => {
+    const still = pre.matches("[data-md]") ? (pre.textContent ?? "").split("\n").map((l) => l.trimEnd()).join("\n") : null;
     const button = document.createElement("button");
     button.className = "button copy";
     button.type = "button";
@@ -83,7 +87,7 @@ const sections = headings.filter((h) => h.depth === 2);
     const label = button.firstElementChild as HTMLElement;
     button.addEventListener("click", async () => {
       try {
-        await navigator.clipboard.writeText(pre.textContent ?? "");
+        await navigator.clipboard.writeText(still ?? pre.textContent ?? "");
         label.textContent = "[copied]";
       } catch {
         label.textContent = "[select and copy]";
@@ -95,4 +99,25 @@ const sections = headings.filter((h) => h.depth === 2);
     pre.replaceWith(wrap);
     wrap.append(pre, button);
   });
+
+  // The markdown components the remark plugin drew, in the site's own colours, each built in as it is scrolled to.
+  // They hold still, as the pieces do, when the system asks for reduced motion, unless the reader chose to play them
+  // anyway; the header's [play anyway] and [hold still] say "ascii-motion", and they start again that way.
+  const docs = document.querySelector<HTMLElement>(".docs");
+  if (docs?.querySelector("pre[data-md]")) {
+    let motion = false;
+    try {
+      motion = localStorage.getItem("ascii-motion") === "play";
+    } catch {}
+    import("ascii.rest/markdown").then(
+      ({ start }) => {
+        let stop = start(docs, { style: false, motion });
+        addEventListener("ascii-motion", (e) => {
+          stop();
+          stop = start(docs, { style: false, motion: (e as CustomEvent<boolean>).detail });
+        });
+      },
+      () => (window as Window & { asciiReload?: () => void }).asciiReload?.(),
+    );
+  }
 </script>

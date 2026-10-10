@@ -14,7 +14,7 @@
   "bin": {
     "ascii.rest": "dist/cli.js"
   },
-  "sideEffects": ["./dist/ascii.js", "./src/astro/*.astro"],
+  "sideEffects": ["./dist/ascii.js", "./dist/markdown/element.js", "./src/astro/*.astro"],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -56,6 +56,22 @@
       "types": "./dist/kit/recipes/index.d.ts",
       "default": "./dist/kit/recipes/index.js"
     },
+    "./markdown": {
+      "types": "./dist/markdown/index.d.ts",
+      "default": "./dist/markdown/index.js"
+    },
+    "./markdown/remark": {
+      "types": "./dist/markdown/remark.d.ts",
+      "default": "./dist/markdown/remark.js"
+    },
+    "./markdown/react": {
+      "types": "./dist/markdown/react.d.ts",
+      "default": "./dist/markdown/react.js"
+    },
+    "./markdown/element": {
+      "types": "./dist/markdown/element.d.ts",
+      "default": "./dist/markdown/element.js"
+    },
     "./astro": "./src/astro/Ascii.astro",
     "./astro/banner": "./src/astro/Banner.astro"
   },
@@ -64,11 +80,12 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "check": "node scripts/check.ts",
-    "test": "node --test \"src/kit/*.test.ts\" \"src/kit/recipes/*.test.ts\"",
+    "test": "node --test \"src/kit/*.test.ts\" \"src/kit/recipes/*.test.ts\" \"src/markdown/*.test.ts\"",
     "test:perf": "KIT_PERF=1 node --test --test-concurrency=1 \"src/kit/*.test.ts\" \"src/kit/recipes/*.test.ts\"",
     "kit": "node scripts/kit/show.ts",
     "kit:docs": "node scripts/kit/docs.ts",
     "kit:examples": "node scripts/kit/examples.ts",
+    "markdown:examples": "node scripts/kit/examples.ts --dir examples/markdown",
     "gen": "node scripts/gen.ts",
     "prepare": "tsc -p tsconfig.build.json"
   },

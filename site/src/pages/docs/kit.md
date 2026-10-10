@@ -453,6 +453,7 @@ Besides the tools, `ascii.rest/kit` has the maths every piece needs:
 | `fract(v)` | the part after the point, 0 to 1 |
 | `hash(a, b?, c?, d?)` | a number 0 to 1 from whole numbers: the same in, the same out |
 | `mulberry32(seed)` | a seeded generator of numbers 0 to 1 |
+| `fnv1a32(text)` | a text's 32-bit FNV-1a hash: a seed from words, `mulberry32(fnv1a32("bas3line"))` |
 | `valueNoise(x, y, seed?)` | smooth noise 0 to 1 |
 | `sample(piece).at(t)` | any piece's frame at `t` as a grid, to read or lay over |
 | `snapshot(piece, t)` | any piece's frame at `t` as text and colours, for tests |

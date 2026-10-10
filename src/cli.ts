@@ -6,6 +6,7 @@
  * npx ascii.rest list: every piece's name, by category.
  * npx ascii.rest banner <text>: the text in block letters, with a passing glint.
  * npx ascii.rest add <name...>: a piece's TypeScript, copied into your project.
+ * npx ascii.rest md <file.md>: a markdown file with each ascii fence drawn: as text, as SVGs for a README, or played.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  */
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, watch, writeFileSync } from "node:fs";
@@ -29,6 +30,7 @@ const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
   npx ascii.rest list             every piece, by category
   npx ascii.rest banner <text>    your text in block letters, with a glint
   npx ascii.rest add <name...>    copies pieces' TypeScript into your project
+  npx ascii.rest md <file.md>     a markdown file with each ascii fence drawn
 
   --mono            a coloured piece in the terminal's own colour
   --light           for a light terminal: the light colours, and shading flipped
@@ -56,6 +58,14 @@ const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
   --overwrite       replace files that are already there
   --registry <url>  another copy of the registry: https://ascii.rest/r
 
+  md:
+  --out <path>      where the markdown goes: printed by default
+  --ascii           its components' box drawing as + - |, for a place without it
+  --svg <dir>       each component as an animated SVG in <dir>, light and dark,
+                    in a <picture> where its fence was
+  --play            plays each component in the terminal in turn, a key for the
+                    next; takes --seconds for each, --light and --mono
+
   -h, --help        this help
   -v, --version     the version
 
@@ -65,6 +75,7 @@ const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
   npx ascii.rest svg sea.ts --dark --out sea-dark.svg
   npx ascii.rest banner 'my cli' --color ff6a00,f778ba --tagline 'v1.0, fast'
   npx ascii.rest add ascii donut banner
+  npx ascii.rest md README.src.md --svg .github/ascii --out README.md
 
 Every piece, on a page: https://ascii.rest. The docs: https://ascii.rest/docs/
 `;
@@ -264,6 +275,7 @@ async function mine(positionals: string[], values: { mono?: boolean; light?: boo
   if (named.length > 1) throw new Usage(`one file at a time: npx ascii.rest ${asked} sea.ts`);
   const path = resolve(named[0]);
   if (!existsSync(path) || !statSync(path).isFile()) throw new Usage(`there is no file ${clean(named[0])}`);
+  if (/\.(md|mdx|markdown)$/i.test(path)) throw new Usage(`${clean(named[0])} is markdown: npx ascii.rest md ${clean(named[0])} draws its ascii fences`);
   const fps = number("fps", values.fps, 60);
   const seconds = number("seconds", values.seconds);
   if (asked === "svg") {
@@ -318,6 +330,99 @@ async function mine(positionals: string[], values: { mono?: boolean; light?: boo
   }
 }
 
+// Words in an HTML attribute.
+const quoted = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// npx ascii.rest md <file>: a markdown file with every ascii fence drawn, as text as render() draws it, or as an
+// animated SVG for a light page and one for a dark page in a <picture>, or played in the terminal one after another.
+// Every fence is drawn before anything is written, so a typo fails the run, naming its line, and nothing ships broken.
+async function md(positionals: string[], values: { out?: string; ascii?: boolean; svg?: string; play?: boolean; seconds?: string; light?: boolean; mono?: boolean }) {
+  const named = positionals.slice(1);
+  if (!named.length) throw new Usage(`md what? npx ascii.rest md README.src.md, a markdown file with \`\`\`ascii fences`);
+  if (named.length > 1) throw new Usage(`one file at a time: npx ascii.rest md README.src.md`);
+  const path = resolve(named[0]);
+  if (!existsSync(path) || !statSync(path).isFile()) throw new Usage(`there is no file ${clean(named[0])}`);
+  if (values.out === "") throw new Usage(`--out takes the file the markdown goes in: --out README.md`);
+  if (values.out !== undefined && resolve(values.out) === path)
+    throw new Usage(`--out is the file md reads: write it to another, README.src.md to README.md, so its fences are there to draw again`);
+  if (values.svg === "") throw new Usage(`--svg takes the folder the SVGs go in: --svg .github/ascii`);
+  const seconds = number("seconds", values.seconds);
+  const file = clean(named[0]);
+  const doc = readFileSync(path, "utf8");
+  const { fencesOf, fromFence, plain, render } = await import("./markdown/index.ts");
+  // The fences render() draws, found as it finds them: top-level ```ascii or ~~~ascii fences, not ones shown inside
+  // another fence.
+  const found = fencesOf(doc);
+  const fences = found.map((f) => {
+    try {
+      return fromFence(f.info, f.body);
+    } catch (error) {
+      const why = error instanceof Error ? error.message.replace(/^ascii\.rest: /, "") : String(error);
+      throw new Usage(`${clean(why)}\n  in ${file}, line ${f.line}: \`\`\`${clean(f.info)}`);
+    }
+  });
+  // A QR code in + - | is no code a phone can read: say so rather than print one that doesn't scan.
+  const qr = values.ascii ? found.findIndex((_, i) => fences[i].kind === "qr") : -1;
+  if (qr >= 0) throw new Usage(`qr needs its blocks to scan, and --ascii has none: draw it with --svg, or as text without --ascii\n  in ${file}, line ${found[qr].line}: \`\`\`${clean(found[qr].info)}`);
+
+  if (values.play) {
+    if (!fences.length) throw new Usage(`${file} has no \`\`\`ascii fences to play`);
+    // Piped or redirected, there is nothing to play on: each component's still, as text.
+    if (!process.stdout.isTTY) return void process.stdout.write(`${fences.map((p) => plain(p)).join("\n\n")}\n`);
+    for (const piece of fences) {
+      const { meta } = piece;
+      // Its build and two seconds more, of its cycle or its finished drawing, or its loop; a key goes on to the next,
+      // Ctrl+C stops.
+      const each = seconds ?? meta.loop ?? (meta.fps ? (meta.still ?? 0) : 0) + 2;
+      const played = await play(piece, { seconds: each, light: values.light === true, mono: values.mono === true });
+      if (played.interrupted) {
+        process.exitCode = 130;
+        return;
+      }
+    }
+    return;
+  }
+
+  let out: string;
+  if (values.svg === undefined) out = render(doc, { ascii: values.ascii === true });
+  else {
+    // Each component as an SVG for a light page and one for a dark page, and a <picture> showing the one for the reader's
+    // theme where its fence was, its paths from the folder the markdown goes in.
+    const dir = resolve(values.svg);
+    const from = values.out === undefined ? process.cwd() : dirname(resolve(values.out));
+    const href = (name: string) => relative(from, join(dir, name)).split(sep).map(encodeURIComponent).join("/");
+    mkdirSync(dir, { recursive: true });
+    let at = 0;
+    out = "";
+    found.forEach((f, i) => {
+      const piece = fences[i];
+      const name = `${i + 1}-${piece.kind}`;
+      writeFileSync(join(dir, `${name}.svg`), toSvg(piece, { label: piece.says }));
+      writeFileSync(join(dir, `${name}.dark.svg`), toSvg(piece, { dark: true, label: piece.says }));
+      const picture = [
+        `<picture>`,
+        `  <source media="(prefers-color-scheme: dark)" srcset="${quoted(href(`${name}.dark.svg`))}">`,
+        `  <img alt="${quoted(piece.says)}" src="${quoted(href(`${name}.svg`))}">`,
+        `</picture>`,
+      ];
+      out += doc.slice(at, f.from) + picture.map((line) => f.indent + line).join("\n");
+      at = f.to;
+    });
+    out += doc.slice(at);
+  }
+  const drawn = fences.length ? `${fences.length} component${fences.length === 1 ? "" : "s"} drawn` : "no ```ascii fences, so as it was";
+  const svgs = values.svg !== undefined && fences.length ? `, as ${fences.length * 2} SVGs in ${clean(values.svg)}` : "";
+  if (values.out === undefined) {
+    process.stdout.write(out);
+    // What else happened, where it doesn't mix with the markdown.
+    if (!fences.length || svgs) process.stderr.write(`${file}: ${drawn}${svgs}\n`);
+    return;
+  }
+  mkdirSync(dirname(resolve(values.out)), { recursive: true });
+  writeFileSync(resolve(values.out), out);
+  process.stdout.write(`wrote ${clean(values.out)}: ${drawn}${svgs}\n`);
+}
+
 async function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -337,12 +442,28 @@ async function main() {
       watch: { type: "boolean" },
       dark: { type: "boolean" },
       out: { type: "string" },
+      ascii: { type: "boolean" },
+      svg: { type: "string" },
+      play: { type: "boolean" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
     },
   });
   if (values.version) return void process.stdout.write(`${version()}\n`);
   if (values.help || !positionals.length) return void process.stdout.write(HELP);
+  // A markdown file, its ascii fences drawn.
+  if (positionals[0] === "md") {
+    if ([values.fps, values.color, values.tagline, values.font, values.shadow, values.effect, values.dir, values.overwrite, values.registry, values.watch, values.dark].some((v) => v !== undefined))
+      throw new Usage(`md takes --out, --ascii, --svg and --play, and with --play --seconds, --light and --mono: npx ascii.rest md README.src.md --out README.md`);
+    if (values.play && [values.out, values.ascii, values.svg].some((v) => v !== undefined))
+      throw new Usage(`--play plays the components in the terminal: it takes --seconds, --light and --mono, not --out, --ascii or --svg`);
+    if (!values.play && [values.seconds, values.light, values.mono].some((v) => v !== undefined))
+      throw new Usage(`--seconds, --light and --mono are for --play: npx ascii.rest md README.src.md --play`);
+    if (values.ascii && values.svg !== undefined) throw new Usage(`--ascii draws the components as text and --svg as SVGs: one or the other`);
+    return md(positionals, values);
+  }
+  if ([values.ascii, values.svg, values.play].some((v) => v !== undefined))
+    throw new Usage(`--ascii, --svg and --play are for md: npx ascii.rest md README.src.md --svg .github/ascii --out README.md`);
   // A piece of your own, by its file.
   const own = positionals[0] === "play" || positionals[0] === "svg" || isFile(positionals[0]);
   if (!own && [values.watch, values.dark, values.out].some((v) => v !== undefined))
