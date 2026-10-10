@@ -5,7 +5,7 @@ import * as donut from "../pieces/donut.ts";
 import { svg as toSvg } from "../svg.ts";
 import type { Piece } from "../types.ts";
 import { EMPTY, NONE, Palette, Surface, piece, snapshot } from "./core.ts";
-import { drawSvg, fromSvg, parseSvg, partCells, type PartCells, type PartMaterial, type PartPaint } from "./vector.ts";
+import { drawSvg, fromSvg, paletteOf, parseSvg, partCells, type PartCells, type PartMaterial, type PartPaint } from "./vector.ts";
 
 // The checks scripts/check.ts makes of a frame: rows lines of cols characters, colours inside the palette.
 function contract(p: Piece, times = [0, 0.5, 1, 2.5]) {
@@ -772,6 +772,24 @@ test("drawSvg draws into a region of a grid you have, its colours the nearest of
   assert.notEqual(snapshot(badge, 0).text, snapshot(badge, 0.4).text);
   assert.throws(() => drawSvg(null as never, HEART, 0), /drawSvg takes the grid to draw into first/);
   assert.throws(() => drawSvg(plain, HEART, 0, { width: 3 } as never), /drawSvg has no option named "width"/);
+});
+
+test("paletteOf gives a piece drawing with drawSvg the drawing's own colours, exact on both pages", () => {
+  const two = `<svg viewBox="0 0 20 10"><rect width="10" height="10" fill="#000000"/><rect x="10" width="10" height="10" fill="#2563eb"/></svg>`;
+  const pal = paletteOf(two)!;
+  assert.deepEqual(pal, { light: ["#000000", "#2563eb"], dark: ["#e8ebef", "#2563eb"] });
+  const p = piece({ name: "pair", cols: 20, rows: 10, palette: pal }, (t, s) => drawSvg(s, two, t));
+  const own = fromSvg(two, { cols: 20, rows: 10, margin: 0 });
+  // The same colours, cell for cell, as fromSvg draws the same drawing, on paper and on a dark page.
+  for (const paper of [true, false]) {
+    const a = snapshot(p, 0, { paper }), b = snapshot(own, 0, { paper });
+    assert.equal(a.text, b.text);
+    assert.deepEqual([...a.color!].map((i) => p.meta.palette![i]), [...b.color!].map((i) => own.meta.palette![i]));
+  }
+  // A glinting part brings its lighter runs; a drawing in the page's own colour has none.
+  assert.equal(paletteOf(two, { "#2563eb": "glint" })!.light.length, 6);
+  assert.equal(paletteOf(`<svg viewBox="0 0 2 2"><rect width="2" height="2" fill="currentColor"/></svg>`), undefined);
+  assert.equal(paletteOf(two, { color: false }), undefined);
 });
 
 test("fromSvg pieces export to an SVG and leave empty cells EMPTY", () => {

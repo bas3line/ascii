@@ -2127,10 +2127,19 @@ function plan(svg: Svg, o: PlanOptions): Plan {
 
     // The samples at t: every paint in order, moved where it moves. What lies under the first moving paint is drawn
     // once and copied each frame.
+    // A motion's transform at t, worked out once a frame however many shapes it moves (a group's are all of them),
+    // so a motion function is called once a frame too.
+    const poses = new Map<Mover, { t: number; m: Mat }>();
+    const pose = (mv: Mover, t: number) => {
+      let c = poses.get(mv);
+      if (!c) poses.set(mv, (c = { t: NaN, m: IDENTITY }));
+      if (c.t !== t) (c.t = t), (c.m = motionAt(mv, t, rowUnits, colUnits));
+      return c.m;
+    };
     // A moving paint's points at t, into its own copy: its motions, outer last, and a ripple along its top.
     const place = (p: Paint, t: number) => {
       let m = IDENTITY;
-      for (const mv of p.movers) m = mul(motionAt(mv, t, rowUnits, colUnits), m);
+      for (const mv of p.movers) m = mul(pose(mv, t), m);
       const s = mul(toSamples, mul(m, fromSamples));
       const rp = p.ripple;
       // A ripple: the top of the shape rises and falls in two waves along it, the bottom held still.
@@ -2177,6 +2186,7 @@ function plan(svg: Svg, o: PlanOptions): Plan {
     // The outline style: each paint's edges walked one cell a step along the way they mostly run, each cell the
     // character for the line's slope there. Later paints draw over earlier ones.
     const sure = new Uint32Array(cols * rows);
+    const alongs = new Map<Float64Array, Float64Array>();
     let stamp = 0;
     const outlines = (t: number) => {
       stamp++;
@@ -2223,8 +2233,9 @@ function plan(svg: Svg, o: PlanOptions): Plan {
           const n = r.length >> 1;
           const shut = p.closed ? p.closed[k] : true;
           const segs = shut ? n : n - 1;
-          // How far along the line each point is, on the page, in columns.
-          const along = new Float64Array(n + 1);
+          // How far along the line each point is, on the page, in columns: a buffer for each line, kept between frames.
+          let along = alongs.get(r);
+          if (!along) alongs.set(r, (along = new Float64Array(n + 1)));
           for (let j = 0; j < segs; j++) {
             const q = (j + 1) % n;
             along[j + 1] = along[j] + Math.hypot((r[2 * q] - r[2 * j]) / sx, ((r[2 * q + 1] - r[2 * j + 1]) / sy) * aspect);
@@ -2718,8 +2729,25 @@ const keyOf = (o: Record<string, unknown>, s: Surface, region: Region) =>
   );
 
 /**
+ * A drawing's colours as fromSvg() draws them, as a palette for piece(): its own on paper (darkened where too pale to
+ * read), lifted on a dark page, and the glint's lighter runs when a part glints. Give a piece that draws the svg with
+ * drawSvg() this palette, made with the same options, and its colours are exact on both pages rather than the nearest
+ * of yours. Undefined for a drawing in the page's own colour (currentColor, or color: false).
+ *
+ *   const heart = parseSvg(markup);
+ *   export default piece({ name: "badge", cols: 40, rows: 12, palette: paletteOf(heart) }, (t, s) => drawSvg(s, heart, t));
+ */
+export function paletteOf(svg: string | Svg, options: DrawSvgOptions = {}): { light: string[]; dark: string[] } | undefined {
+  const { region: _, ...rest } = options;
+  const o = planOptions(rest as Record<string, unknown>, true, 2);
+  const p = plan(svgOf(svg), { ...o, cols: 48, rows: 24 });
+  return p.light.length ? { light: p.light, dark: p.dark } : undefined;
+}
+
+/**
  * Draws an SVG into a grid you already have, at t seconds: fitted inside `region` (all of it by default) and centred,
- * its colours found in the grid's palette (the nearest of them), or in the grid's one ink. Parts move and fill as in
+ * its colours found in the grid's palette (the nearest of them: paletteOf() makes one they are all in), or in the
+ * grid's one ink. Parts move and fill as in
  * fromSvg(). The svg is read and fitted once for each drawing and options, then reused, so call it every frame. A
  * motion function is told apart by which function it is, so make it once, outside the drawing: one written inside it
  * is a new function each frame, and the drawing is fitted again each time.
