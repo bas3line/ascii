@@ -678,6 +678,8 @@ test("character references past the last code point, titles with control charact
   assert.equal(parseSvg(`<svg viewBox="0 0 1 1"><g><title>a tooltip</title><rect width="1" height="1"/></g></svg>`).title, null);
   assert.equal(fromSvg(`<svg viewBox="0 0 1 1"><title>&#7;</title><rect width="1" height="1"/></svg>`).meta.name, "vector");
   assert.throws(() => fromSvg(SQUARE, [] as never), /fromSvg takes options as an object/);
+  assert.throws(() => fromSvg(SQUARE, { name: "two\nlines" }), /name takes one line/);
+  assert.throws(() => fromSvg(SQUARE, { note: "two\nlines" }), /note takes one line/);
   assert.throws(() => drawSvg(new Surface(4, 4), SQUARE, 0, [] as never), /drawSvg takes options as an object/);
   assert.throws(() => drawSvg(new Surface(4, 4), SQUARE, 0, null as never), /drawSvg takes options as an object/);
   assert.throws(() => drawSvg(new Surface(4, 4), SQUARE, 0, { region: { x: 0, y: 0, cols: 4 } as never }), /drawSvg's region takes \{ x, y, cols, rows \}/);

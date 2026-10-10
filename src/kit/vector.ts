@@ -2911,7 +2911,10 @@ export function fromSvg(svg: string | Svg, options: VectorOptions = {}): KitPiec
   const fps = whole(opts.fps, "fps", 0, 60);
   const still = opts.still === undefined ? undefined : typeof opts.still === "number" && Number.isFinite(opts.still) && opts.still >= 0 ? opts.still : fail(`still takes a number of seconds of 0 or more, not ${String(opts.still)}`);
   if (opts.ground !== undefined && !isHex(opts.ground)) fail(`ground takes a colour as #rrggbb, not ${JSON.stringify(opts.ground)}`);
-  if (opts.name !== undefined && (typeof opts.name !== "string" || !opts.name.trim())) fail(`name takes one line, such as "heart", not ${JSON.stringify(opts.name)}`);
+  // A name and a note are one line each: a player shows them as a label.
+  const control = /[\u0000-\u001f\u007f-\u009f]/;
+  if (opts.name !== undefined && (typeof opts.name !== "string" || !opts.name.trim() || control.test(opts.name))) fail(`name takes one line, such as "heart", not ${JSON.stringify(opts.name)}`);
+  if (opts.note !== undefined && (typeof opts.note !== "string" || control.test(opts.note))) fail(`note takes one line of 1 to 72 characters, not ${JSON.stringify(opts.note)}`);
 
   // What fills parts: materials bring their colours for each page, pieces their palettes; all join the drawing's.
   const sources = p.textured.map(({ part, material, moves }) => ({ part, moves, material: isPartMaterial(material) ? material : null, src: isPartMaterial(material) ? null : asPiece(material as Source) }));
