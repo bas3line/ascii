@@ -6,6 +6,11 @@ description: particles() makes snow, rain, sparks, fireworks and systems of your
 
 `particles()` makes a piece of particles: things born over time that move, age and die. Snow, rain, sparks, fireworks, fireflies. Eight come ready-made, and any other is a few fields of plain numbers: cells, seconds and degrees. Every frame depends only on `t`, so the piece loops exactly and plays as an SVG.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/kit-particles.mp4" poster="https://cdn.ascii.rest/videos/kit-particles.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>Snow by name, swapped for rain and then fireworks, then a system of your own, embers, built up a few fields at a time.</figcaption>
+</figure>
+
 Snow, by name:
 
 ```ts

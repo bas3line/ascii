@@ -7,8 +7,8 @@ description: Get an animation on your page in under two minutes, with one script
 Pick the way that fits your project and follow its steps. Each one ends with something moving on your screen.
 
 <figure class="video">
-  <video src="https://cdn.ascii.rest/videos/quickstart.mp4" poster="https://cdn.ascii.rest/videos/quickstart.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
-  <figcaption>One script tag on a plain page, then npm install and a banner in React.</figcaption>
+  <video src="https://cdn.ascii.rest/videos/quickstart-2.mp4" poster="https://cdn.ascii.rest/videos/quickstart-2.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>One script tag on a plain page, then npm install and both components in React, then a piece and a banner in the terminal.</figcaption>
 </figure>
 
 Two words you will see on every page. A **piece** is one animation, like `donut` or `night-coast`. A **banner** is any text you choose, drawn in big block letters.

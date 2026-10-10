@@ -6,6 +6,11 @@ description: Moving pictures by name in one line, a sea, a plasma, aurora, flame
 
 A **look** is a moving picture you ask for by name: `sea()`, `plasma()`, `aurora()`. Its options are words, `{ palette: "ocean", speed: "slow", scale: "large" }`, and there is nothing to work out. A look is a normal piece, so it plays wherever one does.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/kit-looks.mp4" poster="https://cdn.ascii.rest/videos/kit-looks.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>Looks asked for by name, their colours picked by palette name, a plasma masked to a word over stars, and a look of your own made with look().</figcaption>
+</figure>
+
 ```ts
 // sunset.ts
 import { above, below, sun, waves } from "ascii.rest/kit";

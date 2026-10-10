@@ -6,6 +6,11 @@ description: What ascii.rest is, the ways to use it, and what its 217 pieces are
 
 ascii.rest is a free, open-source library of animated ascii art: 217 small animations, called pieces, and block-letter banners for any text. You can play them on a web page, in a GitHub README or in a terminal.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/intro.mp4" poster="https://cdn.ascii.rest/videos/intro.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>What ascii.rest is: a library of 217 pieces, two React components, a piece of your own made with the kit, the banner maker and image to ascii in the browser, and one piece in React, on a plain page, in a README and in a terminal.</figcaption>
+</figure>
+
 To make your own, [the kit](/docs/kit/) turns one line into a piece, with no maths: `sea({ palette: "ocean" })`, `spinning(torus())`, `clockFace()`. When you want more, its parts go all the way down: a formula, a 3D scene, snow, an SVG, an effect on any piece.
 
 ascii.rest is MIT licensed. You can use and change it in any project, free or paid.

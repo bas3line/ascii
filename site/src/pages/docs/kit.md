@@ -6,6 +6,11 @@ description: Make your own animated ascii art with ascii.rest/kit. Start with re
 
 The kit is the part of ascii.rest for making your own ascii art. Start with a **recipe**: a whole thing in one line, asked for by name, with options in plain words and no maths.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/kit.mp4" poster="https://cdn.ascii.rest/videos/kit.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>A recipe in one line, steps chained onto it, a glass of water built from parts, and a field drawn from a formula, each playing as it is written.</figcaption>
+</figure>
+
 ```ts
 // sea.ts
 import { sea } from "ascii.rest/kit";

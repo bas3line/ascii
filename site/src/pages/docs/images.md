@@ -7,8 +7,8 @@ description: Turn a logo or a photo into animated ascii in your browser, then pu
 [image to ascii](/make/) turns any image into animated ascii, in the image's own colours. Drop in a logo or a photo, and you get three things back: a snippet for any web page, two SVGs for a GitHub README, and a piece file. A **piece** is one of the library's animations, and the file is in the library's own format, ready to add to it.
 
 <figure class="video">
-  <video src="https://cdn.ascii.rest/videos/make.mp4" poster="https://cdn.ascii.rest/videos/make.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
-  <figcaption>Image to ascii: a logo dropped in, a JPG's white background left out, a photo shaded, the one-colour view, and the README snippet copied.</figcaption>
+  <video src="https://cdn.ascii.rest/videos/make-2.mp4" poster="https://cdn.ascii.rest/videos/make-2.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>Image to ascii: a logo dropped in, a JPG's white background left out, a photo shaded, the one-colour view, both SVGs saved and the README snippet copied, and the piece file downloaded.</figcaption>
 </figure>
 
 It all happens in your browser. Your image is never uploaded.

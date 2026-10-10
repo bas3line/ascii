@@ -6,6 +6,11 @@ description: Noise, seeded randomness, easing, tweens, loops and a 3D camera, so
 
 These are the sums a piece would otherwise write for itself: noise for terrain and clouds, random numbers from a seed, easing, time that loops, and points in 3D. All of it is in `ascii.rest/kit`, and every function gives the same answer for the same input, in every browser and in Node.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/kit-math.mp4" poster="https://cdn.ascii.rest/videos/kit-math.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>A mountain range from one noise(), a sun moved with oscillate(), and the same tween() with six easings by name.</figcaption>
+</figure>
+
 A mountain range is one `noise()`, described rather than worked out:
 
 ```ts

@@ -12,6 +12,11 @@ A **motion** takes a thing and gives it back moving: `spinning(torus())`, `bounc
 - a shape from [materials](/docs/kit-materials/) such as `heart()`, `flame()` or `cup()`, drawn in its own material;
 - parts made with `shape()` and `emit()`.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/kit-motion.mp4" poster="https://cdn.ascii.rest/videos/kit-motion.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>The library's owl bouncing, then spinning, a kit heart pulsing, a cube floating as it spins, and eight pieces from motion.ts below, each moving by one word.</figcaption>
+</figure>
+
 ```ts
 // bounce.ts
 import { banner } from "ascii.rest/banner";

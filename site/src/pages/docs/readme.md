@@ -10,8 +10,8 @@ A GitHub README can't run scripts, so ascii.rest serves animated SVG images that
 - A **banner**: any text you like, in big block letters.
 
 <figure class="video">
-  <video src="https://cdn.ascii.rest/videos/banner-maker.mp4" poster="https://cdn.ascii.rest/videos/banner-maker.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
-  <figcaption>The banner maker: typing a name, picking colours and a logo, copying the snippet, and the banner on GitHub.</figcaption>
+  <video src="https://cdn.ascii.rest/videos/banner-maker-2.mp4" poster="https://cdn.ascii.rest/videos/banner-maker-2.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>The banner maker: typing a name and a tagline, picking colours and a logo, copying the centred snippet, and the banner on GitHub.</figcaption>
 </figure>
 
 Paste this into your `README.md`:

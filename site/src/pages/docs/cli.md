@@ -4,7 +4,12 @@ title: cli
 description: Every command and flag of npx ascii.rest, what each one prints, and the exit codes it returns.
 ---
 
-`npx ascii.rest` runs ascii.rest from your terminal. You can play a piece, list every piece, print text as a banner, or copy source files into your project. The [terminal](/docs/terminal/) page has a video of it.
+`npx ascii.rest` runs ascii.rest from your terminal. You can play a piece, list every piece, print text as a banner, or copy source files into your project.
+
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/cli.mp4" poster="https://cdn.ascii.rest/videos/cli.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>npm install, then a piece of your own in sea.ts played with play --watch and played again on each save, written as an SVG for a README, and the kit copied in with add.</figcaption>
+</figure>
 
 A **piece** is one animation. Play the one called `donut`:
 

@@ -6,6 +6,11 @@ description: fromImage() turns any image, a logo or a photo, into an ascii piece
 
 `fromImage()` turns an image into a piece, in code. It draws it the way [ascii.rest/make](/make/) does: a logo's edges become the characters whose shape matches them, and a photo is shaded. It keeps the image's own colours, lifted on a dark page so they still read, and can glint like the library's logos.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/kit-image.mp4" poster="https://cdn.ascii.rest/videos/kit-image.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>A PNG drawn as ascii with fromImage(), in its own colours with a glint, then pixel art typed as rows with fromPixels().</figcaption>
+</figure>
+
 ```ts
 // logo.ts
 import { fromImage } from "ascii.rest/kit";

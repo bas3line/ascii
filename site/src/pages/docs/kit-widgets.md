@@ -6,6 +6,11 @@ description: Whole things in one call, a clock face, a progress bar, a spinner, 
 
 A **widget** is a whole thing in one call, with defaults that look right: `clockFace()`, `progressBar({ label: "downloading" })`, `barChart({ mon: 3, tue: 5 })`. Each is a normal piece, in GitHub's colours for a light page and a dark one, so it plays wherever a piece does and sits in a layout with others.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/kit-widgets.mp4" poster="https://cdn.ascii.rest/videos/kit-widgets.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>A gauge, a sparkline, a bar chart, a progress bar and a typewriter, each one call, then a dashboard of them put together with row() and column().</figcaption>
+</figure>
+
 ```ts
 // bars.ts
 import { barChart } from "ascii.rest/kit";

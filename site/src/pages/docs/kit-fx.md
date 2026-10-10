@@ -6,6 +6,11 @@ description: Effects that take any piece, banner or text and return a new piece,
 
 An **effect** takes a piece and returns a new one. It works on anything: a library piece like `rust`, a `banner()`, a piece you made with the kit, or plain text. The new piece plays everywhere, keeps its source's colours on both pages, and loops when they both do.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/kit-fx.mp4" poster="https://cdn.ascii.rest/videos/kit-fx.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>rust with a glint, then a glitch, a spinning torus dissolving, a banner with two effects chained, and all 12 effects on one banner.</figcaption>
+</figure>
+
 ```ts
 // glint-rust.ts
 import { glint } from "ascii.rest/kit";

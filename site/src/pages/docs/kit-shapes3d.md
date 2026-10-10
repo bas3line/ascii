@@ -6,6 +6,11 @@ description: scene() draws lit, spinning 3D shapes as ascii, from a donut, a pla
 
 `scene()` draws 3D shapes the way `donut.c` draws its donut: lit from one side, each cell shaded by how much light it catches, nearer surfaces hiding further ones. You name the shapes and how they move. The kit does the maths, and fits the camera so nothing leaves the frame.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/kit-shapes3d.mp4" poster="https://cdn.ascii.rest/videos/kit-shapes3d.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>The donut in one call, then given a colour, then swapped for a cube.</figcaption>
+</figure>
+
 The donut, in one line:
 
 ```ts

@@ -6,6 +6,11 @@ description: Pieces made of other pieces, side by side, in a grid with borders, 
 
 The layout functions make a piece out of other pieces. Each part keeps its own player, options and colours, and the whole is one piece that plays everywhere. A part can be a piece, a block of text, or a grid.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/kit-compose.mp4" poster="https://cdn.ascii.rest/videos/kit-compose.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>A banner over a scene with layer(), three logos in a row(), a grid() of charts in titled boxes, and the logos one after another with sequence().</figcaption>
+</figure>
+
 Three logos in a row:
 
 ```ts

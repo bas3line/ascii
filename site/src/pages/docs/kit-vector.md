@@ -6,6 +6,11 @@ description: fromSvg() turns any SVG, from Figma, Illustrator or an icon set, in
 
 `fromSvg()` turns SVG markup into a piece. Draw anything in Figma, Illustrator or Inkscape, or take an icon, export the SVG and pass the markup. It is drawn in its own colours, each cell the character whose shape best matches its edge. Then name its parts to set them moving.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/kit-vector.mp4" poster="https://cdn.ascii.rest/videos/kit-vector.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>A lava lamp drawn as an SVG with four parts by id, each part brought to life by name, playing in a terminal with play --watch as the file is saved.</figcaption>
+</figure>
+
 ```ts
 // heart.ts
 import { fromSvg } from "ascii.rest/kit";

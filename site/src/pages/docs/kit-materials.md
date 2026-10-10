@@ -6,6 +6,11 @@ description: Build a picture by saying what is in it, a glass with water inside,
 
 The materials let you build a picture by saying what is in it. A **shape** says where something is: a cup, a flame, a house. A **material** says what it is made of: glass, water, fire. An **emission** is what it gives off: bubbles, steam, smoke. `picture()` lays them over each other and makes a piece.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/kit-materials.mp4" poster="https://cdn.ascii.rest/videos/kit-materials.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>A glass built part by part, with water inside it and bubbles rising, then a candle the same way: wax, a wick, a flame and smoke.</figcaption>
+</figure>
+
 A glass of water, half full, with bubbles rising:
 
 ```ts

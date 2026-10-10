@@ -6,6 +6,11 @@ description: Draw on a piece's grid with text, lines, boxes, circles, polygons, 
 
 The drawing functions draw on the grid a [piece()](/docs/kit/#piece-draw-your-own) hands you. Each takes the grid first, then where, then an options object. Placing needs no geometry: a clock's hands point a fraction of the way round, a box hands back its inside to draw in, and a plot scales itself. What changes with time is your own arithmetic on `t`, as here, where `Math.floor(t) % 3` is which second of three it is.
 
+<figure class="video">
+  <video src="https://cdn.ascii.rest/videos/kit-draw.mp4" poster="https://cdn.ascii.rest/videos/kit-draw.jpg" autoplay muted loop playsinline controls width="1280" height="720"></video>
+  <figcaption>A box with rect(), text centred in it, a line that joins its sides, and a wave plotted in braille, drawn one call at a time.</figcaption>
+</figure>
+
 ```ts
 // status.ts
 import { piece, rect, text } from "ascii.rest/kit";
