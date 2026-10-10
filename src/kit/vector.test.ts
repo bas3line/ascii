@@ -7,6 +7,10 @@ import type { Piece } from "../types.ts";
 import { EMPTY, NONE, Palette, Surface, piece, snapshot } from "./core.ts";
 import { drawSvg, fromSvg, parseSvg, partCells, svgPalette, type PartCells, type PartMaterial, type PartPaint } from "./vector.ts";
 
+// Wall-clock budgets, as on an idle machine when KIT_PERF=1 (npm run test:perf); ten times as long otherwise, so a
+// busy CI runner running the files side by side fails only on a slowdown of a different order.
+const slack = process.env.KIT_PERF ? 1 : 10;
+
 // The checks scripts/check.ts makes of a frame: rows lines of cols characters, colours inside the palette.
 function contract(p: Piece, times = [0, 0.5, 1, 2.5]) {
   const { meta } = p;
@@ -650,12 +654,45 @@ test("markup nested however deep, uses of their own ancestors and uses that mult
   // A <use> of a group it is inside is not followed, as SVG says.
   assert.equal(parseSvg(`<svg viewBox="0 0 10 10"><g id="a"><rect width="1" height="1"/><use href="#a"/><use href="#a"/></g></svg>`).shapes.length, 1);
   assert.equal(parseSvg(`<svg viewBox="0 0 10 10"><symbol id="s"><rect width="1" height="1"/><use href="#s"/></symbol><use href="#s"/></svg>`).shapes.length, 1);
-  // Uses of uses ten wide and nine deep, a billion rects: refused at once, saying why.
-  let defs = `<g id="a0"><rect width="1" height="1"/></g>`;
-  for (let i = 1; i < 10; i++) defs += `<g id="a${i}">${`<use href="#a${i - 1}"/>`.repeat(10)}</g>`;
+});
+
+// A chain of `levels` groups (or symbols), each using the one before `wide` times, the first holding `leaf`.
+const laughs = (levels: number, wide: number, leaf: string, tag = "g") => {
+  let defs = `<${tag} id="a0">${leaf}</${tag}>`;
+  for (let i = 1; i < levels; i++) defs += `<${tag} id="a${i}">${`<use href="#a${i - 1}"/>`.repeat(wide)}</${tag}>`;
+  return `<svg viewBox="0 0 10 10"><defs>${defs}</defs><use href="#a${levels - 1}"/></svg>`;
+};
+
+test("uses that multiply out (the svg form of billion laughs) are refused fast, whatever they draw", () => {
+  // Twelve levels of ten uses each, four rects at the bottom, 4 * 10^11 rects: refused once 20000 shapes are drawn, in
+  // well under 100 ms.
+  const four = `<rect width="1" height="1"/>`.repeat(4);
+  const cases: [string, RegExp][] = [
+    [laughs(12, 10, four), /^Error: ascii\.rest: this SVG expands to more than 20000 shapes: simplify it or flatten its <use> elements$/],
+    [laughs(12, 10, four, "symbol"), /this SVG expands to more than 20000 shapes/],
+    // drawing nothing, so only the walk itself is counted
+    [laughs(12, 10, `<g/>`), /^Error: ascii\.rest: this SVG expands to more than 50000 elements: simplify it or flatten its <use> elements$/],
+    [laughs(30, 2, `<g/>`), /this SVG expands to more than 50000 elements/],
+  ];
+  for (const [markup, error] of cases) {
+    const t0 = performance.now();
+    assert.throws(() => parseSvg(markup), error);
+    const ms = performance.now() - t0;
+    assert.ok(ms < 100 * slack, `took ${ms} ms`);
+  }
+  // A curve that flattens to more segments than a drawing may have, used again and again: refused on segments.
+  const curve = `<path fill="#000" d="M0 0${" C9 0 9 9 0 9 C-9 9 -9 0 0 0".repeat(40)}"/>`;
   const t0 = performance.now();
-  assert.throws(() => parseSvg(`<svg viewBox="0 0 10 10"><defs>${defs}</defs><use href="#a9"/></svg>`), /up to 200000 elements, each <use> counting what it draws again/);
-  assert.ok(performance.now() - t0 < 2000);
+  assert.throws(() => parseSvg(laughs(4, 10, curve)), /this SVG expands to more than 200000 line segments/);
+  assert.ok(performance.now() - t0 < 300 * slack, `segments took ${performance.now() - t0} ms`);
+  // What an editor exports, a few hundred uses, is read as it was.
+  assert.equal(parseSvg(laughs(3, 10, `<rect width="1" height="1"/>`)).shapes.length, 100);
+});
+
+test("markup longer than 5 million characters is refused before it is read", () => {
+  const t0 = performance.now();
+  assert.throws(() => parseSvg(`<svg viewBox="0 0 1 1"><!--${" ".repeat(5_000_000)}--></svg>`), /fromSvg reads markup up to 5 million characters long, and this is 5000036: simplify the svg/);
+  assert.ok(performance.now() - t0 < 50 * slack);
 });
 
 test("non-finite coordinates, paint servers that are not there, and text are left out, and say so", () => {
@@ -726,14 +763,14 @@ test("rows crossed by many edges fill by their rule", () => {
   const p = fromSvg(`<svg viewBox="0 0 10 10"><polygon fill="#000" points="${pts}"/></svg>`, { width: 80 });
   const t0 = performance.now();
   snapshot(p);
-  assert.ok(performance.now() - t0 < 2000, `${performance.now() - t0} ms`);
+  assert.ok(performance.now() - t0 < 2000 * slack, `${performance.now() - t0} ms`);
 });
 
 test("thousands of colours are merged quickly into what a palette holds", () => {
   const rects = Array.from({ length: 3000 }, (_, i) => `<rect x="${i % 60}" y="${Math.floor(i / 60)}" width="1" height="1" fill="#${((i * 2654435761) >>> 8).toString(16).padStart(6, "0").slice(-6)}"/>`).join("");
   const t0 = performance.now();
   const p = fromSvg(`<svg viewBox="0 0 60 50">${rects}</svg>`, { width: 64 });
-  assert.ok(performance.now() - t0 < 2000, `${performance.now() - t0} ms`);
+  assert.ok(performance.now() - t0 < 2000 * slack, `${performance.now() - t0} ms`);
   assert.ok(p.meta.palette!.length <= 64);
   contract(p, [0]);
 });

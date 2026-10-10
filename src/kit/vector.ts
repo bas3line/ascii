@@ -711,9 +711,14 @@ const SHAPES = new Set(["path", "rect", "circle", "ellipse", "line", "polyline",
 const GROUPS = new Set(["g", "a", "switch", "svg"]);
 // What a browser would draw that fromSvg leaves out, named in Svg.skipped and in the error for a drawing of nothing else.
 const LEFT_OUT = new Set(["text", "image", "foreignobject"]);
-// The most elements a drawing is walked through, each <use> counting what it draws again: a guard against markup whose
-// uses multiply out to millions.
-const MOST = 200000;
+// Budgets for one drawing, each <use> counting what it draws again: the elements walked through, the shapes drawn and
+// the line segments their outlines flatten to. A guard against markup whose uses multiply out to millions (a chain of
+// symbols each using the one before ten times, the SVG form of "billion laughs"), which would otherwise hang the page.
+const MOST = 50000;
+const MOST_SHAPES = 20000;
+const MOST_SEGMENTS = 200000;
+// The longest markup read, in characters.
+const MOST_MARKUP = 5_000_000;
 const DEEP = 256;
 
 /**
@@ -722,6 +727,7 @@ const DEEP = 256;
  */
 export function parseSvg(markup: string): Svg {
   if (typeof markup !== "string") fail(`fromSvg takes SVG markup as a string, such as "<svg viewBox=\\"0 0 24 24\\">...</svg>", not ${markup === null ? "null" : typeof markup}`);
+  if (markup.length > MOST_MARKUP) fail(`fromSvg reads markup up to ${MOST_MARKUP / 1e6} million characters long, and this is ${markup.length}: simplify the svg, or save it smaller in your editor`);
   const doc = xml(markup);
   // Elements in document order, walked with a stack of our own rather than by recursion, so markup nested however deep
   // can't overflow the call stack.
@@ -762,7 +768,8 @@ export function parseSvg(markup: string): Svg {
   const skipped = new Set<string>();
   // The elements being walked, so a <use> of one of its own ancestors, which SVG leaves undrawn, is not followed.
   const open = new Set<XNode>();
-  let count = 0;
+  let count = 0, segments = 0;
+  const tooMuch = (what: string, most: number): never => fail(`this SVG expands to more than ${most} ${what}: simplify it or flatten its <use> elements`);
 
   // An element's own properties: attributes, then the <style>'s rules by how specific they are, then style="". A fill
   // or stroke a browser can't read is dropped where it is written, so the one under it (or the group's) is taken.
@@ -817,7 +824,7 @@ export function parseSvg(markup: string): Svg {
   // Groups deeper than DEEP are left out, which no drawing an editor exports comes near, so the walk can't overflow.
   const walk = (n: XNode, ctm: Mat, parent: Inherited, chain: SvgNode[], depth: number, vbw: number, vbh: number) => {
     if (depth > DEEP) return;
-    if (count >= MOST) fail(`fromSvg can read up to ${MOST} elements, each <use> counting what it draws again, and this svg has more: simplify it, or flatten its <use> elements in your editor`);
+    if (count >= MOST) tooMuch("elements", MOST);
     open.add(n);
     try {
       visit(n, ctm, parent, chain, depth, vbw, vbh);
@@ -884,7 +891,10 @@ export function parseSvg(markup: string): Svg {
     const all = moved(ops, m);
     // A coordinate too large for a number (1e400) leaves the shape out, as a browser does.
     if (!all.every(Number.isFinite)) return;
+    if (shapes.length >= MOST_SHAPES) tooMuch("shapes", MOST_SHAPES);
     const subs = flatten(all, IDENTITY, Math.max(vw, vh) / 4000);
+    for (const sub of subs) segments += sub.pts.length >> 1;
+    if (segments > MOST_SEGMENTS) tooMuch("line segments", MOST_SEGMENTS);
     const b = bounds(subs, stroke ? sw / 2 : 0);
     if (!b || !Number.isFinite(b[2] - b[0]) || !Number.isFinite(b[3] - b[1])) return;
     shapes.push({

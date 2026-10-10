@@ -979,7 +979,30 @@ export function fromPixels(rgba: PixelArray, width: number, height: number, o?: 
 // --- reading an image ---------------------------------------------------------------------
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const isMarkup = (text: string) => /^\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*(<!DOCTYPE[^>]*>\s*)?<svg[\s>]/i.test(text);
+
+// True for SVG markup: an <svg> element after any XML declaration, comments and doctype. Only the first 4096 characters
+// are looked at, and the prologue is stepped over with indexOf rather than a regular expression, so a long string of
+// "<!--" can't make it take seconds.
+function isMarkup(text: string): boolean {
+  const head = text.slice(0, 4096);
+  let at = 0;
+  const space = () => {
+    while (at < head.length && /\s/.test(head[at])) at++;
+  };
+  const skip = (open: string, close: string): boolean => {
+    if (head.slice(at, at + open.length).toLowerCase() !== open) return false;
+    const end = head.indexOf(close, at + open.length);
+    if (end < 0) return false;
+    at = end + close.length;
+    return true;
+  };
+  space();
+  if (skip("<?xml", ">")) space();
+  while (skip("<!--", "-->")) space();
+  if (skip("<!doctype", ">")) space();
+  while (skip("<!--", "-->")) space();
+  return head.slice(at, at + 4).toLowerCase() === "<svg" && /[\s>]/.test(head[at + 4] ?? "");
+}
 
 /**
  * Any image, as a piece. In a browser: a URL (fetched, so another site's must allow it with CORS), a data: URL, SVG
@@ -1232,11 +1255,15 @@ const PNG = [137, 80, 78, 71, 13, 10, 26, 10];
 const ADAM7 = [[0, 0, 8, 8], [4, 0, 8, 8], [0, 4, 4, 8], [2, 0, 4, 4], [0, 2, 2, 4], [1, 0, 2, 2], [0, 1, 1, 2]];
 // Channels a pixel for each PNG colour type: grey, -, RGB, palette, grey and alpha, -, RGBA.
 const CHANNELS = [1, 0, 3, 1, 2, 0, 4];
+// The largest PNG read: pixels a side, and pixels in all, about /make/'s 40 MB raster.
+const MOST_SIDE = 16384;
+const MOST_PIXELS = 40_000_000;
 
 /**
  * A PNG file's bytes as pixels, in Node or anywhere: what fromImage() reads a PNG with where there is no browser to
  * decode it, for a script that wants drawing() rather than a piece. Every kind of PNG: grey, colour or a palette, with
- * or without alpha (tRNS included), 1 to 16 bits a channel, interlaced or not, up to 8192 by 8192 pixels or as many.
+ * or without alpha (tRNS included), 1 to 16 bits a channel, interlaced or not, up to 16384 pixels a side and 40 million
+ * in all.
  * 16 bits are cut to 8; a colour profile or gamma, if it has one, is not applied, as a browser would. Rejects, saying
  * why, for bytes that aren't a PNG it can read.
  *
@@ -1271,8 +1298,10 @@ export async function readPng(bytes: Uint8Array | ArrayBuffer): Promise<PixelDat
   if (interlace > 1) bad(`interlace method ${interlace} is not a PNG one`);
   if (type === 3 && !plte) bad("it has a palette's indices but no palette");
   if (!idat.length) bad("it has no image data");
-  // A few bytes can claim a huge image: past 8192 by 8192 (256 MB of pixels), it is turned away before it is inflated.
-  if (width * height > 1 << 26) bad(`at ${width} by ${height} pixels it is too large to read here, past 8192 by 8192: make it smaller first`);
+  // A few bytes can claim a huge image: past 16384 pixels a side, or 40 million in all (160 MB of pixels), it is turned
+  // away before anything is inflated or made.
+  if (width > MOST_SIDE || height > MOST_SIDE || width * height > MOST_PIXELS)
+    bad(`it is too large, ${width} by ${height} pixels: it can be up to ${MOST_SIDE} pixels a side and ${MOST_PIXELS / 1e6} million in all, so make it smaller first`);
 
   const all = new Uint8Array(idat.reduce((n, c) => n + c.length, 0));
   idat.reduce((at, c) => (all.set(c, at), at + c.length), 0);
@@ -1341,26 +1370,29 @@ export async function readPng(bytes: Uint8Array | ArrayBuffer): Promise<PixelDat
 }
 
 // zlib's inflate, with the DecompressionStream that Node and browsers both have. Read to its end, so its checksum is
-// checked, unless it runs well past the `need` bytes the rows take: then the rest, however much, is never read.
+// checked. Its output can be no more than the `need` bytes the rows take: a few KB that inflate past that (a
+// decompression bomb) are turned away as soon as they do, before the rest, however much, is read.
 async function inflate(data: Uint8Array, need: number): Promise<Uint8Array> {
   if (typeof DecompressionStream !== "function") fail("reading a PNG needs DecompressionStream, which this runtime lacks: decode it yourself and pass its pixels to fromPixels()");
   const parts: Uint8Array[] = [];
-  let got = 0;
+  let got = 0, over = false;
   try {
     const reader = new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("deflate")).getReader();
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      parts.push(value);
       got += value.length;
-      if (got > need + 65536) {
+      if (got > need) {
+        over = true;
         await reader.cancel().catch(() => {});
         break;
       }
+      parts.push(value);
     }
   } catch {
     return fail("could not read that PNG: its image data is damaged");
   }
+  if (over) fail(`could not read that PNG: it is too large, its image data inflating past the ${need} bytes its size takes`);
   const out = new Uint8Array(got);
   parts.reduce((at, p) => (out.set(p, at), at + p.length), 0);
   return out;

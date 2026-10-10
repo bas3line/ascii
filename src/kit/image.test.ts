@@ -13,6 +13,10 @@ import { mulberry32, piece, rgb, snapshot } from "./core.ts";
 import { CH, CW, FILL, GLYPHS, GX, GY } from "./glyphs.ts";
 import { drawImage, drawing, fromDrawing, fromImage, fromPixels, imagePalette, readPng, type Drawing, type ImagePiece } from "./image.ts";
 
+// Wall-clock budgets, as on an idle machine when KIT_PERF=1 (npm run test:perf); ten times as long otherwise, so a
+// busy CI runner running the files side by side fails only on a slowdown of a different order.
+const slack = process.env.KIT_PERF ? 1 : 10;
+
 type RGBA = [number, number, number, number];
 
 // An image w by h from a colour for each pixel.
@@ -554,7 +558,7 @@ test("a frame is quick: under 4 ms at 64 by 24, under 10 ms at 200 by 100", () =
     const t0 = performance.now();
     for (let i = 0; i < 100; i++) frame(i / 30, { color });
     const ms = (performance.now() - t0) / 100;
-    assert.ok(ms < (width === 64 ? 4 : 10), `${p.meta.cols}x${p.meta.rows}: ${ms.toFixed(2)} ms a frame`);
+    assert.ok(ms < (width === 64 ? 4 : 10) * slack, `${p.meta.cols}x${p.meta.rows}: ${ms.toFixed(2)} ms a frame`);
   }
 });
 
@@ -835,19 +839,54 @@ test("readPng says what is wrong with bytes it can't read", async () => {
   const two = { width: 2, height: 2, depth: 8, type: 0, at: () => [5] };
   await assert.rejects(readPng(short(two, Uint8Array.from([0, 5, 5]))), /its image data is cut short/);
   await assert.rejects(readPng(short(two, Uint8Array.from([7, 5, 5, 0, 5, 5]))), /a row has filter 7, which PNG has none of/);
-  // a few bytes that claim a huge image are turned away before anything is inflated
+});
+
+// A PNG of a header claiming `width` by `height` and image data that is `idat`, deflated.
+const claiming = (width: number, height: number, idat: Uint8Array) => {
   const ihdr = new Uint8Array(13);
-  new DataView(ihdr.buffer).setUint32(0, 8193);
-  new DataView(ihdr.buffer).setUint32(4, 8192);
+  new DataView(ihdr.buffer).setUint32(0, width);
+  new DataView(ihdr.buffer).setUint32(4, height);
   ihdr.set([8, 6, 0, 0, 0], 8);
-  const huge = concat([Uint8Array.from(SIGNATURE), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(new Uint8Array(64))), chunk("IEND", new Uint8Array(0))]);
-  await assert.rejects(readPng(huge), /at 8193 by 8192 pixels it is too large to read here, past 8192 by 8192: make it smaller first/);
-  // image data that inflates to far more than its rows: the rows are read, and the rest never is
-  const rows = Uint8Array.from([0, 5, 6, 0, 7, 8]);
-  const long = new Uint8Array(32 << 20);
-  long.set(rows);
-  const read = await readPng(short(two, long));
-  assert.deepEqual([...read.data].filter((_, i) => i % 4 === 0), [5, 6, 7, 8]);
+  return concat([Uint8Array.from(SIGNATURE), chunk("IHDR", ihdr), chunk("IDAT", deflateSync(idat)), chunk("IEND", new Uint8Array(0))]);
+};
+
+test("readPng turns away a header claiming a huge image before it inflates or makes anything, and fast", async () => {
+  for (const [w, h] of [[100000, 100000], [16385, 1], [1, 16385], [8000, 5001]]) {
+    const t0 = performance.now();
+    await assert.rejects(readPng(claiming(w, h, new Uint8Array(64))), new RegExp(`could not read that PNG: it is too large, ${w} by ${h} pixels: it can be up to 16384 pixels a side and 40 million in all`));
+    assert.ok(performance.now() - t0 < 50 * slack, `${w} by ${h} took ${performance.now() - t0} ms`);
+  }
+  // the largest it takes is still read: 16384 by 2, a side at the limit
+  const wide = await readPng(claiming(16384, 2, new Uint8Array(2 * (1 + 16384 * 4))));
+  assert.deepEqual([wide.width, wide.height], [16384, 2]);
+});
+
+test("fromImage knows SVG markup after a prologue, and a megabyte of \"<!--\" is not markup and takes no time to tell", async () => {
+  // markup is drawn on a page, so in Node it is turned away as markup: proof it was read as SVG
+  for (const markup of ['<svg viewBox="0 0 4 4"/>', '  <?xml version="1.0"?>\n<!-- a -->\n<!-- b --><!DOCTYPE svg PUBLIC "x">\n<SVG>', "<!DOCTYPE svg><!-- after --><svg\n>"])
+    await assert.rejects(fromImage(markup), /fromImage\(\) draws SVG on a page, so not in Node/, markup);
+  for (const text of ["<svgx>", "<!-- <svg> -->", "<?xml?><p><svg>", "<!-- open <svg>"]) await assert.rejects(fromImage(text), (e: Error) => !/draws SVG on a page/.test(e.message), text);
+  // "<!---->" forty times then not <svg> took the old regular expression, nesting a repeat round comments, about four
+  // times as long for every two more comments: 67 ms for 24, hours for 40.
+  for (const evil of ["<!---->".repeat(40) + "x", "<!---->".repeat(150_000) + "x", "<!--".repeat(250_000), "<!--" + " ".repeat(1_000_000), "<?xml" + "<!--".repeat(250_000)]) {
+    const t0 = performance.now();
+    await assert.rejects(fromImage(evil));
+    const ms = performance.now() - t0;
+    assert.ok(ms < 50 * slack, `${evil.slice(0, 12)}... took ${ms} ms`);
+  }
+});
+
+test("readPng turns away a decompression bomb: image data inflating past what its size takes fails as soon as it does", async () => {
+  // a 2 by 2 image takes 2 rows of a filter byte and 8 bytes: 18 bytes. 64 MB of zeros deflates to about 64 KB.
+  const bomb = claiming(2, 2, new Uint8Array(64 << 20));
+  assert.ok(bomb.length < 100_000, `the bomb is ${bomb.length} bytes`);
+  const t0 = performance.now();
+  await assert.rejects(readPng(bomb), /could not read that PNG: it is too large, its image data inflating past the 18 bytes its size takes/);
+  const ms = performance.now() - t0;
+  assert.ok(ms < 200 * slack, `the bomb took ${ms} ms`);
+  // exactly what the rows take is read
+  const fits = await readPng(claiming(2, 2, Uint8Array.from([0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 9, 10, 11, 12, 13, 14, 15, 16])));
+  assert.deepEqual([...fits.data], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
 });
 
 test("fromImage in Node reads a PNG by its path, a file: URL, a Blob or a data: URL, as fromPixels draws it", async () => {
