@@ -113,6 +113,37 @@ test("every kit piece chains: recipes, scenes, particles, layouts, effects, imag
   assert.equal(kit.snapshot(plain, 1).text, kit.snapshot(donut, 1).text);
 });
 
+test("npx ascii.rest play and svg take a file of your own: its default export", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { mkdtempSync, writeFileSync, readFileSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const cli = fileURLToPath(new URL("../cli.ts", import.meta.url));
+  const index = fileURLToPath(new URL("./index.ts", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "kit-cli-"));
+  try {
+    const file = join(dir, "sea.ts");
+    writeFileSync(file, `import { sea } from ${JSON.stringify(index)};\nexport default sea({ cols: 30, rows: 8 });\n`);
+    const run = (...args: string[]) => execFileSync(process.execPath, [cli, ...args], { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    // piped, play prints its still; a path alone plays as play does
+    const still = run("play", "sea.ts");
+    assert.equal(still.replace(/\n$/, "").split("\n").length, 8, "its 8 rows");
+    assert.equal(run("./sea.ts"), still);
+    // svg writes the SVG of it, for a dark page with --dark
+    assert.match(run("svg", "sea.ts", "--out", "sea.svg"), /^wrote sea\.svg: sea, [\d.]+ KB\n$/);
+    assert.match(readFileSync(join(dir, "sea.svg"), "utf8"), /^<svg [^>]*aria-label="sea, in ascii, from ascii\.rest"/);
+    assert.ok(run("svg", "sea.ts", "--dark").startsWith("<svg"));
+    // what it can't play it says so
+    writeFileSync(join(dir, "none.ts"), "export const x = 1;\n");
+    assert.throws(() => run("play", "none.ts"), (e: { stderr: string }) => /none\.ts has no piece: export one as its default/.test(e.stderr));
+    assert.throws(() => run("play", "missing.ts"), (e: { stderr: string }) => /there is no file missing\.ts/.test(e.stderr));
+    assert.throws(() => run("svg", "sea.ts", "--watch"), (e: { stderr: string }) => /--watch, --mono and --light are for play/.test(e.stderr));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("a piece made through the index plays: the three-line field", () => {
   const sea = kit.field({ name: "sea", cols: 48, rows: 10, ramp: "blocks", colors: ["#0b3d91", "#7fdbff"], period: 2 }, (x, y, t, at) =>
     0.5 + 0.5 * Math.sin(x * 6 + y * 2 + kit.TAU * at.phase),

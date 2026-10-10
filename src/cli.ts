@@ -1,25 +1,31 @@
 #!/usr/bin/env node
 /*
  * npx ascii.rest <piece>: plays a piece in the terminal until a key is pressed.
+ * npx ascii.rest play <file.ts>: plays a piece of your own, its file's default export, again on each save with --watch.
+ * npx ascii.rest svg <file.ts>: a piece of your own as an animated SVG, for a README.
  * npx ascii.rest list: every piece's name, by category.
  * npx ascii.rest banner <text>: the text in block letters, with a passing glint.
  * npx ascii.rest add <name...>: a piece's TypeScript, copied into your project.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { drawable, fonts, shadows, type Effect, type FontName, type ShadowName } from "./banner.ts";
 import { isPiece, load, names, type PieceName } from "./library.ts";
+import { svg as toSvg } from "./svg.ts";
 import { banner, play, still } from "./terminal.ts";
-import type { Category } from "./types.ts";
+import type { Category, Piece } from "./types.ts";
 
 const or = (words: string[]) => (words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : words[0]);
 
 const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
 
   npx ascii.rest <piece>          plays a piece until you press a key
+  npx ascii.rest play <file.ts>   plays a piece of your own: the file's default export
+  npx ascii.rest svg <file.ts>    a piece of your own as an animated SVG, for a README
   npx ascii.rest list             every piece, by category
   npx ascii.rest banner <text>    your text in block letters, with a glint
   npx ascii.rest add <name...>    copies pieces' TypeScript into your project
@@ -28,6 +34,11 @@ const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
   --light           for a light terminal: the light colours, and shading flipped
   --fps <n>         frames a second, instead of the piece's own
   --seconds <n>     stops after n seconds; for a banner, how long it moves
+
+  play and svg:
+  --watch           plays it again each time you save the file
+  --dark            the SVG for a dark page, as GitHub's dark theme
+  --out <path>      where the SVG goes: printed by default
 
   a banner:
   --color <hex>     its letters in this colour, like ff6a00, or two or more
@@ -48,6 +59,8 @@ const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
 
   npx ascii.rest rust
   npx ascii.rest night-coast --seconds 10
+  npx ascii.rest play sea.ts --watch
+  npx ascii.rest svg sea.ts --dark --out sea-dark.svg
   npx ascii.rest banner 'my cli' --color ff6a00,f778ba --tagline 'v1.0, fast'
   npx ascii.rest add ascii donut banner
 
@@ -61,6 +74,8 @@ interface RegistryItem {
   files?: { path: string; content?: string; target?: string }[];
   registryDependencies?: string[];
   dependencies?: string[];
+  /** A line on how to use what was added, which add prints. */
+  docs?: string;
 }
 
 // Each name's registry item, and every item it depends on, once each, dependencies first.
@@ -142,7 +157,9 @@ async function add(wanted: string[], { dir, overwrite, registry }: { dir?: strin
   let s = wrote.length ? `wrote\n${wrote.map((p) => `  ${p}`).join("\n")}\n` : "";
   if (kept.length) s += `kept, already there (--overwrite replaces them)\n${kept.map((p) => `  ${p}`).join("\n")}\n`;
   if (deps.size) s += `it needs ${[...deps].join(", ")}: npm install ${[...deps].join(" ")}\n`;
-  process.stdout.write(`${s}\nThe docs for what you added: https://ascii.rest/docs/copy/\n`);
+  // Each item's own word on how to use it, the kit's say, where it has one; the copying docs for the rest.
+  const docs = [...new Set(all.filter((item) => wanted.includes(item.name) && typeof item.docs === "string" && item.docs.trim()).map((item) => clean(item.docs).trim()))];
+  process.stdout.write(`${s}\n${docs.length ? docs.join("\n") : "The docs for what you added: https://ascii.rest/docs/copy/"}\n`);
 }
 
 // The order of the sidebar on ascii.rest and of the table in the README.
@@ -216,6 +233,84 @@ async function list() {
   process.stdout.write(`${s}\n${all.length} pieces. npx ascii.rest <piece> plays one.\n`);
 }
 
+// True for an argument that names a file there is, so npx ascii.rest ./sea.ts plays it as play would.
+const isFile = (arg: string | undefined) => !!arg && /[\\/.]/.test(arg) && existsSync(resolve(arg)) && statSync(resolve(arg)).isFile();
+
+// A piece from a file of your own: its default export, or the file itself when it is a piece module (meta and a default
+// function), as scripts/kit/show.ts reads one. `bust` loads it afresh after a save.
+async function pieceIn(path: string, bust = 0): Promise<Piece> {
+  const isPieceLike = (v: unknown): v is Piece => !!v && typeof v === "object" && "meta" in v && typeof (v as Piece).default === "function";
+  let mod: Record<string, unknown>;
+  try {
+    mod = (await import(`${pathToFileURL(path).href}${bust ? `?v=${bust}` : ""}`)) as Record<string, unknown>;
+  } catch (error) {
+    if ((error as { code?: string }).code === "ERR_UNKNOWN_FILE_EXTENSION")
+      throw new Usage(`Node ${process.version} can't run ${clean(relative(process.cwd(), path))} as it is: a .ts file needs Node 22.18 or later, or compile it to .js first`);
+    throw error;
+  }
+  if (isPieceLike(mod.default)) return mod.default;
+  if (mod.meta && typeof mod.default === "function") return mod as unknown as Piece;
+  throw new Usage(`${clean(relative(process.cwd(), path))} has no piece: export one as its default, export default sea()`);
+}
+
+// npx ascii.rest play <file> and svg <file>: a piece of your own, played in the terminal (again on each save with
+// --watch) or written as an SVG.
+async function mine(positionals: string[], values: { mono?: boolean; light?: boolean; fps?: string; seconds?: string; watch?: boolean; dark?: boolean; out?: string }) {
+  const asked = positionals[0] === "play" || positionals[0] === "svg" ? positionals[0] : "play";
+  const named = positionals[0] === "play" || positionals[0] === "svg" ? positionals.slice(1) : positionals;
+  if (!named.length) throw new Usage(`${asked} what? npx ascii.rest ${asked} sea.ts, a file whose default export is a piece`);
+  if (named.length > 1) throw new Usage(`one file at a time: npx ascii.rest ${asked} sea.ts`);
+  const path = resolve(named[0]);
+  if (!existsSync(path) || !statSync(path).isFile()) throw new Usage(`there is no file ${clean(named[0])}`);
+  const fps = number("fps", values.fps, 60);
+  const seconds = number("seconds", values.seconds);
+  if (asked === "svg") {
+    if (values.watch || values.mono || values.light) throw new Usage(`--watch, --mono and --light are for play: an SVG takes --dark, --out, --fps and --seconds`);
+    const piece = await pieceIn(path);
+    const out = toSvg(piece, { dark: values.dark === true, ...(fps ? { fps } : {}), ...(seconds ? { seconds } : {}) });
+    if (values.out === undefined) return void process.stdout.write(`${out}\n`);
+    writeFileSync(resolve(values.out), out);
+    return void process.stdout.write(`wrote ${clean(values.out)}: ${piece.meta.name}, ${(out.length / 1024).toFixed(1)} KB\n`);
+  }
+  if (values.dark || values.out !== undefined) throw new Usage(`--dark and --out are for svg: npx ascii.rest svg sea.ts --dark --out sea.svg`);
+  const options = { mono: values.mono === true, light: values.light === true, fps, seconds };
+  // Piped or redirected, there is nothing to play on: the first frame, as text.
+  if (!process.stdout.isTTY) return void process.stdout.write(`${await still(await pieceIn(path), { light: options.light })}\n`);
+  if (!values.watch) {
+    const played = await play(await pieceIn(path), options);
+    if (played.interrupted) process.exitCode = 130;
+    return;
+  }
+  // Watching: each save stops the play and loads the file afresh; a key, Ctrl+C or --seconds ends it all.
+  let controller = new AbortController(), changed = false, wake: (() => void) | null = null, version = 0;
+  const watcher = watch(path, () => {
+    changed = true;
+    controller.abort();
+    wake?.();
+  });
+  try {
+    for (;;) {
+      controller = new AbortController();
+      changed = false;
+      let piece: Piece;
+      try {
+        piece = await pieceIn(path, ++version);
+      } catch (error) {
+        // A save that doesn't load yet: say why, and wait for the next one.
+        process.stderr.write(`ascii.rest: ${error instanceof Error ? error.message : String(error)}\nwaiting for ${clean(named[0])} to change\n`);
+        await new Promise<void>((done) => (wake = done));
+        wake = null;
+        continue;
+      }
+      const played = await play(piece, { ...options, signal: controller.signal });
+      if (played.interrupted) process.exitCode = 130;
+      if (!changed) return;
+    }
+  } finally {
+    watcher.close();
+  }
+}
+
 async function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -232,12 +327,24 @@ async function main() {
       dir: { type: "string" },
       overwrite: { type: "boolean" },
       registry: { type: "string" },
+      watch: { type: "boolean" },
+      dark: { type: "boolean" },
+      out: { type: "string" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
     },
   });
   if (values.version) return void process.stdout.write(`${version()}\n`);
   if (values.help || !positionals.length) return void process.stdout.write(HELP);
+  // A piece of your own, by its file.
+  const own = positionals[0] === "play" || positionals[0] === "svg" || isFile(positionals[0]);
+  if (!own && [values.watch, values.dark, values.out].some((v) => v !== undefined))
+    throw new Usage(`--watch, --dark and --out are for a piece of your own: npx ascii.rest play sea.ts --watch`);
+  if (own) {
+    if ([values.color, values.tagline, values.font, values.shadow, values.effect, values.dir, values.overwrite, values.registry].some((v) => v !== undefined))
+      throw new Usage(`play and svg take --mono, --light, --fps, --seconds, --watch, --dark and --out`);
+    return mine(positionals, values);
+  }
   if (positionals[0] === "add" && [values.mono, values.light, values.fps, values.seconds, values.color, values.tagline, values.font, values.shadow, values.effect].some((v) => v !== undefined))
     throw new Usage(`add takes only --dir, --overwrite and --registry: npx ascii.rest add donut --dir src/ascii`);
   if (positionals[0] === "add") return add(positionals.slice(1), { dir: values.dir, overwrite: values.overwrite === true, registry: (values.registry ?? REGISTRY).replace(/\/$/, "") });

@@ -317,6 +317,37 @@ test("a kit piece plays through svg()", () => {
   assert.match(svg(banner("kit", { effect: "still" })), /<svg/);
 });
 
+test("svg() keeps to a budget: fewer frames a second, then fewer colours, then it says why", () => {
+  // every cell a different character and one of 48 colours each frame: a big SVG
+  const colors = gradient(["#ff0000", "#00ff00", "#0000ff"], 48);
+  const noisy = piece({ name: "noisy", cols: 60, rows: 20, fps: 30, loop: 4, palette: colors }, (t, s) => {
+    const f = Math.floor(t * 30);
+    for (let y = 0; y < s.rows; y++) for (let x = 0; x < s.cols; x++) s.set(x, y, "#*+=-:."[Math.floor(hash(x, y, f) * 7)], Math.floor(hash(x, y, f, 1) * 48));
+  });
+  const warned: string[] = [];
+  const warn = console.warn;
+  console.warn = (m: string) => void warned.push(m);
+  try {
+    const full = svg(noisy, { budget: false });
+    assert.ok(full.length > 2_000_000, `${full.length} bytes with no budget`);
+    const kept = svg(noisy, { budget: full.length / 2 });
+    assert.ok(kept.length <= full.length / 2, `${kept.length} bytes within half of ${full.length}`);
+    assert.equal(warned.length, 0);
+    // a budget it can't meet: the smallest it can make, and a word on why
+    const tight = svg(noisy, { budget: 1000 });
+    assert.ok(tight.length < kept.length);
+    assert.equal(warned.length, 1);
+    assert.match(warned[0], /^ascii\.rest: the SVG of noisy is [\d.]+ MB, over its budget of 0\.0 MB even at 6 frames a second and 16 colours: its loop is 4 s, it is 60 by 20 in 48 colours\./);
+    // a piece that moves with no loop is said to jump, once
+    const loose = piece({ name: "loose", cols: 4, rows: 1 }, (t, s) => s.write(0, 0, String(Math.floor(t))));
+    svg(loose);
+    svg(loose);
+    assert.equal(warned.filter((m) => /loose moves but has no loop/.test(m)).length, 1);
+  } finally {
+    console.warn = warn;
+  }
+});
+
 test("a kit piece plays through mount() in a <pre>, with the browser stubbed", async () => {
   const g = globalThis as Record<string, unknown>;
   const saved = Object.fromEntries(["HTMLCanvasElement", "getComputedStyle", "matchMedia", "IntersectionObserver", "requestAnimationFrame", "cancelAnimationFrame", "document"].map((k) => [k, g[k]]));

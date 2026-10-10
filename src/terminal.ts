@@ -41,6 +41,8 @@ export interface PlayOptions {
   options?: Options;
   /** Where to draw: process.stdout by default. Keys are read from process.stdin. */
   out?: Output;
+  /** Stops it, as a key does, when aborted: for playing a file again when it changes. */
+  signal?: AbortSignal;
 }
 
 export interface Played {
@@ -249,7 +251,7 @@ export async function still(piece: Piece | PieceName, { light = false, options =
 /** Plays a piece in the terminal. Resolves when it stops: after `seconds`, on a key or on Ctrl+C. */
 export async function play(
   piece: Piece | PieceName,
-  { seconds, mono = false, light = false, fps, options = {}, out = process.stdout }: PlayOptions = {},
+  { seconds, mono = false, light = false, fps, options = {}, out = process.stdout, signal }: PlayOptions = {},
 ): Promise<Played> {
   const { meta, default: make } = await resolve(piece);
   const cells = painter(meta, !mono);
@@ -340,6 +342,7 @@ export async function play(
       clearInterval(timer);
       clearTimeout(end);
       out.off?.("resize", resize);
+      signal?.removeEventListener("abort", aborted);
       process.off("SIGINT", interrupt);
       process.off("SIGTERM", terminate);
       process.off("exit", restore);
@@ -382,6 +385,10 @@ export async function play(
         draw();
       });
 
+    // Asked to stop from outside, it stops as a key stops it.
+    const aborted = () => stop();
+    if (signal?.aborted) return done(played);
+    signal?.addEventListener("abort", aborted, { once: true });
     process.on("SIGINT", interrupt);
     process.on("SIGTERM", terminate);
     // If the program exits while it plays, the terminal is put back on the way out.
