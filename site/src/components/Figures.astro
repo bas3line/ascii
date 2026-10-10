@@ -1,0 +1,55 @@
+---
+/*
+ * The markdown figures on the home page, after the scenes: a card for each
+ * figure built, its catalog example drawn in its well as the remark plugin
+ * draws a fence, so the page is whole before any script runs, then built in
+ * as the section nears the screen. Each card goes to the figure's docs. The
+ * script sits inside the section, so the next category is still a section
+ * right after this one, spaced as the others are.
+ */
+import { catalog, kinds, markup } from "ascii.rest/markdown";
+
+const built = catalog.filter((e) => Object.hasOwn(kinds, e.kind));
+---
+
+<section id="markdown">
+  <div class="head">
+    <h2>markdown</h2>
+    <span class="count">{built.length}</span>
+    <span class="tools"><a href="/docs/markdown/">[docs]</a></span>
+  </div>
+  <div class="grid">
+    {built.map((e) => (
+      <a class="card" href={`/docs/markdown-${e.group}/#${e.kind}`}>
+        <div class="well" set:html={markup(e.kind, e.source, e.options)} />
+        <span class="name">{e.kind}</span>
+        <span class="note">{e.about}</span>
+      </a>
+    ))}
+  </div>
+
+  <script>
+    // The figures build in once the section nears the screen. They hold still, as the pieces do, when the system asks
+    // for reduced motion, unless the reader chose to play them anyway.
+    const section = document.getElementById("markdown");
+    if (section) {
+      const io = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((e) => e.isIntersecting)) return;
+          io.disconnect();
+          let motion = false;
+          try {
+            motion = localStorage.getItem("ascii-motion") === "play";
+          } catch {}
+          import("ascii.rest/markdown").then(
+            ({ start }) => start(section, { style: false, motion }),
+            // the module's file is gone: the page is from an older build (the script at the top of <head>)
+            () => (window as Window & { asciiReload?: () => void }).asciiReload?.(),
+          );
+        },
+        { rootMargin: "200px 0px" },
+      );
+      io.observe(section);
+    }
+  </script>
+</section>

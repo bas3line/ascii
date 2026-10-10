@@ -36,6 +36,14 @@ export const DOCS = [
     ],
   },
   {
+    // The markdown figures: what they are and how to write one, then a page for each group that has a figure built.
+    label: "markdown",
+    pages: [
+      { href: "/docs/markdown/", title: "markdown figures" },
+      { href: "/docs/markdown-lettering/", title: "lettering" },
+    ],
+  },
+  {
     label: "make your own",
     pages: [
       { href: "/docs/kit/", title: "the kit" },

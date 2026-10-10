@@ -2,10 +2,11 @@
 /*
  * ascii.rest: a scene playing, the sponsors, what the library is, how to use a
  * piece, and then every piece by category, each a live preview linking to its
- * own page.
+ * own page, with the markdown figures after the scenes.
  */
 import Layout from "../layouts/Layout.astro";
 import Art from "../components/Art.astro";
+import Figures from "../components/Figures.astro";
 import Sponsors from "../components/Sponsors.astro";
 import Usage from "../components/Usage.astro";
 import { categories, issue, pieces } from "../lib/library";
@@ -60,6 +61,7 @@ const description = `${pieces.length} animated ascii pieces for web pages, in Ty
 
   <div id="pieces">
     {categories.map((category) => (
+      <>
       <section id={category.name}>
         <div class="head">
           <h2>{category.name}</h2>
@@ -91,6 +93,8 @@ const description = `${pieces.length} animated ascii pieces for web pages, in Ty
           )}
         </div>
       </section>
+      {category.name === "scenes" && <Figures />}
+      </>
     ))}
   </div>
 </Layout>

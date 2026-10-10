@@ -3,7 +3,8 @@
  * A docs page: the site's shell with the docs' index in the sidebar instead of
  * the pieces, the page's own headings above it, its Markdown, and the pages
  * before and after it. Code blocks get a [copy] button, and the tags from
- * ascii.rest/element are defined, so a page can show <ascii-banner> live.
+ * ascii.rest/element are defined, so a page can show <ascii-banner> live. A
+ * figure an ```ascii fence drew plays as it is scrolled to.
  */
 import type { MarkdownLayoutProps } from "astro";
 import Layout from "./Layout.astro";
@@ -95,4 +96,18 @@ const sections = headings.filter((h) => h.depth === 2);
     pre.replaceWith(wrap);
     wrap.append(pre, button);
   });
+
+  // The markdown figures the remark plugin drew, in the site's own colours, each built in as it is scrolled to. They
+  // hold still, as the pieces do, when the system asks for reduced motion, unless the reader chose to play them anyway.
+  const docs = document.querySelector<HTMLElement>(".docs");
+  if (docs?.querySelector("pre[data-md]")) {
+    let motion = false;
+    try {
+      motion = localStorage.getItem("ascii-motion") === "play";
+    } catch {}
+    import("ascii.rest/markdown").then(
+      ({ start }) => start(docs, { style: false, motion }),
+      () => (window as Window & { asciiReload?: () => void }).asciiReload?.(),
+    );
+  }
 </script>

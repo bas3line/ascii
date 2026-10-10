@@ -200,6 +200,33 @@ Every option of [banner()](https://ascii.rest/docs/banners/) and [svg()](https:/
 
 [ascii.rest/make](https://ascii.rest/make/) turns your own logo or a photo into animated ascii. It takes an SVG, PNG, JPG, WebP or GIF, and works in your browser, so nothing is uploaded. You get an embed for any page, two SVGs for a README, and a piece file to add to the library. [Image to ascii](https://ascii.rest/docs/images/) in the docs.
 
+### Markdown figures
+
+Write an `ascii` fence in your markdown, and `ascii.rest/markdown` draws it in text: on a site through its remark plugin, built in as it is scrolled to, and in a README as a plain fenced block or an animated SVG.
+
+````md
+```ascii headline
+ascii.rest "animated ascii art for web pages"
+```
+````
+
+```sh
+npx ascii.rest md README.src.md --out README.md
+```
+
+```text
+ ██╗  ███╗ ███╗█╗█╗  ███╗ ████╗ ███╗█████╗
+█╔═█╗█╔══╝█╔══╝█║█║  █╔═█╗█╔══╝█╔══╝╚═█╔═╝
+████║╚██╗ █║   █║█║  ███╔╝███╗ ╚██╗   █║
+█╔═█║ ╚═█╗█║   █║█║  █╔█║ █╔═╝  ╚═█╗  █║
+█║ █║███╔╝╚███╗█║█║█╗█║╚█╗████╗███╔╝  █║
+╚╝ ╚╝╚══╝  ╚══╝╚╝╚╝╚╝╚╝ ╚╝╚═══╝╚══╝   ╚╝
+
+animated ascii art for web pages
+```
+
+[Markdown figures](https://ascii.rest/docs/markdown/) in the docs.
+
 ## In a terminal
 
 ```sh

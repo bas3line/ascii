@@ -1,6 +1,8 @@
 import { cpSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { unified } from "@astrojs/markdown-remark";
 import vercel from "@astrojs/vercel";
+import ascii from "ascii.rest/markdown/remark";
 import { defineConfig } from "astro/config";
 
 // The compiled library (../dist) is served from the site's root as well, so a
@@ -24,8 +26,14 @@ export default defineConfig({
   // an older deploy keeps getting that deploy's files and banners, for as long as the project's setting holds them.
   adapter: vercel({ skewProtection: true }),
   integrations: [library],
-  // The docs' code is plain, in the site's one face and ink, like the rest of its code.
-  markdown: { syntaxHighlight: false },
+  markdown: {
+    // The docs' code is plain, in the site's one face and ink, like the rest of its code.
+    syntaxHighlight: false,
+    // An ```ascii fence in the docs is drawn as its figure by the library's own remark plugin, ascii.rest/markdown/remark,
+    // as a reader's site draws one; the library is built before Astro loads this. Astro 7's own Markdown processor runs
+    // no remark plugins, so the docs go through remark, @astrojs/markdown-remark's unified().
+    processor: unified({ remarkPlugins: [ascii] }),
+  },
   // Astro 7 strips the whitespace between tags the way JSX does; the pages are written for HTML's, which keeps a space.
   compressHTML: true,
   vite: {
