@@ -1089,9 +1089,10 @@ export interface PartMaterial {
 /**
  * What draws a part instead of its own characters: a material (water(), glass(), fire() from ascii.rest/kit's
  * materials, or one of your own), or any piece, a library piece such as plasma or one made with the kit, or a grid,
- * which plays inside the part, centred on it and tiled.
+ * which plays inside the part, centred on it and tiled. (Named apart from the materials module's Material, which is one
+ * of these.)
  */
-export type Material = PartMaterial | Piece | Surface;
+export type SvgMaterial = PartMaterial | Piece | Surface;
 
 const isPartMaterial = (v: unknown): v is PartMaterial => {
   const m = v as PartMaterial;
@@ -1101,8 +1102,8 @@ const isSource = (v: unknown): v is Piece | Surface => v instanceof Surface || (
 
 // --- options ----------------------------------------------------------------------------------
 
-/** How a part looks and moves: a motion, a material, its own character or colour, or hidden. */
-export interface PartOptions {
+/** How a part of an svg looks and moves: a motion, a material, its own character or colour, or hidden. */
+export interface SvgPartOptions {
   /** How it moves: a word, several, or a function of t giving its pose, for any motion the words don't have. */
   motion?: Motion | readonly Motion[] | PoseFn;
   /**
@@ -1128,7 +1129,7 @@ export interface PartOptions {
    * or glass(), or any piece or grid. A material is prepared once for a part that stays where it is, and again each
    * frame for one that moves. Not in the "outline" style, which has no inside to fill.
    */
-  material?: Material;
+  material?: SvgMaterial;
   /** The character its solid cells take, instead of the drawing's ("8" unless `fill` says otherwise). */
   fill?: string;
   /**
@@ -1143,8 +1144,8 @@ export interface PartOptions {
   hide?: boolean;
 }
 
-/** What a part is given: a motion word or several, a function of t giving its pose, a material, its options, or false to leave it out. */
-export type Part = Motion | readonly Motion[] | PoseFn | Material | PartOptions | false;
+/** What a part of an svg is given: a motion word or several, a function of t giving its pose, a material, its options, or false to leave it out. */
+export type SvgPart = Motion | readonly Motion[] | PoseFn | SvgMaterial | SvgPartOptions | false;
 
 /** How the cells are chosen. */
 export type VectorStyle = "logo" | "outline" | "blocks" | "braille";
@@ -1196,9 +1197,9 @@ export interface VectorOptions {
   /** The colour behind it, as #rrggbb; it is then drawn for that ground whatever the page. */
   ground?: string;
   /** Parts, by "#id", ".class", "#rrggbb" (shapes of that colour) or "*" (all of it). */
-  [part: `#${string}`]: Part;
-  [part: `.${string}`]: Part;
-  "*"?: Part;
+  [part: `#${string}`]: SvgPart;
+  [part: `.${string}`]: SvgPart;
+  "*"?: SvgPart;
 }
 
 /** drawSvg()'s options: fromSvg()'s ways of drawing and its parts, and where in the grid. */
@@ -1233,7 +1234,7 @@ interface PartPlan {
   // A word's motion, or "pose" for a function's; a function with no period has NaN, so the piece has no loop.
   motions: { motion: Motion | "pose"; fn: PoseFn | null; period: number; amount: number; offset: number; stagger: number }[];
   origin: Origin | null;
-  material: Material | null;
+  material: SvgMaterial | null;
   fill: string | null;
   char: string | null;
   color: string | null;
@@ -1729,7 +1730,7 @@ interface Plan {
   /** A moment its first traced part is held whole, for the still, when a part traces. */
   held: number | undefined;
   /** The parts a material or a piece fills, the backmost first. */
-  textured: { part: number; material: Material; moves: boolean; first: number }[];
+  textured: { part: number; material: SvgMaterial; moves: boolean; first: number }[];
   draw: () => Drawer;
 }
 
@@ -1762,14 +1763,14 @@ function partOf(key: string, v: unknown, rank: number): PartPlan {
     plan.hide = true;
     return plan;
   }
-  let o: PartOptions;
+  let o: SvgPartOptions;
   if (typeof v === "function") o = { motion: v as PoseFn };
   else if (typeof v === "string" || Array.isArray(v)) o = { motion: words(v) };
-  else if (isSource(v) || isPartMaterial(v)) o = { material: v as Material };
+  else if (isSource(v) || isPartMaterial(v)) o = { material: v as SvgMaterial };
   else if (v && typeof v === "object") {
     for (const k of Object.keys(v))
       if (!PART_KEYS.has(k)) fail(`${key} has no option named ${JSON.stringify(k)}: a part takes ${and([...PART_KEYS])}`);
-    o = v as PartOptions;
+    o = v as SvgPartOptions;
   } else return fail(`${takes}, not ${String(v)}`);
   const fn = typeof o.motion === "function" ? o.motion : null;
   const list = o.motion === undefined || fn ? [] : words(o.motion);
@@ -2205,7 +2206,7 @@ function plan(svg: Svg, o: PlanOptions): Plan {
   const firstMoving = paints.findIndex(changes);
 
   // The parts a material or a piece fills, the backmost first, and whether each moves.
-  const textured: { part: number; material: Material; moves: boolean; first: number }[] = [];
+  const textured: { part: number; material: SvgMaterial; moves: boolean; first: number }[] = [];
   o.parts.forEach((pp, pi) => {
     if (!pp.material) return;
     const first = paints.findIndex((p) => p.part === pi);
@@ -2663,7 +2664,7 @@ function planOptions(o: Record<string, unknown>, drawing: boolean, aspect: numbe
   };
 }
 
-// drawSvg's and paletteOf's options, checked before their region is taken out: an object, its region one of the grid.
+// drawSvg's and svgPalette's options, checked before their region is taken out: an object, its region one of the grid.
 function drawOptions(o: DrawSvgOptions, name: string): DrawSvgOptions {
   if (o === null || typeof o !== "object" || Array.isArray(o)) fail(`${name} takes options as an object, such as { region, "#star": "spin" }`);
   const r = o.region;
@@ -3017,10 +3018,10 @@ const keyOf = (o: Record<string, unknown>, s: Surface, region: Region) =>
  * of yours. Undefined for a drawing in the page's own colour (currentColor, or color: false).
  *
  *   const heart = parseSvg(markup);
- *   export default piece({ name: "badge", cols: 40, rows: 12, palette: paletteOf(heart) }, (t, s) => drawSvg(s, heart, t));
+ *   export default piece({ name: "badge", cols: 40, rows: 12, palette: svgPalette(heart) }, (t, s) => drawSvg(s, heart, t));
  */
-export function paletteOf(svg: string | Svg, options: DrawSvgOptions = {}): { light: string[]; dark: string[] } | undefined {
-  const { region: _, ...rest } = drawOptions(options, "paletteOf");
+export function svgPalette(svg: string | Svg, options: DrawSvgOptions = {}): { light: string[]; dark: string[] } | undefined {
+  const { region: _, ...rest } = drawOptions(options, "svgPalette");
   const o = planOptions(rest as Record<string, unknown>, true, 2);
   const p = plan(svgOf(svg), { ...o, cols: 48, rows: 24 });
   return p.light.length ? { light: p.light, dark: p.dark } : undefined;
@@ -3028,11 +3029,10 @@ export function paletteOf(svg: string | Svg, options: DrawSvgOptions = {}): { li
 
 /**
  * Draws an SVG into a grid you already have, at t seconds: fitted inside `region` (all of it by default) and centred,
- * its colours found in the grid's palette (the nearest of them: paletteOf() makes one they are all in), or in the
- * grid's one ink. Parts move and fill as in
- * fromSvg(). The svg is read and fitted once for each drawing and options, then reused, so call it every frame. A
- * motion function is told apart by which function it is, so make it once, outside the drawing: one written inside it
- * is a new function each frame, and the drawing is fitted again each time.
+ * its colours found in the grid's palette (the nearest of them: svgPalette() makes one they are all in), or in the
+ * grid's one ink. Parts move and fill as in fromSvg(). The svg is read and fitted once for each drawing and options,
+ * then reused, so call it every frame. A motion function or a material is told apart by which object it is, so make it
+ * once, outside the drawing: one written inside it is a new one each frame, and the drawing is fitted again each time.
  *
  *   piece({ name: "badge", cols: 40, rows: 12, palette: ["#e11d48"] }, (t, s) => drawSvg(s, heart, t, { "#heart": "pulse" }));
  */

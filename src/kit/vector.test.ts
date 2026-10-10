@@ -5,7 +5,7 @@ import * as donut from "../pieces/donut.ts";
 import { svg as toSvg } from "../svg.ts";
 import type { Piece } from "../types.ts";
 import { EMPTY, NONE, Palette, Surface, piece, snapshot } from "./core.ts";
-import { drawSvg, fromSvg, paletteOf, parseSvg, partCells, type PartCells, type PartMaterial, type PartPaint } from "./vector.ts";
+import { drawSvg, fromSvg, parseSvg, partCells, svgPalette, type PartCells, type PartMaterial, type PartPaint } from "./vector.ts";
 
 // The checks scripts/check.ts makes of a frame: rows lines of cols characters, colours inside the palette.
 function contract(p: Piece, times = [0, 0.5, 1, 2.5]) {
@@ -681,7 +681,7 @@ test("character references past the last code point, titles with control charact
   assert.throws(() => drawSvg(new Surface(4, 4), SQUARE, 0, [] as never), /drawSvg takes options as an object/);
   assert.throws(() => drawSvg(new Surface(4, 4), SQUARE, 0, null as never), /drawSvg takes options as an object/);
   assert.throws(() => drawSvg(new Surface(4, 4), SQUARE, 0, { region: { x: 0, y: 0, cols: 4 } as never }), /drawSvg's region takes \{ x, y, cols, rows \}/);
-  assert.throws(() => paletteOf(SQUARE, [] as never), /paletteOf takes options as an object/);
+  assert.throws(() => svgPalette(SQUARE, [] as never), /svgPalette takes options as an object/);
 });
 
 test("a fill or stroke a browser can't read is ignored, so the group's is taken; var() takes its fallback", () => {
@@ -939,9 +939,9 @@ test("drawSvg draws into a region of a grid you have, its colours the nearest of
   assert.throws(() => drawSvg(plain, HEART, 0, { width: 3 } as never), /drawSvg has no option named "width"/);
 });
 
-test("paletteOf gives a piece drawing with drawSvg the drawing's own colours, exact on both pages", () => {
+test("svgPalette gives a piece drawing with drawSvg the drawing's own colours, exact on both pages", () => {
   const two = `<svg viewBox="0 0 20 10"><rect width="10" height="10" fill="#000000"/><rect x="10" width="10" height="10" fill="#2563eb"/></svg>`;
-  const pal = paletteOf(two)!;
+  const pal = svgPalette(two)!;
   assert.deepEqual(pal, { light: ["#000000", "#2563eb"], dark: ["#e8ebef", "#2563eb"] });
   const p = piece({ name: "pair", cols: 20, rows: 10, palette: pal }, (t, s) => drawSvg(s, two, t));
   const own = fromSvg(two, { cols: 20, rows: 10, margin: 0 });
@@ -952,9 +952,11 @@ test("paletteOf gives a piece drawing with drawSvg the drawing's own colours, ex
     assert.deepEqual([...a.color!].map((i) => p.meta.palette![i]), [...b.color!].map((i) => own.meta.palette![i]));
   }
   // A glinting part brings its lighter runs; a drawing in the page's own colour has none.
-  assert.equal(paletteOf(two, { "#2563eb": "glint" })!.light.length, 6);
-  assert.equal(paletteOf(`<svg viewBox="0 0 2 2"><rect width="2" height="2" fill="currentColor"/></svg>`), undefined);
-  assert.equal(paletteOf(two, { color: false }), undefined);
+  assert.equal(svgPalette(two, { "#2563eb": "glint" })!.light.length, 6);
+  assert.equal(svgPalette(`<svg viewBox="0 0 2 2"><rect width="2" height="2" fill="currentColor"/></svg>`), undefined);
+  assert.equal(svgPalette(two, { color: false }), undefined);
+  // A colour given to currentColor is in it, on both pages.
+  assert.deepEqual(svgPalette(`<svg viewBox="0 0 2 2"><rect width="2" height="2" fill="currentColor"/></svg>`, { color: "#f97316" }), { light: ["#f97316"], dark: ["#f97316"] });
 });
 
 test("fromSvg pieces export to an SVG and leave empty cells EMPTY", () => {
