@@ -1,0 +1,104 @@
+"use client";
+/*
+ * <Markdown>: ascii.rest's markdown figures in React, and a component for
+ * each one, <Headline> and the rest. A client component, so it works in the
+ * Next.js app router as well as anywhere else React runs. The server renders
+ * the figure's still, the finished figure, as text in a <pre class="ascii-md">,
+ * so the page is whole before any script runs; in the browser paint() builds
+ * it in when it is first scrolled to, then plays its cycle while it is in
+ * view, or holds. It imports the markdown family only, never the library's
+ * loader, so a page of figures doesn't bundle the pieces.
+ * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
+ *
+ *   import { Headline, Markdown } from "ascii.rest/markdown/react";
+ *
+ *   <Headline font="slim">{`ascii.rest "animated ascii art for web pages"`}</Headline>
+ *   <Markdown kind="headline" source="ascii.rest" align="center" width={60} />
+ *
+ * The fence's body goes in as a string: a template literal in braces keeps its
+ * lines, where JSX text would run them into one. Its shared indent is left out.
+ * Props it can't draw render nothing, and the console says why.
+ */
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
+import type { Common, FenceOptions, Kind } from "./core.ts";
+import { html, paint } from "./html.ts";
+import { make } from "./index.ts";
+
+/** What every figure takes: its fence's body, the options every figure takes, its own options, and the <pre>'s props. */
+export interface FigureProps extends Common {
+  /** Its fence's body, as a string: a template literal in braces, {`ascii.rest "a line"`}. */
+  children?: string;
+  /** Or its body as a prop, which children give way to. */
+  source?: string;
+  /** Options as one object, under the props given one at a time. */
+  options?: FenceOptions;
+  /** What the figure shows, for screen readers: its own sentence by default. */
+  label?: string;
+  /** Plays even when the reader prefers reduced motion: only behind a control the reader chooses. false. */
+  motion?: boolean;
+  className?: string;
+  style?: CSSProperties;
+  /** A figure's own options, a prop each, as a fence gives them: font="slim", align="center". */
+  [option: string]: unknown;
+}
+
+/** <Markdown>'s props: a figure's, and the figure it is. */
+export interface MarkdownProps extends FigureProps {
+  /** The figure: "headline" and the rest. */
+  kind: Kind;
+}
+
+// The props that are the figure's, not options for it.
+const OWN = new Set(["kind", "children", "source", "options", "label", "motion", "className", "style", "ref"]);
+
+/**
+ * Any markdown figure, by its name: <Markdown kind="headline" font="slim">{source}</Markdown>. Every prop but its own
+ * is an option, as a fence's are; the figure is made again only when one of them really changes.
+ */
+export function Markdown(props: MarkdownProps) {
+  const { kind, children, source, options, label, motion = false, className, style } = props;
+  const ref = useRef<HTMLPreElement>(null);
+  const given: Record<string, unknown> = { ...options };
+  for (const [name, value] of Object.entries(props)) if (!OWN.has(name) && value !== undefined) given[name] = value;
+  // An inline object is new every render; only a real change makes a new figure.
+  const key = JSON.stringify([kind, source ?? children ?? null, given]);
+  const piece = useMemo(() => {
+    const [k, s, o] = JSON.parse(key) as [string, string | null, Common & FenceOptions];
+    try {
+      if (typeof s !== "string") throw new Error(`ascii.rest: <Markdown kind="${k}"> takes its fence's body as children, a string in braces, or as source`);
+      return make(k, s, o);
+    } catch (error) {
+      console.warn(`<Markdown kind="${k}"> could not draw:`, error);
+      return null;
+    }
+  }, [key]);
+  // The same object while the figure is the same, so React never puts the still back over a figure as it builds.
+  const inner = useMemo(() => (piece ? { __html: html(piece) } : null), [piece]);
+  useEffect(() => {
+    if (!piece || !ref.current) return;
+    return paint(ref.current, piece, { motion });
+  }, [piece, motion]);
+  if (!piece || !inner) return null;
+  return (
+    <pre
+      ref={ref}
+      className={className ? `ascii-md ${className}` : "ascii-md"}
+      role="img"
+      aria-label={label ?? piece.says}
+      style={{ "--cols": piece.meta.cols, "--rows": piece.meta.rows, ...style } as CSSProperties}
+      dangerouslySetInnerHTML={inner}
+    />
+  );
+}
+
+// A component for one figure: <Headline> is <Markdown kind="headline">. One is added here as each figure is built.
+function named(kind: Kind, name: string) {
+  const Named = (props: FigureProps) => <Markdown {...props} kind={kind} />;
+  Named.displayName = name;
+  return Named;
+}
+
+// lettering
+export const Headline = named("headline", "Headline");
+
+export type { Common, FenceOptions, Kind };

@@ -22,3 +22,5 @@ jobs:
       - run: npm test
       - run: npm run kit:examples
       - run: npm run kit:docs
+      # The markdown figures: every example through the frame contract (their tests run in npm test above).
+      - run: npm run markdown:examples
