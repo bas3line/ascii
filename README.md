@@ -341,6 +341,12 @@ pre.art { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberatio
 
 The logos and distros are drawn from [devicon](https://github.com/devicons/devicon) (MIT) and [Simple Icons](https://github.com/simple-icons/simple-icons) (CC0); omarchy's mark there is its own, MIT licensed, from [omarchy.org](https://omarchy.org). The companies are drawn from Simple Icons too, and a0, agentmail, autumn, coderabbit, collabute, command code, databuddy, greptile, helmcode, keiki, orchid, polar and supermemory from their own marks on [a0.dev](https://a0.dev), [agentmail.to](https://www.agentmail.to), [useautumn.com](https://useautumn.com), [coderabbit.ai](https://www.coderabbit.ai/press-kit), [collabute.ai](https://collabute.ai), [commandcode.ai](https://commandcode.ai), [databuddy.cc](https://www.databuddy.cc), [greptile.com](https://www.greptile.com), [helmcode.com](https://helmcode.com/brand), [onkeiki.com](https://onkeiki.com), [orchid.ai](https://orchid.ai/brand), [polar.sh](https://polar.sh/brand) and [supermemory.ai](https://supermemory.ai). Each is a trademark of its owner, shown here to name the language, the distribution or the company.
 
+## Sites using it
+
+A few pages that put the library on the open web. Open a pull request if yours should be here.
+
+- [AmberCell](https://cyberhallucinet.github.io/AmberCell/) — high-interaction honeypot landing, sealed in amber: real services in contained cells, told with dissolve, lighthouse, spider and friends from the library
+
 ## Contributing
 
 New pieces, fixes and ideas are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the piece contract, the checks and how to open a pull request, and the [code of conduct](CODE_OF_CONDUCT.md) applies everywhere. Found a security problem? See [SECURITY.md](SECURITY.md).
