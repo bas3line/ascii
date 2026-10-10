@@ -5,7 +5,7 @@ import { svg } from "../svg.ts";
 import { still } from "../terminal.ts";
 import type { Piece } from "../types.ts";
 import { Surface, TAU, piece, snapshot } from "./core.ts";
-import { cone, cube, cylinder, group, lines, mesh, orbit, parametric, plane, points, render3d, scene, sphere, textures, torus, type Shape3d, type Vec3 } from "./shapes3d.ts";
+import { cone, cube, cylinder, group, lines, mesh, orbit, parametric, plane, points, render3d, scene, scenePalette, sphere, textures, torus, type Shape3d, type Vec3 } from "./shapes3d.ts";
 
 // The checks scripts/check.ts makes of a frame: rows lines of cols characters, colours inside the palette, the same
 // frame for the same t, on paper and on a dark page, in colour and in one ink.
@@ -331,9 +331,12 @@ test("parametric surfaces draw, and one of t moves", () => {
   assert.notEqual(drawn([sea], 0).frame(), drawn([sea], 0.5).frame());
   // its own segments, a number for both or [u, v]
   assert.ok(extent(drawn([parametric((u, v) => [u * 2 - 1, v * 2 - 1, 0], { segments: [2, 3] })]).frame()).n > 30);
-  // a point that isn't numbers is taken as the centre, never a crash
-  const holey = parametric((u, v) => (u > 0.5 ? [Number.NaN, 0, 0] : [u * 2 - 1, v * 2 - 1, 0]));
-  assert.ok(extent(drawn([holey]).frame()).n > 0);
+  // a point that isn't numbers is taken as the centre, never a crash: NaN, null, undefined, a number or a string
+  for (const odd of [[Number.NaN, 0, 0], null, undefined, 3, "x"]) {
+    const holey = parametric((u, v) => (u > 0.5 ? odd : [u * 2 - 1, v * 2 - 1, 0]) as Vec3);
+    assert.ok(extent(drawn([holey]).frame()).n > 0, String(odd));
+    assert.ok(extent(drawn([parametric((u, v, t) => (u > 0.5 ? odd : [u * 2 - 1, v * 2 - 1, t]) as Vec3)], 1).frame()).n > 0, `${odd}, moving`);
+  }
 });
 
 test("lines: paths drawn by their slope or in one character, closed or not, hidden behind nearer surfaces", () => {
@@ -450,7 +453,104 @@ test("a scene with a huge spinning surface is made quickly: it counts as its bal
   }
 });
 
+test("a shape too small to cover a cell's centre still shows as one cell, and hides as a shape does", () => {
+  const o = { camera: { zoom: 4, distance: 40 } };
+  // alone: one cell, where its centre is, lit as the side facing the camera
+  const tiny = drawn([sphere({ radius: 0.02 })], 0, o).frame();
+  assert.equal(extent(tiny).n, 1);
+  assert.equal(at(tiny, 20, 10), "*");
+  // behind a larger shape it is hidden, so the frame is the larger one's alone
+  const big = drawn([sphere()], 0, o).frame();
+  assert.equal(drawn([sphere(), sphere({ radius: 0.02, at: [0, 0, 3] })], 0, o).frame(), big);
+  assert.equal(drawn([sphere({ radius: 0.02, at: [0, 0, 3] }), sphere()], 0, o).frame(), big);
+  // in front of it, it shows, in its own colour
+  const pair = scene({ cols: 40, rows: 20, ...o }, [sphere({ color: "#ff0000" }), sphere({ radius: 0.02, at: [0, 0, -3], color: "#ffffff" })]);
+  const { color } = snapshot(pair, 0);
+  assert.match(pair.meta.palette![color![10 * 40 + 20]], /^#(\w\w)\1\1$/, "the near speck is the white one's");
+  // a moon going round never blinks out: one cell in every frame of its orbit
+  const moon = scene({ cols: 40, rows: 20, camera: { zoom: 6 } }, [sphere({ radius: 0.05, at: orbit({ radius: 2, period: 4, tilt: 0.3 }) })]);
+  const f = moon.default();
+  for (let i = 0; i < 60; i++) assert.equal(extent(f((i * 4) / 60)).n, 1, `t=${(i * 4) / 60}`);
+  // off the grid, behind the camera, or seen from inside: nothing
+  assert.equal(extent(drawn([sphere({ radius: 0.02, at: [100, 0, 0] })], 0, o).frame()).n, 0);
+  assert.equal(extent(drawn([sphere({ radius: 0.02, at: [0, 0, -50] })], 0, o).frame()).n, 0);
+  assert.equal(extent(drawn([sphere()], 0, { camera: { zoom: 4, distance: 0.5 } }).frame()).n, 0);
+  // seen edge on, a plane is its border line and no speck
+  assert.match(drawn([plane()], 0, o).frame().replace(/[\n ]/g, ""), /^-+$/);
+});
+
+test("render3d measures shapes made anew each frame once when they are made alike, and anew when it can't tell", () => {
+  // a loop of 4 pi seconds, which the fit follows moment by moment: the slow way to measure
+  const once = [torus({ spin: [1, 0, 0.5] }), sphere({ radius: 0.4, at: orbit({ radius: 3, period: TAU }) })];
+  const kept = piece({ name: "kept", cols: 64, rows: 24 }, (t, s) => render3d(s, once, t));
+  const anew = piece({ name: "anew", cols: 64, rows: 24 }, (t, s) => render3d(s, [torus({ spin: [1, 0, 0.5] }), sphere({ radius: 0.4, at: orbit({ radius: 3, period: TAU }) })], t));
+  for (const t of [0, 0.7, 3.1, 11]) assert.equal(snapshot(anew, t).text, snapshot(kept, t).text, `t=${t}`);
+  // and as quick: measured once, not every frame (made anew, it took 60 times as long before: 6.9 ms against 0.11)
+  const time = (p: Piece) => {
+    const f = p.default();
+    f(0);
+    const start = performance.now();
+    for (let i = 1; i <= 60; i++) f(i / 30);
+    return (performance.now() - start) / 60;
+  };
+  const a = time(kept), b = time(anew);
+  assert.ok(b < a * 4 + 0.5, `made anew ${b.toFixed(2)} ms a frame, made once ${a.toFixed(2)} ms`);
+  // shapes made differently never share a view: drawn after another, a shape is drawn as it is into a fresh surface
+  const pairs: [() => Shape3d, () => Shape3d][] = [
+    [() => sphere(), () => sphere({ at: [3, 0, 0] })],
+    [() => sphere(), () => sphere({ radius: 2 })],
+    [() => cube({ spin: 1 }), () => cube({ spin: 2 })],
+    [() => sphere({ at: orbit({ radius: 2, period: 4 }) }), () => sphere({ at: orbit({ radius: 3, period: 4 }) })],
+    [() => points("galaxy"), () => points("galaxy", { seed: 2 })],
+    [() => mesh([[0, 1, 0], [-1, -1, 0], [1, -1, 0]], [[0, 1, 2]]), () => mesh([[0, 2, 0], [-1, -1, 0], [1, -1, 0]], [[0, 1, 2]])],
+    [() => group([sphere({ at: [1, 0, 0] })]), () => group([sphere({ at: [2, 0, 0] })])],
+  ];
+  for (const [x, y] of pairs) {
+    const s = new Surface(40, 20);
+    render3d(s, x(), 0.5);
+    s.clear();
+    render3d(s, y(), 0.5);
+    assert.equal(s.frame(), drawn([y()], 0.5).frame(), `${x().kind} then another`);
+  }
+  // one placed by a function of its own, made anew each frame, is measured each frame: the same frame for the same t
+  const own = piece({ name: "own", cols: 40, rows: 20 }, (t, s) => render3d(s, sphere({ at: (u) => [2 * Math.sin(u), 0, 0], radius: 0.5 }), t));
+  const f = own.default();
+  for (const t of [3, 1, 2]) assert.equal(f(t), snapshot(own, t).text, `t=${t}`);
+});
+
+test("options are checked by name when a shape or scene is made: a typo says what was meant", () => {
+  const bad: [() => unknown, RegExp][] = [
+    [() => sphere({ colour: "#ff0000" } as {}), /ascii\.rest: sphere\(\) has no option "colour" \(did you mean color\?\): it takes at, rotate, spin, scale, color, texture, edges and radius/],
+    [() => sphere({ size: 2 } as {}), /sphere\(\) has no option "size" \(did you mean radius\?\)/],
+    [() => cube({ radius: 2 } as {}), /cube\(\) has no option "radius" \(did you mean size\?\)/],
+    [() => torus({ thickness: 0.5 } as {}), /torus\(\) has no option "thickness" \(did you mean tube\?\)/],
+    [() => cube({ position: [1, 0, 0] } as {}), /cube\(\) has no option "position" \(did you mean at\?\)/],
+    [() => cube({ rotation: [1, 0, 0] } as {}), /cube\(\) has no option "rotation" \(did you mean rotate\?\)/],
+    [() => parametric((u, v) => [u, v, 0], { resolution: 8 } as {}), /parametric\(\) has no option "resolution" \(did you mean segments\?\)/],
+    [() => points("ball", { edges: false }), /points\(\) has no option "edges": it takes at, rotate, spin, scale, color, char, count, seed and glow/],
+    [() => group([sphere()], { edges: false }), /group\(\) has no option "edges"/],
+    [() => scene({ zoom: 4 } as {}, sphere()), /scene\(\) has no option "zoom" \(did you mean camera: \{ zoom \}\?\)/],
+    [() => scene({ colour: ["#000000"] } as {}, sphere()), /scene\(\) has no option "colour" \(did you mean colors\?\)/],
+    [() => scene({ width: 40 } as {}, sphere()), /scene\(\) has no option "width" \(did you mean cols\?\)/],
+    [() => scene({ camera: { fov: 60 } as {} }, sphere()), /camera has no option "fov" \(did you mean zoom\?\): it takes distance, zoom, tilt and spin/],
+    [() => orbit({ radius: 1, period: 2, centre: [0, 0, 0] } as { radius: number; period: number }), /orbit\(\) has no option "centre" \(did you mean center\?\)/],
+    [() => render3d(new Surface(10, 4), sphere(), 0, { name: "x" } as {}), /render3d\(\) has no option "name": it takes camera, light/],
+  ];
+  for (const [make, message] of bad) assert.throws(make, message);
+});
+
 // --- scenes -----------------------------------------------------------------------
+
+test("scene() takes the shapes alone, every option its default; with a spec, the spec comes first", () => {
+  const alone = scene(torus({ spin: [0.8, 0, 0.35] }));
+  assert.deepEqual({ ...alone.meta }, { ...scene({}, torus({ spin: [0.8, 0, 0.35] })).meta });
+  assert.equal(alone.meta.name, "scene");
+  assert.equal(snapshot(alone, 1.5).text, snapshot(scene({}, torus({ spin: [0.8, 0, 0.35] })), 1.5).text);
+  assert.equal(scene([sphere(), cube({ at: [2, 0, 0] })]).meta.fps, 0);
+  assert.equal(scene((t) => [sphere({ at: [Math.sin(t), 0, 0] })]).meta.fps, 30);
+  assert.throws(() => (scene as (a: unknown, b: unknown) => unknown)(torus(), {}), /ascii\.rest: scene\(\) takes its spec first and its shapes second/);
+  assert.throws(() => scene({ cols: 20 } as never), /scene\(\) takes a shape, a list of shapes.*not undefined/);
+});
 
 test("scene() makes a normal piece: 64 by 24, shapes category, 30 fps moving, a still when nothing moves", () => {
   const donut = scene({ name: "donut", cols: 40, rows: 22 }, [torus({ spin: [0.8, 0, 0.35] })]);
@@ -646,6 +746,37 @@ test("render3d draws over what is in a surface, inside any piece, and keeps its 
   assert.equal(nan, s.frame());
 });
 
+test("scenePalette gives a piece of your own the colours scene() would draw the shapes in, ink first", () => {
+  type Pair = { readonly light: readonly string[]; readonly dark: readonly string[] };
+  const box = cube({ rotate: [-0.6, 0.7, 0], color: "#f97316" });
+  const pal = scenePalette(box) as Pair;
+  assert.equal(pal.light.length, 5);
+  assert.equal(pal.light[0], "#1f2328");
+  assert.equal(pal.dark[0], "#f0f6fc");
+  // render3d into a piece with it draws every cell in the very colour scene() draws it in, and text with none in the ink
+  const own = piece({ name: "own", cols: 40, rows: 20, palette: pal }, (t, s) => {
+    render3d(s, box, t);
+    s.write(0, 0, "hi");
+  });
+  const made = scene({ cols: 40, rows: 20 }, box);
+  for (const paper of [false, true]) {
+    const a = snapshot(own, 0, { paper }), b = snapshot(made, 0, { paper });
+    const ap = own.meta.palette!, bp = made.meta.palette!;
+    for (let i = 2; i < 40 * 20; i++) if (b.text.replace(/\n/g, "")[i] !== " ") assert.equal(ap[a.color![i]], bp[b.color![i]], `cell ${i} on ${paper ? "paper" : "a dark page"}`);
+    assert.equal(ap[a.color![0]], paper ? "#1f2328" : "#f0f6fc", "the text in the page's ink");
+  }
+  // nothing coloured: none, unless you give your own; your own come first; a scene's fade; options as render3d's
+  assert.equal(scenePalette([sphere(), torus()]), undefined);
+  assert.deepEqual(scenePalette(sphere(), {}, ["#123456"]), { light: ["#123456"], dark: ["#123456"] });
+  assert.equal((scenePalette(box, {}, { light: ["#000000"], dark: ["#ffffff"] }) as Pair).dark[0], "#ffffff");
+  assert.equal((scenePalette(sphere(), { colors: ["#000044", "#8888ff"], shades: 6 }) as Pair).light.length, 7);
+  assert.throws(() => scenePalette(box, { zoom: 2 } as {}), /ascii\.rest: scenePalette\(\) has no option "zoom" \(did you mean camera: \{ zoom \}\?\)/);
+  assert.throws(() => scenePalette(box, {}, ["blue"]), /a palette takes colours as #rrggbb, not "blue"/);
+  assert.throws(() => scenePalette("x" as unknown as Shape3d), /scenePalette\(\) takes a shape, a list of shapes/);
+  const many = Array.from({ length: 8 }, (_, i) => sphere({ color: `#${(i * 30).toString(16).padStart(2, "0")}0000` }));
+  assert.throws(() => scenePalette(many), /scenePalette\(\): these colours come to 33 a page, 8 colours in 4 shades each and 1 first, past the 32/);
+});
+
 test("a frame depends only on t: drawn out of order, it is the same", () => {
   const p = scene({ name: "all", cols: 48, rows: 20, period: 6, colors: ["#334155", "#f8fafc"] }, [
     torus({ spin: [0.8, 0, 0.35], scale: 0.6 }),
@@ -692,7 +823,7 @@ test("frames are quick: under 4 ms at 64 by 24 and 10 ms at 200 by 100", () => {
 });
 
 test("the examples are pieces that pass the contract", async () => {
-  for (const name of ["donut", "cube", "planet", "crystal", "galaxy", "orrery", "boing"]) {
+  for (const name of ["donut", "cube", "planet", "crystal", "galaxy", "orrery", "boing", "loader"]) {
     const p = (await import(`../../examples/kit/shapes3d-${name}.ts`)).default as Piece;
     assert.ok(p.meta.loop, `${name} loops`);
     contract(p);

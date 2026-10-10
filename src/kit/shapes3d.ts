@@ -5,14 +5,16 @@
  * one, seen by a camera and lit by one light. render3d() draws them into a
  * grid, the nearest surface winning each cell, shaded through a ramp, flat
  * faces outlined by their edges, and coloured by shape, light or depth;
- * scene() makes a piece of them that plays wherever a piece does. Patterns
- * and point clouds come ready made by name, so a planet with continents or a
- * turning galaxy takes no maths. The spinning donut is one line.
+ * scene() makes a piece of them that plays wherever a piece does, and
+ * scenePalette() gives a piece of your own their colours. Patterns and point
+ * clouds come ready made by name, so a planet with continents or a turning
+ * galaxy takes no maths. The spinning donut is one line.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
- *   import { group, orbit, points, scene, sphere, torus } from "ascii.rest/kit";
+ *   import { cube, group, orbit, piece, points, render3d, scene, scenePalette, sphere, torus } from "ascii.rest/kit";
  *
  *   export const donut = scene({ name: "donut", cols: 40, rows: 22 }, torus({ spin: [0.8, 0, 0.35] }));
+ *   export const box = scene(cube({ rotate: [-0.6, 0.7, 0], spin: [0.5, 1, 0] }));
  *
  *   export const planet = scene({ name: "planet", period: 6 }, [
  *     sphere({ color: "#3b82f6", texture: "spots", spin: 1 }),
@@ -26,11 +28,19 @@
  *     sphere({ color: "#fbbf24" }),
  *     group([sphere({ radius: 0.5 }), sphere({ radius: 0.15, at: orbit({ radius: 1, period: 3 }) })], { at: orbit({ radius: 4, period: 12 }) }),
  *   ]);
+ *
+ *   // 3D in a piece of your own, beside text
+ *   const spinner = cube({ spin: 1, color: "#38bdf8" });
+ *   export const loader = piece({ name: "loader", cols: 36, rows: 14, palette: scenePalette(spinner) }, (t, s) => {
+ *     render3d(s, spinner, t);
+ *     s.write(14, 13, "loading");
+ *   });
  */
 import type { Options } from "../types.ts";
 import {
   INK,
   NONE,
+  Palette,
   Surface,
   TAU,
   and,
@@ -95,6 +105,35 @@ function vec3(v: unknown, what: string, def?: Vec3): Vec3 {
   if (!Array.isArray(v) || v.length !== 3 || !v.every((n) => typeof n === "number" && Number.isFinite(n)))
     fail(`${what} takes [x, y, z], three numbers, not ${shown(v)}`);
   return [v[0], v[1], v[2]];
+}
+
+// Names people write for an option, and the options they likely mean, the first one the options object takes winning.
+const MEANT: Record<string, readonly string[]> = {
+  colour: ["color", "colors"], colours: ["colors", "color"], color: ["colors"], colors: ["color"],
+  colourBy: ["colorBy"], colorby: ["colorBy"], shadeBy: ["colorBy"],
+  position: ["at"], pos: ["at"], origin: ["at"], center: ["at", "center"], centre: ["at", "center"],
+  rotation: ["rotate", "spin"], angle: ["rotate", "tilt", "phase"], angles: ["rotate"], orientation: ["rotate"],
+  speed: ["spin", "period"], spins: ["spin"], spin: ["camera"], tilt: ["camera"], distance: ["camera"], zoom: ["camera", "scale"],
+  fov: ["zoom"], pitch: ["tilt"], yaw: ["spin"], rotate: ["spin"], dist: ["distance"],
+  size: ["radius", "width"], radius: ["size"], diameter: ["radius", "size"], r: ["radius"], thickness: ["tube"], tubeRadius: ["tube"],
+  width: ["cols"], height: ["rows", "depth"], columns: ["cols"], length: ["height", "depth"],
+  pattern: ["texture"], textures: ["texture"], material: ["texture"], edge: ["edges"], outline: ["edges"], wireframe: ["edges"],
+  background: ["ground"], bg: ["ground"], lights: ["light"], lighting: ["light"], sun: ["light"],
+  chars: ["ramp", "char"], characters: ["ramp", "char"], charset: ["ramp"], character: ["char"], glyph: ["char"],
+  duration: ["period"], seconds: ["period"], loop: ["closed", "period"], close: ["closed"], shade: ["shades"], steps: ["shades", "segments"],
+  resolution: ["segments"], detail: ["segments"], n: ["count"], number: ["count"], brightness: ["glow"],
+  inverted: ["invert"], flip: ["invert"], fitted: ["fit"],
+};
+
+// Throws for a key an options object doesn't take, naming the one meant where it is a near miss, so a typo isn't let
+// through to draw something other than what was asked.
+function known(o: object, keys: readonly string[], who: string): void {
+  for (const k of Object.keys(o)) {
+    if (keys.includes(k)) continue;
+    const meant = Object.hasOwn(MEANT, k) ? MEANT[k].find((n) => keys.includes(n)) : undefined;
+    const hint = meant === "camera" ? ` (did you mean camera: { ${k} }?)` : meant ? ` (did you mean ${meant}?)` : "";
+    fail(`${who} has no option ${JSON.stringify(k)}${hint}: it takes ${and(keys)}`);
+  }
 }
 
 // --- points in space, and textures ----------------------------------------------------
@@ -225,7 +264,8 @@ export interface ShapeOptions {
   /**
    * Draws its edges as lines, - | / and \ by their slope, over its faces: true. Edges are where flat faces meet at an
    * angle, and borders: a cube's twelve, a mesh's creases, a plane's border, a cylinder's and a cone's rims. They keep
-   * faces lit alike apart and show the shape in one ink. A sphere, a torus and a parametric() surface have none.
+   * faces lit alike apart and show the shape in one ink. A sphere, a torus and a parametric() surface have none; not
+   * for points(), lines() or group().
    */
   edges?: boolean;
 }
@@ -276,6 +316,10 @@ interface Body {
   children: readonly Body[] | null;
   // True when its form itself changes with t: a parametric surface of t, or points or lines from a function.
   timed: boolean;
+  // Its own size and form as text, such as a torus's radius and tube; null where a function of the user's makes it.
+  form: string | null;
+  // Its form, place and motion as text, worked out when first asked: see sigOf().
+  sig?: string | null;
 }
 
 // What lines() holds: its paths, each a list of points, fixed (three numbers a point) or a function of t; whether each
@@ -296,9 +340,11 @@ interface Cloud {
 
 const KINDS = ["torus", "sphere", "cube", "cylinder", "cone", "plane", "points", "lines", "mesh", "parametric", "group"];
 const BODIES = new WeakMap<Shape3d, Body>();
-// The periods of the functions orbit() makes, so a scene can work out its loop.
-const ORBITS = new WeakMap<object, number>();
+// The periods of the functions orbit() makes, so a scene can work out its loop, and each one's numbers as text.
+const ORBITS = new WeakMap<object, { period: number; sig: string }>();
 const ORIGIN: Vec3 = [0, 0, 0];
+// What every shape takes; a shape with no surface takes the first five.
+const SHAPE_KEYS = ["at", "rotate", "spin", "scale", "color", "texture", "edges"] as const;
 
 // [x, y, z], or a function of t that gives one, checked at t = 0.
 function animated(v: unknown, what: string): Animated<Vec3> {
@@ -307,13 +353,15 @@ function animated(v: unknown, what: string): Animated<Vec3> {
   return v as (t: number) => Vec3;
 }
 
-// The options every shape takes, checked. Shapes with no surface (points, lines, a group) take no texture.
-function base(kind: string, o: unknown, surface = true): Pick<Body, "kind" | "at" | "rotate" | "spin" | "scale" | "color" | "texture" | "edges"> {
+// The options every shape takes, checked, with `extra`, the ones its kind adds. Shapes with no surface (points, lines,
+// a group) take no texture and no edges.
+function base(kind: string, o: unknown, extra: readonly string[], surface = true): Pick<Body, "kind" | "at" | "rotate" | "spin" | "scale" | "color" | "texture" | "edges"> {
   if (o !== undefined && (o === null || typeof o !== "object" || Array.isArray(o))) fail(`${kind}() takes an options object, such as { spin: [0, 1, 0] }, not ${shown(o)}`);
   const p = (o ?? {}) as ShapeOptions;
+  if (p.texture !== undefined && !surface) fail(`${kind}() takes no texture: it has no surface to put one on`);
+  known(p, [...SHAPE_KEYS.slice(0, surface ? 7 : 5), ...extra], `${kind}()`);
   if (p.color !== undefined && !isHex(p.color)) fail(`${kind}'s color takes a colour as #rrggbb, not ${shown(p.color)}`);
   let texture: Texture | undefined;
-  if (p.texture !== undefined && !surface) fail(`${kind}() takes no texture: it has no surface to put one on`);
   if (typeof p.texture === "string") {
     if (!TEXTURES.includes(p.texture)) fail(`${kind}'s texture takes ${and(TEXTURES.map((n) => `"${n}"`))}, or a function (u, v, t) => brightness 0 to 1, not ${shown(p.texture)}`);
     texture = textures[p.texture]();
@@ -356,6 +404,37 @@ function body(s: unknown, who: string): Body {
   const b = s !== null && typeof s === "object" ? BODIES.get(s as Shape3d) : undefined;
   if (!b) fail(`${who} takes shapes made by ${and(KINDS.map((k) => `${k}()`))}, not ${shown(s)}`);
   return b;
+}
+
+// A list of numbers as a short text, the same for the same numbers: how many, and two 32-bit FNV-1a hashes of their bits.
+function digest(list: Float32Array): string {
+  const u = new Uint32Array(list.buffer, list.byteOffset, list.length);
+  let h = 0x811c9dc5, g = 0x9747b28c;
+  for (let i = 0; i < u.length; i++) {
+    h = Math.imul(h ^ u[i], 16777619);
+    g = Math.imul(g ^ u[i], 2246822519);
+  }
+  return `${u.length}#${(h >>> 0).toString(36)}.${(g >>> 0).toString(36)}`;
+}
+
+// A place or angles as text: the numbers, or an orbit's; null for a function of the user's own, which text can't tell
+// from another written the same way.
+const motion = (v: Animated<Vec3>): string | null => (typeof v === "function" ? (ORBITS.get(v)?.sig ?? null) : `${v[0]},${v[1]},${v[2]}`);
+
+// What fixes a shape's room on screen and its loop, as text: its kind and form, place, angles, spin, scale, whether it
+// draws edges and changes with t, and the same of the shapes in it. Two shapes made alike get the same text, so
+// render3d() finds the view it measured for shapes made anew each frame. Null when a function of the user's own places,
+// turns or forms it.
+function sigOf(b: Body): string | null {
+  if (b.sig !== undefined) return b.sig;
+  const at = motion(b.at), rot = motion(b.rotate);
+  let sig: string | null = null;
+  if (b.form !== null && at !== null && rot !== null) {
+    const inner = b.children ? b.children.map(sigOf) : [];
+    if (!inner.includes(null))
+      sig = `${b.kind}(${b.form})@${at}r${rot}s${b.spin.join(",")}k${b.scale}${b.edges ? "e" : ""}${b.timed ? "~" : ""}${b.children ? `[${inner.join(";")}]` : ""}`;
+  }
+  return (b.sig = sig);
 }
 
 // --- meshes -------------------------------------------------------------------------
@@ -677,9 +756,9 @@ function cloud(name: CloudName, n: number, seed: number): Vec3[] {
  *   torus({ spin: [0.8, 0, 0.35] })
  */
 export function torus(o: ShapeOptions & { radius?: number; tube?: number } = {}): Shape3d {
-  const b = base("torus", o);
+  const b = base("torus", o, ["radius", "tube"]);
   const R = positive(o.radius, "torus's radius", 2), r = positive(o.tube, "torus's tube", 1);
-  return shape({ ...b, ...PLAIN, reach: () => R + r, mesh: (unit) => ringMesh(R, r, unit) });
+  return shape({ ...b, ...PLAIN, reach: () => R + r, mesh: (unit) => ringMesh(R, r, unit), form: `${R},${r}` });
 }
 
 /**
@@ -689,9 +768,9 @@ export function torus(o: ShapeOptions & { radius?: number; tube?: number } = {})
  *   sphere({ color: "#3b82f6", texture: "spots", spin: [0, 1, 0] })
  */
 export function sphere(o: ShapeOptions & { radius?: number } = {}): Shape3d {
-  const b = base("sphere", o);
+  const b = base("sphere", o, ["radius"]);
   const r = positive(o.radius, "sphere's radius", 1);
-  return shape({ ...b, ...PLAIN, reach: () => r, mesh: (unit) => ballMesh(r, unit) });
+  return shape({ ...b, ...PLAIN, reach: () => r, mesh: (unit) => ballMesh(r, unit), form: `${r}` });
 }
 
 /**
@@ -701,23 +780,23 @@ export function sphere(o: ShapeOptions & { radius?: number } = {}): Shape3d {
  *   cube({ spin: [0.4, 0.7, 0], color: "#f97316" })
  */
 export function cube(o: ShapeOptions & { size?: number } = {}): Shape3d {
-  const b = base("cube", o);
+  const b = base("cube", o, ["size"]);
   const h = positive(o.size, "cube's size", 2) / 2;
-  return shape({ ...b, ...PLAIN, reach: () => h * Math.sqrt(3), mesh: () => boxMesh(h) });
+  return shape({ ...b, ...PLAIN, reach: () => h * Math.sqrt(3), mesh: () => boxMesh(h), form: `${h}` });
 }
 
 /** A cylinder standing upright along y, closed at both ends, its rims drawn as lines: `radius` 1, `height` 2. */
 export function cylinder(o: ShapeOptions & { radius?: number; height?: number } = {}): Shape3d {
-  const b = base("cylinder", o);
+  const b = base("cylinder", o, ["radius", "height"]);
   const r = positive(o.radius, "cylinder's radius", 1), h = positive(o.height, "cylinder's height", 2);
-  return shape({ ...b, ...PLAIN, reach: () => Math.hypot(r, h / 2), mesh: (unit) => tubeMesh(r, h, unit, false) });
+  return shape({ ...b, ...PLAIN, reach: () => Math.hypot(r, h / 2), mesh: (unit) => tubeMesh(r, h, unit, false), form: `${r},${h}` });
 }
 
 /** A cone standing on its base, its point up along y, its rim drawn as a line: the base's `radius` 1, `height` 2, centred halfway up. */
 export function cone(o: ShapeOptions & { radius?: number; height?: number } = {}): Shape3d {
-  const b = base("cone", o);
+  const b = base("cone", o, ["radius", "height"]);
   const r = positive(o.radius, "cone's radius", 1), h = positive(o.height, "cone's height", 2);
-  return shape({ ...b, ...PLAIN, reach: () => Math.hypot(r, h / 2), mesh: (unit) => tubeMesh(r, h, unit, true) });
+  return shape({ ...b, ...PLAIN, reach: () => Math.hypot(r, h / 2), mesh: (unit) => tubeMesh(r, h, unit, true), form: `${r},${h}` });
 }
 
 /**
@@ -727,9 +806,9 @@ export function cone(o: ShapeOptions & { radius?: number; height?: number } = {}
  *   plane({ at: [0, -1, 0], width: 8, depth: 8, texture: textures.checker(8, 8) })
  */
 export function plane(o: ShapeOptions & { width?: number; depth?: number } = {}): Shape3d {
-  const b = base("plane", o);
+  const b = base("plane", o, ["width", "depth"]);
   const w = positive(o.width, "plane's width", 4), d = positive(o.depth, "plane's depth", 4);
-  return shape({ ...b, ...PLAIN, reach: () => Math.hypot(w, d) / 2, mesh: () => floorMesh(w, d) });
+  return shape({ ...b, ...PLAIN, reach: () => Math.hypot(w, d) / 2, mesh: () => floorMesh(w, d), form: `${w},${d}` });
 }
 
 /**
@@ -760,13 +839,12 @@ export function plane(o: ShapeOptions & { width?: number; depth?: number } = {})
  *   points([[0, 1, 0], [1, 0, 0], [0, 0, 1]], { char: "*" })
  */
 export function points(list: Animated<readonly Point3[]> | CloudName, o: ShapeOptions & { char?: string; count?: number; seed?: number; glow?: number } = {}): Shape3d {
-  const b = base("points", o, false);
+  const b = base("points", o, ["char", "count", "seed", "glow"], false);
   const named = typeof list === "string";
   if (named && !Object.hasOwn(CLOUDS, list)) fail(`points() takes a cloud's name, ${and(Object.keys(CLOUDS).map((n) => `"${n}"`))}, or a list of points, each [x, y, z], not ${shown(list)}`);
   if (!named && (o.count !== undefined || o.seed !== undefined)) fail("points' count and seed are for a named cloud, such as points(\"galaxy\", { count: 500 }); a list of your own is drawn as it is");
-  const source: Animated<readonly Vec3[]> = named
-    ? cloud(list, wholeIn(o.count, "points' count", CLOUDS[list].count, 1, 20000), wholeIn(o.seed, "points' seed", 1, -(2 ** 31), 2 ** 31 - 1))
-    : (list as Animated<readonly Vec3[]>);
+  const count = named ? wholeIn(o.count, "points' count", CLOUDS[list].count, 1, 20000) : 0, seed = named ? wholeIn(o.seed, "points' seed", 1, -(2 ** 31), 2 ** 31 - 1) : 0;
+  const source: Animated<readonly Vec3[]> = named ? cloud(list, count, seed) : (list as Animated<readonly Vec3[]>);
   const timed = typeof source === "function";
   const check = (l: unknown, when: string): readonly Vec3[] => {
     if (!Array.isArray(l)) fail(`points() takes a cloud's name, a list of points, each [x, y, z], or a function of t that gives one, not ${shown(l)}${when}`);
@@ -787,7 +865,8 @@ export function points(list: Animated<readonly Point3[]> | CloudName, o: ShapeOp
   const still = far(first);
   const fn = source as (t: number) => readonly Vec3[];
   const dots = timed ? fn : Float32Array.from(first.flat());
-  return shape({ ...b, ...PLAIN, reach: timed ? (t) => far(fn(t)) : () => still, cloud: { dots, char, glow }, timed });
+  const form = timed ? null : named ? `${list},${count},${seed}` : digest(dots as Float32Array);
+  return shape({ ...b, ...PLAIN, reach: timed ? (t) => far(fn(t)) : () => still, cloud: { dots, char, glow }, timed, form });
 }
 
 /**
@@ -802,7 +881,7 @@ export function points(list: Animated<readonly Point3[]> | CloudName, o: ShapeOp
  *   lines((t) => [[[0, 0, 0], [Math.cos(t), Math.sin(t), 0]]])             // a hand going round
  */
 export function lines(list: Animated<readonly Point3[] | readonly (readonly Point3[])[]>, o: ShapeOptions & { char?: string; closed?: boolean } = {}): Shape3d {
-  const b = base("lines", o, false);
+  const b = base("lines", o, ["char", "closed"], false);
   const timed = typeof list === "function";
   // One path (its first item is a point) or a list of paths, as a list of paths; none for anything else.
   const paths = (l: unknown): readonly (readonly Vec3[])[] =>
@@ -824,12 +903,14 @@ export function lines(list: Animated<readonly Point3[] | readonly (readonly Poin
   };
   const still = far(first);
   const fn = timed ? (t: number) => paths(list(t)) : null;
+  const fixed = fn ? null : first.map((p) => Float32Array.from(p.flat()));
   return shape({
     ...b,
     ...PLAIN,
     reach: fn ? (t) => far(fn(t)) : () => still,
-    wire: { paths: fn ?? first.map((p) => Float32Array.from(p.flat())), closed: o.closed ?? false, char: o.char === undefined ? 0 : code(o.char) },
+    wire: { paths: fn ?? fixed!, closed: o.closed ?? false, char: o.char === undefined ? 0 : code(o.char) },
     timed,
+    form: fixed && fixed.map(digest).join("|"),
   });
 }
 
@@ -843,7 +924,7 @@ export function lines(list: Animated<readonly Point3[] | readonly (readonly Poin
  *     { at: orbit({ radius: 5, period: 12 }) })
  */
 export function group(shapes: readonly Shape3d[], o: ShapeOptions = {}): Shape3d {
-  const b = base("group", o, false);
+  const b = base("group", o, [], false);
   if (!Array.isArray(shapes)) fail(`group() takes a list of shapes, such as [sphere(), cube({ at: [2, 0, 0] })], not ${shown(shapes)}`);
   // a shape with no colour of its own takes the group's, on a copy, so the shape stays as it was elsewhere
   const children = shapes.map((s) => {
@@ -858,7 +939,7 @@ export function group(shapes: readonly Shape3d[], o: ShapeOptions = {}): Shape3d
     }
     return r;
   };
-  return shape({ ...b, ...PLAIN, reach, children, timed: children.some((c) => c.timed) });
+  return shape({ ...b, ...PLAIN, reach, children, timed: children.some((c) => c.timed), form: "" });
 }
 
 // A body, and the bodies inside it, in a colour where they have none.
@@ -875,7 +956,7 @@ function paint(b: Body, color: string): Body {
  *   mesh([[0, 1, 0], [-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1]], [[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1], [1, 2, 3, 4]])
  */
 export function mesh(vertices: readonly Point3[], faces: readonly (readonly number[])[], o: ShapeOptions = {}): Shape3d {
-  const b = base("mesh", o);
+  const b = base("mesh", o, []);
   if (o.texture !== undefined) fail("mesh() takes no texture: its faces have no u and v; parametric() makes a surface of your own that takes one");
   if (!Array.isArray(vertices) || !vertices.length) fail(`mesh() takes a list of vertices, each [x, y, z], such as [[0, 1, 0], [1, -1, 0], [-1, -1, 0]], not ${shown(vertices)}`);
   const vs = vertices.map((v, i) => vec3(v, `mesh's vertex ${i}`));
@@ -887,7 +968,7 @@ export function mesh(vertices: readonly Point3[], faces: readonly (readonly numb
   const built = flat(vs, faces);
   let far = 0;
   for (const v of vs) far = Math.max(far, Math.hypot(v[0], v[1], v[2]));
-  return shape({ ...b, ...PLAIN, reach: () => far, mesh: () => built });
+  return shape({ ...b, ...PLAIN, reach: () => far, mesh: () => built, form: `${far},${digest(built.pos)}` });
 }
 
 /**
@@ -895,13 +976,14 @@ export function mesh(vertices: readonly Point3[], faces: readonly (readonly numb
  * function that names a third parameter, (u, v, t), is a surface that moves. Lit on whichever side faces the camera,
  * smooth across, its normals worked out from its points; where it meets itself at u 0 and 1 (or v), it is smooth across
  * the join too. `segments`: quads across u and v, one number for both or [u, v]; by default about one every column and
- * a half of its length on screen. Its texture's u and v are fn's.
+ * a half of its length on screen. Its texture's u and v are fn's. fn is checked at u 0, v 0 and t 0; a point it gives
+ * elsewhere that isn't three numbers is taken as the centre.
  *
  *   // a saddle
  *   parametric((u, v) => [u * 4 - 2, (u * 4 - 2) * (v * 4 - 2) / 4, v * 4 - 2])
  */
 export function parametric(fn: (u: number, v: number, t: number) => Vec3, o: ShapeOptions & { segments?: number | readonly [number, number] } = {}): Shape3d {
-  const b = base("parametric", o);
+  const b = base("parametric", o, ["segments"]);
   if (typeof fn !== "function") fail(`parametric() takes a function (u, v) => [x, y, z], u and v each 0 to 1, or (u, v, t) => [x, y, z] for a surface that moves, not ${shown(fn)}`);
   vec3(fn(0, 0, 0), "parametric's function at u 0, v 0 and t 0");
   // A function that names t moves, and is built again each frame.
@@ -913,7 +995,7 @@ export function parametric(fn: (u: number, v: number, t: number) => Vec3, o: Sha
   // How long it runs along u and along v, and how far it reaches, from a look at a 32 by 32 grid of its points.
   const probe = (t: number) => {
     const n = 32, p: Vec3[] = [];
-    for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) p.push(fn(i / n, j / n, t));
+    for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) p.push(fn(i / n, j / n, t) ?? ORIGIN);
     let lu = 0, lv = 0, far = 0;
     const d = (a: Vec3, c: Vec3) => Math.hypot(a[0] - c[0], a[1] - c[1], a[2] - c[2]) || 0;
     for (let k = 0; k <= n; k++) {
@@ -945,6 +1027,7 @@ export function parametric(fn: (u: number, v: number, t: number) => Vec3, o: Sha
       return sheet(m, fn, nu, nv, t);
     },
     timed,
+    form: null,
   });
 }
 
@@ -954,7 +1037,8 @@ function sheet(m: Mesh, fn: (u: number, v: number, t: number) => Vec3, nu: numbe
   let far = 0;
   for (let j = 0, k = 0; j <= nv; j++)
     for (let i = 0; i <= nu; i++, k += 3) {
-      const p = fn(i / nu, j / nv, t);
+      // null or undefined is the centre, as anything else that isn't three numbers is
+      const p = fn(i / nu, j / nv, t) ?? ORIGIN;
       pos[k] = Number.isFinite(p[0]) ? p[0] : 0;
       pos[k + 1] = Number.isFinite(p[1]) ? p[1] : 0;
       pos[k + 2] = Number.isFinite(p[2]) ? p[2] : 0;
@@ -992,6 +1076,7 @@ function sheet(m: Mesh, fn: (u: number, v: number, t: number) => Vec3, nu: numbe
  */
 export function orbit(o: { radius: number; period: number; tilt?: number; center?: Vec3; phase?: number }): (t: number) => Vec3 {
   if (!o || typeof o !== "object") fail(`orbit() takes { radius, period }, such as { radius: 2.4, period: 6 }, not ${shown(o)}`);
+  known(o, ["radius", "period", "tilt", "center", "phase"], "orbit()");
   const r = positive(o.radius, "orbit's radius"), period = positive(o.period, "orbit's period");
   const tilt = finite(o.tilt, "orbit's tilt", 0), phase = finite(o.phase, "orbit's phase", 0);
   const c = vec3(o.center, "orbit's center", ORIGIN);
@@ -1002,7 +1087,7 @@ export function orbit(o: { radius: number; period: number; tilt?: number; center
     const x = r * Math.cos(a), z = r * Math.sin(a);
     return [c[0] + x, c[1] + z * st, c[2] + z * ct];
   };
-  ORBITS.set(fn, period);
+  ORBITS.set(fn, { period, sig: `orbit(${r},${period},${tilt},${c.join(",")},${phase})` });
   return fn;
 }
 
@@ -1066,6 +1151,10 @@ export interface SceneOptions {
 const DONUT = ".,-~:;=!*#$@";
 const NEAR = 0.05;
 const COLOR_BY: readonly ColorBy[] = ["shape", "depth", "light"];
+// What a scene's options and a piece's spec take, and a camera's.
+const SCENE_KEYS = ["camera", "light", "ambient", "ramp", "invert", "colorBy", "colors", "shades", "fit", "period"];
+const SPEC_KEYS = ["name", "note", "category", "cols", "rows", "fps", "palette", "ink", "ground", "cell", "loop", "still", "clock", "options", "clear"];
+const CAMERA_KEYS = ["distance", "zoom", "tilt", "spin"];
 
 // A scene's options, checked, with their defaults.
 interface Settings {
@@ -1088,6 +1177,7 @@ function settings(o: SceneOptions, who: string): Settings {
   if (o === null || typeof o !== "object") fail(`${who} takes its options as an object, such as { light: [0, 1, -1] }, not ${shown(o)}`);
   const cam = o.camera ?? {};
   if (cam === null || typeof cam !== "object" || Array.isArray(cam)) fail(`camera takes { distance, zoom, tilt, spin }, not ${shown(o.camera)}`);
+  known(cam, CAMERA_KEYS, "camera");
   const light = vec3(o.light, "light", [-0.4, 1, -1]);
   const len = Math.hypot(...light);
   if (!len) fail("light takes a direction towards the light, not [0, 0, 0]: [-0.4, 1, -1] is from the upper left");
@@ -1193,7 +1283,7 @@ function rate(w: number, period: number | undefined): number {
 function orbits(bodies: readonly Body[], period: number | undefined): void {
   if (period === undefined) return;
   for (const b of bodies) {
-    const p = typeof b.at === "function" ? ORBITS.get(b.at) : undefined;
+    const p = typeof b.at === "function" ? ORBITS.get(b.at)?.period : undefined;
     if (p !== undefined && !whole(period / p))
       fail(`an orbit going round every ${p} seconds doesn't go round a whole number of times in the scene's period of ${period}: make the period a multiple of ${p}`);
     if (b.children) orbits(b.children, period);
@@ -1202,7 +1292,7 @@ function orbits(bodies: readonly Body[], period: number | undefined): void {
 
 // The fastest anything in it turns or goes round, in radians a second: its spins, its orbit, and the fastest inside it.
 function speed(b: Body, period: number | undefined): number {
-  const p = typeof b.at === "function" ? ORBITS.get(b.at) : undefined;
+  const p = typeof b.at === "function" ? ORBITS.get(b.at)?.period : undefined;
   let inner = 0;
   for (const c of b.children ?? []) inner = Math.max(inner, speed(c, period));
   return b.spin.reduce((sum, w) => sum + Math.abs(rate(w, period)), 0) + (p ? TAU / p : 0) + inner;
@@ -1406,7 +1496,7 @@ function loopOf(shapes: readonly Shape3d[] | ((t: number) => readonly Shape3d[])
   const add = (b: Body): boolean => {
     if (b.timed || typeof b.rotate === "function") return false;
     if (typeof b.at === "function") {
-      const p = ORBITS.get(b.at);
+      const p = ORBITS.get(b.at)?.period;
       if (p === undefined) return false;
       periods.push(p);
     }
@@ -1465,6 +1555,8 @@ class View {
   #id = 0;
   #shade: Uint8Array | null = null;
   #tex: Texture | undefined;
+  // whether the surface being drawn covered any cell's centre, seen or hidden
+  #hit = false;
 
   constructor(cols: number, rows: number, aspect: number, set: Settings, fit: Fit, loop: number | undefined) {
     this.cols = cols;
@@ -1659,6 +1751,7 @@ class View {
       else V[o + 2] = -1;
     }
     const spare = nv * S;
+    this.#hit = false;
     for (let j = 0; j < tri.length; j += 3) {
       const A = tri[j] * S, B = tri[j + 1] * S, C = tri[j + 2] * S;
       // Which way it faces: its own normal, turned to agree with its corners' normals. Turned away from the camera, a
@@ -1673,6 +1766,7 @@ class View {
       if (V[A + 2] >= 0 && V[B + 2] >= 0 && V[C + 2] >= 0) this.fill(V, A, B, C, sign);
       else this.cut(V, A, B, C, spare, sign);
     }
+    if (!this.#hit) this.speck(b, p, k);
     if (b.edges && mesh.edges) this.edges(V, mesh, m, b.reach(this.#t) * k * 0.35);
   }
 
@@ -1731,6 +1825,7 @@ class View {
     // none, or not a number: nothing to fill
     if (!area) return;
     const inv = 1 / area;
+    let hit = false;
     for (let r = r0; r <= r1; r++) {
       const sy = r + 0.5;
       for (let cc = c0; cc <= c1; cc++) {
@@ -1739,6 +1834,7 @@ class View {
         const w1 = ((x2 - sx) * (y0 - sy) - (x0 - sx) * (y2 - sy)) * inv;
         const w2 = 1 - w0 - w1;
         if (w0 < -1e-9 || w1 < -1e-9 || w2 < -1e-9) continue;
+        hit = true;
         const q = w0 * q0 + w1 * q1 + w2 * q2;
         const i = r * cols + cc;
         if (q <= z[i]) continue;
@@ -1771,6 +1867,42 @@ class View {
         s.put(i, ch, shade);
       }
     }
+    if (hit) this.#hit = true;
+  }
+
+  // A surface too small on screen to cover a cell's centre, a moon far off, still shows, as a point does: the cell its
+  // centre falls in, at its front's depth, lit as its side facing the camera is. A larger one that covered none is off
+  // the grid, edge on or seen from inside, and draws nothing.
+  speck(b: Body, p: Float64Array, k: number): void {
+    const { cols, rows, aspect, set, z, who } = this;
+    const D = set.distance, f = this.#f, d = p[2] + D;
+    if (!(d >= NEAR)) return;
+    const r = b.reach(this.#t) * k;
+    if (!((f * r) / d < 1.5)) return;
+    const col = Math.floor(cols / 2 + (f * p[0]) / d), row = Math.floor(rows / 2 - (f * p[1]) / d / aspect);
+    if (!(col >= 0 && col < cols && row >= 0 && row < rows)) return;
+    const i = row * cols + col, q = 1 / Math.max(NEAR, d - r);
+    if (q <= z[i]) return;
+    z[i] = q;
+    who[i] = this.#id;
+    const l = set.light, len = Math.hypot(p[0], p[1], d);
+    let v = -(p[0] * l[0] + p[1] * l[1] + d * l[2]) / len;
+    v = (v > 0 ? v : 0) * (1 - set.ambient) + set.ambient;
+    const chars = set.chars, nc = chars.length;
+    let ci = (v * nc) | 0;
+    if (ci >= nc) ci = nc - 1;
+    const ch = chars[this.#flip ? nc - 1 - ci : ci];
+    if (ch === 32) return;
+    const steps = this.#shade;
+    let shade = NONE;
+    if (steps) {
+      const ns = steps.length;
+      let g = set.colorBy === "depth" ? (this.#zk ? (this.fit.zmax - p[2]) * this.#zk : 1) : v;
+      g = g < 0 ? 0 : g;
+      const si = (g * ns) | 0;
+      shade = steps[si >= ns ? ns - 1 : si];
+    }
+    this.#s!.put(i, ch, shade);
   }
 
   // A surface's edges as lines: a closed one's where a face it joins is towards the camera, the others' all, each
@@ -1869,10 +2001,12 @@ function fade(colors: PaletteSpec, shades: number, paper: boolean): readonly str
 }
 
 // The views render3d() has made for each surface, the latest last, each for a list of shapes and options as they were
-// passed: a list with the same shapes in the same order, and options with the same values, find their view again, so
-// a list or options written out inside the drawing don't make it measure the scene again every frame.
+// passed: a list with the same shapes in the same order, or with shapes made alike (the same sigOf() text), and options
+// with the same values, find their view again, so shapes, a list or options written out inside the drawing don't make
+// it measure the scene again every frame.
 interface Kept {
   shapes: readonly Shape3d[];
+  sig: string | null;
   key: string;
   view: View;
 }
@@ -1883,15 +2017,18 @@ const same = (a: readonly Shape3d[], b: readonly Shape3d[]) => a.length === b.le
  * Draws shapes at t seconds into a grid you already have, over what is there: each cell a shape covers takes the
  * nearest surface's character and colour, and the rest are left as they were. Use it inside piece() to mix 3D with
  * text, lines and the rest; scene() is this with the piece made for you. Coloured shapes take the nearest colours the
- * piece has, so give piece() a palette with them. The options are scene()'s, each with the same default. The fit (and
- * the loop the spins are rounded to) is worked out the first time it sees a list of shapes and options, and kept for
- * the same shapes in the same order with options of the same values, so make the shapes once, outside the drawing,
- * and move them with at, rotate and spin; shapes made anew every frame are measured anew every frame. Throws, saying
- * what to change, for a surface, shapes or options it can't take.
+ * piece has, so give piece() the palette scenePalette() makes of them. The options are scene()'s, each with the same
+ * default. The fit (and the loop the spins are rounded to) is worked out the first time it sees a list of shapes and
+ * options, and kept for the same shapes, or shapes made alike, in the same order with options of the same values:
+ * shapes written out inside the drawing are measured once, as long as each is placed, turned and formed by the same
+ * numbers or orbit() every frame. One placed, turned or formed by a function of your own (an at or rotate of t, points,
+ * lines or parametric() from a function) is measured again each frame it is made anew, so make it once, outside the
+ * drawing. One placed by numbers worked out from t, such as at: [Math.sin(t), 0, 0], is another shape each frame, and
+ * the fit zooms to keep each in the frame: give it at: (t) => [Math.sin(t), 0, 0] instead, or a camera.zoom. Throws,
+ * saying what to change, for a surface, shapes or options it can't take.
  *
- *   const shapes = [cube({ spin: [0.5, 0.7, 0] })];
  *   export default piece({ name: "box", cols: 40, rows: 20 }, (t, s) => {
- *     render3d(s, shapes, t);
+ *     render3d(s, cube({ spin: [0.5, 0.7, 0] }), t);
  *     s.write(1, 19, "a cube");
  *   });
  */
@@ -1905,56 +2042,109 @@ export function render3d(s: Surface, shapes: Shape3d | readonly Shape3d[], t: nu
   if (!kept) VIEWS.set(s, (kept = []));
   let v = kept.find((k) => k.key === key && same(k.shapes, shapes));
   if (!v) {
-    const set = settings(o, "render3d()");
-    orbits(shapes.map((x) => body(x, "render3d()")), set.period);
-    const loop = set.period ?? loopOf(shapes, set.spin);
-    v = { shapes: [...shapes], key, view: new View(s.cols, s.rows, s.aspect, set, measure(shapes, set, s.cols, s.rows, s.aspect, loop), loop) };
-    // a few at most: a drawing that makes new shapes every frame finds none of them again
-    if (kept.push(v) > 8) kept.shift();
+    const bodies = shapes.map((x) => body(x, "render3d()"));
+    // shapes made anew, alike: the view the ones before them were measured for
+    const sigs = bodies.map(sigOf), sig = sigs.includes(null) ? null : sigs.join(";");
+    if (sig !== null) v = kept.find((k) => k.key === key && k.sig === sig);
+    if (!v) {
+      if (o !== null && typeof o === "object") known(o, SCENE_KEYS, "render3d()");
+      const set = settings(o, "render3d()");
+      orbits(bodies, set.period);
+      const loop = set.period ?? loopOf(shapes, set.spin);
+      v = { shapes: [...shapes], sig, key, view: new View(s.cols, s.rows, s.aspect, set, measure(shapes, set, s.cols, s.rows, s.aspect, loop), loop) };
+      // a few at most: a drawing that makes new shapes of its own functions every frame finds none of them again
+      if (kept.push(v) > 8) kept.shift();
+    }
   }
   v.view.draw(s, shapes, Number.isFinite(t) ? t : 0);
 }
 
+/** What scene() draws: a shape, a list of shapes, or a function of t that gives a list. */
+export type Shapes = Shape3d | readonly Shape3d[] | ((t: number) => readonly Shape3d[]);
+
+// The colours shapes are drawn in on one page: the scene's one fade, or each shape colour's shades, each colour once.
+const usedColors = (bodies: readonly Body[]) => [...new Set(leaves(bodies).map((b) => b.color).filter((c): c is string => !!c))];
+function colorsOf(bodies: readonly Body[], set: Settings, paper: boolean): string[] {
+  if (set.colors) return [...fade(set.colors, set.shades, paper)];
+  return usedColors(bodies).flatMap((c) => shadesOf(c, set.colorBy, set.shades, paper));
+}
+// How many colours those are, in words, for an error.
+const tally = (bodies: readonly Body[], set: Settings) => (set.colors ? `a fade of ${set.shades} shades` : `${usedColors(bodies).length} colours in ${set.shades} shades each`);
+
 /**
- * A scene of shapes as a piece: 64 by 24 unless you give a size, named "scene", in the "shapes" category. `shapes` is a
- * shape, a list, or a function of t that gives a list, for shapes that come and go (its colours must all be in its list
- * at t = 0, since a piece's colours are fixed when it is made). Shapes with colours make it coloured: each colour in
- * `shades` steps for each page, plus the ink for shapes with none. It moves at 30 frames a second when anything in it
- * moves, and is a still when nothing does; it loops by `period`, or by itself when its motions all repeat within a
- * minute. Throws, saying what to change, for an option it can't take.
+ * The palette a piece of your own needs to draw these shapes in colour with render3d(), given the same options: the
+ * kit's INK first, so anything drawn with no colour of its own, a shape or your text, is in the page's text colour;
+ * or your own colours first (`own`, the first of them then the piece's ink); then each shape colour's shades for each
+ * page, or the scene's one fade, as scene() makes them. Undefined when nothing has a colour and you give none. Throws
+ * past the 32 colours a page a piece can have.
  *
- *   export default scene({ name: "donut", cols: 40, rows: 22 }, torus({ spin: [0.8, 0, 0.35] }));
+ *   const box = cube({ spin: 1, color: "#38bdf8" });
+ *   export default piece({ name: "box", cols: 36, rows: 14, palette: scenePalette(box) }, (t, s) => {
+ *     render3d(s, box, t);
+ *     s.write(14, 13, "a box");
+ *   });
  */
-export function scene<O extends Options = Options>(spec: MakerSpec<O> & SceneOptions, shapes: Shape3d | readonly Shape3d[] | ((t: number) => readonly Shape3d[])): KitPiece<O> {
+export function scenePalette(shapes: Shapes, o: SceneOptions = {}, own?: PaletteSpec): PaletteSpec | undefined {
+  if (o !== null && typeof o === "object") known(o, SCENE_KEYS, "scenePalette()");
+  const set = settings(o, "scenePalette()");
+  if (one(shapes)) shapes = [shapes];
+  if (typeof shapes !== "function" && !Array.isArray(shapes)) fail(`scenePalette() takes a shape, a list of shapes, or a function of t that gives a list, not ${shown(shapes)}`);
+  const bodies = listAt(shapes, 0, "scenePalette()").map((s) => body(s, "scenePalette()"));
+  const light = colorsOf(bodies, set, true), dark = colorsOf(bodies, set, false);
+  if (!light.length && own === undefined) return undefined;
+  // Palette() checks your own colours, saying what is wrong with them
+  const mine = own === undefined ? null : new Palette(own);
+  const first = mine ? { light: mine.colors.slice(0, mine.size), dark: mine.colors.slice(mine.themed ? mine.size : 0, mine.themed ? 2 * mine.size : mine.size) } : { light: [INK.light], dark: [INK.dark] };
+  const out = { light: [...first.light, ...light], dark: [...first.dark, ...dark] };
+  if (out.light.length > 32) fail(`scenePalette(): these colours come to ${out.light.length} a page, ${tally(bodies, set)} and ${first.light.length} first, past the 32 a page a piece can have: use fewer colours or fewer shades`);
+  return out;
+}
+
+/**
+ * A scene of shapes as a piece: 64 by 24 unless you give a size, named "scene", in the "shapes" category. The spec,
+ * which may be left out, is a piece's spec and the scene's options. `shapes` is a shape, a list, or a function of t that
+ * gives a list, for shapes that come and go (its colours must all be in its list at t = 0, since a piece's colours are
+ * fixed when it is made). Shapes with colours make it coloured: each colour in `shades` steps for each page, plus the
+ * ink for shapes with none. It moves at 30 frames a second when anything in it moves, and is a still when nothing does;
+ * it loops by `period`, or by itself when its motions all repeat within a minute. Throws, saying what to change, for an
+ * option it can't take.
+ *
+ *   export default scene(cube({ rotate: [-0.6, 0.7, 0], spin: [0.5, 1, 0] }));
+ *   export const donut = scene({ name: "donut", cols: 40, rows: 22 }, torus({ spin: [0.8, 0, 0.35] }));
+ */
+export function scene<O extends Options = Options>(shapes: Shapes): KitPiece<O>;
+export function scene<O extends Options = Options>(spec: MakerSpec<O> & SceneOptions, shapes: Shapes): KitPiece<O>;
+export function scene<O extends Options = Options>(first: (MakerSpec<O> & SceneOptions) | Shapes, second?: Shapes): KitPiece<O> {
+  // scene(shapes): every option its default
+  const drawable = one(first) || Array.isArray(first) || typeof first === "function";
+  if (drawable && second !== undefined) fail("scene() takes its spec first and its shapes second, such as scene({ cols: 40, rows: 20 }, torus()), or the shapes alone");
+  const spec = (drawable ? {} : first) as MakerSpec<O> & SceneOptions;
+  let shapes = (drawable ? first : second) as Shapes;
   const base = specOf<O>(spec, "scene");
+  if (spec) known(spec, [...SPEC_KEYS, ...SCENE_KEYS], "scene()");
   const set = settings((spec ?? {}) as SceneOptions, "scene()");
   if (one(shapes)) shapes = [shapes];
   if (typeof shapes !== "function" && !Array.isArray(shapes)) fail(`scene() takes a shape, a list of shapes, such as [torus()], or a function of t that gives a list, not ${shown(shapes)}`);
   const list = shapes as readonly Shape3d[] | ((t: number) => readonly Shape3d[]);
-  const first = listAt(list, 0, "scene()").map((s) => body(s, "a scene"));
-  orbits(first, set.period);
+  const bodies = listAt(list, 0, "scene()").map((s) => body(s, "a scene"));
+  orbits(bodies, set.period);
 
   // Its colours: the scene's one fade, or each shape colour's shades for each page, and the ink for shapes with none.
   let palette: PaletteSpec | undefined = base.palette, ink: Themed<Color> | undefined = base.ink;
-  if (palette === undefined && set.colors) palette = { light: fade(set.colors, set.shades, true), dark: fade(set.colors, set.shades, false) };
-  else if (palette === undefined) {
-    const drawn = leaves(first);
-    const used = [...new Set(drawn.map((b) => b.color).filter((c): c is string => !!c))];
-    if (used.length) {
-      const light = used.flatMap((c) => shadesOf(c, set.colorBy, set.shades, true));
-      const dark = used.flatMap((c) => shadesOf(c, set.colorBy, set.shades, false));
-      const plain = drawn.some((b) => b.color === undefined);
+  if (palette === undefined) {
+    const light = colorsOf(bodies, set, true), dark = colorsOf(bodies, set, false);
+    if (light.length) {
+      const plain = !set.colors && leaves(bodies).some((b) => b.color === undefined);
       if (plain) {
         light.push(INK.light);
         ink = dark.push(INK.dark) - 1;
       }
-      if (light.length > 32)
-        fail(`this scene's colours come to ${light.length} a page, ${used.length} colours in ${set.shades} shades each${plain ? " and the ink for shapes with none" : ""}, past the 32 a page a piece can have: use fewer colours or fewer shades`);
+      if (light.length > 32) fail(`this scene's colours come to ${light.length} a page, ${tally(bodies, set)}${plain ? " and the ink for shapes with none" : ""}, past the 32 a page a piece can have: use fewer colours or fewer shades`);
       palette = { light, dark };
     }
   }
 
-  const moving = typeof list === "function" || set.spin !== 0 || first.some(moves);
+  const moving = typeof list === "function" || set.spin !== 0 || bodies.some(moves);
   const repeats = set.period ?? loopOf(list, set.spin);
   const loop = base.loop ?? repeats;
   const aspect = base.cell === 1 ? 1 : 2;
