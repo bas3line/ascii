@@ -150,15 +150,56 @@ test("progressBar: a still at a value, or filling and coming round", () => {
   assert.equal(filling.meta.loop, 3);
   assert.ok(frame(filling, 0).endsWith("  0%"));
   assert.ok(frame(filling, 2.5).endsWith("100%"), "full, and held");
-  assert.throws(() => progressBar({ value: 2 }), /progressBar's value takes a number from 0 to 1, not 2/);
+  assert.equal(filling.meta.still, 2, "held still, it is full");
+  // filling over 2.5 seconds and a second full makes 3.5: made up to 4, a loop other widgets share
+  assert.equal(progressBar({ seconds: 2.5 }).meta.loop, 4);
+  assert.throws(() => progressBar({ value: 2 }), /progressBar's value takes a number from 0 to 1, a percentage such as "64%", or a function that reads one, not 2: did you mean 0\.02, or "2%"\?/);
 });
 
-test("spinner: its frames in turn, a tenth of a second each", () => {
+test("progressBar and gauge take a value the same ways: a number in their range, or a percentage", () => {
+  assert.equal(frame(progressBar({ value: "50%", width: 10 }), 0), "█████░░░░░  50%");
+  assert.equal(frame(progressBar({ value: 32, min: 0, max: 64, width: 10 }), 0), "█████░░░░░  50%");
+  assert.ok(frame(gauge({ value: "64%" }), 0).includes("64%"));
+  assert.ok(frame(gauge({ value: 64 }), 0).includes("64%"));
+  // a share given to a gauge reading 0 to 100 is asked about, not drawn as an empty dial at 1%
+  assert.throws(() => gauge({ value: 0.64 }), /gauge's value is a reading from 0 to 100, and 0\.64 is less than 1: did you mean 64, or "64%"\? Give it max: 1 for a reading from 0 to 1/);
+  assert.ok(frame(gauge({ value: 0.64, max: 1, unit: "" }), 0).includes("1"), "with max: 1 it is a share");
+  assert.throws(() => gauge({ value: "164%" }), /gauge's value takes a percentage from "0%" to "100%"/);
+});
+
+test("a value read by a function makes a live widget: a clock, read every frame", () => {
+  let cpu = 10;
+  const g = gauge({ value: () => cpu, label: "cpu" });
+  assert.equal(g.meta.clock, true);
+  assert.equal(g.meta.loop, undefined);
+  const f = g.default();
+  assert.ok(f(0).includes("10%"));
+  cpu = 87;
+  assert.ok(f(0).includes("87%"), "read again on the next frame");
+  let done = 0.25;
+  const bar = progressBar({ value: () => done, width: 8 });
+  const b = bar.default();
+  assert.ok(b(0).endsWith(" 25%"));
+  done = 2;
+  assert.ok(b(0).endsWith("100%"), "a reading past the end is the end");
+  const history = [1, 2, 3];
+  const spark = sparkline(() => history, { label: "q" });
+  assert.equal(spark.meta.clock, true);
+  const s = spark.default();
+  const before = s(0);
+  history.push(9);
+  assert.notEqual(s(0), before);
+  assert.ok(s(0).includes("9"));
+});
+
+test("spinner: its frames in turn, its turn a loop other widgets share", () => {
+  // four frames: a tenth of a second each would be 0.4, so the turn is half a second, an eighth each
   const s = spinner("line", { label: "wait" });
-  assert.equal(s.meta.loop, 0.4);
-  assert.deepEqual([0, 0.1, 0.2, 0.3].map((t) => frame(s, t)), ["- wait", "\\ wait", "| wait", "/ wait"], "each frame at its own moment");
-  assert.deepEqual([0.05, 0.39, 0.4].map((t) => frame(s, t)), ["- wait", "/ wait", "- wait"]);
+  assert.equal(s.meta.loop, 0.5);
+  assert.deepEqual([0, 0.125, 0.25, 0.375].map((t) => frame(s, t)), ["- wait", "\\ wait", "| wait", "/ wait"], "each frame at its own moment");
+  assert.deepEqual([0.05, 0.49, 0.5].map((t) => frame(s, t)), ["- wait", "/ wait", "- wait"]);
   assert.equal(spinner("dots", { speed: "slow" }).meta.loop, 2);
+  assert.equal(spinner("line", { period: 0.4 }).meta.loop, 0.4, "a period of your own is kept");
   for (const name of Object.keys(spinners)) contract(spinner(name as keyof typeof spinners));
   assert.throws(() => spinner("moon" as never), /spinner\(\) takes "dots", "line", "arc"/);
 });
@@ -170,16 +211,25 @@ test("gauge: the reading in its middle, coloured by how high it is", () => {
   assert.ok(frame(g, 0).split("\n")[0].includes(" disk "));
   assert.ok(ink(frame(gauge({ value: 90 }), 0).replace(/░/g, "")) > ink(frame(gauge({ value: 10 }), 0).replace(/░/g, "")), "more of the dial is filled higher up");
   const live = gauge();
-  assert.equal(live.meta.loop, 8);
-  assert.equal(frame(live, 1), frame(live, 9));
+  assert.equal(live.meta.loop, 12);
+  assert.equal(frame(live, 1), frame(live, 13));
   assert.ok(frame(gauge({ value: 5, max: 10, unit: " rpm" }), 0).includes("5 rpm"));
-  assert.throws(() => gauge({ value: 120 }), /gauge's value takes a number from 0 to 100, not 120/);
+  assert.throws(() => gauge({ value: 120 }), /gauge's value takes a number from 0 to 100, a percentage such as "64%", or a function that reads one, not 120/);
   assert.throws(() => gauge({ min: 5, max: 5 }), /gauge's max takes a number above its min/);
+  // with no frame of its own, the label sits over the dial
+  const bare = rows(gauge({ value: 40, label: "mem", frame: false }), 0);
+  assert.ok(!bare.join("").includes("╭") && bare[0].includes("mem"));
 });
 
 test("sparkline: numbers drawn in from the left, or a live reading scrolling", () => {
   const s = sparkline([1, 3, 2, 5, 4, 6], { label: "up", width: 20 });
-  assert.equal(s.meta.loop, 4.5);
+  assert.equal(s.meta.loop, 5);
+  assert.equal(s.meta.still, 1.5, "held still, it is drawn in");
+  // numbers all alike draw a flat line, every frame, and an SVG
+  const flat = sparkline([0, 0, 0, 0], { label: "errors" });
+  contract(flat);
+  assert.ok(svg(flat).startsWith("<svg"));
+  assert.ok(frame(flat, 2).includes("0"));
   assert.ok(ink(frame(s, 0.5)) < ink(frame(s, 2)), "drawing in");
   assert.ok(frame(s, 2).includes("6"), "its latest number once drawn");
   assert.ok(frame(s, 2).startsWith("up ") || frame(s, 2).split("\n").some((r) => r.startsWith("up ")));
@@ -200,6 +250,9 @@ test("barChart: a bar for each value, growing in, values and names", () => {
   assert.equal(grown[3], "███  ███", "mon is half");
   assert.equal(grown[0], "      4 ", "its value over it");
   assert.equal(ink(frame(b, 0)), ink("mon  tue"), "nothing grown at the start, the names already there");
+  // held still, for reduced motion and an SVG's first frame, the bars are grown
+  assert.deepEqual(rows(b, b.meta.still!), grown);
+  assert.equal(b.meta.loop, 4, "0.8 to grow, a tenth for the second bar and 3 held: made up to 4");
   const still = barChart([1, 2], { seconds: 0 });
   assert.equal(still.meta.fps, 0);
   const h = barChart({ go: 1, rust: 2 }, { horizontal: true, size: 8, seconds: 0 });
@@ -226,6 +279,74 @@ test("panel and card: boxes round things", () => {
   assert.equal(c.meta.rows, cr.length);
   assert.ok(cr.at(-2)!.trimEnd().endsWith("end │"), "the footer on the right");
   assert.throws(() => card({}), /card\(\) takes a title, text or a footer/);
+  // with no frame, its words alone, in the room the lines took
+  const bare = card({ title: "ascii.rest", text: "one two three four five six seven", footer: "end", width: 20, frame: false });
+  assert.ok(bare.meta.rows <= c.meta.rows - 2);
+  assert.ok(!rows(bare, 0).join("").includes("╭"));
+  assert.ok(rows(bare, 0)[0].includes("ascii.rest") && rows(bare, 0).at(-1)!.trimEnd().endsWith("end"));
+  // a panel too small for what is in it says so, rather than cutting it
+  assert.throws(() => panel("hello there", { cols: 8 }), /panel's room inside is 4 by 1, and hello there is 11 by 1: give the panel cols 15 and rows 3 or more, or leave them out/);
+});
+
+test("words a cell can't hold are refused when a widget is made, not on its first frame", () => {
+  const cases: [() => unknown, RegExp][] = [
+    [() => barChart({ "🍎": 3, pear: 2 }), /barChart's names takes words a cell can hold/],
+    [() => barChart({ "a\tb": 3 }), /barChart's names takes words a cell can hold.*"\\t"/],
+    [() => card({ title: "launch 🚀" }), /card's title takes words a cell can hold/],
+    [() => card({ footer: "🚀" }), /card's footer takes words a cell can hold/],
+    [() => gauge({ label: "🔥" }), /gauge's label takes words a cell can hold/],
+    [() => gauge({ unit: "°🔥" }), /gauge's unit takes words a cell can hold/],
+    [() => progressBar({ label: "🚀 deploy" }), /progressBar's label takes words a cell can hold/],
+    [() => spinner("dots", { label: "🚀" }), /spinner's label takes words a cell can hold/],
+    [() => sparkline([1, 2], { label: "📈" }), /sparkline's label takes words a cell can hold/],
+    [() => clockFace({ title: "☕🍵" }), /clockFace's title takes words a cell can hold/],
+    [() => card({ title: "two\nlines" }), /card's title takes words a cell can hold, one character each from the Basic Multilingual Plane on one line/],
+  ];
+  for (const [make, error] of cases) assert.throws(make, error);
+  // a character in the Basic Multilingual Plane is one a cell holds
+  assert.ok(frame(card({ title: "✨ new" }), 0).includes("✨"));
+  assert.ok(svg(gauge({ label: "✨ cpu" })).startsWith("<svg"));
+});
+
+test("text too long for a widget says so in the widget's words", () => {
+  assert.throws(() => marquee("x".repeat(330)), /marquee\(\) scrolls up to 318 characters, and these words are 330/);
+  assert.throws(() => marquee("x".repeat(270), { speed: "slow" }), /marquee\(\) takes 62 seconds to cross at this speed, past the minute a loop can be: at this width and speed it scrolls up to 260 columns of words/);
+  assert.throws(() => typewriter("word ".repeat(4000)), /typewriter\(\) takes \d+(\.\d)? seconds to type these words at this speed, past the minute a loop can be/);
+  assert.throws(() => typewriter("word ".repeat(4000), { hold: "forever" }), /typewriter\(\)'s words wrap past the 120 rows a piece can have at 40 columns/);
+});
+
+test("widgets' loops divide a minute, so a dashboard of them loops", async () => {
+  const { grid, row } = await import("../compose.ts");
+  const parts = [gauge(), gauge({ value: 64 }), sparkline([3, 5, 2, 8]), barChart({ mon: 3, tue: 5, wed: 4, thu: 8, fri: 6 }), spinner("dots"), clockFace({ size: "small" })];
+  for (const p of parts) if (p.meta.loop) assert.equal(60 % p.meta.loop, 0, `${p.meta.name}: ${p.meta.loop}`);
+  const dash = grid(parts, { columns: 3, border: { title: true } });
+  assert.equal(dash.meta.loop, 60);
+  assert.equal(frame(dash, 1.3), frame(dash, 61.3));
+  const words = row([typewriter("hello there"), marquee("open late")]);
+  assert.ok(words.meta.loop !== undefined, "a typewriter and a marquee come round together");
+  for (const t of [typewriter("hello there"), typewriter("a much longer sentence to type out", { speed: "fast" }), marquee("news", { width: 30 }), marquee("x", { speed: 0.7 })])
+    assert.equal(60 % t.meta.loop!, 0, `${t.meta.name}: ${t.meta.loop}`);
+  // a gauge in a bordered grid draws its own frame, not two: its label once, and a box only round the plain part
+  const both = frame(grid([gauge({ value: 30, label: "cpu" }), "plain"], { border: { title: true } }), 0);
+  assert.equal(both.split("cpu").length - 1, 1, both);
+  assert.equal(both.split("╭").length - 1, 2, both);
+});
+
+test("a widget given a colour for each page shows each page's on that page", () => {
+  for (const make of [() => typewriter("hello", { color: { light: "#000000", dark: "#ffffff" }, hold: "forever" }), () => marquee("hello", { color: { light: "#000000", dark: "#ffffff" } })]) {
+    const p = make();
+    for (const paper of [true, false]) {
+      const color = new Uint8Array(p.meta.cols * p.meta.rows);
+      const text = p.default()(5, { paper, color });
+      const i = [...text.replace(/\n/g, "")].findIndex((ch) => /[a-z]/.test(ch));
+      assert.ok(i >= 0);
+      assert.equal(p.meta.palette![color[i]], paper ? "#000000" : "#ffffff", `${p.meta.name} on ${paper ? "paper" : "a dark page"}`);
+    }
+  }
+  const ocean = typewriter("hello", { color: "ocean", hold: "forever" });
+  const color = new Uint8Array(ocean.meta.cols * ocean.meta.rows);
+  ocean.default()(5, { paper: true, color });
+  assert.equal(ocean.meta.palette![color[0]], "#025a8c", "ocean's paper colour on paper");
 });
 
 test("typewriter, marquee and countdown: words that move", () => {
@@ -235,13 +356,13 @@ test("typewriter, marquee and countdown: words that move", () => {
   assert.ok(ink(frame(t, 0.2)) < ink(frame(t, 0.6)), "typing");
   assert.ok(frame(t, 0.95).includes("world"));
   assert.ok(loopOf(t).every > 1);
-  assert.ok(typewriter("abc", { speed: "fast" }).meta.loop! < typewriter("abc").meta.loop!, "faster types sooner");
+  assert.ok(ink(frame(typewriter("hello world", { speed: "fast" }), 0.4)) > ink(frame(typewriter("hello world"), 0.4)), "faster types sooner");
 
   const m = marquee("news", { width: 20 });
   assert.equal(m.meta.cols, 20);
   assert.notEqual(frame(m, 0), frame(m, 1));
-  assert.equal(m.meta.loop, 2.6, "a crossing: 20 columns and the words' 6, at 10 a second");
-  assert.equal(marquee("x", { width: 20, speed: "fast" }).meta.loop, 1.15);
+  assert.equal(m.meta.loop, 3, "a crossing: 20 columns and the words' 6 at 10 a second is 2.6, kept to 3, a loop widgets share");
+  assert.equal(marquee("x", { width: 20, speed: "fast" }).meta.loop, 1);
 
   const c = countdown({ from: 3, to: 1, then: "go" });
   assert.equal(c.meta.loop, 5, "a second for each number and 2 for the words");
@@ -254,7 +375,7 @@ test("typewriter, marquee and countdown: words that move", () => {
 });
 
 test("widgets check their options and say what to change", () => {
-  assert.throws(() => progressBar({ colour: "#ff0000" } as never), /progressBar\(\) has no option "colour": it takes value, label, width, style, percent, seconds, color, name and note/);
+  assert.throws(() => progressBar({ colour: "#ff0000" } as never), /progressBar\(\) has no option "colour": it takes value, min, max, label, width, style, percent, seconds, color, name and note/);
   assert.throws(() => gauge({ color: "red" }), /gauge's color takes a colour as #rrggbb, \{ light, dark \}, or a palette's name such as "ocean", not "red"/);
   assert.throws(() => typewriter(""), /typewriter\(\) takes words to type/);
   assert.equal(panel(asPiece("x"), { color: { light: "#000000", dark: "#ffffff" } }).meta.palette!.length >= 2, true);

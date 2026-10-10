@@ -45,8 +45,9 @@ const run = (times: number[], p: boolean, m: boolean) => {
   });
   return { out, ms };
 };
-// Halves too, so a piece that loops in 1 or 2 seconds is not taken for one that hardly moves.
-const times = [...new Set([...at, 0, 0.5, 1, 1.5, 2, 2.5, 3, 4, 6])].sort((a, b) => a - b);
+// Halves and quarters too, so a piece that loops in 1 or 2 seconds, or jolts for a moment each second, is not taken
+// for one that hardly moves.
+const times = [...new Set([...at, 0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 6])].sort((a, b) => a - b);
 const a = run(times, paper, mono), b = run(times, paper, mono);
 a.out.forEach(({ text, color }, i) => {
   const lines = text.split("\n");

@@ -149,6 +149,90 @@ test("speed words: slow doubles the loop, fast halves it, still is a still", () 
   assert.equal(text(c, 0), text(c, 5));
 });
 
+test("a numeric speed gives a loop in whole hundredths, so a look combines with others and keeps its loop", async () => {
+  const { banner } = await import("../../banner.ts");
+  const { floating, bouncing } = await import("./motion.ts");
+  const { over } = await import("../compose.ts");
+  for (const speed of [0.7, 0.3, 0.8, 1.5, 3]) {
+    const p = plasma({ speed });
+    const loop = p.meta.loop!;
+    assert.equal(Math.round(loop * 100), loop * 100, `speed ${speed}: ${loop}`);
+    assert.equal(text(p, 0.4), text(p, 0.4 + loop), `speed ${speed} comes round on its loop`);
+    assert.equal(p.behind(banner("hi", { effect: "still" })).meta.loop, loop, `speed ${speed}: behind a banner`);
+  }
+  // 8 / 0.8 is 10.000000000000002 to a computer: kept as 10, it meets a float's 3 and a bounce's 1.5 within a minute
+  assert.equal(plasma({ speed: 0.8 }).meta.loop, 10);
+  assert.equal(floating(plasma({ speed: 0.8 })).meta.loop, 30);
+  assert.equal(over(bouncing("o", { speed: 0.8 }), plasma({ speed: 0.8 })).meta.loop, 30);
+  assert.equal(checker({ speed: "still" }).move("left", 0.7).meta.loop, 11.43);
+  assert.equal(checker({ speed: "still" }).rotate(0.7).meta.loop, 11.43);
+  // slower than a minute a loop is refused, as svg() could not play it whole
+  assert.throws(() => marble({ speed: 0.25 }), /marble\(\)'s speed is too slow to loop within a minute: use 0\.267 or more, or "still"/);
+  assert.throws(() => plasma({ speed: 0.1 }), /plasma\(\)'s speed is too slow to loop within a minute/);
+  assert.equal(marble({ speed: "slow" }).meta.loop, 32);
+});
+
+test("a large scale travels at least a feature a loop, so noise looks take every scale they offer", () => {
+  for (const make of [() => clouds({ scale: 3 }), () => clouds({ scale: 4 }), () => clouds({ scale: 10 }), () => flames({ scale: 10 }), () => plume({ scale: 10 }), () => clouds({ scale: 4, period: 60 })]) {
+    const p = make();
+    contract(p);
+    assert.equal(text(p, 0.5), text(p, 0.5 + p.meta.loop!));
+  }
+});
+
+test("a mask follows a rotate, zoom or move chained after it, as a function mask does", () => {
+  const board = checker({ cols: 16, rows: 6, speed: "still", ramp: "#@" });
+  const bottom = text(board.mask(below(0.5)), 0).split("\n");
+  assert.ok(bottom.slice(0, 3).every((l) => !l.trim()) && bottom.slice(3).every((l) => l.trim().length === 16), "the bottom half");
+  // turned a quarter, the bottom half is a side: a vertical band, the top rows no longer empty
+  const turned = text(board.mask(below(0.5)).rotate("quarter"), 0).split("\n");
+  assert.ok(turned.slice(0, 3).some((l) => l.trim()), turned.join("\n"));
+  assert.ok(turned.every((l) => l.includes(" ")), "and every row half empty");
+  assert.deepEqual(turned, text(board.mask((_x, y) => y > 0).rotate("quarter"), 0).split("\n"), "as a function mask turns");
+  // zoomed in, a heart in the middle is bigger
+  assert.ok(ink(text(plasma().mask(heart()).zoom("in"), 1)) > ink(text(plasma().mask(heart()), 1)));
+});
+
+test("a word or a shape as a mask is filled, every cell inside drawn, so it reads with no ramp of your own", () => {
+  const word = text(plasma({ palette: "fire" }).mask("HOT"), 1);
+  const filled = text(plasma({ palette: "fire" }).mask((x, y, t, at) => letters("HOT").test(x, y, t, at)), 1);
+  assert.ok(ink(word) > ink(filled), `${ink(word)} cells against ${ink(filled)}`);
+  // every cell of the letters is drawn: the same cells as the letters in a solid look
+  const solid = text(plasma({ ramp: "@@" }).mask("HOT"), 1);
+  assert.equal(ink(word), ink(solid));
+  // a share of the picture is not a shape to fill: dark parts of a sea stay dark
+  assert.equal(text(waves().mask(below(0.5)), 1).split("\n").slice(12).join("").includes(" "), true);
+});
+
+test("sea's horizon is half way down by default, so above(\"half\") is its sky, and above(\"third\") a high one's", () => {
+  const sky = (p: Look) => text(p, 1).split("\n").findIndex((l) => l.trim().length > 0);
+  assert.equal(sky(sea()), 12, "a 24-row sea starts at its middle row");
+  assert.equal(sky(sea({ horizon: "high" })), 8);
+  assert.equal(sky(sea({ horizon: "low" })), 16);
+  // stars in the sky over it, none in the water
+  const both = sea().add(stars({ density: "dense" }).mask(above("half")));
+  const rows = text(both, 1).split("\n");
+  const water = text(sea(), 1).split("\n");
+  for (let r = 12; r < 24; r++) assert.equal(rows[r], water[r], `row ${r} is the sea's own`);
+  assert.ok(rows.slice(0, 12).some((l) => l.trim()), "stars above");
+});
+
+test("blur works out each sample once a frame: blurs chained cost about one look each", () => {
+  const time = (p: Look) => {
+    const f = p.default({});
+    f(0, {});
+    const start = performance.now();
+    for (let i = 1; i <= 10; i++) f(i * 0.1, {});
+    return (performance.now() - start) / 10;
+  };
+  const once = time(marble()), thrice = time(marble().blur().blur().blur());
+  assert.ok(thrice < once * 12 + 1, `three blurs ${thrice.toFixed(2)} ms a frame, the look alone ${once.toFixed(2)} ms`);
+  assert.ok(time(plasma({ cols: 160, rows: 60 }).blur().blur()) < 40 * slack);
+  // a blur still softens, and loops
+  const b = checker().blur("strong");
+  assert.equal(text(b, 0.3), text(b, 0.3 + b.meta.loop!));
+});
+
 test("period sets a look's loop in seconds, over speed, as it does every recipe's", () => {
   assert.equal(plasma({ period: 4 }).meta.loop, 4);
   assert.equal(plasma({ period: 4, speed: "slow" }).meta.loop, 4);

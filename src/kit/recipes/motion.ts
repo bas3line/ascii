@@ -361,7 +361,7 @@ export interface ShakingOptions extends MotionOptions {
  * A thing shaking: jolting for a moment now and then, every 2 seconds at normal speed, or all the time. fx's shake()
  * with its numbers put in words.
  *
- *   shaking(banner("boom"), { amount: "big" })
+ *   shaking(banner("boom"), { amount: "strong" })
  */
 export function shaking(thing: Thing, o?: ShakingOptions): KitPiece {
   const p = optionsOf("shaking()", o, [...MOTION, "amount", "nonstop"]);
@@ -394,7 +394,7 @@ export interface DriftOptions extends MotionOptions {
  * A thing drifting across, off one edge and back in at the other, a crossing taking 8 seconds at normal speed: a cloud
  * over the sky, a ship through the stars, a bubble rising.
  *
- *   drifting(cloud(), { across: sky })
+ *   drifting(cloud(), { across: sky() })
  *   drifting("<o>", { to: "left", lane: "top" })
  */
 export function drifting(thing: Thing, o?: DriftOptions): KitPiece {

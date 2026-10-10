@@ -256,6 +256,35 @@ test("sources: text and grids as stills, a library piece sampled into grids", ()
   assert.equal(sample(donut).at(0.5).toString(), snapshot(donut, 0.5).text);
 });
 
+test("a grid drawn for one page shows each page's own colours on each, its palette themed", () => {
+  const palette = new Palette({ light: ["#000000", "#0969da"], dark: ["#ffffff", "#58a6ff"] });
+  for (const drawnOnPaper of [false, true]) {
+    const g = new Surface(3, 1, { palette });
+    g.paper = drawnOnPaper;
+    g.set(0, 0, "a", 0);
+    g.set(1, 0, "b", 1);
+    const p = asPiece(g);
+    for (const paper of [true, false]) {
+      const color = new Uint8Array(3);
+      p.default()(0, { paper, color });
+      const hex = [...color].slice(0, 2).map((c) => p.meta.palette![c]);
+      assert.deepEqual(hex, paper ? ["#000000", "#0969da"] : ["#ffffff", "#58a6ff"], `drawn on ${drawnOnPaper ? "paper" : "a dark page"}, shown on ${paper ? "paper" : "a dark page"}`);
+    }
+  }
+});
+
+test("text in a template literal is read as stamp() reads it; text on one line keeps its spaces", () => {
+  const art = asPiece(`
+      /\\
+     /  \\
+    /____\\
+  `);
+  assert.deepEqual([art.meta.cols, art.meta.rows], [6, 3]);
+  assert.equal(art.default()(0), "  /\\  \n /  \\ \n/____\\");
+  assert.equal(asPiece("  hi").meta.cols, 4);
+  assert.equal(asPiece("a\r\nb").default()(0), "a\nb", "Windows line ends are newlines");
+});
+
 // A small coloured piece that loops, for the players below.
 const orbit = piece({ name: "orbit", cols: 24, rows: 9, fps: 15, loop: 2, palette: { light: ["#b45309", "#1f2328"], dark: ["#fbbf24", "#f0f6fc"] }, ink: 1 }, (t, s) => {
   const a = (t / 2) * Math.PI * 2;

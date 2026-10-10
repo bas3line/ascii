@@ -115,6 +115,23 @@ export function wordOf<W extends string>(what: string, v: unknown, words: readon
   return v as W;
 }
 
+/**
+ * Words to show, checked now rather than on the first frame: a string whose every character a cell can hold (no tab,
+ * no emoji outside the Basic Multilingual Plane), on one line unless `lines`. Undefined when none is given.
+ */
+export function textOf(what: string, v: unknown, o: { lines?: boolean } = {}): string | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v !== "string") fail(`${what} takes words, not ${show(v)}`);
+  const text = v.replace(/\r\n?/g, "\n");
+  for (const ch of text) {
+    if (ch === "\n" && o.lines) continue;
+    const c = ch.charCodeAt(0);
+    if (ch.length > 1 || c < 32 || (c >= 0x7f && c <= 0x9f) || (c >= 0xd800 && c <= 0xdfff))
+      fail(`${what} takes words a cell can hold, one character each from the Basic Multilingual Plane${o.lines ? "" : " on one line"}: not ${JSON.stringify(ch)} in ${show(v.length > 40 ? v.slice(0, 40) + "..." : v)}`);
+  }
+  return text;
+}
+
 /** True or false, or its default. */
 export function boolOf(what: string, v: unknown, def: boolean): boolean {
   if (v === undefined) return def;
@@ -148,9 +165,23 @@ export function speedOf(what: string, v: unknown, o: { still?: boolean } = {}): 
 
 /** The seconds one loop takes at a speed, from the recipe's `normal` seconds: `period` wins when given. */
 export function secondsOf(what: string, o: { speed?: unknown; period?: unknown }, normal: number): number {
-  if (o.period !== undefined) return numberOf(`${what}'s period`, o.period, normal, 0.05, 60);
   // Rounded to hundredths, so loops of several motions come round together, as the kit's time rule counts them.
+  if (o.period !== undefined) return Math.max(0.05, Math.round(numberOf(`${what}'s period`, o.period, normal, 0.05, 60) * 100) / 100);
   return Math.max(0.05, Math.round((normal / speedOf(what, o.speed)) * 100) / 100);
+}
+
+/**
+ * The loops widgets keep to: every one divides a minute, so any widgets side by side, in a row(), a column() or a
+ * dashboard grid(), come round together within one, and the dashboard loops.
+ */
+export const LOOPS = [0.25, 0.5, 1, 2, 3, 4, 5, 6, 10, 12, 15, 20, 30, 60] as const;
+
+/** Seconds as one of LOOPS: the nearest (by ratio), or with `up` the shortest at least as long. */
+export function loopOf(seconds: number, up = false): number {
+  if (up) return LOOPS.find((l) => l >= seconds - 1e-9) ?? 60;
+  let best: number = LOOPS[0];
+  for (const l of LOOPS) if (Math.abs(Math.log(l / seconds)) < Math.abs(Math.log(best / seconds))) best = l;
+  return best;
 }
 
 /** An easing by its name, as a function from 0..1 to 0..1. */

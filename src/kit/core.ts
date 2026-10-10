@@ -671,18 +671,35 @@ export function asPiece(src: Source, name = "text"): Piece {
     const grid = src.clone();
     const palette = grid.palette;
     const meta: Meta = checkMeta({ name, category: "type", note: name, cols: grid.cols, rows: grid.rows, fps: 0, ...(palette ? { palette: palette.colors } : {}) });
+    // Its colours were found for the page it was drawn for. A themed palette has each colour twice, light then dark,
+    // so on the other page each cell takes the same colour's other half: drawn for a dark page, it shows its paper
+    // colours on paper, not white text on a white page.
+    const other = grid.clone();
+    if (palette?.themed) {
+      const n = palette.size;
+      for (let i = 0; i < other.colors.length; i++) {
+        const c = other.colors[i];
+        if (c !== NONE) other.colors[i] = grid.paper ? (c < n ? c + n : c) : c >= n ? c - n : c;
+      }
+    }
+    other.paper = !grid.paper;
     return {
       meta,
-      default: () => (t, env = {}) => {
-        grid.paper = !!env.paper;
-        return grid.frame(env);
-      },
+      default: () => (t, env = {}) => (!!env.paper === grid.paper ? grid : other).frame(env),
     };
   }
   if (typeof src === "string") {
-    const lines = src.split("\n");
+    let lines = src.replace(/\r\n?/g, "\n").split("\n");
+    // Art in a template literal, starting on the line after the backtick, is read as draw's stamp() reads it: its
+    // blank first and last lines and the indent its lines share are left out.
+    if (lines.length > 1 && lines[0] === "") {
+      while (lines.length > 1 && !lines[0].trim()) lines.shift();
+      while (lines.length > 1 && !lines[lines.length - 1].trim()) lines.pop();
+      const indent = lines.reduce((n, l) => (l.trim() ? Math.min(n, l.length - l.trimStart().length) : n), Infinity);
+      if (Number.isFinite(indent)) lines = lines.map((l) => l.slice(indent));
+    }
     const cols = Math.max(1, ...lines.map((l) => l.length));
-    if (CONTROL.test(src.replace(/\n/g, ""))) fail("text takes printable characters and newlines, not control characters");
+    if (CONTROL.test(lines.join(""))) fail("text takes printable characters and newlines, not control characters");
     const text = lines.map((l) => l.padEnd(cols)).join("\n");
     const meta: Meta = checkMeta({ name, category: "type", note: name, cols, rows: lines.length, fps: 0 });
     return { meta, default: () => () => text };

@@ -59,6 +59,8 @@ const scaleOf = (what: string, v: unknown) => {
 };
 const densityOf = (what: string, v: unknown) => wordOr(`${what}'s density`, v, DENSITIES, "normal", 0, 10);
 const DIRECTIONS = HEADINGS;
+// Seconds rounded to whole hundredths, the steps the kit's time rule combines loops in, and never under a twentieth.
+const hundredths = (s: number) => Math.max(0.05, Math.round(s * 100) / 100);
 
 // --- a look ----------------------------------------------------------------------------------
 
@@ -194,14 +196,23 @@ export class Look implements KitPiece {
   /**
    * Only the part of this look inside a shape; nothing is drawn outside it. The shape is any of: below(0.4) and
    * above(0.3), the bottom or top share of the picture; a word, "HI", in big letters; a shape from ascii.rest/kit's
-   * materials, such as heart(), ball(), star() or cup(), or area.rect() and its kin; any piece or block of text, its inked
+   * materials, such as heart(), ball(), star() or cup(), or area.rect() and its kin; any piece or grid, its inked
    * cells, centred (a banner, a logo from fromImage(), another look); outside(shape) for the rest; or a function of x,
-   * y, t and the cell that returns true where to draw.
+   * y, t and the cell that returns true where to draw. A string is always a word in big letters: for a block of ascii
+   * art, pass asPiece(text). A word or a material's shape is filled, its every cell drawn. The mask follows a rotate(),
+   * zoom(), move() or warp() chained after it.
    */
   mask(shape: MaskLike): Look {
     const m = maskOf("mask()", shape);
     const f = this.#def.fn;
-    return this.#with({ periods: [...this.#def.periods, ...m.periods], fn: (x, y, t, at) => (m.test(x, y, t, at) ? f(x, y, t, at) : null) });
+    // A shape to fill, a word or a heart, reads only when every cell in it is drawn: its ramp loses its blank, so the
+    // look's darkest parts are its faintest character rather than holes in the letters.
+    const solid = m.fills ? this.#def.ramp.replace(/^ +/, "") : this.#def.ramp;
+    return this.#with({
+      periods: [...this.#def.periods, ...m.periods],
+      ramp: solid.length >= 2 ? solid : this.#def.ramp,
+      fn: (x, y, t, at) => (m.test(x, y, t, at) ? f(x, y, t, at) : null),
+    });
   }
 
   /**
@@ -213,7 +224,8 @@ export class Look implements KitPiece {
     const s = speedOf("move()", speed);
     if (s === 0) return this;
     const [dx, dy] = DIRECTIONS[direction];
-    const P = 8 / s, D = 2;
+    const P = hundredths(8 / s), D = 2;
+    if (P > 60) fail(`move()'s speed is too slow to loop within a minute: use 0.134 or more, or "still"`);
     const f = this.#def.fn;
     // Two copies a loop apart, crossfaded: each slides on at the same speed and the one ending fades as the next comes
     // in, so the end of the loop is its start. The contrast lost in the middle of the fade is put back.
@@ -252,7 +264,8 @@ export class Look implements KitPiece {
     const v = typeof by === "number" ? by : wordOr("rotate()", by, { slow: 0.5, normal: 1, fast: 2 }, "slow", -10, 10);
     if (!Number.isFinite(v) || v < -10 || v > 10) fail(`rotate() takes "slow", "normal", "fast", "eighth", "quarter", "half", or a speed from -10 to 10, not ${show(by)}`);
     if (v === 0) return this;
-    const P = 8 / Math.abs(v), sign = Math.sign(v);
+    const P = hundredths(8 / Math.abs(v)), sign = Math.sign(v);
+    if (P > 60) fail(`rotate()'s speed is too slow to loop within a minute: use 0.134 or more (or -0.134 or less)`);
     return this.#with({
       periods: [...this.#def.periods, P],
       fn: (x, y, t, at) => {
@@ -273,19 +286,34 @@ export class Look implements KitPiece {
     });
   }
 
-  /** Softened, each cell the average of those round it: `amount` "subtle", "medium" (the default), "strong", or cells. */
+  /**
+   * Softened, each cell the average of those round it: `amount` "subtle" (its neighbours counting little), "medium"
+   * (the default), "strong" (two cells out), or cells out, a whole number up to 8.
+   */
   blur(amount: Amount = "medium"): Look {
-    const r = wordOr("blur()", amount, { subtle: 0.75, medium: 1.25, strong: 2 }, "medium", 0, 8);
+    const r = Math.round(wordOr("blur()", amount, { subtle: 1, medium: 1, strong: 2 }, "medium", 0, 8));
     if (r === 0) return this;
     const f = this.#def.fn;
-    // Nine samples: the cell and eight round it, nearer ones counting more.
-    const taps = [[0, 0, 4], [1, 0, 2], [-1, 0, 2], [0, 1, 2], [0, -1, 2], [1, 1, 1], [-1, 1, 1], [1, -1, 1], [-1, -1, 1]] as const;
+    // Nine samples: the cell and eight round it, nearer ones counting more, the cell itself more still when subtle.
+    const middle = amount === "subtle" ? 12 : 4;
+    const taps = [[0, 0, middle], [1, 0, 2], [-1, 0, 2], [0, 1, 2], [0, -1, 2], [1, 1, 1], [-1, 1, 1], [1, -1, 1], [-1, -1, 1]] as const;
+    // The samples fall on other cells' centres, so each is worked out once a frame and kept: a blur costs about one
+    // look a cell, and blurs chained cost one each rather than nine times the one before.
+    const kept = new Map<number, number | null>();
+    let when = NaN, size = -1;
+    const at1 = (x: number, y: number, t: number, at: FieldCell) => {
+      if (t !== when || at.cols * 4096 + at.rows !== size) (kept.clear(), (when = t), (size = at.cols * 4096 + at.rows));
+      const key = (Math.round(x * 4096) + 4e6) * 8e6 + Math.round(y * 4096) + 4e6;
+      let v = kept.get(key);
+      if (v === undefined) kept.set(key, (v = f(x, y, t, at)));
+      return v;
+    };
     return this.#with({
       fn: (x, y, t, at) => {
         const cw = (at.width / at.cols) * r, rh = (at.height / at.rows) * r;
         let sum = 0, weight = 0, any = false;
         for (const [i, j, w] of taps) {
-          const v = f(x + i * cw, y + j * rh, t, at);
+          const v = at1(x + i * cw, y + j * rh, t, at);
           if (v !== null) any = true;
           sum += (v ?? 0) * w;
           weight += w;
@@ -371,6 +399,8 @@ export interface Mask {
   readonly kind: "mask";
   /** The loops of anything in it that moves, in seconds. */
   readonly periods: readonly number[];
+  /** True for a shape the look fills, a word or a heart: every cell inside it is drawn, the faintest in its ramp's first ink. */
+  readonly fills?: boolean;
   /** True for a cell to draw. */
   test(x: number, y: number, t: number, at: FieldCell): boolean;
 }
@@ -390,12 +420,18 @@ function perSize<T>(make: (cols: number, rows: number) => T): (at: FieldCell) =>
   };
 }
 
+// Where x and y fall in the picture's cells, as fractions: the middle of a cell is its column or row and a half. A mask
+// reads these rather than the cell being drawn, so a rotate(), zoom(), move() or warp() after it turns, zooms, moves or
+// bends the mask with the look, as it does a function mask.
+const colAt = (x: number, at: FieldCell) => ((x + at.width / 2) / at.width) * at.cols;
+const rowAt = (y: number, at: FieldCell) => ((y + at.height / 2) / at.height) * at.rows;
+
 function maskOf(what: string, v: unknown): Mask {
   if (isMask(v)) return v;
   if (typeof v === "string") return letters(v);
   if (isArea(v)) {
     const placed = perSize((cols, rows) => v.place(cols, rows));
-    return { kind: "mask", periods: [], test: (_x, _y, _t, at) => placed(at).test(at.col + 0.5, at.row + 0.5) };
+    return { kind: "mask", periods: [], fills: true, test: (x, y, _t, at) => placed(at).test(colAt(x, at), rowAt(y, at)) };
   }
   if (typeof v === "function") return { kind: "mask", periods: [], test: (x, y, t, at) => !!(v as (x: number, y: number, t: number, at: FieldCell) => boolean)(x, y, t, at) };
   if (v instanceof Surface || isPiece(v)) {
@@ -405,10 +441,10 @@ function maskOf(what: string, v: unknown): Mask {
     return {
       kind: "mask",
       periods: loop ? [loop] : [],
-      test: (_x, _y, t, at) => {
+      test: (x, y, t, at) => {
         // Played once a frame, not once a cell, and centred on the look.
         if (t !== when || !grid) (grid = player.at(t, { mono: true })), (when = t);
-        const c = at.col - ((at.cols - grid.cols) >> 1), r = at.row - ((at.rows - grid.rows) >> 1);
+        const c = Math.floor(colAt(x, at)) - ((at.cols - grid.cols) >> 1), r = Math.floor(rowAt(y, at)) - ((at.rows - grid.rows) >> 1);
         return c >= 0 && r >= 0 && c < grid.cols && r < grid.rows && grid.chars[r * grid.cols + c] !== EMPTY;
       },
     };
@@ -419,13 +455,13 @@ function maskOf(what: string, v: unknown): Mask {
 /** The bottom `share` of the picture, 0 to 1: below(0.4) is its bottom 40%. "third" and "half" are words for 1/3 and 1/2. */
 export function below(share: "third" | "half" | number): Mask {
   const k = wordOr("below()", share, { third: 1 / 3, half: 1 / 2 }, "half", 0, 1);
-  return { kind: "mask", periods: [], test: (_x, _y, _t, at) => at.v >= 1 - k };
+  return { kind: "mask", periods: [], test: (_x, y, _t, at) => rowAt(y, at) / at.rows >= 1 - k };
 }
 
 /** The top `share` of the picture, 0 to 1: above(0.3) is its top 30%. "third" and "half" are words for 1/3 and 1/2. */
 export function above(share: "third" | "half" | number): Mask {
   const k = wordOr("above()", share, { third: 1 / 3, half: 1 / 2 }, "half", 0, 1);
-  return { kind: "mask", periods: [], test: (_x, _y, _t, at) => at.v < k };
+  return { kind: "mask", periods: [], test: (_x, y, _t, at) => rowAt(y, at) / at.rows < k };
 }
 
 /** Everywhere a shape is not: outside(ball()) keeps a look round a ball and leaves the ball empty. Takes what mask() takes. */
@@ -456,7 +492,7 @@ export function letters(text: string, o?: { big?: number }): Mask {
       }
     return area.text(text, { big }).place(cols, rows);
   });
-  return { kind: "mask", periods: [], test: (_x, _y, _t, at) => placed(at).test(at.col + 0.5, at.row + 0.5) };
+  return { kind: "mask", periods: [], fills: true, test: (x, y, _t, at) => placed(at).test(colAt(x, at), rowAt(y, at)) };
 }
 
 // --- making a look -------------------------------------------------------------------------------
@@ -561,11 +597,13 @@ export function look<O extends LookOptions>(name: string, o: O | undefined, how:
   const scale = scaleOf(what, opts.scale);
   const base = how.period ?? 8;
   if (!(typeof base === "number" && Number.isFinite(base) && base > 0 && base <= 60)) fail(`look()'s period takes seconds above 0, up to 60, not ${show(base)}`);
-  // A period of the user's own wins over speed, as in every recipe; the speed is then what that period makes it.
-  const own = opts.period === undefined ? undefined : numberOf(`${what}'s period`, opts.period, base, 0.05, 60);
+  // A period of the user's own wins over speed, as in every recipe; the speed is then what that period makes it. Either
+  // way the loop is whole hundredths of a second, as the kit's time rule counts them, so it combines with others.
+  const own = opts.period === undefined ? undefined : hundredths(numberOf(`${what}'s period`, opts.period, base, 0.05, 60));
   const speed = own === undefined ? speedOf(what, opts.speed) : base / own;
-  const period = own ?? (speed > 0 ? base / speed : 0);
-  if (period > 600) fail(`${what}'s speed is too slow to loop: use ${+(base / 600).toFixed(3)} or more, or "still"`);
+  const period = own ?? (speed > 0 ? hundredths(base / speed) : 0);
+  // A loop longer than a minute is none by the time rule, so svg() would cut it short: too slow is refused.
+  if (period > 60) fail(`${what}'s speed is too slow to loop within a minute: use ${Math.ceil((base / 60) * 1000) / 1000} or more, or "still"`);
   if (opts.dither !== undefined && typeof opts.dither !== "boolean") fail(`${what}'s dither takes true or false, not ${show(opts.dither)}`);
   if (opts.name !== undefined && (typeof opts.name !== "string" || !opts.name.trim())) fail(`${what}'s name takes a line of text, not ${show(opts.name)}`);
   if (opts.note !== undefined && (typeof opts.note !== "string" || !opts.note.trim() || opts.note.length > 72)) fail(`${what}'s note takes one line of 1 to 72 characters, not ${show(opts.note)}`);
@@ -577,7 +615,14 @@ export function look<O extends LookOptions>(name: string, o: O | undefined, how:
     noise: (n = {}) => {
       const { travel, change, ...rest } = n;
       if (!period) return noise({ ...rest, morph: 0 });
-      if (travel) return noise({ ...rest, drift: [travel[0] / period, travel[1] / period], period });
+      if (travel) {
+        // At least one feature a loop: a larger scale makes larger features, and a band that slides round shorter than
+        // one would flatten out, so it travels further instead.
+        const s = rest.size ?? 12;
+        const [sx, sy] = typeof s === "number" ? [s, s / 2] : s;
+        const features = Math.hypot(travel[0] / sx, travel[1] / sy), k = features > 0 && features < 1 ? 1.0001 / features : 1;
+        return noise({ ...rest, drift: [(travel[0] * k) / period, (travel[1] * k) / period], period });
+      }
       return noise({ ...rest, morph: (change ?? 1) / period, period });
     },
     column: (x, at) => ((x + at.width / 2) / at.width) * at.cols,
@@ -615,13 +660,19 @@ export function waves(o?: LookOptions & { to?: "left" | "right" }): Look {
 
 /**
  * The open sea to the horizon: swell coming in, larger and brighter near, finer far off, an empty sky above.
- * `horizon` "high", "middle" (the default) or "low". Ocean blues by default.
+ * `horizon` "high" (a third of the way down), "middle" (half way, the default) or "low" (two thirds), so the masks
+ * line up with it by name: above("half") is the sky over the default sea, above("third") over a high one.
+ * Ocean blues by default.
+ *
+ *   sea().add(stars().mask(above("half")))
  */
 export function sea(o?: LookOptions & { horizon?: "high" | "middle" | "low" }): Look {
   return look("sea", o, { options: ["horizon"], note: "the open sea to the horizon", palette: "ocean", ramp: " .-~=≈", light: false, period: 8 }, (k, opts) => {
-    const h = { high: -0.55, middle: -0.25, low: 0.1 }[wordOf("sea()'s horizon", opts.horizon, ["high", "middle", "low"], "middle")];
+    const share = { high: 1 / 3, middle: 1 / 2, low: 2 / 3 }[wordOf("sea()'s horizon", opts.horizon, ["high", "middle", "low"], "middle")];
     const swell = k.noise({size: [1.1 * k.scale, 0.22 * k.scale], detail: 3, travel: [0, -2.2] });
-    return (x, y, t) => {
+    return (x, y, t, at) => {
+      // The horizon a share of the way down: the row the masks' words split at.
+      const h = (share - 0.5) * at.height;
       if (y < h) return null;
       // Depth grows towards the horizon; the sea is sampled across and into the distance at that depth, so near swells
       // are long and far ones are fine lines.

@@ -108,6 +108,12 @@ export interface Layer extends Clip {
    * character; null, nothing, so its whole box covers what is under it, as a card does.
    */
   mask?: string | null;
+  /**
+   * Cells cleared round its ink, so it reads over a busy picture: 1 clears the cells next to every character it
+   * draws, as a knockout does, and 0 none. By default 1 for words and banners laid over a part that moves, a title
+   * on a starfield, and 0 for anything else.
+   */
+  halo?: number;
 }
 
 // A value as an error message shows it.
@@ -143,11 +149,34 @@ function oneOf<T extends string>(v: unknown, name: string, list: readonly T[], d
   if (!list.includes(v as T)) fail(`${name} takes ${or(list.map((w) => JSON.stringify(w)))}, not ${shown(v)}`);
   return v as T;
 }
-function object<T extends object>(v: T | undefined, name: string): Partial<T> {
+// An options object, checked for keys it does not take, so a misspelt one throws instead of doing nothing.
+function object<T extends object>(v: T | undefined, name: string, keys?: readonly string[]): Partial<T> {
   if (v === undefined) return {};
   if (v === null || typeof v !== "object" || Array.isArray(v)) fail(`${name} takes an object of options, not ${shown(v)}`);
+  if (keys)
+    for (const [k, val] of Object.entries(v)) if (val !== undefined && !keys.includes(k)) fail(`${name} has no option ${JSON.stringify(k)}: it takes ${and(keys)}`);
   return v;
 }
+
+// A name or a note: one line of words, as screen readers, titles and svg() read them.
+const oneLine = (v: unknown): v is string => typeof v === "string" && !!v.trim() && !/[\u0000-\u001f\u007f-\u009f]/.test(v);
+
+// A whole's own name and note, when its options give them, checked.
+function naming(fn: string, o: { name?: unknown; note?: unknown }): { name?: string; note?: string } {
+  if (o.name !== undefined && !oneLine(o.name)) fail(`${fn}()'s name takes one line, such as "dashboard", not ${shown(o.name)}`);
+  if (o.note !== undefined && !(oneLine(o.note) && o.note.length <= 72)) fail(`${fn}()'s note takes one line of 1 to 72 characters saying what you see, not ${shown(o.note)}`);
+  return { ...(o.name !== undefined ? { name: (o.name as string).trim() } : {}), ...(o.note !== undefined ? { note: o.note as string } : {}) };
+}
+
+// A whole's own loop, when its options give one: its time then wraps round on it, as repeat() does, whatever its parts.
+function loopOption(fn: string, v: unknown): number | undefined {
+  if (v === undefined) return undefined;
+  if (!finite(v) || v < 0.05 || v > 60) fail(`${fn}()'s loop takes seconds from 0.05 to 60, the loop it plays round on, not ${shown(v)}`);
+  return Math.round(v * 100) / 100;
+}
+
+// What a clip takes, and a step or a layer besides.
+const CLIP = ["src", "options", "offset", "speed", "color"] as const;
 // A colour for both themes or one for each, as a list of one or two: null when it is left out.
 function colorOf(v: unknown, name: string): string[] | null {
   if (v === undefined) return null;
@@ -172,6 +201,8 @@ interface Prepared {
   // Its size in the whole's cells.
   cols: number;
   rows: number;
+  // True for a part that draws a frame of its own, a gauge or a panel: grid()'s border draws none round it.
+  frames: boolean;
 }
 
 const isPiece = (v: unknown): v is Piece => v !== null && typeof v === "object" && "meta" in v && typeof (v as Piece).default === "function";
@@ -187,8 +218,9 @@ const textName = (text: string) => {
   return line ? `"${line.slice(0, 24)}"` : "text";
 };
 
-function prepare(fn: string, v: unknown): Prepared {
+function prepare(fn: string, v: unknown, keys: readonly string[] = CLIP): Prepared {
   v = unwrap(v);
+  if (isClip(v)) object(v, `${fn}()'s part`, keys);
   const clip: Clip = isClip(v) ? v : { src: v as Source };
   // Text read from a file written on Windows ends its lines with \r\n: a newline all the same.
   const given = unwrap(clip.src);
@@ -204,7 +236,8 @@ function prepare(fn: string, v: unknown): Prepared {
   const offset = clip.offset === undefined ? 0 : finite(clip.offset) ? clip.offset : fail(`a clip's offset takes a number of seconds, not ${shown(clip.offset)}`);
   const speed = clip.speed === undefined ? 1 : finite(clip.speed) && clip.speed > 0 ? clip.speed : fail(`a clip's speed takes a number above 0, not ${shown(clip.speed)}`);
   const tint = colorOf(clip.color, "a clip's color");
-  return { piece: p, meta: p.meta, options: { ...clip.options }, offset, speed, tint, stretch: 0, cols: p.meta.cols, rows: p.meta.rows };
+  const frames = (src as { frames?: unknown }).frames === true;
+  return { piece: p, meta: p.meta, options: { ...clip.options }, offset, speed, tint, stretch: 0, cols: p.meta.cols, rows: p.meta.rows, frames };
 }
 
 // Fits a part to the whole's cells, 2 widths tall or 1, by doubling or halving its rows, so it keeps its shape.
@@ -216,9 +249,9 @@ function fit(p: Prepared, cell: number): Prepared {
 }
 
 // A list of parts, fitted to the first one's cells.
-function list(fn: string, parts: unknown): Prepared[] {
+function list(fn: string, parts: unknown, keys: readonly string[] = CLIP): Prepared[] {
   if (!Array.isArray(parts) || !parts.length) fail(`${fn}() takes a list of one or more parts: pieces, text, Surfaces or { src } clips`);
-  const all = parts.map((v) => prepare(fn, v));
+  const all = parts.map((v) => prepare(fn, v, keys));
   for (const p of all) fit(p, all[0].meta.cell ?? 2);
   return all;
 }
@@ -470,7 +503,11 @@ interface Placed extends Prepared {
   margin: number;
   move: { to: Side; period: number } | null;
   mask: string | null;
+  // Cells cleared round its ink; undefined until stack() works out the default.
+  halo: number | undefined;
 }
+
+const LAYER = [...CLIP, "anchor", "margin", "move", "x", "y", "mask", "halo"] as const;
 
 // A layer's move, checked: a side, or { to, period }. A period of 0 is one not given, which stack() fits to the parts.
 function travel(v: unknown): Placed["move"] {
@@ -498,8 +535,9 @@ function position(v: unknown, name: string): number | ((t: number) => number) {
 }
 
 function layerOf(fn: string, v: unknown, anchor: Anchor): Placed {
-  const p = prepare(fn, v);
+  const p = prepare(fn, v, LAYER);
   const l: Partial<Layer> = isClip(v) ? v : {};
+  if (l.halo !== undefined && !(Number.isInteger(l.halo) && l.halo >= 0 && l.halo <= 4)) fail(`a layer's halo takes a whole number of cells from 0 to 4, not ${shown(l.halo)}`);
   let mask: string | null = " ";
   if (l.mask === null) mask = null;
   else if (l.mask !== undefined) {
@@ -515,7 +553,25 @@ function layerOf(fn: string, v: unknown, anchor: Anchor): Placed {
     margin: whole(l.margin, "a layer's margin", 0, 0),
     move: travel(l.move),
     mask,
+    halo: l.halo,
   };
+}
+
+// Clears the cells round a layer's ink, `h` cells out across and half that down (a cell is about twice as tall as it
+// is wide), to blanks that cover what is under them: a knockout, so words read over a busy picture.
+function knockout(s: Surface, g: Surface, x: number, y: number, h: number, mask: number) {
+  const dy = Math.max(1, Math.round(h / 2));
+  const blank = 32;
+  for (let r = 0; r < g.rows; r++)
+    for (let c = 0; c < g.cols; c++) {
+      const ch = g.chars[r * g.cols + c];
+      if (ch === EMPTY || ch === mask) continue;
+      for (let j = r - dy; j <= r + dy; j++)
+        for (let i = c - h; i <= c + h; i++) {
+          const k = s.index(x + i, y + j);
+          if (k >= 0) s.put(k, blank);
+        }
+    }
 }
 
 // A position at t, in whole cells.
@@ -547,10 +603,22 @@ function spot(l: Placed, t: number, cols: number, rows: number): [number, number
   return [x, y];
 }
 
-function stack(fn: string, all: Placed[]): KitPiece {
+function stack(fn: string, all: Placed[], given: { name?: string; note?: string } = {}): KitPiece {
   const cell = all[0].meta.cell ?? 2;
   for (const l of all) fit(l, cell);
   const { cols, rows } = all[0];
+  for (let i = 1; i < all.length; i++) {
+    const l = all[i];
+    // Words or a banner bigger than the stage, sitting still, would be cut at their edges with nothing said: "launch
+    // day" read "AUNCH DA". Words that travel or are steered by a function cross the stage on purpose, and a picture
+    // bigger than its stage is a window onto it.
+    if (l.meta.category === "type" && !l.move && typeof l.x !== "function" && typeof l.y !== "function" && (l.cols > cols || l.rows > rows)) {
+      const way = l.cols > cols ? `${l.cols} columns, wider than the ${cols}` : `${l.rows} rows, taller than the ${rows}`;
+      fail(`${fn}(): ${l.meta.name} is ${way} of ${all[0].meta.name} under it, so its edges would be cut off. Make it smaller (banner() takes max: ${cols}, or a narrower font), crop() it, or lay it on something bigger`);
+    }
+    // Words and banners over a part that moves get a cell cleared round them, so they read.
+    if (l.halo === undefined) l.halo = l.meta.category === "type" && all.slice(0, i).some((b) => b.meta.fps > 0) ? 1 : 0;
+  }
   // A layer placed by a function moves on no period the kit can know: repeat() gives it one.
   const steered = all.some((l) => typeof l.x === "function" || typeof l.y === "function");
   // A move with no period of its own crosses in about 8 seconds: a whole number of the parts' loop when they have one
@@ -563,7 +631,8 @@ function stack(fn: string, all: Placed[]): KitPiece {
   const own = travels.length ? together(travels) : 0;
   const m = merge(all);
   const whole: Whole = {
-    name: all.map((l) => l.meta.name).reverse().join(" over "),
+    name: given.name ?? all.map((l) => l.meta.name).reverse().join(" over "),
+    note: given.note,
     category: all[0].meta.category,
     cols,
     rows,
@@ -587,6 +656,7 @@ function stack(fn: string, all: Placed[]): KitPiece {
         const [x, y] = spot(l, t, cols, rows);
         // A card: its blank cells cover what is under them too.
         if (l.mask === null) s.fill(" ", undefined, { x, y, cols: l.cols, rows: l.rows });
+        else if (l.halo) knockout(s, g, x, y, l.halo, l.mask === null ? -1 : l.mask.charCodeAt(0));
         s.paste(g, x, y, { mask: l.mask });
       }
     };
@@ -617,10 +687,10 @@ export function layer(base: Source | Layer, ...over: (Source | Layer)[]): KitPie
  *
  *   over(banner("ascii.rest"), oceanSunset, { anchor: "top", margin: 12 })
  */
-export function over(top: Source | Layer, bottom: Source | Layer, o: Omit<Layer, "src"> = {}): KitPiece {
-  const opts = object(o, "over()");
+export function over(top: Source | Layer, bottom: Source | Layer, o: Omit<Layer, "src"> & { name?: string; note?: string } = {}): KitPiece {
+  const { name, note, ...opts } = object(o, "over()", [...LAYER.filter((k) => k !== "src"), "name", "note"]);
   const upper = isClip(top) ? { ...opts, ...top } : { ...opts, src: top };
-  return stack("over", [layerOf("over", bottom, "top-left"), layerOf("over", upper, "center")]);
+  return stack("over", [layerOf("over", bottom, "top-left"), layerOf("over", upper, "center")], naming("over", { name, note }));
 }
 
 // --- borders -------------------------------------------------------------------------------
@@ -659,6 +729,7 @@ function borderOf(name: string, v: unknown): Border | null {
   if (v === undefined || v === false) return null;
   const o: BorderOptions =
     v === true ? {} : v !== null && typeof v === "object" && !Array.isArray(v) ? v : fail(`${name} takes true, or { style, title, color, pad }, not ${shown(v)}`);
+  object(o, name, ["style", "title", "color", "pad"]);
   const style = o.style ?? "rounded";
   const chars = typeof style === "string" && Object.hasOwn(BOXES, style) ? BOXES[style as keyof typeof BOXES] : style;
   if (typeof chars !== "string" || chars.length !== 6 || /[\ud800-\udfff]/.test(chars))
@@ -734,18 +805,30 @@ export function border(src: Source | Clip, o: BorderOptions = {}): KitPiece {
 
 // --- layouts -------------------------------------------------------------------------------
 
+// What row(), column() and grid() take besides their layout: a loop, a name and a note of the whole's own.
+interface Own {
+  loop?: number;
+  name?: string;
+  note?: string;
+}
+
 // Parts at fixed places in a whole of their own, with a box round each first when there is a border.
-function arrange(fn: string, all: Prepared[], cols: number, rows: number, spots: readonly (readonly [number, number])[], name: string, boxes: readonly { region: Region; title: string }[] = [], b: Border | null = null): KitPiece {
+function arrange(fn: string, all: Prepared[], cols: number, rows: number, spots: readonly (readonly [number, number])[], name: string, own: Own, boxes: readonly { region: Region; title: string }[] = [], b: Border | null = null): KitPiece {
   const m = merge(all, b?.color ?? [], boxes.length > 0 && !b?.color);
+  const { name: given, note } = naming(fn, own);
+  const loop = loopOption(fn, own.loop);
+  const fps = fpsOf(all);
   const whole: Whole = {
-    name,
+    name: given ?? name,
+    note,
     category: categoryOf(all),
     cols,
     rows,
     cell: all[0].meta.cell ?? 2,
-    fps: fpsOf(all),
+    fps,
     ground: groundOf(all),
-    loop: together(all.map(period)),
+    // A loop of the whole's own wins: its time wraps round on it, so parts that would only meet past a minute repeat.
+    loop: loop !== undefined ? (fps ? loop : undefined) : together(all.map(period)),
     still: stillOf(all),
     clock: all.some((p) => p.meta.clock),
   };
@@ -753,6 +836,7 @@ function arrange(fn: string, all: Prepared[], cols: number, rows: number, spots:
     const play = all.map((p, i) => player(p, m.maps[i]));
     const ink = borderInk(m, all.length, b);
     return (t, s, ctx) => {
+      if (loop !== undefined) t -= loop * Math.floor(t / loop);
       const k = ctx.mono || !ink ? NONE : ink[ctx.paper ? 0 : 1];
       for (const bx of boxes) box(s, bx.region, b!.chars, bx.title, k);
       for (let i = 0; i < all.length; i++) s.paste(play[i](t, ctx.paper, ctx.mono), spots[i][0], spots[i][1]);
@@ -766,6 +850,15 @@ export interface RowOptions {
   gap?: number;
   /** Where a shorter part sits in the row's height, the tallest part's: "top", "middle" or "bottom": "middle". */
   align?: "top" | "middle" | "bottom";
+  /**
+   * Seconds it plays round on, its parts' time wrapping at it as repeat() does: by default the least common multiple of
+   * its parts' loops, none when they meet only past a minute. Give one to make such a row loop.
+   */
+  loop?: number;
+  /** Its name: its parts' names by default ("a and b"). */
+  name?: string;
+  /** One line, up to 72 characters, saying what you see: its name by default. */
+  note?: string;
 }
 
 /**
@@ -776,7 +869,7 @@ export interface RowOptions {
  */
 export function row(parts: readonly (Source | Clip)[], o: RowOptions = {}): KitPiece {
   const fn = "row";
-  const opts = object(o, "row()");
+  const opts = object(o, "row()", ["gap", "align", "loop", "name", "note"]);
   const gap = whole(opts.gap, "row's gap", 0, 2);
   const align = oneOf(opts.align, "row's align", ["top", "middle", "bottom"], "middle");
   const all = list(fn, parts);
@@ -788,7 +881,7 @@ export function row(parts: readonly (Source | Clip)[], o: RowOptions = {}): KitP
     x += p.cols + gap;
     return spot;
   });
-  return arrange(fn, all, x - gap, rows, spots, and(all.map((p) => p.meta.name)));
+  return arrange(fn, all, x - gap, rows, spots, and(all.map((p) => p.meta.name)), opts);
 }
 
 /** How column() lays out its parts. */
@@ -797,6 +890,12 @@ export interface ColumnOptions {
   gap?: number;
   /** Where a narrower part sits in the column's width, the widest part's: "left", "center" or "right": "center". */
   align?: "left" | "center" | "right";
+  /** Seconds it plays round on, as row()'s loop: its parts' loops together by default. */
+  loop?: number;
+  /** Its name: its parts' names by default. */
+  name?: string;
+  /** One line, up to 72 characters, saying what you see: its name by default. */
+  note?: string;
 }
 
 /**
@@ -807,7 +906,7 @@ export interface ColumnOptions {
  */
 export function column(parts: readonly (Source | Clip)[], o: ColumnOptions = {}): KitPiece {
   const fn = "column";
-  const opts = object(o, "column()");
+  const opts = object(o, "column()", ["gap", "align", "loop", "name", "note"]);
   const gap = whole(opts.gap, "column's gap", 0, 1);
   const align = oneOf(opts.align, "column's align", ["left", "center", "right"], "center");
   const all = list(fn, parts);
@@ -819,7 +918,7 @@ export function column(parts: readonly (Source | Clip)[], o: ColumnOptions = {})
     y += p.rows + gap;
     return spot;
   });
-  return arrange(fn, all, cols, y - gap, spots, and(all.map((p) => p.meta.name)));
+  return arrange(fn, all, cols, y - gap, spots, and(all.map((p) => p.meta.name)), opts);
 }
 
 /** How grid() lays out its parts. */
@@ -835,20 +934,28 @@ export interface GridOptions {
   align?: Anchor;
   /**
    * A border round every cell, each the size of its cell, so the boxes line up in rows and columns: none. true for the
-   * default border; `{ title: true }` puts each part's name on its box.
+   * default border; `{ title: true }` puts each part's name on its box. A part that draws a frame of its own, a kit
+   * gauge(), panel(), card() or clockFace(), gets none: it fills its cell's box instead.
    */
   border?: boolean | BorderOptions;
+  /** Seconds it plays round on, as row()'s loop: its parts' loops together by default. */
+  loop?: number;
+  /** Its name: its parts' names by default. */
+  name?: string;
+  /** One line, up to 72 characters, saying what you see: its name by default. */
+  note?: string;
 }
 
 /**
  * Pieces in a grid of `columns` a row: a dashboard. Cells line up, each column as wide as its widest part and each row
  * as tall as its tallest, `gap` apart, with a border round each if you like.
  *
- *   grid([barChart, gauge, sparkline, heartbeat], { border: { title: true } })   // two a row
+ *   grid([lib.barChart, lib.gauge, lib.sparkline, lib.heartbeat], { border: { title: true } })   // two a row
+ *   grid([gauge({ label: "cpu" }), sparkline({ label: "net" }), clockFace()], { columns: 3, name: "dashboard" })
  */
 export function grid(parts: readonly (Source | Clip)[], o: GridOptions = {}): KitPiece {
   const fn = "grid";
-  const opts = object(o, "grid()");
+  const opts = object(o, "grid()", ["columns", "gap", "align", "border", "loop", "name", "note"]);
   const all = list(fn, parts);
   const columns = whole(opts.columns, "grid's columns", 1, Math.ceil(Math.sqrt(all.length)));
   const g: unknown = opts.gap;
@@ -873,17 +980,22 @@ export function grid(parts: readonly (Source | Clip)[], o: GridOptions = {}): Ki
   const ys = ch.map((_, r) => ch.slice(0, r).reduce((a, v) => a + v + gy, 0));
   const spots = all.map((p, i) => {
     const j = i % n, r = Math.floor(i / n);
+    // A part with a frame of its own sits in its cell's whole box, where the border would have been.
+    if (b && p.frames) {
+      const [dx, dy] = place(align, cw[j], ch[r], p.cols, p.rows);
+      return [xs[j] + dx, ys[r] + dy] as const;
+    }
     const [dx, dy] = place(align, widths[j], heights[r], p.cols, p.rows);
     return [xs[j] + e + px + dx, ys[r] + e + py + dy] as const;
   });
   const boxes = b
-    ? all.map((p, i) => {
+    ? all.flatMap((p, i) => {
         const j = i % n, r = Math.floor(i / n);
-        return { region: { x: xs[j], y: ys[r], cols: cw[j], rows: ch[r] }, title: titleOf(b, p.meta.name) };
+        return p.frames ? [] : [{ region: { x: xs[j], y: ys[r], cols: cw[j], rows: ch[r] }, title: titleOf(b, p.meta.name) }];
       })
     : [];
   const cols = xs[n - 1] + cw[n - 1], rows = ys[lines - 1] + ch[lines - 1];
-  return arrange(fn, all, cols, rows, spots, and(all.map((p) => p.meta.name)), boxes, b);
+  return arrange(fn, all, cols, rows, spots, and(all.map((p) => p.meta.name)), opts, boxes, b);
 }
 
 // --- one piece, reshaped --------------------------------------------------------------------
@@ -1056,6 +1168,10 @@ export interface SequenceOptions {
   loop?: boolean;
   /** The dissolve's pattern: 1. */
   seed?: number;
+  /** Its name: its steps' names by default ("a, then b"). */
+  name?: string;
+  /** One line, up to 72 characters, saying what you see: its name by default. */
+  note?: string;
 }
 
 const TRANSITIONS = ["cut", "dissolve", "fade", "wipe"] as const;
@@ -1114,7 +1230,8 @@ const BAND = "░▒▓"; // a wipe's band, the next step's side first
  */
 export function sequence(steps: readonly (Source | Step)[], o: SequenceOptions = {}): KitPiece {
   const fn = "sequence";
-  const opts = object(o, "sequence()");
+  const opts = object(o, "sequence()", ["seconds", "transition", "overlap", "loop", "seed", "name", "note"]);
+  const given = naming(fn, opts);
   const each = duration(opts.seconds, "sequence's seconds", 4);
   const transition = oneOf(opts.transition, "sequence's transition", TRANSITIONS, "dissolve");
   const overlap = duration(opts.overlap, "sequence's overlap", 0.8, true);
@@ -1122,7 +1239,7 @@ export function sequence(steps: readonly (Source | Step)[], o: SequenceOptions =
   if (typeof loop !== "boolean") fail(`sequence's loop takes true or false, not ${shown(loop)}`);
   const seed = opts.seed ?? 1;
   if (!Number.isInteger(seed)) fail(`sequence's seed takes a whole number, not ${shown(seed)}`);
-  const all = list(fn, steps);
+  const all = list(fn, steps, [...CLIP, "seconds"]);
   const n = all.length;
   const span = all.map((_, i) => {
     const v = steps[i];
@@ -1152,7 +1269,8 @@ export function sequence(steps: readonly (Source | Step)[], o: SequenceOptions =
   const fading = transition === "fade" ? fadeTable() : null;
   const fps = Math.max(fpsOf(all), alone ? 0 : 24);
   const whole: Whole = {
-    name: all.map((p) => p.meta.name).join(", then "),
+    name: given.name ?? all.map((p) => p.meta.name).join(", then "),
+    note: given.note,
     category: categoryOf(all),
     cols,
     rows,
@@ -1316,7 +1434,7 @@ export function freeze(src: Source | Clip, at: number): KitPiece {
  *   named(over(banner("hello"), starfield), "hello", { note: "hello among the stars" })
  */
 export function named(src: Source | Clip, name: string, o: { note?: string; category?: Category } = {}): KitPiece {
-  const opts = object(o, "named()");
+  const opts = object(o, "named()", ["note", "category"]);
   // A name and a note are one line each: screen readers, titles and svg() read them as one.
   const line = (v: unknown) => typeof v === "string" && !!v.trim() && !/[\u0000-\u001f\u007f-\u009f]/.test(v);
   if (!line(name)) fail(`named() takes a name, one line such as "hello", not ${shown(name)}`);

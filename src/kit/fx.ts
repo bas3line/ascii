@@ -942,8 +942,8 @@ export function glitch(src: Source, options?: GlitchOptions): KitPiece {
       setup: () => (t, s, g) => {
         const u = mod(t - first, every);
         if (u >= length) return copy(s, g);
-        // One look for each sixteenth of a second of each burst.
-        const burst = Math.floor((t - first) / every), k = burst * 97 + Math.floor(u * 16);
+        // One look for each sixteenth of a second of a burst, the same in every burst, so the loop is exact.
+        const k = Math.floor(u * 16 + 1e-6);
         const shift = Math.floor(hash(seed, k, 1) * 3);
         const { cols } = g;
         for (let y = 0; y < g.rows; y++) {
@@ -1144,7 +1144,8 @@ export function shake(src: Source, options?: ShakeOptions): KitPiece {
       const u = mod(t - first, every);
       let dx = 0, dy = 0;
       if (u < length) {
-        const k = Math.floor((t - first) / every) * 97 + Math.floor(u * 20);
+        // Each jolt by its moment in the burst alone, so every burst is the same and the loop is exact.
+        const k = Math.floor(u * 20 + 1e-6);
         dx = Math.round((hash(seed, k, 1) * 2 - 1) * amount);
         dy = Math.round((hash(seed, k, 2) * 2 - 1) * amount);
         // A jolt always moves it.

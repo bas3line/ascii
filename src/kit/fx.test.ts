@@ -766,6 +766,18 @@ test("loops: an effect's piece keeps to its own loop, not a logo's shine, in a c
   assert.deepEqual(loopOf(shadow(banner("hi"))), loopOf(banner("hi")));
 });
 
+test("shake and glitch repeat exactly on the loop they claim: every burst is the same", () => {
+  for (const p of [shake("HELLO WORLD\nSECOND LINE", { amount: 2 }), glitch("HELLO WORLD\nSECOND LINE"), shake(rust, { every: 1.5, seed: 4 })]) {
+    const loop = p.meta.loop!;
+    assert.ok(loop > 0, p.meta.name);
+    for (let i = 0; i < 60; i++) {
+      const t = (i / 60) * loop;
+      assert.equal(look(p, t).text, look(p, t + loop).text, `${p.meta.name} at ${t.toFixed(3)}`);
+      assert.equal(look(p, t).text, look(p, t + 3 * loop).text, `${p.meta.name} three loops on at ${t.toFixed(3)}`);
+    }
+  }
+});
+
 test("any t gives a whole frame: before 0, not a number, and a long way on", () => {
   const sources: Piece[] = [rust, still3, asPiece("ab\ncd")];
   const makers = [glint, typeIn, dissolve, fade, scan, glitch, wave, rainbow, hueCycle, shake, outline, shadow] as ((s: Piece) => Piece)[];

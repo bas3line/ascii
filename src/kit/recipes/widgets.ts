@@ -25,7 +25,7 @@ import { arc, braille, circle, label, line, ray, rect, text, type BoxStyle, type
 import { border, layer, sequence, type Anchor } from "../compose.ts";
 import { typeIn } from "../fx.ts";
 import { ease, loopNoise } from "../math.ts";
-import { NAMING, boolOf, colorOf, numberOf, optionsOf, secondsOf, show, speedOf, titled, wholeOf, wordOf, type Speed } from "./checks.ts";
+import { NAMING, boolOf, colorOf, loopOf, numberOf, optionsOf, secondsOf, show, speedOf, textOf, titled, wholeOf, wordOf, type Speed } from "./checks.ts";
 import { drifting } from "./motion.ts";
 import { palette, type ColorLike, type PaletteLike } from "./palettes.ts";
 import { pieceOf, type Thing } from "./words.ts";
@@ -201,11 +201,13 @@ function tones(accent?: { light: string; dark: string }, more: readonly { light:
   return { light: list.map((c) => c.light), dark: list.map((c) => c.dark) };
 }
 
-// Text as a grid in one colour, for a maker that takes a source: one colour for both pages or one for each.
-function inked(str: string, color: { light: string; dark: string } | undefined, width?: number): Surface {
+// Text as a grid in one colour, for a maker that takes a source: one colour for both pages or one for each. Throws,
+// in `what`'s words, for text that wraps past the 120 rows a piece can have, rather than cutting it short.
+function inked(what: string, str: string, color: { light: string; dark: string } | undefined, width?: number, asked = width): Surface {
   const lines = str.replace(/\r\n?/g, "\n");
-  const scratch = new Surface(width ?? Math.max(1, ...lines.split("\n").map((l) => l.length)), 120);
+  const scratch = new Surface(width ?? Math.max(1, ...lines.split("\n").map((l) => l.length)), 121);
   const box = text(scratch, 0, 0, lines, width ? { width } : {});
+  if (box.rows > 120) fail(`${what}'s words wrap past the 120 rows a piece can have${asked ? ` at ${asked} columns` : ""}: give it fewer words${asked ? " or more width" : ""}`);
   const s = new Surface(Math.max(1, width ?? box.cols), Math.max(1, box.rows), { palette: color ? new Palette({ light: [color.light], dark: [color.dark] }) : null });
   text(s, 0, 0, lines, { ...(width ? { width } : {}), ...(color ? { color: 0 } : {}) });
   return s;
@@ -215,6 +217,36 @@ const WIDGET = ["color", ...NAMING] as const;
 
 // A widget's name and note: the user's, or its own.
 const naming = (o: { name?: string; note?: string }, name: string, note: string) => ({ name: o.name ?? name, note: (o.note ?? note).slice(0, 72) });
+
+// A widget that draws a frame of its own: grid()'s border leaves it out rather than drawing a second one round it.
+const framing = <P extends object>(p: P, framed: boolean): P => (framed ? Object.assign(p, { frames: true }) : p);
+
+/**
+ * How full, from what gauge() and progressBar() take: a number from `min` to `max`, or a percentage as a string,
+ * "64%". A share of 0 to 1 is what a progress bar takes; a gauge from 0 to 100 given one is asked if it meant a
+ * percentage. A function is read every frame, for a live reading: the piece is then a clock (svg() can't loop it).
+ */
+function amountOf(what: string, v: unknown, min: number, max: number, share: boolean): number | (() => number) | undefined {
+  if (v === undefined) return undefined;
+  if (typeof v === "function") {
+    return () => {
+      const got = (v as () => unknown)();
+      return typeof got === "number" && Number.isFinite(got) ? Math.max(min, Math.min(max, got)) : min;
+    };
+  }
+  if (typeof v === "string") {
+    const m = /^\s*(\d+(?:\.\d+)?)\s*%\s*$/.exec(v);
+    if (!m || +m[1] > 100) fail(`${what}'s value takes a percentage from "0%" to "100%", or a number, not ${show(v)}`);
+    return min + (+m[1] / 100) * (max - min);
+  }
+  if (typeof v !== "number" || !Number.isFinite(v) || v < min || v > max) {
+    const hint = share && typeof v === "number" && v > 1 && v <= 100 ? `: did you mean ${+(v / 100).toFixed(4)}, or "${v}%"?` : "";
+    fail(`${what}'s value takes a number from ${min} to ${max}, a percentage such as "64%", or a function that reads one, not ${show(v)}${hint}`);
+  }
+  if (!share && min === 0 && max === 100 && v > 0 && v < 1)
+    fail(`${what}'s value is a reading from 0 to 100, and ${v} is less than 1: did you mean ${+(v * 100).toFixed(2)}, or "${+(v * 100).toFixed(2)}%"? Give it max: 1 for a reading from 0 to 1`);
+  return v;
+}
 
 // --- clock face ------------------------------------------------------------------------------------
 
@@ -250,16 +282,16 @@ export function clockFace(o?: ClockFaceOptions): KitPiece {
   const numbers = wordOf("clockFace's numbers", p.numbers, ["all", "quarters", "none"] as const, size === "small" ? "quarters" : "all");
   const real = boolOf("clockFace's real", p.real, false);
   const framed = boolOf("clockFace's frame", p.frame, true);
-  if (p.title !== undefined && typeof p.title !== "string") fail(`clockFace's title takes words, not ${show(p.title)}`);
+  const title = textOf("clockFace's title", p.title);
   const time = p.time ?? "10:10";
   const hm = /^(\d{1,2}):(\d{2})$/.exec(String(time));
   if (!hm || +hm[1] > 23 || +hm[2] > 59) fail(`clockFace's time takes "h:mm", such as "10:10", not ${show(time)}`);
   const [h0, m0] = [+hm![1] % 12, +hm![2]];
   const { cols, rows } = { small: { cols: 25, rows: 13 }, medium: { cols: 41, rows: 21 }, large: { cols: 61, rows: 29 } }[size];
   const second = themed("clockFace's color", p.color) ?? TONES.bad;
-  return piece({ ...naming(p, "clock", real ? "a clock face showing the time" : `a clock face at ${time}, its second hand going round`), category: "objects", cols, rows, fps: 4, palette: tones(second), ...(real ? { clock: true } : { loop: 60 }) }, (t, s) => {
+  const made = piece({ ...naming(p, "clock", real ? "a clock face showing the time" : `a clock face at ${time}, its second hand going round`), category: "objects", cols, rows, fps: 4, palette: tones(second), ...(real ? { clock: true } : { loop: 60 }) }, (t, s) => {
     const [x, y] = at(s);
-    if (framed) rect(s, 0, 0, cols, rows, { style: "rounded", title: p.title, color: MUTED });
+    if (framed) rect(s, 0, 0, cols, rows, { style: "rounded", title, color: MUTED });
     // the dial's radius in columns: the frame's inside, or the whole
     const r = (rows / 2 - (framed ? 1.5 : 0.5)) * s.aspect;
     circle(s, x, y, r, { char: "auto", color: MUTED });
@@ -276,13 +308,21 @@ export function clockFace(o?: ClockFaceOptions): KitPiece {
       if (numbers === "all" || (numbers === "quarters" && hour % 3 === 0)) label(s, ...point, hour || 12);
     });
   });
+  return framing(made, framed);
 }
 
 // --- progress bar ------------------------------------------------------------------------------------
 
 export interface ProgressBarOptions {
-  /** How far along, 0 to 1: a still bar at that. None by default: it fills over `seconds`, holds a second, and fills again. */
-  value?: number;
+  /**
+   * How far along: a share from 0 to 1 (or from `min` to `max`), or a percentage, "64%", for a still bar at that; or
+   * a function that reads it, called every frame, for a live one. None by default: it fills over `seconds`, holds, and
+   * fills again.
+   */
+  value?: number | `${number}%` | (() => number);
+  /** What an empty bar and a full one stand for: 0 and 1. */
+  min?: number;
+  max?: number;
   /** Words before the bar: none. */
   label?: string;
   /** The bar's length in columns: 30. */
@@ -291,7 +331,7 @@ export interface ProgressBarOptions {
   style?: "blocks" | "ascii" | "dots";
   /** The percentage after the bar: true. */
   percent?: boolean;
-  /** Seconds it takes to fill when it has no value: 4. */
+  /** Seconds it takes to fill when it has no value: 4. It then stays full until its loop, the fill and a second, comes round on a whole number of seconds that combines with other widgets'. */
   seconds?: number;
   /** The bar's colour, as #rrggbb, { light, dark } or a palette's name: blue, and green once full. */
   color?: ColorLike;
@@ -309,19 +349,26 @@ const EIGHTHS = "▏▎▍▌▋▊▉█";
  *   progressBar({ value: 0.42, style: "ascii" })
  */
 export function progressBar(o?: ProgressBarOptions): KitPiece {
-  const p = optionsOf("progressBar()", o, ["value", "label", "width", "style", "percent", "seconds", ...WIDGET]);
-  const value = p.value === undefined ? undefined : numberOf("progressBar's value", p.value, 0, 0, 1);
-  if (p.label !== undefined && typeof p.label !== "string") fail(`progressBar's label takes words, not ${show(p.label)}`);
-  const label = p.label ? `${p.label} ` : "";
+  const p = optionsOf("progressBar()", o, ["value", "min", "max", "label", "width", "style", "percent", "seconds", ...WIDGET]);
+  const min = numberOf("progressBar's min", p.min, 0), max = numberOf("progressBar's max", p.max, 1);
+  if (!(max > min)) fail(`progressBar's max takes a number above its min, ${min}, not ${show(p.max)}`);
+  const value = amountOf("progressBar", p.value, min, max, min === 0 && max === 1);
+  const live = typeof value === "function";
+  const words = textOf("progressBar's label", p.label);
+  const label = words ? `${words} ` : "";
   const width = wholeOf("progressBar's width", p.width, 30, 3, 300);
   const style = wordOf("progressBar's style", p.style, ["blocks", "ascii", "dots"] as const, "blocks");
   const percent = boolOf("progressBar's percent", p.percent, true);
   const fill = numberOf("progressBar's seconds", p.seconds, 4, 0.1, 59);
   const smooth = ease.inOutSine;
-  const loop = fill + 1;
+  // Full for a second at least, then round again on a loop other widgets share.
+  const loop = loopOf(fill + 1, true);
   const cols = label.length + width + (percent ? 5 : 0);
-  return piece({ ...naming(p, label.trim() || "progress", value === undefined ? "a progress bar filling" : `a progress bar at ${Math.round(value * 100)}%`), category: "ui", cols, rows: 1, fps: value === undefined ? 24 : 0, palette: tones(themed("progressBar's color", p.color)), ...(value === undefined ? { loop } : {}) }, (t, s) => {
-    const k = value ?? smooth(Math.min(1, (((t % loop) + loop) % loop) / fill));
+  const share = (v: number) => (v - min) / (max - min);
+  const timing = live ? { fps: 4, clock: true } : value === undefined ? { fps: 24, loop, still: fill } : { fps: 0 };
+  const note = live ? "a progress bar, live" : value === undefined ? "a progress bar filling" : `a progress bar at ${Math.round(share(value) * 100)}%`;
+  return piece({ ...naming(p, label.trim() || "progress", note), category: "ui", cols, rows: 1, ...timing, palette: tones(themed("progressBar's color", p.color)) }, (t, s) => {
+    const k = typeof value === "function" ? share(value()) : value !== undefined ? share(value) : smooth(Math.min(1, (((t % loop) + loop) % loop) / fill));
     const color = k >= 1 ? GOOD : ACCENT;
     s.write(0, 0, label);
     const x = label.length;
@@ -366,8 +413,10 @@ export type SpinnerName = keyof typeof spinners;
 export interface SpinnerOptions {
   /** Words after it: none. */
   label?: string;
-  /** How fast: "slow", "normal" (a frame every tenth of a second) or "fast", or times as fast. */
+  /** How fast: "slow", "normal" (about a frame every tenth of a second, its turn a whole loop that combines) or "fast", or times as fast. */
   speed?: Speed;
+  /** Seconds for one turn through its frames, over speed. */
+  period?: number;
   /** Its colour, as #rrggbb, { light, dark } or a palette's name: blue. */
   color?: ColorLike;
   name?: string;
@@ -382,12 +431,13 @@ export interface SpinnerOptions {
  */
 export function spinner(kind: SpinnerName = "dots", o?: SpinnerOptions): KitPiece {
   const name = wordOf("spinner()", kind, Object.keys(spinners) as SpinnerName[], "dots");
-  const p = optionsOf("spinner()", o, ["label", "speed", ...WIDGET]);
-  if (p.label !== undefined && typeof p.label !== "string") fail(`spinner's label takes words, not ${show(p.label)}`);
+  const p = optionsOf("spinner()", o, ["label", "speed", "period", ...WIDGET]);
+  const label = textOf("spinner's label", p.label);
   const frames = spinners[name];
-  const loop = secondsOf("spinner()", p, frames.length / 10);
-  const words = p.label ? ` ${p.label}` : "";
-  return piece({ ...naming(p, p.label || `${name} spinner`, `a ${name} spinner${words ? `,${words}` : ""}`), category: "ui", cols: 1 + words.length, rows: 1, fps: 30, palette: tones(themed("spinner's color", p.color)), loop }, (t, s) => {
+  // A tenth of a second a frame, its turn kept to a loop other widgets share; a period of your own as it is.
+  const loop = p.period !== undefined ? secondsOf("spinner()", p, 1) : loopOf(secondsOf("spinner()", p, frames.length / 10));
+  const words = label ? ` ${label}` : "";
+  return piece({ ...naming(p, label || `${name} spinner`, `a ${name} spinner${words ? `,${words}` : ""}`), category: "ui", cols: 1 + words.length, rows: 1, fps: 30, palette: tones(themed("spinner's color", p.color)), loop }, (t, s) => {
     // the frame t is in, a hair past each step so a frame's own moment shows it
     const k = Math.floor(((((t % loop) + loop) % loop) * frames.length) / loop + 1e-9);
     s.set(0, 0, frames[Math.min(frames.length - 1, k)], ACCENT);
@@ -398,10 +448,16 @@ export function spinner(kind: SpinnerName = "dots", o?: SpinnerOptions): KitPiec
 // --- gauge -------------------------------------------------------------------------------------------
 
 export interface GaugeOptions {
-  /** The reading, from `min` to `max`: a still at that. None by default: a live reading wandering up and down, looping every 8 seconds. */
-  value?: number;
-  /** Its name, on the frame's top edge: none. */
+  /**
+   * The reading, from `min` to `max`, or a percentage of the way, "64%": a still at that. A function that reads it is
+   * called every frame, for a live reading such as the real CPU. None by default: a reading wandering up and down,
+   * looping every 12 seconds.
+   */
+  value?: number | `${number}%` | (() => number);
+  /** Its name, on the frame's top edge (above the dial when it has no frame): none. */
   label?: string;
+  /** A rounded frame round it: true. false for none, as when a grid() draws its own border round each part. */
+  frame?: boolean;
   /** The reading's lowest and highest: 0 and 100. */
   min?: number;
   max?: number;
@@ -421,24 +477,30 @@ export interface GaugeOptions {
  *   gauge({ value: 72, label: "disk" })
  */
 export function gauge(o?: GaugeOptions): KitPiece {
-  const p = optionsOf("gauge()", o, ["value", "label", "min", "max", "unit", ...WIDGET]);
+  const p = optionsOf("gauge()", o, ["value", "label", "frame", "min", "max", "unit", ...WIDGET]);
   const min = numberOf("gauge's min", p.min, 0), max = numberOf("gauge's max", p.max, 100);
   if (!(max > min)) fail(`gauge's max takes a number above its min, ${min}, not ${show(p.max)}`);
-  const value = p.value === undefined ? undefined : numberOf("gauge's value", p.value, min, min, max);
-  if (p.label !== undefined && typeof p.label !== "string") fail(`gauge's label takes words, not ${show(p.label)}`);
-  const unit = p.unit === undefined ? "%" : typeof p.unit === "string" ? p.unit : fail(`gauge's unit takes words, such as "%", not ${show(p.unit)}`);
+  const value = amountOf("gauge", p.value, min, max, false);
+  const title = textOf("gauge's label", p.label);
+  const unit = p.unit === undefined ? "%" : textOf("gauge's unit", p.unit)!;
+  const framed = boolOf("gauge's frame", p.frame, true);
   const own = themed("gauge's color", p.color);
-  const loop = 8;
-  // A live reading: smooth noise that comes round every loop, kept between a sixth and nineteen twentieths.
-  const live = (t: number) => 0.15 + 0.8 * loopNoise(0.3, 0.7, t, loop, { radius: 0.9 });
-  return piece({ ...naming(p, p.label || "gauge", value === undefined ? "a gauge, its reading rising and falling" : `a gauge reading ${value}${unit}`), category: "data", cols: 25, rows: 12, fps: value === undefined ? 24 : 0, palette: tones(own), ...(value === undefined ? { loop } : {}) }, (t, s) => {
-    const k = value === undefined ? live(t) : (value - min) / (max - min);
+  // 12 seconds: a loop that divides a minute, so a gauge next to a clock face or a sparkline loops with them.
+  const loop = 12;
+  // A reading that wanders: smooth noise that comes round every loop, kept between a sixth and nineteen twentieths.
+  const wander = (t: number) => 0.15 + 0.8 * loopNoise(0.3, 0.7, t, loop, { radius: 0.9 });
+  const timing = typeof value === "function" ? { fps: 4, clock: true } : value === undefined ? { fps: 24, loop } : { fps: 0 };
+  const note = typeof value === "function" ? "a gauge, live" : value === undefined ? "a gauge, its reading rising and falling" : `a gauge reading ${+value.toFixed(2)}${unit}`;
+  const made = piece({ ...naming(p, title || "gauge", note), category: "data", cols: 25, rows: 12, ...timing, palette: tones(own) }, (t, s) => {
+    const k = typeof value === "function" ? (value() - min) / (max - min) : value === undefined ? wander(t) : (value - min) / (max - min);
     const color = own ? ACCENT : k > 0.85 ? BAD : k > 0.6 ? WARN : GOOD;
-    rect(s, 0, 0, s.cols, s.rows, { style: "rounded", title: p.label, color: MUTED });
+    if (framed) rect(s, 0, 0, s.cols, s.rows, { style: "rounded", title, color: MUTED });
+    else if (title) textAt(s, title, "top");
     arc(s, 12.5, 7, 9, -0.375, 0.375, { char: "░", color: MUTED });
     arc(s, 12.5, 7, 9, -0.375, -0.375 + 0.75 * k, { char: "█", color });
     label(s, 12.5, 7, `${Math.round(min + k * (max - min))}${unit}`);
   });
+  return framing(made, framed);
 }
 
 // --- sparkline -----------------------------------------------------------------------------------------
@@ -460,36 +522,56 @@ export interface SparklineOptions {
 
 /**
  * A sparkline: a small, smooth line chart in braille, its latest number after it. Given numbers, it draws itself in
- * from the left, holds, and draws again; given none, it is a live reading scrolling left, looping every 12 seconds.
+ * from the left, holds, and draws again; given none, it is a reading wandering and scrolling left, looping every 12
+ * seconds. Given a function that returns numbers, it reads them every frame and draws the latest, for live data: the
+ * piece is then a clock (svg() can't loop it).
  *
  *   sparkline([3, 5, 2, 8, 6, 9, 4, 7], { label: "visits" })
- *   sparkline({ label: "net" })   // live
+ *   sparkline({ label: "net" })                    // a wandering reading
+ *   sparkline(() => history, { label: "cpu" })     // live: history is your own list, kept up to date
  */
-export function sparkline(data?: readonly number[] | SparklineOptions, o?: SparklineOptions): KitPiece {
-  // Options alone, for a live reading.
+export function sparkline(data?: readonly number[] | (() => readonly number[]) | SparklineOptions, o?: SparklineOptions): KitPiece {
+  // Options alone, for a wandering reading.
   if (data !== undefined && data !== null && typeof data === "object" && !Array.isArray(data)) {
     if (o !== undefined) fail("sparkline() takes numbers then options, or options alone for a live reading, not two lots of options");
     [data, o] = [undefined, data as SparklineOptions];
   }
   const p = optionsOf("sparkline()", o, ["label", "width", "height", "fill", ...WIDGET]);
-  if (data !== undefined && (!Array.isArray(data) || data.length < 2 || !data.every((v) => typeof v === "number" && Number.isFinite(v))))
-    fail(`sparkline() takes a list of two or more numbers, such as [3, 5, 2, 8], not ${show(data)}`);
-  if (p.label !== undefined && typeof p.label !== "string") fail(`sparkline's label takes words, not ${show(p.label)}`);
-  const words = p.label ? `${p.label} ` : "";
+  const numbers = (v: unknown): v is readonly number[] => Array.isArray(v) && v.length >= 2 && v.every((n) => typeof n === "number" && Number.isFinite(n));
+  const live = typeof data === "function" ? (data as () => readonly number[]) : null;
+  if (data !== undefined && !live && !numbers(data)) fail(`sparkline() takes a list of two or more numbers, such as [3, 5, 2, 8], or a function that returns one, not ${show(data)}`);
+  const label = textOf("sparkline's label", p.label);
+  const words = label ? `${label} ` : "";
   const width = wholeOf("sparkline's width", p.width, 32, 2, 300), height = wholeOf("sparkline's height", p.height, 3, 1, 100);
   const fill = boolOf("sparkline's fill", p.fill, true);
-  const list = data ? [...data] : null;
-  const lo = list ? Math.min(...list) : 0, hi = list ? Math.max(...list) : 1;
-  // Drawing in takes 1.5 seconds and holds 3; the live reading comes round every 12.
-  const loop = list ? 4.5 : 12;
+  const list = data && !live ? [...(data as readonly number[])] : null;
+  // A line through numbers all alike is flat in the middle, not a range of nothing.
+  const range = (l: readonly number[]): [number, number] => {
+    const lo = Math.min(...l), hi = Math.max(...l);
+    return lo === hi ? [lo - 1, hi + 1] : [lo, hi];
+  };
+  const [lo, hi] = list ? range(list) : [0, 1];
+  // Drawing in takes 1.5 seconds and holds; the wandering reading comes round every 12: loops other widgets share.
+  const loop = list ? loopOf(1.5 + 3, true) : 12;
   const reading = (x: number) => 0.1 + 0.8 * loopNoise(0.4, 0.2, x, loop, { radius: 1.4 });
-  const last = list ? String(+list[list.length - 1].toFixed(2)) : "100";
+  const last = list ? String(+list[list.length - 1].toFixed(2)) : live ? "100000" : "100";
   const cols = words.length + width + 1 + last.length;
-  return piece({ ...naming(p, p.label || "sparkline", list ? "a sparkline drawing itself in" : "a sparkline of a live reading"), category: "data", cols, rows: height, fps: 24, palette: tones(themed("sparkline's color", p.color)), loop }, (t, s) => {
+  const timing = live ? { fps: 4, clock: true } : { fps: 24, loop, ...(list ? { still: 1.5 } : {}) };
+  const note = live ? "a sparkline of live data" : list ? "a sparkline drawing itself in" : "a sparkline of a wandering reading";
+  return piece({ ...naming(p, label || "sparkline", note), category: "data", cols, rows: height, ...timing, palette: tones(themed("sparkline's color", p.color)) }, (t, s) => {
     const u = ((t % loop) + loop) % loop;
     textAt(s, words, "left");
     const area = { x: words.length, y: 0, cols: width, rows: height };
     const b = braille(s, area);
+    if (live) {
+      const now = live();
+      if (!numbers(now)) return;
+      const [a, z] = range(now);
+      b.plot(now, { y0: a, y1: z, fill, color: ACCENT });
+      b.draw();
+      textAt(s, String(+now[now.length - 1].toFixed(2)), "right");
+      return;
+    }
     if (list) b.plot(list, { y0: lo, y1: hi, fill, color: ACCENT });
     else b.plot(reading, { x0: t - width / 4, x1: t, y0: 0, y1: 1, fill, color: ACCENT });
     b.draw();
@@ -517,7 +599,7 @@ export interface BarChartOptions {
   color?: ColorLike;
   /** Seconds the bars take to grow in, one just after another: 0.8. 0 draws them grown, a still. */
   seconds?: number;
-  /** Seconds they stay before growing again: 3. */
+  /** Seconds they stay before growing again: 3, or a little more, so the loop is one other widgets share. */
   hold?: number;
   name?: string;
   note?: string;
@@ -547,6 +629,7 @@ export function barChart(data: Readonly<Record<string, number>> | readonly numbe
   const entries: [string, number][] = Array.isArray(data) ? data.map((v, i) => [String(i + 1), v]) : data && typeof data === "object" ? Object.entries(data as Record<string, number>) : [];
   if (!entries.length || entries.length > 64 || !entries.every(([, v]) => typeof v === "number" && Number.isFinite(v) && v >= 0))
     fail(`barChart() takes names and values, such as { mon: 3, tue: 5 }, or a list of values, 1 to 64 of them, each 0 or more, not ${show(data)}`);
+  for (const [k] of entries) textOf("barChart's names", k);
   const horizontal = boolOf("barChart's horizontal", p.horizontal, false);
   const size = wholeOf("barChart's size", p.size, horizontal ? 30 : 10, 1, 300);
   const top = numberOf("barChart's max", p.max, Math.max(...entries.map(([, v]) => v)) || 1, 0);
@@ -557,8 +640,10 @@ export function barChart(data: Readonly<Record<string, number>> | readonly numbe
   const snappy = ease.outBack;
   const shown = entries.map(([, v]) => String(+v.toFixed(2)));
   const names = entries.map(([k]) => k);
-  // Bars start a tenth of a second apart; the loop is the last one grown, and the hold.
-  const loop = grow ? Math.round((grow + 0.1 * (entries.length - 1) + hold) * 100) / 100 : undefined;
+  // Bars start a tenth of a second apart; the loop is the last one grown and the hold, made up to a loop other widgets
+  // share. Held still, they are all grown.
+  const grown = grow + 0.1 * (entries.length - 1);
+  const loop = grow ? loopOf(grown + hold, true) : undefined;
   const lengthAt = (i: number, t: number) => {
     const full = Math.min(1, entries[i][1] / top);
     if (!loop) return full;
@@ -567,7 +652,7 @@ export function barChart(data: Readonly<Record<string, number>> | readonly numbe
   };
   const colorOf = (i: number) => (own ? ACCENT : 6 + (i % BARS.length));
   const palette = tones(own, own ? [] : BARS);
-  const spec = { ...naming(p, "bar chart", `a bar chart of ${entries.length} bars${loop ? ", growing in" : ""}`), category: "data" as const, fps: loop ? 24 : 0, palette, ...(loop ? { loop } : {}) };
+  const spec = { ...naming(p, "bar chart", `a bar chart of ${entries.length} bars${loop ? ", growing in" : ""}`), category: "data" as const, fps: loop ? 24 : 0, palette, ...(loop ? { loop, still: Math.min(loop - 0.01, grown + 0.05) } : {}) };
   if (horizontal) {
     const nameW = Math.max(...names.map((n) => n.length)), valueW = values ? Math.max(...shown.map((v) => v.length)) + 1 : 0;
     return piece({ ...spec, cols: nameW + 1 + size + valueW, rows: entries.length }, (t, s) => {
@@ -620,17 +705,19 @@ export interface PanelOptions {
  */
 export function panel(content?: Thing, o?: PanelOptions): KitPiece {
   const p = optionsOf("panel()", o, ["title", "style", "cols", "rows", ...WIDGET]);
-  if (p.title !== undefined && typeof p.title !== "string") fail(`panel's title takes words, not ${show(p.title)}`);
+  const title = textOf("panel's title", p.title);
   const style = wordOf("panel's style", p.style, ["rounded", "single", "double", "heavy", "ascii"] as const, "rounded");
   const inner = content === undefined ? null : pieceOf(content, "panel()");
   const cols = wholeOf("panel's cols", p.cols, (inner?.meta.cols ?? 20) + 4, 3, 320), rows = wholeOf("panel's rows", p.rows, (inner?.meta.rows ?? 4) + 2, 3, 120);
+  if (inner && (inner.meta.cols > cols - 4 || inner.meta.rows > rows - 2))
+    fail(`panel's room inside is ${cols - 4} by ${rows - 2}, and ${inner.meta.name} is ${inner.meta.cols} by ${inner.meta.rows}: give the panel cols ${inner.meta.cols + 4} and rows ${inner.meta.rows + 2} or more, or leave them out`);
   // The room inside the lines and a column of padding each side, the thing in its middle.
   const room = new Surface(Math.max(1, cols - 4), Math.max(1, rows - 2));
   const filled = inner ? layer(room, { src: inner, anchor: "center" }) : room;
   const color = themed("panel's color", p.color);
-  const boxed = border(filled, { style, pad: [0, 1], ...(p.title ? { title: p.title } : {}), ...(color ? { color } : {}) });
-  const name = p.name ?? p.title ?? inner?.meta.name ?? "panel";
-  return titled(boxed, name, p.note ?? `${name}, in a box`);
+  const boxed = border(filled, { style, pad: [0, 1], ...(title ? { title } : {}), ...(color ? { color } : {}) });
+  const name = p.name ?? title ?? inner?.meta.name ?? "panel";
+  return framing(titled(boxed, name, p.note ?? `${name}, in a box`), true);
 }
 
 export interface CardOptions {
@@ -644,6 +731,8 @@ export interface CardOptions {
   width?: number;
   /** Its lines: "rounded" (the default), "single", "double", "heavy" or "ascii". */
   style?: BoxStyle;
+  /** A box round it: true. false for none, its words alone, as when a grid() draws its own border round each part. */
+  frame?: boolean;
   /** The heading's colour, as #rrggbb, { light, dark } or a palette's name: blue. */
   color?: ColorLike;
   name?: string;
@@ -657,28 +746,33 @@ export interface CardOptions {
  *   card({ title: "ascii.rest", text: "Animated ascii art for the web, in one line.", footer: "npm i ascii.rest" })
  */
 export function card(o: CardOptions): KitPiece {
-  const p = optionsOf("card()", o, ["title", "text", "footer", "width", "style", ...WIDGET]);
-  for (const k of ["title", "text", "footer"] as const) if (p[k] !== undefined && typeof p[k] !== "string") fail(`card's ${k} takes words, not ${show(p[k])}`);
-  if (!p.title && !p.text && !p.footer) fail("card() takes a title, text or a footer, such as { title: \"hello\", text: \"...\" }");
+  const p = optionsOf("card()", o, ["title", "text", "footer", "width", "style", "frame", ...WIDGET]);
+  const title = textOf("card's title", p.title), words = textOf("card's text", p.text, { lines: true }), footer = textOf("card's footer", p.footer);
+  if (!title && !words && !footer) fail("card() takes a title, text or a footer, such as { title: \"hello\", text: \"...\" }");
   const style = wordOf("card's style", p.style, ["rounded", "single", "double", "heavy", "ascii"] as const, "rounded");
+  const framed = boolOf("card's frame", p.frame, true);
   const width = wholeOf("card's width", p.width, 36, 8, 320);
-  const room = width - 4;
+  // Inside its lines and a column of room each side; with no frame, the room alone.
+  const edge = framed ? 1 : 0;
+  const room = width - 2 - 2 * edge;
   // How many rows the words wrap to, found by writing them on a scratch grid.
-  const body = p.text ? text(new Surface(room, 120), 0, 0, p.text, { width: room }).rows : 0;
-  const head = p.title ? 2 : 0, foot = p.footer ? (body ? 2 : 1) : 0;
-  const rows = 2 + head + body + foot;
-  return piece({ ...naming(p, p.title || "card", p.title ? `a card: ${p.title}` : "a card"), category: "ui", cols: width, rows, fps: 0, palette: tones(themed("card's color", p.color)) }, (_, s) => {
-    const inside = rect(s, 0, 0, width, rows, { style, color: MUTED });
-    const [x, w] = [inside.x + 1, room];
-    let y = inside.y;
-    if (p.title) {
-      text(s, x, y, p.title, { width: w, wrap: false, color: ACCENT });
+  const body = words ? text(new Surface(room, 120), 0, 0, words, { width: room }).rows : 0;
+  if (body > 100) fail(`card's text wraps to ${body} rows at this width, past the 100 a card can hold: give it fewer words or more width`);
+  const head = title ? 2 : 0, foot = footer ? (body ? 2 : 1) : 0;
+  const rows = 2 * edge + head + body + foot;
+  const made = piece({ ...naming(p, title || "card", title ? `a card: ${title}` : "a card"), category: "ui", cols: width, rows, fps: 0, palette: tones(themed("card's color", p.color)) }, (_, s) => {
+    if (framed) rect(s, 0, 0, width, rows, { style, color: MUTED });
+    const x = edge + 1;
+    let y = edge;
+    if (title) {
+      text(s, x, y, title, { width: room, wrap: false, color: ACCENT });
       line(s, 0, y + 1, width - 1, y + 1, { style: style === "rounded" ? "single" : style, color: MUTED });
       y += 2;
     }
-    if (p.text) y += text(s, x, y, p.text, { width: w }).rows;
-    if (p.footer) text(s, x, rows - 2, p.footer, { width: w, align: "right", wrap: false, color: MUTED });
+    if (words) y += text(s, x, y, words, { width: room }).rows;
+    if (footer) text(s, x, rows - 1 - edge, footer, { width: room, align: "right", wrap: false, color: MUTED });
   });
+  return framing(made, framed);
 }
 
 // --- words that move --------------------------------------------------------------------------------------
@@ -690,7 +784,7 @@ export interface TypewriterOptions {
   width?: number;
   /** A cursor at the next character, blinking once it is all typed: true. */
   cursor?: boolean;
-  /** Seconds it stays typed before typing again: 3. "forever" types it once and stays. */
+  /** Seconds it stays typed before typing again: 3, or a little more, so its loop is one other widgets share. "forever" types it once and stays. */
   hold?: number | "forever";
   /** Its colour, as #rrggbb, { light, dark } or a palette's name: the page's ink. */
   color?: ColorLike;
@@ -706,15 +800,21 @@ export interface TypewriterOptions {
  */
 export function typewriter(words: string, o?: TypewriterOptions): KitPiece {
   if (typeof words !== "string" || !words.trim()) fail(`typewriter() takes words to type, not ${show(words)}`);
+  words = textOf("typewriter()", words, { lines: true })!;
   const p = optionsOf("typewriter()", o, ["speed", "width", "cursor", "hold", ...WIDGET]);
   const longest = Math.max(...words.split("\n").map((l) => l.length));
   const width = Math.min(longest, wholeOf("typewriter's width", p.width, 40, 4, 300));
   const cursor = boolOf("typewriter's cursor", p.cursor, true);
-  const hold = p.hold === "forever" ? undefined : numberOf("typewriter's hold", p.hold, 3, 0, 60);
+  const asked = p.hold === "forever" ? undefined : numberOf("typewriter's hold", p.hold, 3, 0, 60);
   // characters a second: 14 at normal speed
   const speed = 14 * speedOf("typewriter()", p.speed);
+  // typeIn() types the characters that are not spaces; the hold is made up so the whole is a loop widgets share
+  const typing = words.replace(/\s/g, "").length / speed;
+  if (asked !== undefined && typing + asked > 60)
+    fail(`typewriter() takes ${+typing.toFixed(1)} seconds to type these words at this speed, past the minute a loop can be: give it fewer words, more speed, or hold: "forever"`);
+  const hold = asked === undefined ? undefined : loopOf(typing + asked, true) - typing;
   // a column more than the words, for the cursor to blink in at the end of the longest line
-  const page = inked(words, themed("typewriter's color", p.color), width + (cursor ? 1 : 0));
+  const page = inked("typewriter()", words, themed("typewriter's color", p.color), width + (cursor ? 1 : 0), width);
   const first = words.trim().split("\n")[0].slice(0, 40);
   return typeIn(page, { speed, cursor: cursor ? "▌" : false, ...(hold !== undefined ? { hold } : {}), ...naming(p, first, `${first}, typed out`) });
 }
@@ -722,7 +822,7 @@ export function typewriter(words: string, o?: TypewriterOptions): KitPiece {
 export interface MarqueeOptions {
   /** Its width in columns: 40. */
   width?: number;
-  /** How fast it scrolls: "slow", "normal" (10 columns a second) or "fast", or times as fast. */
+  /** How fast it scrolls: "slow", "normal" (about 10 columns a second, its crossing a loop other widgets share) or "fast", or times as fast. */
   speed?: Speed;
   /** Which way it scrolls: "left" (the default) or "right". */
   to?: "left" | "right";
@@ -743,16 +843,23 @@ export interface MarqueeOptions {
  */
 export function marquee(words: string, o?: MarqueeOptions): KitPiece {
   if (typeof words !== "string" || !words.trim()) fail(`marquee() takes words to scroll, not ${show(words)}`);
+  words = textOf("marquee()", words, { lines: true })!.replace(/\n/g, " ");
   const p = optionsOf("marquee()", o, ["width", "speed", "to", "big", ...WIDGET]);
   const width = wholeOf("marquee's width", p.width, 40, 4, 320);
   const to = wordOf("marquee's to", p.to, ["left", "right"] as const, "left");
   const color = themed("marquee's color", p.color);
   const big = boolOf("marquee's big", p.big, false);
-  const src: Piece | Surface = big ? banner(words, { effect: "still", ...(color ? { color: color } : {}) }) : inked(` ${words.replace(/\n/g, " ")} `, color);
+  const speed = speedOf("marquee()", p.speed);
+  if (!big && words.length + 2 > 320) fail(`marquee() scrolls up to 318 characters, and these words are ${words.length}: split them into two marquees`);
+  const src: Piece | Surface = big ? banner(words, { effect: "still", ...(color ? { color: color } : {}) }) : inked("marquee()", ` ${words} `, color);
   const length = src instanceof Surface ? src.cols : src.meta.cols;
-  // a crossing, the width and the words' own length, at 10 columns a second
-  const period = secondsOf("marquee()", { speed: p.speed }, (width + length) / 10);
-  return drifting(src, { to, period, cols: width, ...naming(p, words.slice(0, 40), `${words.slice(0, 40)}, scrolling ${to}`) });
+  // A crossing, the width and the words' own length, at about 10 columns a second: a loop other widgets share.
+  const crossing = (width + length) / 10 / speed;
+  if (crossing > 60) {
+    const most = Math.floor(600 * speed - width);
+    fail(`marquee() takes ${Math.round(crossing)} seconds to cross at this speed, past the minute a loop can be: at this width and speed it scrolls up to ${most} columns of words, so give it fewer, a narrower width, or more speed`);
+  }
+  return drifting(src, { to, period: loopOf(crossing), cols: width, ...naming(p, words.slice(0, 40), `${words.slice(0, 40)}, scrolling ${to}`) });
 }
 
 export interface CountdownOptions {
@@ -784,8 +891,8 @@ export function countdown(o?: CountdownOptions): KitPiece {
   const from = wholeOf("countdown's from", p.from, 10, 0, 999), to = wholeOf("countdown's to", p.to, 1, 0, 999);
   if (to > from) fail(`countdown's to takes a number no more than its from, ${from}, not ${to}`);
   if (from - to > 99) fail(`countdown() counts up to 100 numbers: from ${from} to ${to} is ${from - to + 1}`);
-  const then = p.then === undefined ? "go!" : p.then;
-  if (then !== false && (typeof then !== "string" || !then.trim())) fail(`countdown's then takes words, or false for none, not ${show(then)}`);
+  const then = p.then === undefined ? "go!" : p.then === false ? false : textOf("countdown's then", p.then)!;
+  if (then !== false && !then.trim()) fail(`countdown's then takes words, or false for none, not ${show(then)}`);
   const seconds = numberOf("countdown's seconds", p.seconds, 1, 0.2, 60);
   const transition = wordOf("countdown's transition", p.transition, ["cut", "fade", "dissolve", "wipe"] as const, "cut");
   // A palette's name is its fade for each page, as banner() takes { light, dark }; anything else goes to banner() as it is.

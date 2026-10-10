@@ -653,6 +653,76 @@ test("a fade only thins: each character steps down toward a space, never through
   assert.notEqual(frame(fades, 1.2), art);
 });
 
+test("words or a banner wider than the stage, sitting still, say so rather than losing their edges", async () => {
+  const synthwave = await import("../pieces/synthwave.ts");
+  const wide = banner("launch day", { font: "slim" });
+  assert.ok(wide.meta.cols > synthwave.meta.cols);
+  assert.throws(
+    () => layer(synthwave, { src: wide, anchor: "top", margin: 1 }),
+    new RegExp(`layer\\(\\): .* is ${wide.meta.cols} columns, wider than the ${synthwave.meta.cols} of synthwave under it, so its edges would be cut off\\. Make it smaller \\(banner\\(\\) takes max: ${synthwave.meta.cols}, or a narrower font\\)`),
+  );
+  assert.throws(() => over("x".repeat(10), dots), /over\(\): .* is 10 columns, wider than the 6 of dots under it/);
+  assert.throws(() => over("a\nb\nc\nd", dots), /is 4 rows, taller than the 3 of dots under it/);
+  // words that travel cross on purpose, and a picture bigger than its stage is a window onto it
+  assert.doesNotThrow(() => layer(dots, { src: "x".repeat(10), move: "left" }));
+  assert.doesNotThrow(() => layer(new Surface(40, 10), { src: galaxy, anchor: "center" }));
+});
+
+test("words over a part that moves get a cell cleared round them, so they read; halo sets it", () => {
+  const busy = piece({ name: "busy", cols: 9, rows: 5, fps: 10, loop: 1 }, (t, s) => s.fill("#"));
+  // a cell cleared each side of the words, and a row above and below
+  assert.deepEqual(frame(over("hi", busy)).split("\n"), ["#########", "##    ###", "## hi ###", "##    ###", "#########"]);
+  // none asked for, none drawn; and none by default over a still part
+  assert.equal(frame(over("hi", busy, { halo: 0 })).split("\n")[2], "###hi####");
+  assert.equal(frame(over("hi", block("#"))).split("\n")[1], "###hi###");
+  // a picture over a moving one keeps its own edge
+  assert.equal(frame(over(dots, busy)).split("\n")[2], "#......##");
+  assert.throws(() => over("hi", busy, { halo: 9 }), /a layer's halo takes a whole number of cells from 0 to 4, not 9/);
+});
+
+test("compose's options are checked: a misspelt one throws, and name and note name the whole", () => {
+  assert.throws(() => row(["a", "b"], { gap: 1, bogus: 1 } as never), /row\(\) has no option "bogus": it takes gap, align, loop, name and note/);
+  assert.throws(() => grid(["a"], { cols: 2 } as never), /grid\(\) has no option "cols": it takes columns, gap, align, border, loop, name and note/);
+  assert.throws(() => sequence(["a", "b"], { bogus: 1 } as never), /sequence\(\) has no option "bogus"/);
+  assert.throws(() => column(["a"], { size: 2 } as never), /column\(\) has no option "size"/);
+  assert.throws(() => over("a", dots, { anchr: "top" } as never), /over\(\) has no option "anchr": it takes options, offset, speed, color, anchor, margin, move, x, y, mask, halo, name and note/);
+  assert.throws(() => border("a", { title: true, colour: "#fff" } as never), /border\(\) has no option "colour": it takes style, title, color and pad/);
+  assert.throws(() => row([{ src: "a", colour: "#ff0000" } as never]), /row\(\)'s part has no option "colour": it takes src, options, offset, speed and color/);
+  assert.throws(() => layer(dots, { src: "a", anchr: "top" } as never), /layer\(\)'s part has no option "anchr"/);
+  assert.throws(() => sequence([{ src: "a", second: 2 } as never]), /sequence\(\)'s part has no option "second": it takes src, options, offset, speed, color and seconds/);
+  // a name and a note of the whole's own
+  assert.equal(row(["a", "b"], { name: "pair" }).meta.name, "pair");
+  assert.equal(grid(["a", "b"], { name: "dash", note: "two things" }).meta.note, "two things");
+  const cat = sequence(["/\\_/\\", "/\\_/\\ "], { name: "cat", seconds: 1 });
+  assert.equal(cat.meta.name, "cat");
+  assert.equal(over("hi", dots, { name: "greeting" }).meta.name, "greeting");
+  assert.throws(() => row(["a"], { name: "" }), /row\(\)'s name takes one line/);
+});
+
+test("row, column and grid take a loop of their own, their time wrapping round on it", () => {
+  const sevens = piece({ name: "sevens", cols: 2, rows: 1, fps: 10, loop: 7 }, (t, s) => s.write(0, 0, String(Math.floor(t * 10) % 70).padStart(2)));
+  const nines = piece({ name: "nines", cols: 2, rows: 1, fps: 10, loop: 9 }, (t, s) => s.write(0, 0, String(Math.floor(t * 10) % 90).padStart(2)));
+  assert.equal(row([sevens, nines]).meta.loop, undefined, "7 and 9 meet only after 63 seconds");
+  const looped = row([sevens, nines], { loop: 21 });
+  assert.equal(looped.meta.loop, 21);
+  assert.equal(frame(looped, 2.5), frame(looped, 23.5));
+  assert.equal(grid([sevens, nines], { loop: 9 }).meta.loop, 9);
+  assert.throws(() => column(["a"], { loop: 90 }), /column\(\)'s loop takes seconds from 0\.05 to 60/);
+});
+
+test("art in a template literal is read as stamp() reads it, its first line break and shared indent left out", () => {
+  const cat = `
+    /\\_/\\
+   ( o.o )
+    > ^ <
+  `;
+  const p = row([cat]);
+  assert.deepEqual([p.meta.cols, p.meta.rows], [7, 3]);
+  assert.equal(frame(p), " /\\_/\\ \n( o.o )\n > ^ < ");
+  // text on one line keeps its spaces
+  assert.equal(row(["  hi"]).meta.cols, 4);
+});
+
 test("every example plays as a piece should: the same frame for the same t in any order, on paper and dark", async () => {
   for (const name of ["compose-dashboard", "compose-logos", "compose-starfield", "compose-banner-scene"]) {
     const p = ((await import(`../../examples/kit/${name}.ts`)) as { default: Piece }).default;
