@@ -204,6 +204,24 @@ test("text: wrapping at spaces, long words broken, lines cut to the box", () => 
   assert.deepEqual(rows(e), ["ab cd", "ef   "]);
 });
 
+test("text: a line that fits is kept as it is when wrapping, so art and columns stay lined up", () => {
+  // runs of spaces and a leading indent survive in a line that fits the box
+  const s = new Surface(12, 1);
+  text(s, 0, 0, "a   b", { width: 10 });
+  assert.equal(s.toString(), "a   b       ");
+  const cols = new Surface(14, 2);
+  text(cols, 0, 0, "name    score\nbo      12", { width: 14 });
+  assert.deepEqual(rows(cols), ["name    score ", "bo      12    "]);
+  // a cat in a region (which wraps by default) keeps its shape: its ears and paws keep their indent
+  const cat = new Surface(9, 3);
+  text(cat, { x: 0, y: 0, cols: 9, rows: 3 }, " /\\_/\\\n( o.o )\n > ^ <");
+  assert.deepEqual(rows(cat), [" /\\_/\\   ", "( o.o )  ", " > ^ <   "]);
+  // a line too long is still rewrapped at spaces, its words joined with one space
+  const long = new Surface(8, 3);
+  text(long, 0, 0, "aa   bb   cc", { width: 7 });
+  assert.deepEqual(rows(long), ["aa bb   ", "cc      ", "        "]);
+});
+
 test("text: valign in a box's height, lines past it left out, transparent spaces", () => {
   const s = new Surface(3, 6);
   text(s, 0, 0, "a\nb", { height: 5, valign: "bottom" });
@@ -233,7 +251,7 @@ test("text: empty text, colours, and errors that say what to change", () => {
   assert.throws(() => text(s, 0, 0, "a", { valign: "center" as never }), /valign takes "top", "middle" or "bottom", not "center"/);
   assert.throws(() => text(s, 0, 0, "a", { width: 0 }), /width takes a number of cells of 1 or more, not 0/);
   assert.throws(() => text(s, 0, 0, "a", { height: NaN }), /height takes a number of cells of 1 or more, not NaN/);
-  assert.throws(() => text(s, 0, 0, "a", { wrap: "yes" as never }), /wrap takes true or false, not yes/);
+  assert.throws(() => text(s, 0, 0, "a", { wrap: "yes" as never }), /wrap takes true or false, not "yes"/);
   assert.throws(() => text(s, 0, 0, {} as never), /text\(\) takes a string to write, or a number/);
   assert.throws(() => text(s, 0, 0, "a", 3 as never), /text\(\) takes its options as an object/);
   // a bad character throws wherever the text lands, off the grid too
@@ -708,6 +726,51 @@ test("stamp: text with its spaces see-through, or not, in a colour", () => {
   assert.throws(() => stamp(c, "a", 0, 0, { mask: "ab" }), /mask takes one character, or null for none/);
 });
 
+test("stamp: placed by align and valign, the block lined up, and the region it covers returned", () => {
+  // the block centred on a point: its lines stay lined up, as label() centring each line would not keep them
+  const cat = " /\\_/\\\n( o.o )\n > ^ <";
+  const s = new Surface(11, 5);
+  assert.deepEqual(stamp(s, cat, s.cols / 2, s.rows / 2, { align: "center", valign: "middle" }), { x: 2, y: 1, cols: 7, rows: 3 });
+  assert.deepEqual(rows(s), ["           ", "   /\\_/\\   ", "  ( o.o )  ", "   > ^ <   ", "           "]);
+  // flush in the bottom right corner: the right and bottom edges at the grid's
+  const corner = new Surface(6, 3);
+  assert.deepEqual(stamp(corner, "ab\ncd", corner.cols, corner.rows, { align: "right", valign: "bottom" }), { x: 4, y: 1, cols: 2, rows: 2 });
+  assert.deepEqual(rows(corner), ["      ", "    ab", "    cd"]);
+  // top left by default, taken down to the cell, as before
+  const plain = new Surface(4, 2);
+  assert.deepEqual(stamp(plain, "xy", 1.9, 0.5), { x: 1, y: 0, cols: 2, rows: 1 });
+  // a grid is placed by its size
+  const src = Surface.from("##\n##");
+  const g = new Surface(6, 4);
+  assert.deepEqual(stamp(g, src, 3, 2, { align: "center", valign: "middle" }), { x: 2, y: 1, cols: 2, rows: 2 });
+  assert.deepEqual(rows(g), ["      ", "  ##  ", "  ##  ", "      "]);
+  assert.throws(() => stamp(g, "x", 0, 0, { align: "middle" as never }), /stamp's align takes "left", "center" or "right", not "middle"/);
+  assert.throws(() => stamp(g, "x", 0, 0, { valign: "center" as never }), /stamp's valign takes "top", "middle" or "bottom", not "center"/);
+  assert.deepEqual(stamp(g, "x", NaN, 0), { x: 0, y: 0, cols: 0, rows: 0 });
+});
+
+test("stamp: art in a template literal is taken as sprite() takes it; a frame's text is taken as it is", () => {
+  const art = `
+      /\\
+     /  \\
+    /____\\
+  `;
+  const s = new Surface(8, 3);
+  assert.deepEqual(stamp(s, art, 4, 0, { align: "center" }), { x: 1, y: 0, cols: 6, rows: 3 });
+  assert.deepEqual(rows(s), ["   /\\   ", "  /  \\  ", " /____\\ "]);
+  // a frame read back from a piece keeps its blank top row and its margin: it does not start with a line break
+  const frame = "    \n  ab";
+  const f = new Surface(4, 2);
+  assert.deepEqual(stamp(f, frame, 0, 0), { x: 0, y: 0, cols: 4, rows: 2 });
+  assert.deepEqual(rows(f), ["    ", "  ab"]);
+});
+
+test("stamp: a grid stamped on itself is read from a copy, not smeared", () => {
+  const s = Surface.from("ab..\n....\n....");
+  stamp(s, s, 1, 1);
+  assert.deepEqual(rows(s), ["ab..", ".ab.", "...."]);
+});
+
 test("stamp: a grid, EMPTY cells see-through, its colours kept, mapped or found", () => {
   const pal = new Palette(["#000000", "#ff0000", "#00ff00"]);
   const src = new Surface(3, 1, { palette: pal });
@@ -724,6 +787,18 @@ test("stamp: a grid, EMPTY cells see-through, its colours kept, mapped or found"
   const mapped = new Surface(3, 1, { palette: new Palette(["#00ff00", "#ee0000"]) });
   stamp(mapped, src, 0, 0, { map: [0, 0, 0] });
   assert.deepEqual([mapped.colors[0], mapped.colors[2]], [0, 0]);
+  // the same themed colours drawn for the other page: each taken to its place in this page's half
+  const themes = new Palette({ light: ["#111111", "#aa0000"], dark: ["#eeeeee", "#ff5555"] });
+  const dark = new Surface(1, 1, { palette: themes });
+  dark.set(0, 0, "x", 1);
+  assert.equal(dark.colors[0], 3, "colour 1 on a dark page");
+  const onPaper = new Surface(1, 1, { palette: themes });
+  onPaper.paper = true;
+  stamp(onPaper, dark, 0, 0);
+  assert.equal(onPaper.colors[0], 1, "colour 1 on paper");
+  const sameTheme = new Surface(1, 1, { palette: themes });
+  stamp(sameTheme, dark, 0, 0);
+  assert.equal(sameTheme.colors[0], 3);
   // on a grid in one ink, colours are left out
   const mono = new Surface(3, 1);
   stamp(mono, src, 0, 0);
@@ -876,6 +951,38 @@ test("braille: plot a list of numbers, spread across and scaled to its own range
   nb.plot([NaN, Infinity]);
   nb.draw();
   assert.equal(none.toString(), "    \n    ");
+});
+
+test("braille: plot with fill fills under the curve to the bottom edge", () => {
+  // the dots in each column: the curve's dot and every one under it, none above
+  const column = (b: ReturnType<typeof braille>, x: number) => [...Array(b.height).keys()].filter((y) => b.get(x, y));
+  const s = new Surface(10, 2);
+  const b = braille(s);
+  b.plot(() => 0, { fill: true });
+  for (let x = 0; x < b.width; x++) assert.deepEqual(column(b, x), [4, 5, 6, 7], `column ${x}`);
+  // a list: every column between its points filled under the line joining them
+  const l = braille(new Surface(4, 2));
+  l.plot([0, 10], { fill: true });
+  for (let x = 0; x < l.width; x++) {
+    const ys = column(l, x);
+    assert.equal(ys.at(-1), l.height - 1, `column ${x} reaches the bottom`);
+    assert.deepEqual(ys, [...Array(l.height - ys[0]).keys()].map((k) => ys[0] + k), `column ${x} has no holes`);
+  }
+  assert.equal(column(l, 0).length, 1, "the smallest is the bottom row alone");
+  assert.equal(column(l, l.width - 1).length, l.height, "the largest fills the column");
+  // above the top the column is full; below the bottom, or a NaN, it is empty
+  const off = braille(new Surface(3, 1));
+  off.plot((x) => (x < 2 ? 5 : x < 4 ? -5 : NaN), { x0: 0, x1: 5, fill: true });
+  assert.equal(column(off, 0).length, off.height);
+  assert.equal(column(off, 3).length, 0);
+  assert.equal(column(off, 5).length, 0);
+  // in a colour, and checked
+  const c = coloured()(2, 1);
+  const cb = braille(c);
+  cb.plot(() => 0, { fill: true, color: 2 });
+  cb.draw();
+  assert.deepEqual([c.toString(), [...c.colors]], ["⣤⣤", [2, 2]]);
+  assert.throws(() => cb.plot(Math.sin, { fill: 1 as never }), /plot's fill takes true or false, not 1/);
 });
 
 test("braille: ray, and the dots' aspect on a square grid", () => {
@@ -1031,6 +1138,26 @@ test("colours: an index or #rrggbb, by the page's theme, checked on a piece in o
   assert.throws(() => line(themed, 0, 0, 1, 0, { color: 7 }), /colour 7 is not one of the palette's 2/);
 });
 
+test("errors show what was given as it is: NaN as NaN, an emoji whole, a region's fields, a hole in a list", () => {
+  const s = new Surface(4, 2);
+  assert.throws(() => line(s, 0, 0, 1, 0, { char: NaN as never }), /a line's char takes one character, or "" to clear, not NaN$/);
+  assert.throws(() => text(s, 0, 0, "a😀b"), /Basic Multilingual Plane, not "😀"/);
+  assert.throws(() => label(s, 0, 0, "😀"), /not "😀"/);
+  assert.throws(() => braille(s, { x: 0, y: 0, cols: NaN, rows: 1 }), /braille\(\) takes a region as \{ x, y, cols, rows \} in numbers, not \{ x: 0, y: 0, cols: NaN, rows: 1 \}/);
+  assert.throws(() => text(s, 0, 0, "a", { width: "4" as never }), /width takes a number of cells of 1 or more, not "4"/);
+  // a hole in a list of points is a point that isn't one, caught as the kit's error, not a TypeError
+  const holes = [[0, 0], , [3, 1]] as never;
+  assert.throws(() => polyline(s, holes), /polyline\(\) takes a list of points as \[x, y\], such as \[\[0, 0\], \[10, 4\]\]: point 1 is undefined/);
+  assert.throws(() => polygon(s, [[0, 0], [1, NaN, 3], ["2", 1]] as never), /polygon\(\) takes a list of points .*: point 2 is \["2", 1\]/);
+  assert.throws(() => polygon(s, "nope" as never), /not "nope"/);
+  // boxes is frozen: a border of your own is a style of 6 characters, not an edit to boxes
+  assert.ok(Object.isFrozen(boxes));
+  assert.throws(() => {
+    (boxes as Record<string, string>).single = "xxxxxx";
+  }, TypeError);
+  assert.equal(boxes.single, "┌┐└┘─│");
+});
+
 test("a piece drawn with draw is the same frame for the same t, whatever came before", () => {
   const p = piece({ name: "mix", cols: 30, rows: 10, palette: ["#0969da", "#cf222e"] }, (t, s) => {
     const inside = rect(s, 0, 0, 30, 10, { style: "double", title: "mix" });
@@ -1088,8 +1215,11 @@ test("the examples: pieces that play everywhere and look like what they are", ()
   assert.ok(/[▀▄█]/.test(snapshot(sprite, 0).text));
   assert.notEqual(snapshot(sprite, 0).text, snapshot(sprite, 0.25).text, "it walks");
   // On paper a themed piece's colours are its light half; on a dark page its dark half.
-  const paper = snapshot(sine, 0.5, { paper: true }).color!, dark = snapshot(sine, 0.5).color!;
-  assert.ok([...paper].every((k) => k < 3) && [...dark].every((k) => k >= 3));
+  for (const p of [sine, sprite]) {
+    const half = p.meta.palette!.length / 2;
+    const paper = snapshot(p, 0.5, { paper: true }).color!, dark = snapshot(p, 0.5).color!;
+    assert.ok([...paper].every((k) => k < half) && [...dark].every((k) => k >= half), p.meta.name);
+  }
   // in mono no colours are written, and the characters are the same as in colour
   for (const p of [clock, sine, sprite]) {
     const mono = snapshot(p, 1.5, { mono: true });

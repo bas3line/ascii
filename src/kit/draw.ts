@@ -3,15 +3,16 @@
  * and wraps in a box, or sits centred on a point as a label; lines that pick
  * their own slope characters, or are a box's lines; boxes in five styles,
  * which hand back their inside to draw in; circles that look round on a 1:2
- * cell, and arcs of them; polygons; and grids or frames stamped over each
- * other. Box-drawing lines join where they meet, so a divider across a box
- * makes ├──┤ and two boxes side by side share ┬ and ┴. Things that go round
- * take a fraction of a turn, as a clock does: ray() for a hand, around() for a
- * point on a dial, arc() for a gauge. And two finer canvases on the same grid:
- * braille, 2 by 4 dots a cell for smooth lines, curves and plots of a function
- * or a list of numbers, and half blocks, two square pixels a cell for pixel
- * art and sprites. Every drawing takes a colour: an index into the piece's
- * colours, or #rrggbb, found in them.
+ * cell, and arcs of them; polygons; and ascii art, grids or frames stamped
+ * over each other, by a corner or centred. Box-drawing lines join where they
+ * meet, so a divider across a box makes ├──┤ and two boxes side by side share
+ * ┬ and ┴. Things that go round take a fraction of a turn, as a clock does:
+ * ray() for a hand, around() for a point on a dial, arc() for a gauge. And two
+ * finer canvases on the same grid: braille, 2 by 4 dots a cell for smooth
+ * lines, curves and plots of a function or a list of numbers, filled under or
+ * not, and half blocks, two square pixels a cell for pixel art and sprites.
+ * Every drawing takes a colour: an index into the piece's colours, or
+ * #rrggbb, found in them.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
  *   import { circle, piece, ray } from "ascii.rest/kit";
@@ -43,18 +44,31 @@ function paint(s: Surface, color: Color | null | undefined): number {
   if (color === undefined || color === null) return NONE;
   if (s.palette) return s.palette.index(color, s.paper);
   if (typeof color === "number" ? !(Number.isInteger(color) && color >= 0) : !isHex(color))
-    fail(`a colour takes #rrggbb or an index into the palette, not ${JSON.stringify(color)}`);
+    fail(`a colour takes #rrggbb or an index into the palette, not ${show(color)}`);
   return NONE;
 }
 
 // One character to draw with, as its char code: "" is EMPTY, which clears.
 function brush(ch: unknown, what: string): number {
   if (ch === "") return EMPTY;
-  if (typeof ch !== "string" || [...ch].length !== 1) fail(`${what} takes one character, or "" to clear, not ${JSON.stringify(ch)}`);
+  if (typeof ch !== "string" || [...ch].length !== 1) fail(`${what} takes one character, or "" to clear, not ${show(ch)}`);
   return code(ch);
 }
 
 const finite = (...v: number[]) => v.every((n) => typeof n === "number" && Number.isFinite(n));
+
+// A value as an error shows it: a string quoted, anything else as it reads, so NaN is NaN rather than JSON's null and
+// a region with a NaN in it says which field. Lists and objects are shown two levels deep and cut after a few entries.
+function show(v: unknown, depth = 0): string {
+  if (typeof v === "string") return JSON.stringify(v.length > 40 ? v.slice(0, 40) + "…" : v);
+  if (typeof v === "function") return "a function";
+  if (!v || typeof v !== "object") return String(v);
+  if (depth > 1) return Array.isArray(v) ? "[...]" : "{...}";
+  const more = (n: number) => (n > 6 ? ", ..." : "");
+  if (Array.isArray(v)) return `[${Array.from(v.slice(0, 6), (x) => show(x, depth + 1)).join(", ")}${more(v.length)}]`;
+  const entries = Object.entries(v);
+  return entries.length ? `{ ${entries.slice(0, 6).map(([k, x]) => `${k}: ${show(x, depth + 1)}`).join(", ")}${more(entries.length)} }` : "{}";
+}
 
 // Choices as a sentence offers them: "a", "b" or "c".
 const or = (words: readonly string[]) => and(words.map((w) => `"${w}"`)).replace(/ and ("[^"]*")$/, " or $1");
@@ -69,7 +83,7 @@ function opts<T extends object>(o: T | undefined, what: string): Partial<T> {
 // A true or false option, checked.
 function yes(v: unknown, name: string, fallback: boolean): boolean {
   if (v === undefined) return fallback;
-  if (typeof v !== "boolean") fail(`${name} takes true or false, not ${String(v)}`);
+  if (typeof v !== "boolean") fail(`${name} takes true or false, not ${show(v)}`);
   return v;
 }
 
@@ -77,7 +91,7 @@ function yes(v: unknown, name: string, fallback: boolean): boolean {
 function area(s: Surface, region: Region | undefined, what: string): Region {
   if (region === undefined) return s.clip();
   if (!region || typeof region !== "object" || !finite(region.x, region.y, region.cols, region.rows))
-    fail(`${what}() takes a region as { x, y, cols, rows } in numbers, not ${JSON.stringify(region)}`);
+    fail(`${what}() takes a region as { x, y, cols, rows } in numbers, not ${show(region)}`);
   return s.clip(region);
 }
 
@@ -212,8 +226,9 @@ function place(s: Surface, j: number, c: number, k: number, join: boolean, a = A
 type Stroke = number | "auto" | BoxStyle;
 
 // A line of n traced cells drawn with one character, or "auto": "|" when it is within about 14 degrees of upright
-// on screen, runs of "_" along each row stepped up with "/" or down with "\" where it crosses more than 1.3 columns a
-// row (as analog-clock draws its hands), "-" when it lies in one row, and "/" or "\" a cell between.
+// on screen, "-" when it lies in one row, and otherwise "/" or "\" in each row, with the row's other cells "_" where
+// it crosses more than a column a row (as analog-clock draws its hands): a run of "_" stepped up with "/" or down with
+// "\", never two slashes side by side in a row.
 function strokeCells(s: Surface, n: number, ch: number | "auto", k: number, join = false): void {
   if (ch !== "auto") {
     for (let i = 0; i < n; i++) {
@@ -225,7 +240,8 @@ function strokeCells(s: Surface, n: number, ch: number | "auto", k: number, join
   const dx = XS[n - 1] - XS[0], dy = YS[n - 1] - YS[0];
   const ax = Math.abs(dx), ay = Math.abs(dy);
   const rising = dx > 0 !== dy > 0;
-  const runs = ax > 1.3 * ay;
+  // a row holds more than one cell only when it crosses more than a column a row
+  const runs = ax > ay;
   const upright = ay * s.aspect > 4 * ax;
   for (let i = 0; i < n; i++) {
     const j = s.index(XS[i], YS[i]);
@@ -252,7 +268,7 @@ function strokeCells(s: Surface, n: number, ch: number | "auto", k: number, join
 function stroke(char: unknown, style: unknown, what: string, fallback = "auto"): Stroke {
   if (style !== undefined) {
     if (char !== undefined) fail(`${what} takes a char or a style, not both: a style draws in a box's lines, ─ │ ┌ and the rest`);
-    if (typeof style !== "string" || !Object.hasOwn(boxes, style)) fail(`${what}'s style takes ${or(Object.keys(boxes))}, not ${JSON.stringify(style)}`);
+    if (typeof style !== "string" || !Object.hasOwn(boxes, style)) fail(`${what}'s style takes ${or(Object.keys(boxes))}, not ${show(style)}`);
     return style as BoxStyle;
   }
   const ch = char ?? fallback;
@@ -332,7 +348,8 @@ export interface TextOptions {
    * How each line sits across the box: "left" by default, starting at x; "center", in its middle, an odd column over
    * going on the right; "right", ending at the box's right edge. With no `width` the box runs to the end of the row,
    * so text(s, 0, 0, "title", { align: "center" }) is centred in the top row and text(s, 0, 0, "9:41", { align:
-   * "right" }) is flush with the right edge. To centre text on a point instead, use label().
+   * "right" }) is flush with the right edge. To centre text on a point instead, use label(); to centre a block of
+   * ascii art whose lines must stay lined up, stamp() with { align: "center" }.
    */
   align?: Align;
   /**
@@ -342,8 +359,8 @@ export interface TextOptions {
   width?: number;
   /**
    * Wrap at spaces to the box's width, a word longer than a line broken across lines: true when `width` is given,
-   * false otherwise (a line is then cut where the row ends). Wrapping joins a line's words with one space; "\n" always
-   * starts a new line.
+   * false otherwise (a line is then cut where the row ends). A line that fits is kept as it is, spaces and all; a line
+   * too long is rewrapped, its words joined with one space. "\n" always starts a new line.
    */
   wrap?: boolean;
   /**
@@ -362,16 +379,17 @@ const ALIGN = ["left", "center", "right"], VALIGN = ["top", "middle", "bottom"];
 
 // A box's size, as a whole number of cells: fractions are taken down.
 function size(v: unknown, what: string): number {
-  if (typeof v !== "number" || !Number.isFinite(v) || v < 1) fail(`${what} takes a number of cells of 1 or more, not ${String(v)}`);
+  if (typeof v !== "number" || !Number.isFinite(v) || v < 1) fail(`${what} takes a number of cells of 1 or more, not ${show(v)}`);
   return Math.floor(v);
 }
 
 // Text to write: a string, or a number as it reads, with \r\n as \n. Every character is checked here, before any is
-// drawn, so a bad one throws wherever the text lands, on the grid or off it.
-const BAD = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\ud800-\udfff]/;
+// drawn, so a bad one throws wherever the text lands, on the grid or off it. An emoji is matched whole, so the error
+// shows it rather than half of it.
+const BAD = /[\ud800-\udbff][\udc00-\udfff]|[\u0000-\u0009\u000b-\u001f\u007f-\u009f\ud800-\udfff]/;
 function words(str: unknown, what: string): string {
   if (typeof str === "number") return String(str);
-  if (typeof str !== "string") fail(`${what}() takes a string to write, or a number, not ${String(str)}`);
+  if (typeof str !== "string") fail(`${what}() takes a string to write, or a number, not ${show(str)}`);
   const t = str.replace(/\r\n?/g, "\n");
   const bad = BAD.exec(t);
   if (bad) code(bad[0]);
@@ -394,11 +412,12 @@ function writeLines(s: Surface, lines: readonly string[], lefts: readonly number
   return left === Infinity ? { x: lefts[0] ?? 0, y: top, cols: 0, rows: lines.length } : { x: left, y: top, cols: right - left, rows: lines.length };
 }
 
-// The lines of a text in a box `width` wide: wrapped at spaces, or cut to it.
+// The lines of a text in a box `width` wide: wrapped at spaces, or cut to it. A line that fits is kept as it is, its
+// runs of spaces too, so ascii art and columns lined up with spaces stay lined up; only a line too long is rewrapped.
 function layout(str: string, width: number, wrap: boolean): string[] {
   const out: string[] = [];
   for (const para of str.split("\n")) {
-    if (!wrap) {
+    if (!wrap || para.length <= width) {
       out.push(para.slice(0, width));
       continue;
     }
@@ -427,7 +446,7 @@ function layout(str: string, width: number, wrap: boolean): string[] {
 function regionOf(r: unknown, what: string): Region {
   const g = r as Region;
   if (!g || typeof g !== "object" || !finite(g.x, g.y, g.cols, g.rows))
-    fail(`${what}() takes a region as { x, y, cols, rows } in numbers, not ${JSON.stringify(r)}`);
+    fail(`${what}() takes a region as { x, y, cols, rows } in numbers, not ${show(r)}`);
   return g;
 }
 
@@ -463,8 +482,8 @@ export function text(s: Surface, ...a: unknown[]): Region {
 // say otherwise.
 function write(s: Surface, x: number, y: number, str: unknown, o: TextOptions | undefined, region?: Region): Region {
   const { color, align = "left", valign = "top", width: w, height: h } = opts(o, "text");
-  if (!ALIGN.includes(align)) fail(`align takes ${or(ALIGN)}, not ${JSON.stringify(align)}`);
-  if (!VALIGN.includes(valign)) fail(`valign takes ${or(VALIGN)}, not ${JSON.stringify(valign)}`);
+  if (!ALIGN.includes(align)) fail(`align takes ${or(ALIGN)}, not ${show(align)}`);
+  if (!VALIGN.includes(valign)) fail(`valign takes ${or(VALIGN)}, not ${show(valign)}`);
   const transparent = yes(o?.transparent, "transparent", false);
   const width = w === undefined ? undefined : size(w, "width"), height = h === undefined ? undefined : size(h, "height");
   const wrap = yes(o?.wrap, "wrap", width !== undefined || !!region);
@@ -488,7 +507,8 @@ function write(s: Surface, x: number, y: number, str: unknown, o: TextOptions | 
  * One character lands in the cell x, y is in, as set() would draw it; a longer line has its middle as near to x as
  * whole cells allow, an even one's extra half on the right. "\n" starts a new line, each centred, and the lines
  * together are centred on y the same way. Returns the region it takes, as text() does. `color` is its colour (none by
- * default: the piece's ink); `transparent` lets spaces show what is under them (false by default).
+ * default: the piece's ink); `transparent` lets spaces show what is under them (false by default). For a block of ascii
+ * art, whose lines must stay lined up, use stamp() with { align: "center", valign: "middle" }, which centres the block.
  *
  *   for (let h = 1; h <= 12; h++) label(s, ...around(s, 20.5, 10.5, 15, h / 12), h);   // a dial's numbers
  */
@@ -570,16 +590,29 @@ function path(s: Surface, pts: readonly Point[], ch: Stroke, k: number, closed: 
     return;
   }
   const last = closed && pts.length > 2 ? pts.length : pts.length - 1;
-  for (let i = 0; i < last; i++) {
+  // In "auto" a corner takes the character of the stretch drawn there last. Stretches lying in one row go first, then
+  // upright ones, then slanting ones, so wherever a slant meets a flat or upright stretch the corner is the slant's,
+  // the same at every corner of a shape rather than whichever stretch comes later in the list.
+  const rank = (i: number) => {
     const a = pts[i], b = pts[(i + 1) % pts.length];
-    const n = trace(a[0], a[1], b[0], b[1], s.cols, s.rows);
-    if (n) strokeCells(s, n, ch, k, join);
-  }
+    const ax = Math.abs(Math.floor(b[0]) - Math.floor(a[0])), ay = Math.abs(Math.floor(b[1]) - Math.floor(a[1]));
+    return !ay ? 0 : ay * s.aspect > 4 * ax ? 1 : 2;
+  };
+  for (let pass = 0; pass < (ch === "auto" ? 3 : 1); pass++)
+    for (let i = 0; i < last; i++) {
+      if (ch === "auto" && rank(i) !== pass) continue;
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      const n = trace(a[0], a[1], b[0], b[1], s.cols, s.rows);
+      if (n) strokeCells(s, n, ch, k, join);
+    }
 }
 
+// A list of points, checked by index, so a hole in the list ([[0, 0], , [4, 2]]) is caught too.
 function checkPoints(points: unknown, what: string): readonly Point[] {
-  if (!Array.isArray(points) || !points.every((p) => Array.isArray(p) && p.length >= 2 && typeof p[0] === "number" && typeof p[1] === "number"))
-    fail(`${what}() takes a list of points as [x, y], such as [[0, 0], [10, 4]]`);
+  const ok = (p: unknown) => Array.isArray(p) && p.length >= 2 && typeof p[0] === "number" && typeof p[1] === "number";
+  if (!Array.isArray(points)) fail(`${what}() takes a list of points as [x, y], such as [[0, 0], [10, 4]], not ${show(points)}`);
+  for (let i = 0; i < points.length; i++)
+    if (!ok(points[i])) fail(`${what}() takes a list of points as [x, y], such as [[0, 0], [10, 4]]: point ${i} is ${show(points[i])}`);
   return points as readonly Point[];
 }
 
@@ -619,14 +652,14 @@ export function ray(s: Surface, x: number, y: number, length: number, turn: numb
 /** A box's border: one of `boxes` by name. */
 export type BoxStyle = "single" | "double" | "rounded" | "heavy" | "ascii";
 
-/** The borders, 6 characters each: top left, top right, bottom left, bottom right, across, down. */
-export const boxes: Record<BoxStyle, string> = {
+/** The borders, 6 characters each: top left, top right, bottom left, bottom right, across, down. Frozen: a border of your own is rect()'s style as 6 characters. */
+export const boxes: Readonly<Record<BoxStyle, string>> = Object.freeze({
   single: "┌┐└┘─│",
   double: "╔╗╚╝═║",
   rounded: "╭╮╰╯─│",
   heavy: "┏┓┗┛━┃",
   ascii: "++++-|",
-};
+});
 
 export interface RectOptions {
   /**
@@ -669,11 +702,11 @@ export function rect(s: Surface, x: number, y: number, w: number, h: number, o?:
     const chars = typeof style === "string" ? (Object.hasOwn(boxes, style) ? boxes[style as BoxStyle] : style) : "";
     // six letters are a name spelt wrong, such as "dotted", rather than a border of your own
     if ([...chars].length !== 6 || /^[a-z]+$/i.test(chars))
-      fail(`style takes ${or([...Object.keys(boxes), "none"])}, or 6 characters of your own (top left, top right, bottom left, bottom right, across, down), not ${JSON.stringify(style)}`);
+      fail(`style takes ${or([...Object.keys(boxes), "none"])}, or 6 characters of your own (top left, top right, bottom left, bottom right, across, down), not ${show(style)}`);
     edges = [...chars].map(code);
   }
   const f = fill === undefined || fill === false ? null : brush(fill, "fill");
-  if (title !== undefined && typeof title !== "string") fail(`title takes a string, not ${String(title)}`);
+  if (title !== undefined && typeof title !== "string") fail(`title takes a string, not ${show(title)}`);
   // every character of the title is checked, whether or not the box has room for it
   if (title) for (const ch of title) code(ch);
   const join = yes(o?.join, "join", true);
@@ -928,8 +961,9 @@ export interface PolygonOptions extends ShapeOptions {
 
 /**
  * A polygon through points, closed: its outline as lines (char "*" by default; "auto" for slope characters, or a box
- * `style`), and with `fill`, its inside by the even-odd rule, a cell inside when its centre is, so a star's middle
- * stays empty.
+ * `style`), and with `fill`, its inside by the even-odd rule, so a star's middle stays empty. The outline joins the
+ * cells the points are in, as line() does, and the fill is every cell whose centre is inside the polygon through those
+ * cells' centres, so it meets the outline and never pokes past it.
  *
  *   polygon(s, [[4, 10], [16, 1], [28, 10]], { char: "auto", fill: ":" });                       // a tent
  *   polygon(s, [[2, 1], [20, 1], [20, 5], [10, 5], [10, 9], [2, 9]], { style: "double", fill: "." });   // a room shaped like an L
@@ -943,14 +977,17 @@ export function polygon(s: Surface, points: readonly Point[], o?: PolygonOptions
   const k = paint(s, color), fk = fillColor === undefined ? k : paint(s, fillColor);
   const join = yes(o?.join, "join", true);
   if (f !== null && pts.length > 2 && pts.every((p) => finite(p[0], p[1]))) {
-    const ys = pts.map((p) => p[1]);
-    const j0 = Math.max(0, Math.floor(Math.min(...ys))), j1 = Math.min(s.rows - 1, Math.ceil(Math.max(...ys)));
+    // the polygon through the centres of the cells its points are in: the line the outline is traced along
+    const px = pts.map((p) => Math.floor(p[0]) + 0.5), py = pts.map((p) => Math.floor(p[1]) + 0.5);
+    let lo = Infinity, hi = -Infinity;
+    for (const v of py) (lo = Math.min(lo, v)), (hi = Math.max(hi, v));
+    const j0 = Math.max(0, Math.floor(lo)), j1 = Math.min(s.rows - 1, Math.ceil(hi));
     const xs: number[] = [];
     for (let j = j0; j <= j1; j++) {
       const yc = j + 0.5;
       xs.length = 0;
       for (let i = 0; i < pts.length; i++) {
-        const [ax, ay] = pts[i], [bx, by] = pts[(i + 1) % pts.length];
+        const n = (i + 1) % pts.length, ax = px[i], ay = py[i], bx = px[n], by = py[n];
         // each edge counted once at a corner: it crosses the row's centre if it starts on or below it and ends above, or the other way
         if (ay <= yc !== by <= yc) xs.push(ax + ((yc - ay) / (by - ay)) * (bx - ax));
       }
@@ -976,34 +1013,58 @@ export interface StampOptions {
   color?: Color;
   /** A grid's colours mapped to this one's: map[i] for its colour i, as mergePalettes() makes. */
   map?: ArrayLike<number>;
+  /**
+   * Which part of the block x stands for: "left" by default, its left edge; "center", its middle, as label() centres
+   * text on a point; "right", its right edge. So { align: "center" } at s.cols / 2 centres it across the grid, and the
+   * block's lines stay lined up, as they would not each centred on their own.
+   */
+  align?: Align;
+  /** Which part of the block y stands for: "top" by default, its top edge; "middle", its middle; "bottom", its bottom edge. */
+  valign?: VAlign;
 }
 
 // Two palettes the same, so a grid's colours need no mapping.
 const samePalette = (a: Surface["palette"], b: Surface["palette"]) =>
   a === b || (!!a && !!b && a.colors.length === b.colors.length && a.colors.every((c, i) => c.toLowerCase() === b.colors[i].toLowerCase()));
 
+// Where a run of n cells starts when `at` is its start (taken down to its cell, as everywhere), its middle, or its end
+// (each rounded to the nearest cell edge, as label() centres).
+const startAt = (at: number, n: number, how: string) =>
+  how === "left" || how === "top" ? Math.floor(at) : Math.floor(at - (how === "center" || how === "middle" ? n / 2 : n) + 0.5);
+
 /**
- * Another grid, or a block of text such as a frame, laid over this one with its top left at x, y. Its EMPTY cells and
- * its `mask` character (a space by default) let this one show through. A grid keeps its colours: as they are when it
- * has this grid's palette, through `map` when given, else each found in this grid's colours (the nearest for the
- * page's theme); on a grid with no colours they are left out.
+ * Another grid, or a block of text such as a frame, laid over this one with its top left at x, y, or placed by x and y
+ * as `align` and `valign` say. Its EMPTY cells and its `mask` character (a space by default) let this one show
+ * through. A grid keeps its colours: as they are when it has this grid's palette, through `map` when given, else each
+ * found in this grid's colours (the nearest for the page's theme); on a grid with no colours they are left out. Text
+ * written in a template literal that starts with a line break is taken as sprite() takes its art: that first empty
+ * line, a blank last line and the indent its lines share are left out. Returns the region the block covers, which may
+ * reach past the grid's edges.
  *
- *   stamp(s, "  /\\_/\\\n ( o.o )\n  > ^ <", 10, 4);   // a cat over whatever is drawn
+ *   const cat = `
+ *      /\\_/\\
+ *     ( o.o )
+ *      > ^ <`;
+ *   stamp(s, cat, s.cols / 2, s.rows / 2, { align: "center", valign: "middle" });   // a cat in the middle
  */
-export function stamp(s: Surface, src: Surface | string, x: number, y: number, o?: StampOptions): void {
+export function stamp(s: Surface, src: Surface | string, x: number, y: number, o?: StampOptions): Region {
   grid(s, "stamp");
-  const { mask = " ", color, map } = opts(o, "stamp");
-  if (mask !== null && (typeof mask !== "string" || mask.length > 1)) fail(`mask takes one character, or null for none, not ${JSON.stringify(mask)}`);
+  const { mask = " ", color, map, align = "left", valign = "top" } = opts(o, "stamp");
+  if (mask !== null && (typeof mask !== "string" || mask.length > 1)) fail(`mask takes one character, or null for none, not ${show(mask)}`);
   if (map !== undefined && (map === null || typeof map !== "object" || typeof (map as ArrayLike<number>).length !== "number"))
     fail("map takes a list of palette indices, one for each of the grid's colours, as mergePalettes() makes");
+  if (!ALIGN.includes(align)) fail(`stamp's align takes ${or(ALIGN)}, not ${show(align)}`);
+  if (!VALIGN.includes(valign)) fail(`stamp's valign takes ${or(VALIGN)}, not ${show(valign)}`);
   const m = mask === null || mask === "" ? -1 : mask.charCodeAt(0);
   const k = color === undefined ? -1 : paint(s, color);
   if (typeof src === "string") {
     // every character is checked before any is drawn, wherever the text lands
-    const lines = src.replace(/\r\n?/g, "\n").split("\n").map((l) => Array.from(l, (ch) => code(ch)));
-    if (!finite(x, y)) return;
-    x = Math.floor(x);
-    y = Math.floor(y);
+    const text = src.replace(/\r\n?/g, "\n");
+    const lines = (text.startsWith("\n") ? artRows(text) : text.split("\n")).map((l) => Array.from(l, (ch) => code(ch)));
+    const w = lines.reduce((n, l) => Math.max(n, l.length), 0), h = lines.length;
+    if (!finite(x, y)) return { x: 0, y: 0, cols: 0, rows: 0 };
+    x = startAt(x, w, align);
+    y = startAt(y, h, valign);
     lines.forEach((l, r) => {
       for (let c = 0; c < l.length; c++) {
         if (l[c] === m) continue;
@@ -1011,26 +1072,32 @@ export function stamp(s: Surface, src: Surface | string, x: number, y: number, o
         if (j >= 0) s.put(j, l[c], k < 0 ? NONE : k);
       }
     });
-    return;
+    return { x, y, cols: w, rows: h };
   }
   const g = src as Surface;
   if (!g || typeof g !== "object" || !(g.chars instanceof Uint16Array) || !(g.colors instanceof Uint8Array))
-    fail("stamp() takes a Surface or a string of text to lay over the grid");
-  if (!finite(x, y)) return;
-  x = Math.floor(x);
-  y = Math.floor(y);
+    fail(`stamp() takes a Surface or a string of text to lay over the grid, not ${show(src)}`);
+  if (!finite(x, y)) return { x: 0, y: 0, cols: 0, rows: 0 };
+  x = startAt(x, g.cols, align);
+  y = startAt(y, g.rows, valign);
   let to: ArrayLike<number> | null = map ?? null;
-  if (!to && k < 0 && s.palette && g.palette && !samePalette(s.palette, g.palette)) {
-    const pal = s.palette, from = g.palette.colors;
-    to = from.map((c) => pal.index(c, s.paper));
+  if (!to && k < 0 && s.palette && g.palette) {
+    const pal = s.palette, size = pal.size;
+    if (!samePalette(pal, g.palette)) to = g.palette.colors.map((c) => pal.index(c, s.paper));
+    // the same themed colours, drawn for the other theme (a grid kept from a frame on the other page): each colour
+    // is taken to its place in this theme's half
+    else if (pal.themed && g.paper !== s.paper) to = Array.from(pal.colors, (_, i) => (i < size ? i + size : i - size));
   }
+  // a grid stamped on itself is read from a copy, so the cells it has moved aren't read again
+  const from = g === s ? { chars: g.chars.slice(), colors: g.colors.slice() } : g;
   for (let r = Math.max(0, -y); r < g.rows && r + y < s.rows; r++)
     for (let c = Math.max(0, -x); c < g.cols && c + x < s.cols; c++) {
-      const i = r * g.cols + c, ch = g.chars[i];
+      const i = r * g.cols + c, ch = from.chars[i];
       if (ch === EMPTY || ch === m) continue;
-      const col = g.colors[i];
+      const col = from.colors[i];
       s.put((r + y) * s.cols + c + x, ch, k >= 0 ? k : !s.palette || col === NONE ? NONE : to ? (to[col] ?? NONE) : col);
     }
+  return { x, y, cols: g.cols, rows: g.rows };
 }
 
 // --- braille --------------------------------------------------------------------------
@@ -1047,6 +1114,8 @@ export interface PlotOptions {
   y1?: number;
   /** The curve's colour. None by default: each cell keeps the colour it has. */
   color?: Color;
+  /** Fills under the curve down to the bottom edge: an area chart, a range of hills, a sea. False by default. */
+  fill?: boolean;
 }
 
 /**
@@ -1087,10 +1156,11 @@ export interface Braille {
    * for x from x0 to x1 (0 to TAU by default), drawn so y0 (-1) is the bottom row and y1 (1) the top; or a list of
    * numbers, spread evenly from the left edge to the right, its smallest at the bottom and its largest at the top
    * unless y0 and y1 say otherwise. Past y0 and y1 the curve goes off the canvas and is cut where it leaves; a value
-   * that is not a number (NaN, Infinity) leaves a gap.
+   * that is not a number (NaN, Infinity) leaves a gap. `fill: true` fills under it to the bottom edge.
    *
-   *   b.plot(Math.sin);                           // one wave across
-   *   b.plot([3, 5, 2, 8, 6, 9], { color: 1 });   // a list of numbers, scaled for you
+   *   b.plot(Math.sin);                                          // one wave across
+   *   b.plot([3, 5, 2, 8, 6, 9], { color: 1 });                  // a list of numbers, scaled for you
+   *   b.plot(load, { x0: t - 8, x1: t, y0: 0, y1: 1, fill: true });   // the last 8 seconds of load(t), as an area
    */
   plot(f: ((x: number) => number) | readonly number[], o?: PlotOptions): void;
   /** Takes every dot and colour away. */
@@ -1204,7 +1274,8 @@ class BrailleCanvas implements Braille {
     const { x0 = 0, x1 = TAU, color } = opts(o, "plot");
     let { y0, y1 } = opts(o, "plot");
     for (const [v, name] of [[x0, "x0"], [x1, "x1"], [y0 ?? 0, "y0"], [y1 ?? 0, "y1"]] as const)
-      if (typeof v !== "number" || !Number.isFinite(v)) fail(`plot's ${name} takes a number, not ${String(v)}`);
+      if (typeof v !== "number" || !Number.isFinite(v)) fail(`plot's ${name} takes a number, not ${show(v)}`);
+    const fill = yes(o?.fill, "plot's fill", false);
     const k = this.#k(color);
     if (list && (y0 === undefined || y1 === undefined)) {
       // a list's range is its own, its smallest number to its largest
@@ -1219,6 +1290,8 @@ class BrailleCanvas implements Braille {
     y1 ??= 1;
     if (y0 === y1) fail(`plot's y0 and y1 take two different numbers, the values at the bottom and the top, not ${y0} and ${y1}`);
     const w = this.width, h = this.height, n = list ? list.length : w;
+    // with fill, the highest dot of the curve in each column, kept between -1 (above the top) and h (below the bottom)
+    const top = fill ? new Int32Array(w).fill(h) : null;
     let px = 0, py = NaN;
     for (let i = 0; i < n; i++) {
       const v = list ? list[i] : (f as (x: number) => number)(x0 + ((x1 - x0) * i) / Math.max(1, w - 1));
@@ -1228,10 +1301,20 @@ class BrailleCanvas implements Braille {
         // joined to the last point, so a steep stretch has no gaps
         const m = Number.isFinite(py) ? trace(px, py, x, y, w, h) : trace(x, y, x, y, w, h);
         for (let d = 0; d < m; d++) this.#dot(XS[d], YS[d], k);
+        if (top) {
+          // the curve's height in each column from the last point to this one, straight between them, even where the
+          // line between is off the canvas
+          const a = Number.isFinite(py) ? px : x, ya = Number.isFinite(py) ? py : y;
+          for (let c = Math.max(0, Math.min(a, x)); c <= Math.min(w - 1, Math.max(a, x)); c++) {
+            const yc = a === x ? Math.min(ya, y) : ya + ((y - ya) * (c - a)) / (x - a);
+            top[c] = Math.min(top[c], Math.max(-1, Math.round(yc)));
+          }
+        }
       }
       px = x;
       py = y;
     }
+    if (top) for (let c = 0; c < w; c++) for (let r = Math.max(0, top[c]); r < h; r++) this.#dot(c, r, k);
   }
 
   clear(): void {
@@ -1262,7 +1345,8 @@ function boxDots(x: number, y: number, w: number, h: number, fill: boolean, dot:
 
 /**
  * A braille canvas on the grid, or on a region of it: 2 by 4 dots a cell, for lines, curves and plots far smoother
- * than whole characters. Draw on it, then call draw(). Making one is cheap: make it in the drawing, each frame.
+ * than whole characters. Draw on it, then call draw(). Making one is cheap: make it in the drawing, each frame. A
+ * region is cut to the grid first, so one reaching past an edge starts where the grid does.
  *
  *   const b = braille(s);
  *   b.plot((x) => Math.sin(x + t), { color: 1 });
@@ -1347,7 +1431,7 @@ function artRows(art: string): string[] {
   const lines = art.replace(/\r\n?/g, "\n").split("\n");
   while (lines.length && !lines[0].trim()) lines.shift();
   while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
-  const indent = Math.min(...lines.filter((l) => l.trim()).map((l) => l.length - l.trimStart().length));
+  const indent = lines.reduce((n, l) => (l.trim() ? Math.min(n, l.length - l.trimStart().length) : n), Infinity);
   return lines.map((l) => l.slice(indent));
 }
 
@@ -1424,13 +1508,13 @@ class PixelCanvas implements Pixels {
     if (!frames.every((f) => typeof f === "string")) fail("sprite() takes its art as a string, a line a row and a character a pixel, or a list of them for frames");
     if (colors === null || typeof colors !== "object") fail('sprite() takes its colours as an object of characters to colours, such as { r: "#e11d48" }, or {} for none');
     const { frame = 0, frames: across = 1 } = opts(o, "sprite");
-    if (typeof frame !== "number") fail(`sprite's frame takes a number, such as t * 4 for four frames a second, not ${String(frame)}`);
-    if (!Number.isInteger(across) || across < 1) fail(`sprite's frames takes a whole number of frames side by side, 1 or more, not ${String(across)}`);
+    if (typeof frame !== "number") fail(`sprite's frame takes a number, such as t * 4 for four frames a second, not ${show(frame)}`);
+    if (!Number.isInteger(across) || across < 1) fail(`sprite's frames takes a whole number of frames side by side, 1 or more, not ${show(across)}`);
     const wrap = yes(o?.wrap, "sprite's wrap", false);
     // each character's colour, found once
     const ink = new Map<string, number>();
     for (const ch of Object.keys(colors)) {
-      if (ch.length !== 1) fail(`sprite()'s colours take one character of the art each, such as { r: "#e11d48" }, not ${JSON.stringify(ch)}`);
+      if (ch.length !== 1) fail(`sprite()'s colours take one character of the art each, such as { r: "#e11d48" }, not ${show(ch)}`);
       ink.set(ch, paint(this.#s, colors[ch]));
     }
     if (!frames.length || !finite(x, y)) return;
@@ -1438,7 +1522,7 @@ class PixelCanvas implements Pixels {
     const count = frames.length * across;
     const f = ((Math.floor(Number.isFinite(frame) ? frame : 0) % count) + count) % count;
     const sheet = artRows(frames[Math.floor(f / across)]);
-    const fw = Math.ceil(Math.max(0, ...sheet.map((l) => l.length)) / across), from = (f % across) * fw;
+    const fw = Math.ceil(sheet.reduce((n, l) => Math.max(n, l.length), 0) / across), from = (f % across) * fw;
     const rows = across === 1 ? sheet : sheet.map((l) => l.slice(from, from + fw));
     const w = this.width, h = this.height;
     x = Math.floor(x);
@@ -1474,7 +1558,8 @@ class PixelCanvas implements Pixels {
 
 /**
  * A half-block canvas on the grid, or on a region of it: two square pixels a cell, for pixel art and sprites. Draw on
- * it, then call draw(). Making one is cheap: make it in the drawing, each frame.
+ * it, then call draw(). Making one is cheap: make it in the drawing, each frame. A region is cut to the grid first, so
+ * one reaching past an edge starts where the grid does.
  *
  *   const p = pixels(s);
  *   p.sprite(`
