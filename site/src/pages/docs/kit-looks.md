@@ -120,7 +120,7 @@ A combined look takes the first look's palette and characters. To keep each part
 - `below(0.4)` and `above(0.3)`: the bottom or top share of the picture, or `"third"` and `"half"`; `sea()`'s `horizon` is at a third, a half or two thirds, so `above("half")` is its sky;
 - a word, `"HI"`, in big letters as large as fit, or `letters("HI", { big: 2 })` for a size;
 - a shape from [materials](/docs/kit-materials/): `heart()`, `ball()`, `star()`, `cup()`;
-- any piece or text: its inked cells, centred, moving with it if it moves;
+- any piece or text: its inked cells, centred, moving with it if it moves; a piece that moves on no loop leaves the look with none;
 - `outside(shape)` for everywhere the shape is not;
 - a function `(x, y, t) => true` where to draw.
 

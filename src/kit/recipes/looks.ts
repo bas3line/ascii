@@ -84,6 +84,8 @@ interface Def {
   dither: boolean;
   // The loops of its moving parts, in seconds: its own loop is their least common multiple. Empty for a still.
   periods: readonly number[];
+  // True when a part of it moves on no loop, a mask of a piece that has none: it moves, and has no loop of its own.
+  loopless?: boolean;
   fn: Fn;
 }
 
@@ -102,7 +104,7 @@ export class Look extends Chainable implements KitPiece {
   constructor(def: Def) {
     super();
     this.#def = def;
-    const loop = def.periods.length ? lcm(def.periods) : undefined;
+    const loop = def.periods.length && !def.loopless ? lcm(def.periods) : undefined;
     // On a light page a light look's ramp is turned round, bright being little ink, so its colours turn round with it.
     const light = def.light ? [...def.scheme.light].reverse() : def.scheme.light;
     const one = def.scheme.light.length === 1 && def.scheme.dark.length === 1;
@@ -121,7 +123,7 @@ export class Look extends Chainable implements KitPiece {
         category: "generative",
         cols: def.cols,
         rows: def.rows,
-        fps: def.periods.length ? 24 : 0,
+        fps: def.periods.length || def.loopless ? 24 : 0,
         ramp: def.ramp,
         colors: { light, dark: def.scheme.dark },
         steps: one ? 1 : 16,
@@ -156,6 +158,7 @@ export class Look extends Chainable implements KitPiece {
     const fa = this.#def.fn, fb = b.fn;
     return this.#with({
       periods: [...this.#def.periods, ...b.periods],
+      loopless: this.#def.loopless || b.loopless,
       fn: (x, y, t, at) => {
         const va = fa(x, y, t, at), vb = fb(x, y, t, at);
         if (va === null && vb === null) return null;
@@ -171,6 +174,7 @@ export class Look extends Chainable implements KitPiece {
     const fa = this.#def.fn, fb = b.fn;
     return this.#with({
       periods: [...this.#def.periods, ...b.periods],
+      loopless: this.#def.loopless || b.loopless,
       fn: (x, y, t, at) => {
         const va = fa(x, y, t, at), vb = fb(x, y, t, at);
         if (va === null && vb === null) return null;
@@ -186,6 +190,7 @@ export class Look extends Chainable implements KitPiece {
     const fa = this.#def.fn, fb = b.fn;
     return this.#with({
       periods: [...this.#def.periods, ...b.periods],
+      loopless: this.#def.loopless || b.loopless,
       fn: (x, y, t, at) => {
         const va = fa(x, y, t, at), vb = fb(x, y, t, at);
         if (va === null || vb === null) return null;
@@ -211,6 +216,7 @@ export class Look extends Chainable implements KitPiece {
     const solid = m.fills ? this.#def.ramp.replace(/^ +/, "") : this.#def.ramp;
     return this.#with({
       periods: [...this.#def.periods, ...m.periods],
+      loopless: this.#def.loopless || m.loopless,
       ramp: solid.length >= 2 ? solid : this.#def.ramp,
       fn: (x, y, t, at) => (m.test(x, y, t, at) ? f(x, y, t, at) : null),
     });
@@ -400,6 +406,8 @@ export interface Mask {
   readonly kind: "mask";
   /** The loops of anything in it that moves, in seconds. */
   readonly periods: readonly number[];
+  /** True when something in it moves on no loop, a piece that has none: a look masked by it moves, and has no loop. */
+  readonly loopless?: boolean;
   /** True for a shape the look fills, a word or a heart: every cell inside it is drawn, the faintest in its ramp's first ink. */
   readonly fills?: boolean;
   /** True for a cell to draw. */
@@ -442,6 +450,7 @@ function maskOf(what: string, v: unknown): Mask {
     return {
       kind: "mask",
       periods: loop ? [loop] : [],
+      loopless: player.meta.fps > 0 && !loop,
       test: (x, y, t, at) => {
         // Played once a frame, not once a cell, and centred on the look.
         if (t !== when || !grid) (grid = player.at(t, { mono: true })), (when = t);
@@ -468,7 +477,7 @@ export function above(share: "third" | "half" | number): Mask {
 /** Everywhere a shape is not: outside(ball()) keeps a look round a ball and leaves the ball empty. Takes what mask() takes. */
 export function outside(shape: MaskLike): Mask {
   const m = maskOf("outside()", shape);
-  return { kind: "mask", periods: m.periods, test: (x, y, t, at) => !m.test(x, y, t, at) };
+  return { kind: "mask", periods: m.periods, loopless: m.loopless, test: (x, y, t, at) => !m.test(x, y, t, at) };
 }
 
 /**

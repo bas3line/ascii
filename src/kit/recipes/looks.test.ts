@@ -7,7 +7,7 @@ import { banner } from "../../banner.ts";
 import { svg } from "../../svg.ts";
 import { still } from "../../terminal.ts";
 import type { Piece } from "../../types.ts";
-import { snapshot } from "../core.ts";
+import { piece, snapshot } from "../core.ts";
 import { area, ball, heart } from "../materials.ts";
 import * as looks from "./looks.ts";
 import {
@@ -394,6 +394,30 @@ test("a mask from a moving piece moves with it, and the look loops with both", (
   assert.equal(m.meta.loop, 8);
   assert.notEqual(text(m, 0.5), text(m, 1.5));
   contract(m);
+});
+
+test("a mask from a piece that moves on no loop moves the look, and the look then has no loop either", () => {
+  // a bar crossing, 4 columns a second, on no loop
+  const bar = piece({ name: "bar", cols: 20, rows: 10 }, (t, s) => {
+    for (let y = 0; y < 10; y++) s.write(Math.floor(t * 4) % 20, y, "##");
+  });
+  assert.equal(bar.meta.loop, undefined);
+  // A still look masked by it plays, so the mask moves: it had no frames a second, so the page never moved it.
+  const held = plasma({ speed: "still" }).mask(bar);
+  assert.ok(held.meta.fps > 0, `${held.meta.fps} frames a second`);
+  assert.equal(held.meta.loop, undefined);
+  assert.notEqual(text(held, 0), text(held, 1));
+  // A moving look masked by it no longer promises its own loop, which the mask does not keep.
+  const moving = sea({ cols: 20, rows: 10 }).mask(bar);
+  assert.notEqual(text(moving, 1), text(moving, 1 + 8), "the sea's 8 seconds are no loop of the whole");
+  assert.equal(moving.meta.loop, undefined);
+  // and so through outside() and into what it is mixed, added or multiplied with
+  const out = plasma({ speed: "still" }).mask(outside(bar));
+  assert.ok(out.meta.fps > 0 && out.meta.loop === undefined);
+  for (const both of [sea().mix(held), sea().add(held), held.multiply(sea())]) assert.equal(both.meta.loop, undefined);
+  // a still mask leaves a still look still
+  assert.equal(plasma({ speed: "still" }).mask(below(0.5)).meta.fps, 0);
+  contract(held);
 });
 
 test("move(), zoom(), rotate(), warp() and blur() change the frame and keep it looping", () => {
