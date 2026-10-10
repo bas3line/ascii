@@ -959,6 +959,50 @@ test("svgPalette gives a piece drawing with drawSvg the drawing's own colours, e
   assert.deepEqual(svgPalette(`<svg viewBox="0 0 2 2"><rect width="2" height="2" fill="currentColor"/></svg>`, { color: "#f97316" }), { light: ["#f97316"], dark: ["#f97316"] });
 });
 
+test("a fromSvg piece plays through mount() in a <pre> (the browser stubbed, as core's test does) and in the terminal", async () => {
+  const heart = fromSvg(HEART, { width: 24, "#heart": "pulse" });
+  const g = globalThis as Record<string, unknown>;
+  const saved = Object.fromEntries(["HTMLCanvasElement", "getComputedStyle", "matchMedia", "IntersectionObserver", "requestAnimationFrame", "cancelAnimationFrame", "document"].map((k) => [k, g[k]]));
+  const frames: ((now: number) => void)[] = [];
+  let observer: ((e: { isIntersecting: boolean }[]) => void) | null = null;
+  Object.assign(g, {
+    HTMLCanvasElement: class {},
+    getComputedStyle: () => ({ color: "rgb(31, 35, 40)" }),
+    matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+    IntersectionObserver: class {
+      constructor(cb: (e: { isIntersecting: boolean }[]) => void) {
+        observer = cb;
+      }
+      observe() {}
+      disconnect() {}
+    },
+    requestAnimationFrame: (cb: (now: number) => void) => frames.push(cb),
+    cancelAnimationFrame: () => {},
+    document: { hidden: false, addEventListener() {}, removeEventListener() {} },
+  });
+  try {
+    const { mount } = await import("../mount.ts");
+    const pre = { textContent: "" } as unknown as HTMLElement;
+    const stop = mount(pre, heart);
+    assert.equal(pre.textContent, snapshot(heart, 0, { paper: true, mono: true }).text);
+    observer!([{ isIntersecting: true }]);
+    const start = performance.now();
+    for (let i = 1; i <= 3; i++) frames.shift()!(start + i * 400);
+    assert.notEqual(pre.textContent, snapshot(heart, 0, { paper: true, mono: true }).text);
+    assert.equal(pre.textContent!.split("\n").length, heart.meta.rows);
+    stop();
+  } finally {
+    Object.assign(g, saved);
+  }
+  const { play } = await import("../terminal.ts");
+  let written = "";
+  const out = { isTTY: true, columns: 80, rows: 24, write: (s: string) => (written += s) };
+  const played = await play(heart, { seconds: 0.2, out });
+  assert.deepEqual(played.piece, { cols: heart.meta.cols, rows: heart.meta.rows });
+  // The heart's own red, #e11d48, on a dark terminal.
+  assert.match(written, /\x1b\[38;2;225;29;72m8/);
+});
+
 test("fromSvg pieces export to an SVG and leave empty cells EMPTY", () => {
   const p = fromSvg(HEART, { "#heart": "pulse" });
   const out = toSvg(p);
