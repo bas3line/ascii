@@ -1,6 +1,8 @@
 // node --test src/kit/core.test.ts
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import * as donut from "../pieces/donut.ts";
 import * as rust from "../pieces/rust.ts";
 import { banner } from "../banner.ts";
@@ -254,6 +256,16 @@ test("sources: text and grids as stills, a library piece sampled into grids", ()
   assert.equal(r.at(1.2, { mono: true }).colors.every((c) => c === NONE), true);
   // A piece in one ink.
   assert.equal(sample(donut).at(0.5).toString(), snapshot(donut, 0.5).text);
+});
+
+test("pieces chain whichever of the kit's files a program loads first: core, compose and fx import each other", () => {
+  const dir = fileURLToPath(new URL(".", import.meta.url));
+  for (const first of ["core", "compose", "fx", "field", "materials", "recipes/looks", "index"]) {
+    const script = `await import(${JSON.stringify(`${dir}${first}.ts`)}); const k = await import(${JSON.stringify(`${dir}index.ts`)});
+      console.log(k.stars().behind(k.pulsing(k.heart())).named("love").glint().border().meta.name);`;
+    const out = execFileSync(process.execPath, ["--input-type=module", "-e", script], { encoding: "utf8" }).trim();
+    assert.equal(out, "love", `${first} loaded first`);
+  }
 });
 
 test("a grid drawn for one page shows each page's own colours on each, its palette themed", () => {

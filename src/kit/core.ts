@@ -13,6 +13,10 @@
  *   });
  */
 import type { Category, Env, Frame, Meta, Options, Piece } from "../types.ts";
+// Every piece the kit makes chains through compose's and fx's makers. They import this file too: theirs read nothing of
+// it as they load, only when called, so either may load first.
+import * as compose from "./compose.ts";
+import * as fx from "./fx.ts";
 
 // --- errors -------------------------------------------------------------------
 
@@ -790,9 +794,170 @@ export function checkMeta<M extends Meta>(m: M): M {
   return m;
 }
 
-/** What a piece made by the kit is: a normal piece, its meta typed for its options. */
-export interface KitPiece<O extends Options = Options> extends Piece<O> {
+/**
+ * What every piece the kit makes can do besides play: each step returns a new piece, which chains again, and leaves
+ * this one as it was, so a recipe, a scene, particles or a layout is one line. Each is a function of the kit's own
+ * (compose's over(), border() and speed(), fx's glint() and shake() and the rest) with this piece as its source.
+ *
+ *   stars().behind(pulsing(heart())).named("love in space")
+ *   gauge({ label: "cpu" }).border({ title: true }).glint({ every: "rarely" })
+ */
+export interface Chain {
+  /** The piece under another name, and a line saying what it shows: compose's named(). */
+  named(name: string, note?: string): KitPiece;
+  /** The piece with a line of its own saying what it shows, as screen readers and svg() read it. */
+  note(note: string): KitPiece;
+  /** This piece laid over another, in that one's size, centred: compose's over(this, bottom). */
+  over(bottom: Source | ComposeLayer, o?: OverOptions): KitPiece;
+  /** Another piece laid over this one, centred: a banner on a starfield. compose's over(top, this). */
+  behind(top: Source | ComposeLayer, o?: OverOptions): KitPiece;
+  /** Played `factor` times as fast: compose's speed(). */
+  speed(factor: number): KitPiece;
+  /** Waiting `seconds` on its first frame before it plays: compose's delay(). */
+  delay(seconds: number): KitPiece;
+  /** Its first `seconds` over and over, which becomes its loop: compose's repeat(). */
+  repeat(seconds: number): KitPiece;
+  /** A still of it at `at` seconds: compose's freeze(). */
+  freeze(at: number): KitPiece;
+  /** Blank cells round it: compose's pad(). */
+  pad(n: number | readonly [number, number] | { top?: number; right?: number; bottom?: number; left?: number }): KitPiece;
+  /** In a box with a title if you like: compose's border(). */
+  border(o?: ComposeBorderOptions): KitPiece;
+  /** A part of it, cells of a region: compose's crop(). */
+  crop(region: Region): KitPiece;
+  /** Mirrored: compose's flip(). */
+  flip(axis: "x" | "y" | "both"): KitPiece;
+  /** Made bigger by whole numbers: compose's scale(). */
+  scale(factor: number | readonly [number, number]): KitPiece;
+  /** A light band crossing it now and then: fx's glint(). */
+  glint(o?: FxOptionsOf<"glint">): KitPiece;
+  /** Jolting now and then: fx's shake(). */
+  shake(o?: FxOptionsOf<"shake">): KitPiece;
+  /** Breaking up now and then: fx's glitch(). */
+  glitch(o?: FxOptionsOf<"glitch">): KitPiece;
+  /** Swaying as a wave runs down it: fx's wave(). */
+  wave(o?: FxOptionsOf<"wave">): KitPiece;
+  /** Fading in and out down a ramp: fx's fade(). */
+  fade(o?: FxOptionsOf<"fade">): KitPiece;
+  /** Dissolving in and out in patches: fx's dissolve(). */
+  dissolve(o?: FxOptionsOf<"dissolve">): KitPiece;
+  /** Its ink in colours running across it: fx's rainbow(). */
+  rainbow(o?: FxOptionsOf<"rainbow">): KitPiece;
+  /** All its ink in one colour going round the wheel: fx's hueCycle(). */
+  hueCycle(o?: FxOptionsOf<"hueCycle">): KitPiece;
+  /** A line round its ink: fx's outline(). */
+  outline(o?: FxOptionsOf<"outline">): KitPiece;
+  /** A shadow behind its ink: fx's shadow(). */
+  shadow(o?: FxOptionsOf<"shadow">): KitPiece;
+  /** A line scanning across it: fx's scan(). */
+  scan(o?: FxOptionsOf<"scan">): KitPiece;
+  /** Typed in a character at a time: fx's typeIn(). */
+  typeIn(o?: FxOptionsOf<"typeIn">): KitPiece;
+}
+
+// The options compose's and fx's makers take, by name, for Chain's methods.
+type OverOptions = Parameters<typeof compose.over>[2];
+type ComposeLayer = Parameters<typeof compose.layer>[0] & object;
+type ComposeBorderOptions = Parameters<typeof compose.border>[1];
+type FxOptionsOf<K extends "glint" | "shake" | "glitch" | "wave" | "fade" | "dissolve" | "rainbow" | "hueCycle" | "outline" | "shadow" | "scan" | "typeIn"> = Parameters<(typeof fx)[K]>[1];
+
+/** What a piece made by the kit is: a normal piece, its meta typed for its options, that chains. */
+export interface KitPiece<O extends Options = Options> extends Piece<O>, Chain {
   meta: Meta<O>;
+}
+
+/**
+ * The methods every piece the kit makes has, on its prototype: a piece is still a plain { meta, default } to mount(),
+ * svg() and the rest. chained() gives any piece them.
+ */
+export class Chainable implements Chain {
+  named(name: string, note?: string): KitPiece {
+    return compose.named(this as unknown as Piece, name, note === undefined ? {} : { note });
+  }
+  note(note: string): KitPiece {
+    return compose.named(this as unknown as Piece, (this as unknown as Piece).meta.name, { note });
+  }
+  over(bottom: Source | ComposeLayer, o?: OverOptions): KitPiece {
+    return compose.over(this as unknown as Piece, bottom, o);
+  }
+  behind(top: Source | ComposeLayer, o?: OverOptions): KitPiece {
+    return compose.over(top, this as unknown as Piece, o);
+  }
+  speed(factor: number): KitPiece {
+    return compose.speed(this as unknown as Piece, factor);
+  }
+  delay(seconds: number): KitPiece {
+    return compose.delay(this as unknown as Piece, seconds);
+  }
+  repeat(seconds: number): KitPiece {
+    return compose.repeat(this as unknown as Piece, seconds);
+  }
+  freeze(at: number): KitPiece {
+    return compose.freeze(this as unknown as Piece, at);
+  }
+  pad(n: number | readonly [number, number] | { top?: number; right?: number; bottom?: number; left?: number }): KitPiece {
+    return compose.pad(this as unknown as Piece, n);
+  }
+  border(o?: ComposeBorderOptions): KitPiece {
+    return compose.border(this as unknown as Piece, o);
+  }
+  crop(region: Region): KitPiece {
+    return compose.crop(this as unknown as Piece, region);
+  }
+  flip(axis: "x" | "y" | "both"): KitPiece {
+    return compose.flip(this as unknown as Piece, axis);
+  }
+  scale(factor: number | readonly [number, number]): KitPiece {
+    return compose.scale(this as unknown as Piece, factor);
+  }
+  glint(o?: FxOptionsOf<"glint">): KitPiece {
+    return fx.glint(this as unknown as Piece, o);
+  }
+  shake(o?: FxOptionsOf<"shake">): KitPiece {
+    return fx.shake(this as unknown as Piece, o);
+  }
+  glitch(o?: FxOptionsOf<"glitch">): KitPiece {
+    return fx.glitch(this as unknown as Piece, o);
+  }
+  wave(o?: FxOptionsOf<"wave">): KitPiece {
+    return fx.wave(this as unknown as Piece, o);
+  }
+  fade(o?: FxOptionsOf<"fade">): KitPiece {
+    return fx.fade(this as unknown as Piece, o);
+  }
+  dissolve(o?: FxOptionsOf<"dissolve">): KitPiece {
+    return fx.dissolve(this as unknown as Piece, o);
+  }
+  rainbow(o?: FxOptionsOf<"rainbow">): KitPiece {
+    return fx.rainbow(this as unknown as Piece, o);
+  }
+  hueCycle(o?: FxOptionsOf<"hueCycle">): KitPiece {
+    return fx.hueCycle(this as unknown as Piece, o);
+  }
+  outline(o?: FxOptionsOf<"outline">): KitPiece {
+    return fx.outline(this as unknown as Piece, o);
+  }
+  shadow(o?: FxOptionsOf<"shadow">): KitPiece {
+    return fx.shadow(this as unknown as Piece, o);
+  }
+  scan(o?: FxOptionsOf<"scan">): KitPiece {
+    return fx.scan(this as unknown as Piece, o);
+  }
+  typeIn(o?: FxOptionsOf<"typeIn">): KitPiece {
+    return fx.typeIn(this as unknown as Piece, o);
+  }
+}
+
+/**
+ * Any piece with the methods every kit piece has, so it chains: a kit piece as it is, anything else (a library piece,
+ * an object of your own with meta and default) as a copy of it with them, everything it carried kept.
+ *
+ *   chained(donut).glint().named("shiny donut")
+ */
+export function chained<P extends Piece>(p: P): P & KitPiece {
+  if (p instanceof Chainable) return p as P & KitPiece;
+  if (!p || typeof p !== "object" || !p.meta || typeof p.default !== "function") fail(`chained() takes a piece, meta and a default function, not ${String(p)}`);
+  return Object.assign(Object.create(Chainable.prototype) as Chainable, p) as unknown as P & KitPiece;
 }
 
 /** What piece() takes: the meta's fields, most of them with a default, and the piece's colours. */
@@ -919,7 +1084,7 @@ export function piece<O extends Options = Options>(spec: PieceSpec<O>, draw: Dra
         ? draw.setup
         : fail("piece() takes a drawing, (t, s, ctx) => { ... }, or { setup: (options) => drawing }");
   const wipe = spec.clear ?? true;
-  return {
+  return chained({
     meta,
     default(options?: Partial<O>): Frame {
       const opts = { ...meta.options, ...options } as O;
@@ -935,7 +1100,7 @@ export function piece<O extends Options = Options>(spec: PieceSpec<O>, draw: Dra
         return s.frame(env);
       };
     },
-  };
+  });
 }
 
 // --- other pieces, inside the kit -------------------------------------------------
@@ -964,10 +1129,10 @@ export function asPiece(src: Source, name = "text"): Piece {
       }
     }
     other.paper = !grid.paper;
-    return {
+    return chained<Piece>({
       meta,
       default: () => (t, env = {}) => (!!env.paper === grid.paper ? grid : other).frame(env),
-    };
+    });
   }
   if (typeof src === "string") {
     let lines = src.replace(/\r\n?/g, "\n").split("\n");
@@ -983,7 +1148,7 @@ export function asPiece(src: Source, name = "text"): Piece {
     if (CONTROL.test(lines.join(""))) fail("text takes printable characters and newlines, not control characters");
     const text = lines.map((l) => l.padEnd(cols)).join("\n");
     const meta: Meta = checkMeta({ name, category: "type", note: name, cols, rows: lines.length, fps: 0 });
-    return { meta, default: () => () => text };
+    return chained<Piece>({ meta, default: () => () => text });
   }
   if (!src || typeof src !== "object" || !src.meta || typeof src.default !== "function") fail("this takes a piece, a string of text or a Surface");
   return src;

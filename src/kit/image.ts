@@ -886,7 +886,8 @@ function pieceOf(d: Drawing, set: Settings, fn: string): ImagePiece {
       };
     },
   });
-  return { ...made, drawing: d };
+  // The piece carries its drawing, for drawImage(), and still chains.
+  return Object.assign(made, { drawing: d });
 }
 
 /** What drawImage() takes besides where, all of it optional. */

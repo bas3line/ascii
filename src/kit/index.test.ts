@@ -76,6 +76,43 @@ test("one colour vocabulary: every option that takes colours takes a palette's n
   assert.throws(() => kit.colorsOf("oceans"), /did you mean "ocean"\?/);
 });
 
+test("every kit piece chains: recipes, scenes, particles, layouts, effects, images and library pieces through pieceOf()", async () => {
+  const donut = await import("../pieces/donut.ts");
+  const love = kit.pulsing(kit.heart());
+  // the line that crashed: stars().behind(...) gave a piece with no methods
+  const space = kit.stars().behind(love).named("love in space");
+  assert.equal(space.meta.name, "love in space");
+  const made = [
+    kit.spinning(kit.torus()),
+    kit.gauge({ label: "cpu" }),
+    kit.scene({}, kit.cube()),
+    kit.particles({ cols: 20, rows: 6 }, "snow"),
+    kit.picture([kit.shape(kit.cup())]),
+    kit.row(["a", "b"]),
+    kit.glint("hi"),
+    kit.field(() => 0.5),
+    kit.fromPixels(new Uint8ClampedArray(4 * 16 * 16).fill(255), 16, 16, { width: 8 }),
+    kit.pieceOf(donut),
+    kit.asPiece("text"),
+    kit.typewriter("hello"),
+    kit.over("hi", kit.sea()),
+  ];
+  for (const p of made) {
+    for (const m of ["named", "note", "over", "behind", "speed", "delay", "repeat", "freeze", "pad", "border", "crop", "flip", "scale", "glint", "shake", "glitch", "wave", "fade", "dissolve", "rainbow", "hueCycle", "outline", "shadow", "scan", "typeIn"])
+      assert.equal(typeof (p as unknown as Record<string, unknown>)[m], "function", `${p.meta.name}.${m}`);
+    const q = (p as kit.KitPiece).named("renamed").border({ title: true }).glint({ every: "rarely" });
+    assert.equal(kit.snapshot(q, 1).text.split("\n").length, q.meta.rows);
+  }
+  // spinning(...).over(sea()) and gauge().named() read as they say
+  assert.equal(kit.gauge().named("cpu").meta.name, "cpu");
+  assert.equal(kit.spinning(kit.torus()).over(kit.sea()).meta.cols, 64);
+  assert.equal(kit.snapshot(kit.pieceOf(donut).speed(2), 1).text, kit.snapshot(donut, 2).text, "twice as fast");
+  // a piece is still a plain { meta, default } to everything that plays it
+  const plain = kit.chained(donut);
+  assert.equal(plain.default, donut.default);
+  assert.equal(kit.snapshot(plain, 1).text, kit.snapshot(donut, 1).text);
+});
+
 test("a piece made through the index plays: the three-line field", () => {
   const sea = kit.field({ name: "sea", cols: 48, rows: 10, ramp: "blocks", colors: ["#0b3d91", "#7fdbff"], period: 2 }, (x, y, t, at) =>
     0.5 + 0.5 * Math.sin(x * 6 + y * 2 + kit.TAU * at.phase),

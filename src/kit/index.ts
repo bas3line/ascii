@@ -132,6 +132,7 @@ export {
 
 // The grid, the piece() builder, colours, ramps and the maths every module shares.
 export {
+  Chainable,
   EMPTY,
   INK,
   MAX,
@@ -142,6 +143,7 @@ export {
   and,
   asPiece,
   bayer,
+  chained,
   checkMeta,
   clamp,
   code,
@@ -176,6 +178,7 @@ export {
   type Color,
   type ColorLike,
   type ColorName,
+  type Chain,
   type Context,
   type Draw,
   type KitPiece,

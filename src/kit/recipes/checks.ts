@@ -7,7 +7,7 @@
  * and pieceOf() for recipes of your own.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  */
-import { checkMeta, colorOf as inkOf, fail, suggest } from "../core.ts";
+import { chained, checkMeta, colorOf as inkOf, fail, suggest } from "../core.ts";
 import type { Piece } from "../../types.ts";
 import { ease as eases, type EaseName } from "../math.ts";
 import type { Area, Part } from "../materials.ts";
@@ -223,7 +223,8 @@ export function titled<P extends Piece>(p: P, name: string | undefined, note: st
   if (name === undefined && note === undefined) return p;
   if (name !== undefined && (typeof name !== "string" || !name.trim())) fail(`a name takes one line of words, such as "hello", not ${show(name)}`);
   const n = name?.trim() ?? p.meta.name;
-  return { ...p, meta: checkMeta({ ...p.meta, name: n, note: (note ?? n).slice(0, 72) }) };
+  // A copy that still chains, everything else it carried kept.
+  return chained({ ...p, meta: checkMeta({ ...p.meta, name: n, note: (note ?? n).slice(0, 72) }) }) as P;
 }
 
 // What every recipe takes for its name and note.

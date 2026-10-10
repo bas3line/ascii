@@ -20,7 +20,7 @@
  */
 import type { Meta } from "../../types.ts";
 import { over as overOf } from "../compose.ts";
-import { EMPTY, Surface, TAU, clamp, fail, fract, hash, ramp as rampOf, sample, smoothstep, type KitPiece, type Sampler, type Source } from "../core.ts";
+import { Chainable, EMPTY, Surface, TAU, clamp, fail, fract, hash, ramp as rampOf, sample, smoothstep, type KitPiece, type Sampler, type Source } from "../core.ts";
 import { field, type FieldCell } from "../field.ts";
 import { area, type Area } from "../materials.ts";
 import { lcm, noise, twinkle, type NoiseOptions } from "../math.ts";
@@ -94,12 +94,13 @@ interface Def {
  *   plasma().mask(heart()).zoom("in")
  *   clouds().mix(sea(), "half")
  */
-export class Look implements KitPiece {
+export class Look extends Chainable implements KitPiece {
   readonly meta: Meta;
   readonly default: KitPiece["default"];
   readonly #def: Def;
 
   constructor(def: Def) {
+    super();
     this.#def = def;
     const loop = def.periods.length ? lcm(def.periods) : undefined;
     // On a light page a light look's ramp is turned round, bright being little ink, so its colours turn round with it.

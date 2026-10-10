@@ -28,6 +28,7 @@ import {
   and,
   asPiece,
   bayer,
+  chained,
   checkMeta,
   code,
   colorOf as inkOf,
@@ -1199,11 +1200,13 @@ function thresholds(cols: number, rows: number, aspect: number, seed: number): F
 // The ramps a fade steps a character down, and for every character its ramp and its place on it, built when the first
 // fade is made: the blocks, eighths and dots down their own ramps, anything else down the standard ramp from the step that
 // has about as much ink as it does, so a thin line only thins and never thickens first. ASCII is placed by the detailed
-// ramp, which orders it by ink; box drawing is a thin line; braille goes by its dots; other characters sit midway.
-const FADES = [ramps.blocks, ramps.eighths, ramps.dots, ramps.standard] as const;
-let fades: { ramp: Uint8Array; level: Uint8Array } | null = null;
+// ramp, which orders it by ink; box drawing is a thin line; braille goes by its dots; other characters sit midway. The
+// ramps are read when the first fade is made, not when this file loads, as core's pieces chain through compose and core
+// may load second.
+let fades: { ramp: Uint8Array; level: Uint8Array; ramps: readonly string[] } | null = null;
 function fadeTable() {
   if (fades) return fades;
+  const FADES = [ramps.blocks, ramps.eighths, ramps.dots, ramps.standard];
   const ramp = new Uint8Array(65536).fill(3), level = new Uint8Array(65536).fill(5);
   const top = ramps.standard.length - 1, ink = ramps.detailed;
   const put = (c: number, r: number, l: number) => ((ramp[c] = r), (level[c] = l));
@@ -1219,7 +1222,7 @@ function fadeTable() {
   for (const [chars, l] of [["▖▗▘▝", 1], ["▀▌▐▚▞", 2], ["▙▛▜▟", 3]] as const) for (const ch of chars) put(ch.charCodeAt(0), 0, l);
   // Each ramp's own characters, the earlier ramps last so they win: █ fades through ▓▒░, not ▇▆▅.
   for (let k = FADES.length - 1; k >= 0; k--) for (let i = 1; i < FADES[k].length; i++) put(FADES[k].charCodeAt(i), k, i);
-  return (fades = { ramp, level });
+  return (fades = { ramp, level, ramps: FADES });
 }
 
 const EDGE = 0.07; // how much of a dissolve's run a cell takes to cross, its edge drawn meanwhile
@@ -1333,7 +1336,7 @@ export function sequence(steps: readonly (Source | Step)[], o: SequenceOptions =
             if (ch === EMPTY) continue;
             const level = fading.level[ch];
             const step = Math.max(0, Math.min(level, Math.round(level * (1 - f) + bayer(x, y))));
-            s.put(c, step >= level ? ch : step <= 0 ? EMPTY : FADES[fading.ramp[ch]].charCodeAt(step), gc[c]);
+            s.put(c, step >= level ? ch : step <= 0 ? EMPTY : fading.ramps[fading.ramp[ch]].charCodeAt(step), gc[c]);
           }
       } else {
         // A band leaning like a slash sweeps left to right, the next step behind it.
@@ -1373,13 +1376,13 @@ function retime(fn: string, p: Prepared, time: (t: number) => number, timing: Ti
   const { loop: _loop, still: _still, ...rest } = p.meta;
   const options = optionsOf(p);
   const meta: Meta = checkMeta({ ...rest, ...(options ? { options } : {}), ...given } as Meta);
-  return {
+  return chained({
     meta,
     default(o?: Partial<Options>): Frame {
       const frame = p.piece.default({ ...meta.options, ...o });
       return (t, env) => frame(Math.max(0, time(Number.isFinite(t) ? t : 0) * p.speed + p.offset), env);
     },
-  };
+  });
 }
 
 // The source's still moment in the whole's time, as its part's speed and offset run it.
@@ -1457,5 +1460,5 @@ export function named(src: Source | Clip, name: string, o: { note?: string; cate
     note: opts.note ?? short(name.trim()),
     category: opts.category ?? p.meta.category,
   });
-  return asItWas ? { ...p.piece, ...renamed } : renamed;
+  return asItWas ? chained({ ...p.piece, meta: renamed.meta, default: renamed.default }) : renamed;
 }

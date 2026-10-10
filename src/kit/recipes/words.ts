@@ -14,7 +14,7 @@
  *   pieceOf(heart());   // an area, drawn and cut to its size
  */
 import type { Piece } from "../../types.ts";
-import { Surface, asPiece, checkMeta, fail, type KitPiece, type Source } from "../core.ts";
+import { Surface, asPiece, chained, checkMeta, fail, type KitPiece, type Source } from "../core.ts";
 import { crop } from "../compose.ts";
 import { picture, shape, type Area, type Part } from "../materials.ts";
 import { scene, type Shape3d } from "../shapes3d.ts";
@@ -43,13 +43,14 @@ const ROOM = { cols: 64, rows: 24 };
  *   pieceOf(heart())                 // a heart, just its size
  *   pieceOf(torus({ spin: 1 }))      // a spinning donut, as a piece
  */
-export function pieceOf(thing: Thing, what = "this"): KitPiece | Piece {
+export function pieceOf(thing: Thing, what = "this"): KitPiece {
   // A module imported whole, as compose takes one.
   if (isObject(thing) && !isPiece(thing) && isPiece((thing as { default?: unknown }).default)) thing = (thing as unknown as { default: Piece }).default;
   if (typeof thing === "function") fail(`${what} takes a thing to show, not ${show(thing)}`);
   // Text is named by its first line, as compose names it.
-  if (typeof thing === "string") return asPiece(thing, thing.split("\n").map((l) => l.trim()).find(Boolean)?.slice(0, 40) ?? "text");
-  if (thing instanceof Surface || isPiece(thing)) return asPiece(thing as Source);
+  if (typeof thing === "string") return chained(asPiece(thing, thing.split("\n").map((l) => l.trim()).find(Boolean)?.slice(0, 40) ?? "text"));
+  // A library piece chains too, as a copy with the kit's methods.
+  if (thing instanceof Surface || isPiece(thing)) return chained(asPiece(thing as Source));
   if (isPart(thing)) return picture([thing]);
   if (Array.isArray(thing) && thing.length && thing.every(isPart)) return picture(thing as readonly Part[]);
   if (isArea(thing)) {
@@ -87,8 +88,8 @@ export function loopFor(parts: readonly (Piece | number)[]): number | undefined 
  * no period of its own. The piece plays as it did; only svg() and the players read the loop. A motion svg() would read
  * in its place (an effect's or a banner's) is left behind, so the loop is the one it plays.
  */
-export function withLoop<P extends Piece>(p: P, loop: number | undefined): P {
+export function withLoop<P extends Piece>(p: P, loop: number | undefined): P & KitPiece {
   const { loop: _, ...meta } = p.meta;
   const { motion: __, ...rest } = p as P & { motion?: unknown };
-  return { ...rest, meta: checkMeta(loop === undefined ? meta : { ...meta, loop }) } as P;
+  return chained({ ...rest, meta: checkMeta(loop === undefined ? meta : { ...meta, loop }) } as P);
 }

@@ -469,11 +469,12 @@ const copy = (s: Surface, g: Surface) => {
 
 // --- characters ------------------------------------------------------------------------
 
-// How much ink a character puts down, 0 to 1: its place on the detailed ramp, or a guess by its kind.
-const DENSE = ramps.detailed;
+// How much ink a character puts down, 0 to 1: its place on the detailed ramp, or a guess by its kind. The ramp is read
+// when called, not when this file loads, as core's pieces chain through these effects and core may load second.
 function density(c: number): number {
-  const k = DENSE.indexOf(String.fromCharCode(c));
-  if (k > 0) return k / (DENSE.length - 1);
+  const dense = ramps.detailed;
+  const k = dense.indexOf(String.fromCharCode(c));
+  if (k > 0) return k / (dense.length - 1);
   if (c === 0x2588) return 1; // █
   if (c === 0x2593) return 0.8; // ▓
   if (c === 0x2592) return 0.55; // ▒
