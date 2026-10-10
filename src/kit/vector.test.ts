@@ -666,6 +666,10 @@ test("non-finite coordinates, paint servers that are not there, and text are lef
   assert.deepEqual(parseSvg(words).skipped, ["text", "image"]);
   assert.throws(() => fromSvg(words), /found nothing to draw in this svg.*it has text and image, which fromSvg leaves out: turn text to outlines/);
   assert.deepEqual(parseSvg(HEART).skipped, []);
+  // An arrow's head is a marker: the line is drawn, and the marker named as left out.
+  const arrow = parseSvg(`<svg viewBox="0 0 24 24"><defs><marker id="m"><circle r="2"/></marker></defs><path d="M4 12h16" stroke="#000" marker-end="url(#m)"/></svg>`);
+  assert.equal(arrow.shapes.length, 1);
+  assert.deepEqual(arrow.skipped, ["marker"]);
 });
 
 test("character references past the last code point, titles with control characters, and options that are not an object", () => {

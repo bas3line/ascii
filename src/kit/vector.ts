@@ -5,12 +5,13 @@
  * absolute), rects with rounded corners, circles, ellipses, lines, polylines
  * and polygons, groups and <use> with their transforms, the viewBox, fills,
  * strokes, opacity, fill rules, gradients (as their mean colour) and the
- * classes of a <style>. Text, images, clip paths, masks and filters are left
- * out: turn text to outlines in your editor before you export. Each cell takes
- * the character whose shape best matches the drawing's edge through it, and 8
- * where it is solid, as the library's logos are drawn, in the drawing's own
- * colours, lifted on a dark page where they would sink into it; where two
- * colours meet, the edge between them is drawn too, so it reads in one ink.
+ * classes of a <style>. Text, images, markers, clip paths, masks and filters
+ * are left out: turn text to outlines in your editor before you export. Each
+ * cell takes the character whose shape best matches the drawing's edge through
+ * it, and 8 where it is solid, as the library's logos are drawn, in the
+ * drawing's own colours, lifted on a dark page where they would sink into it;
+ * where two colours meet, the edge between them is drawn too, so it reads in
+ * one ink.
  *
  * Every element is a part you can name by its id, its class or its colour, to
  * set it moving with a word (spin, flip, bob, pulse, sway, blink, glint,
@@ -102,7 +103,7 @@ export interface Svg {
   readonly title: string | null;
   /** Every part it can be addressed by: "#id", ".class" and each colour it paints, as #rrggbb. */
   readonly parts: readonly string[];
-  /** The elements it has that fromSvg can't draw and leaves out, such as "text" and "image": none for most drawings. */
+  /** What it has that fromSvg can't draw and leaves out, "text", "image", "foreignObject" or "marker": none for most drawings. */
   readonly skipped: readonly string[];
 }
 
@@ -868,6 +869,8 @@ export function parseSvg(markup: string): Svg {
       return;
     }
     if (LEFT_OUT.has(n.name) && st.visible) skipped.add(n.name === "foreignobject" ? "foreignObject" : n.name);
+    // A line's arrowheads and dots are markers, drawn by a browser at its ends: not here, so say so.
+    if (st.visible && (n.attrs["marker-start"] || n.attrs["marker-mid"] || n.attrs["marker-end"] || /marker(-start|-mid|-end)?\s*:/.test(n.attrs.style ?? ""))) skipped.add("marker");
     if (!SHAPES.has(n.name) || !st.visible) return;
     const ops = shapeOps(n.name, n.attrs, vbw, vbh);
     if (!ops) return;
