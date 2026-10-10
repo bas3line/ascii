@@ -1,25 +1,23 @@
 ---
 /*
  * The markdown figures on the home page, after the scenes: a card for each
- * figure built, its catalog example drawn in its well as the remark plugin
- * draws a fence, so the page is whole before any script runs, then built in
- * as the section nears the screen. Each card goes to the figure's docs. The
- * script sits inside the section, so the next category is still a section
- * right after this one, spaced as the others are.
+ * figure, its catalog example drawn in its well as the remark plugin draws a
+ * fence, so the page is whole before any script runs, then built in as the
+ * section nears the screen. Each card goes to the figure's docs. The script
+ * sits inside the section, so the next category is still a section right
+ * after this one, spaced as the others are.
  */
-import { catalog, kinds, markup } from "ascii.rest/markdown";
-
-const built = catalog.filter((e) => Object.hasOwn(kinds, e.kind));
+import { catalog, markup } from "ascii.rest/markdown";
 ---
 
 <section id="markdown">
   <div class="head">
     <h2>markdown</h2>
-    <span class="count">{built.length}</span>
+    <span class="count">{catalog.length}</span>
     <span class="tools"><a href="/docs/markdown/">[docs]</a></span>
   </div>
   <div class="grid">
-    {built.map((e) => (
+    {catalog.map((e) => (
       <a class="card" href={`/docs/markdown-${e.group}/#${e.kind}`}>
         <div class="well" set:html={markup(e.kind, e.source, e.options)} />
         <span class="name">{e.kind}</span>

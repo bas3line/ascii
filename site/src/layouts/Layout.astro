@@ -1,6 +1,7 @@
 ---
 /*
- * The shell for every page: a sidebar index of every category and piece, the
+ * The shell for every page: a sidebar index of every category and piece, with
+ * the markdown figures after the scenes as the home page has them, the
  * header with the theme switch, a footer with links to open an issue, [copy]
  * buttons for code blocks, tabs, and the script that mounts each piece as it
  * scrolls into view.
@@ -11,6 +12,7 @@ import SpeedInsights from "@vercel/speed-insights/astro";
 import Credit from "../components/Credit.astro";
 import Icon from "../components/Icon.astro";
 import { AUTHOR, NAME, REPO, SITE, groups, issue, pieces } from "../lib/library";
+import { catalog as figures } from "ascii.rest/markdown";
 
 interface Props {
   title: string;
@@ -129,6 +131,21 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
                   </ul>
                 </>
               ))}
+              {i === 0 && (
+                <>
+                  <h3>
+                    <a href="/#markdown">markdown</a>
+                    <span class="count">{figures.length}</span>
+                  </h3>
+                  <ul role="list">
+                    {figures.map((figure) => (
+                      <li>
+                        <a href={`/docs/markdown-${figure.group}/#${figure.kind}`}>{figure.kind}</a>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </>
           ))}
         </nav>

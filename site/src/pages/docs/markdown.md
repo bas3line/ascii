@@ -33,9 +33,17 @@ animated ascii art for web pages
 
 ## The figures
 
-They come in groups, each with a page:
+There are 25, in seven groups, each with a page:
 
-- [lettering](/docs/markdown-lettering/): [headline](/docs/markdown-lettering/#headline), words in block letters with a glint passing over them.
+- [lettering](/docs/markdown-lettering/): [headline](/docs/markdown-lettering/#headline), words in block letters; [typing](/docs/markdown-lettering/#typing), a line that types itself and keeps changing its word; [flap](/docs/markdown-lettering/#flap), a split-flap sign; [marquee](/docs/markdown-lettering/#marquee), a ticker.
+- [ornaments](/docs/markdown-ornaments/): [divider](/docs/markdown-ornaments/#divider), a rule that moves; [confetti](/docs/markdown-ornaments/#confetti), a burst over a message; [solid](/docs/markdown-ornaments/#solid), a 3D shape turning; [say](/docs/markdown-ornaments/#say), a creature with a balloon; [orbit](/docs/markdown-ornaments/#orbit), the rings of things round a hub.
+- [machines](/docs/markdown-machines/): [sequence](/docs/markdown-machines/#sequence), messages between actors; [git](/docs/markdown-machines/#git), a history as `git log --graph` prints it; [railroad](/docs/markdown-machines/#railroad), a command's syntax; [logic](/docs/markdown-machines/#logic), a rule as logic gates.
+- [inside a system](/docs/markdown-internals/): [flame](/docs/markdown-internals/#flame), a flame graph; [bits](/docs/markdown-internals/#bits), a binary layout; [pinout](/docs/markdown-internals/#pinout), a chip's pins; [schema](/docs/markdown-internals/#schema), an ER diagram.
+- [tokens](/docs/markdown-tokens/): [qr](/docs/markdown-tokens/#qr), a QR code; [sigil](/docs/markdown-tokens/#sigil), a text's fingerprint; [stamp](/docs/markdown-tokens/#stamp), a rubber stamp; [ticket](/docs/markdown-tokens/#ticket), a pass.
+- [games](/docs/markdown-games/): [chess](/docs/markdown-games/#chess), a position and its moves; [bracket](/docs/markdown-games/#bracket), a knockout; [sprite](/docs/markdown-games/#sprite), pixel art that walks.
+- [places](/docs/markdown-places/): [world](/docs/markdown-places/#world), a map with pins and routes.
+
+They are made with ascii.rest's own art and [kit](/docs/kit/): headline, stamp and ticket in [banner](/docs/banners/) letters, solid on the kit's 3D renderer, confetti with its particles, world on the earth piece's map, and every seeded one, confetti, sigil, the stamp's wear, the ticket's bars and git's hashes, on its `fnv1a32()` and `mulberry32()`, so a figure draws the same on a page, in an SVG and as text.
 
 ## Write a fence
 

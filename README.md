@@ -202,7 +202,7 @@ Every option of [banner()](https://ascii.rest/docs/banners/) and [svg()](https:/
 
 ### Markdown figures
 
-Write an `ascii` fence in your markdown, and `ascii.rest/markdown` draws it in text: on a site through its remark plugin, built in as it is scrolled to, and in a README as a plain fenced block or an animated SVG.
+Write an `ascii` fence in your markdown, and `ascii.rest/markdown` draws it in text: on a site through its remark plugin, built in as it is scrolled to, and in a README as a plain fenced block or an animated SVG. There are 25 figures, among them a headline in banner letters, a sequence of messages, a git graph, a flame graph, a chip's pinout, a QR code, a chess board and a map of the world, each one an ascii.rest piece that plays in React, MDX, any page, an SVG and a terminal.
 
 ````md
 ```ascii headline
@@ -225,7 +225,46 @@ npx ascii.rest md README.src.md --out README.md
 animated ascii art for web pages
 ```
 
-[Markdown figures](https://ascii.rest/docs/markdown/) in the docs.
+Messages between the parts of a system, in PlantUML's arrows, each one travelling its arrow on a page:
+
+````md
+```ascii sequence title="list users"
+browser -> api "GET /users"
+api -> db "select users"
+db --> api "12 rows"
+api --> browser "200 ok"
+```
+````
+
+```text
+╭─ list users ────────────────────────────╮
+│ ╭─────────╮     ╭─────╮          ╭────╮ │
+│ │ browser │     │ api │          │ db │ │
+│ ╰────┬────╯     ╰──┬──╯          ╰─┬──╯ │
+│      │ GET /users  │               │    │
+│      ├────────────>│               │    │
+│      │             │ select users  │    │
+│      │             ├──────────────>│    │
+│      │             │       12 rows │    │
+│      │             │<┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤    │
+│      │      200 ok │               │    │
+│      │<┄┄┄┄┄┄┄┄┄┄┄┄┤               │    │
+╰──────────────────────────── 4 messages ─╯
+```
+
+And a cat with something to say, from an `ascii say` fence holding `a fence in, a figure out.`:
+
+```text
+╭───────────────────────────╮
+│ a fence in, a figure out. │
+╰──┬────────────────────────╯
+    ╲
+     /\_/\
+    ( o.o )
+     > ^ <
+```
+
+[Markdown figures](https://ascii.rest/docs/markdown/) in the docs, and `npx ascii.rest add markdown` copies them into your project.
 
 ## In a terminal
 

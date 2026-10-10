@@ -4,18 +4,16 @@
  * figure with what it draws and the fence that draws it, and where the pieces and the registry are.
  */
 import type { APIRoute } from "astro";
-import { catalog, fenceOf, kinds } from "ascii.rest/markdown";
+import { catalog, fenceOf } from "ascii.rest/markdown";
 import { DOCS } from "../lib/docs";
 import { SITE, pieces } from "../lib/library";
 import { page, section } from "../lib/llms";
 
 const about = (href: string) => page(href).description;
 
-// Each markdown figure built: its name linking its docs, what it draws, where it suits and how it moves, and its first
+// Each markdown figure: its name linking its docs, what it draws, where it suits and how it moves, and its first
 // example as the fence an agent writes.
-const figures = catalog
-  .filter((e) => Object.hasOwn(kinds, e.kind))
-  .flatMap((e) => [`### ${e.kind}`, "", `[${e.kind}](${SITE}/docs/markdown-${e.group}/#${e.kind}): ${e.about}. For ${e.for.join(", ")}; ${e.moves}.`, "", fenceOf(e), ""]);
+const figures = catalog.flatMap((e) => [`### ${e.kind}`, "", `[${e.kind}](${SITE}/docs/markdown-${e.group}/#${e.kind}): ${e.about}. For ${e.for.join(", ")}; ${e.moves}.`, "", fenceOf(e), ""]);
 
 export const GET: APIRoute = () => {
   const rules = section("/docs/", "Rules for AI coding agents");

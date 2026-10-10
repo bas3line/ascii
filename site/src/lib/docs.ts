@@ -36,11 +36,17 @@ export const DOCS = [
     ],
   },
   {
-    // The markdown figures: what they are and how to write one, then a page for each group that has a figure built.
+    // The markdown figures: what they are and how to write one, then a page for each group of them.
     label: "markdown",
     pages: [
       { href: "/docs/markdown/", title: "markdown figures" },
       { href: "/docs/markdown-lettering/", title: "lettering" },
+      { href: "/docs/markdown-ornaments/", title: "ornaments" },
+      { href: "/docs/markdown-machines/", title: "machines" },
+      { href: "/docs/markdown-internals/", title: "inside a system" },
+      { href: "/docs/markdown-tokens/", title: "tokens" },
+      { href: "/docs/markdown-games/", title: "games" },
+      { href: "/docs/markdown-places/", title: "places" },
     ],
   },
   {
