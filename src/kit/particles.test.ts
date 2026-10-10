@@ -10,6 +10,8 @@ import { type Particle, type System, drawParticles, paletteOf, particles, preset
 
 const SIZE = { cols: 64, rows: 24 };
 const NAMES = Object.keys(presets) as (keyof typeof presets)[];
+// A banner in a fade of many colours, for pictures.
+const WORD = banner("ascii", { effect: "still", color: ["#f59e0b", "#ef4444"] });
 
 // The checks scripts/check.ts makes of a frame: rows lines of cols characters, colours inside the palette.
 function contract(p: Piece, times = [0, 0.5, 1, 2.5, 7]) {
@@ -606,7 +608,8 @@ test("every option is checked when the piece is made, saying what to change", ()
   assert.throws(() => loose({}, ok, { wind: 3 }), /particles\(\) takes options third only for a preset/);
   assert.throws(() => particles({ period: -1 }, ok), /particles\(\)'s period takes a number of seconds, 0 for none, not -1/);
   assert.throws(() => particles({ cols: 0 }, ok), /takes whole numbers of columns and rows/);
-  assert.throws(() => particles({ front: 3 as never }, ok), /particles\(\)'s front takes text, or \{ art, at, color, paint, solid \}/);
+  assert.throws(() => particles({ front: 3 as never }, ok), /particles\(\)'s front takes text, a piece, a Surface, or \{ art, at, color, paint, solid \}, not 3/);
+  assert.throws(() => particles({ back: { art: 3 } as never }, ok), /particles\(\)'s back takes text, a piece, a Surface, or \{ art, at, color, paint, solid \}/);
   assert.throws(() => particles({ back: { art: "x", at: "middle" as never } }, ok), /particles\(\)'s back\.at takes a place/);
   assert.throws(() => particles({ front: { art: "x", color: "grey" } }, ok), /front\.color takes #rrggbb or \{ light, dark \}/);
   assert.throws(() => particles({ front: { art: "x", paint: { ab: "#ffffff" } } }, ok), /front\.paint takes one character a key, not "ab"/);
@@ -763,9 +766,18 @@ test("text: particles born on its characters, a burst one on each, drawn as the 
   // A rate: every particle on a character, never on a space.
   const rate = cells(drawn({ emitter: { text: "A B" }, rate: 300, life: 0.4, speed: 0, glyphs: "o" }, 2, 9, 3), "o");
   assert.deepEqual(rate.sort(), [[3, 1], [5, 1]]);
-  // Thrown out, each flies away from the middle of the text.
-  const out = drawn({ emitter: { text: "A   B" }, burst: { every: Infinity }, speed: 10, life: 9 }, 0.5, 30, 5);
+  // Thrown out, each flies away from the middle of the text: a burst of text holds a second first, so the word is seen.
+  const boom: System = { emitter: { text: "A   B" }, burst: { every: Infinity }, speed: 10, life: 9 };
+  assert.equal(drawn(boom, 0.9, 30, 5).toString().split("\n")[2], "            A   B             ");
+  const out = drawn(boom, 1.5, 30, 5);
   assert.ok(cells(out, "A")[0][0] < 12 && cells(out, "B")[0][0] > 18, out.toString());
+  assert.deepEqual(cells(drawn({ ...boom, hold: 0 }, 0.5, 30, 5), "A"), cells(out, "A"));
+  // Its life counts from its birth, the hold included; left to its default, it is 1 to 2 s after the hold.
+  assert.equal(cells(drawn(boom, 8.9, 300, 60), "B").length, 1);
+  assert.equal(cells(drawn(boom, 9.1, 300, 60), "B").length, 0);
+  const plain: System = { emitter: { text: "A   B" }, burst: { every: Infinity }, speed: 10 };
+  assert.equal(cells(drawn(plain, 1.95, 300, 60), "B").length + cells(drawn(plain, 1.95, 300, 60), "A").length, 2);
+  assert.equal(drawn(plain, 3.01, 300, 60).toString().trim(), "");
   // A piece's still frame, such as a banner's, or a grid, is text too.
   const word = banner("hi", { effect: "still", shadow: "none" });
   const blown = particles({ cols: word.meta.cols, rows: word.meta.rows }, { emitter: { text: word }, burst: { every: Infinity }, speed: 0, life: 99 });
@@ -813,6 +825,8 @@ test("the new tools keep a frame to t alone, and quick: bounces with trails, hol
       emitter: "center", rate: 60, life: 4, speed: 4,
       path: (p) => [p.x0 + p.speed * p.age * Math.cos(p.angle + p.age), p.y0 + (p.speed * p.age * Math.sin(p.angle + p.age)) / 2],
     }),
+    particles({ name: "falling" }, [{ emitter: "top", glyphs: "*" }, { emitter: "left", wind: 2, colors: ["#ff0000", "#0000ff"] }]),
+    particles({ name: "sparkle", back: WORD }, { emitter: { text: WORD }, direction: "up", spread: 50, colors: ["#fffbeb", "#f59e0b"] }),
   ];
   for (const p of pieces) {
     contract(p);
@@ -826,4 +840,118 @@ test("the new tools keep a frame to t alone, and quick: bounces with trails, hol
     const ms = (performance.now() - start) / 120;
     assert.ok(ms < 4, `${p.meta.name}: ${ms.toFixed(2)} ms a frame`);
   }
+});
+
+test("drag as small as you like keeps the closed form exact", () => {
+  // The plain formula loses every digit to rounding by drag 1e-9 (a particle 280 rows from where it should be), so a
+  // drag this small must give the path with none.
+  for (const drag of [1e-15, 1e-12, 1e-9, 1e-7, 1e-5]) {
+    const fall = follow(one({ gravity: 20, drag }), 1)!;
+    assert.ok(Math.abs(fall.y - 10) < 1e-3 && Math.abs(fall.vy - 20) < 1e-3, `drag ${drag}: row ${fall.y}, ${fall.vy} cells a second`);
+    const thrown = follow(one({ speed: 10, drag }), 1)!;
+    assert.ok(Math.abs(thrown.x - 20) < 1e-3, `drag ${drag}: column ${thrown.x}`);
+    // Thrown up from 8 cells down at 20 cells a second under gravity 20, the top of its arc is 2 cells above the grid,
+    // so with "die" it is gone, though where it is now is inside.
+    const up = one({ emitter: { point: [10, 4] }, speed: 20, angle: -TAU / 4, gravity: 20, drag, bounds: "die" });
+    assert.equal(follow(up, 1.8), undefined, `drag ${drag}: past the top`);
+    assert.ok(follow({ ...up, bounds: "none" }, 1.8)!.y > 2, `drag ${drag}: inside now`);
+  }
+});
+
+test("from a side with no life, particles cross the whole grid, about as thick at any size", () => {
+  const rows = (sys: System, cols: number, n: number, t = 30) => cells(drawn(sys, t, cols, n), "o").map(([, y]) => y);
+  // What falls from the top reaches the bottom, and from the left the right.
+  assert.ok(Math.max(...rows({ emitter: "top", glyphs: "o" }, 64, 24)) >= 21);
+  assert.ok(Math.max(...cells(drawn({ emitter: "left", glyphs: "o" }, 30, 64, 24), "o").map(([x]) => x)) >= 58);
+  // Gravity alone carries it across too; with neither speed nor gravity it can't, and keeps the usual life.
+  assert.ok(Math.max(...rows({ emitter: "top", glyphs: "o", speed: 0, gravity: 10 }, 64, 24)) >= 21);
+  const still = rows({ emitter: "top", glyphs: "o", speed: 0 }, 64, 24);
+  assert.ok(still.every((y) => y === 0) && still.length > 10 && still.length <= 41, `${still.length} on the top row`);
+  // About as thick at any size: twice the width and height, about four times as many.
+  const small = rows({ emitter: "top", glyphs: "o" }, 64, 24).length, big = rows({ emitter: "top", glyphs: "o" }, 128, 48).length;
+  assert.ok(small > 50 && small < 130 && big / small > 3 && big / small < 5, `${small} at 64 by 24, ${big} at 128 by 48`);
+  // A life of your own is kept, and so is the usual rate with it: 1 s at 2 to 6 cells a second is 3 rows at most.
+  const short = rows({ emitter: "top", glyphs: "o", life: 1 }, 64, 24);
+  assert.ok(short.every((y) => y <= 3) && short.length > 12, `${short.length}, down to row ${Math.max(...short)}`);
+  // In a region, it crosses the region.
+  const s = new Surface(40, 20);
+  drawParticles(s, { emitter: "top", glyphs: "o" }, 30, { region: { x: 5, y: 4, cols: 20, rows: 8 } });
+  const inside = cells(s, "o");
+  assert.ok(inside.every(([x, y]) => x >= 5 && x < 25 && y >= 4 && y < 12) && inside.some(([, y]) => y >= 10));
+  // Fitted when the piece is made, so too many alive throws then: a minute's life at a thousand a second.
+  assert.throws(() => particles({}, { emitter: "top", rate: 1000, speed: 0.5 }), /would keep 60000 particles alive at once/);
+});
+
+test("text: a rate sends sparks off it; a burst with no life lives a second or two after its hold", () => {
+  const sparks = drawn({ emitter: { text: "AB" }, rate: 50, speed: 0, life: 1 }, 3, 10, 3);
+  assert.equal(cells(sparks, "A").length + cells(sparks, "B").length, 0);
+  assert.ok(cells(sparks, "*").length > 0, sparks.toString());
+  // As letters, when asked.
+  assert.ok(cells(drawn({ emitter: { text: "AB" }, rate: 50, speed: 0, life: 1, glyph: (p) => p.char }, 3, 10, 3), "A").length > 0);
+  // Any hold: the life left to its default counts on from the longest.
+  const held = { emitter: { point: [10, 5] }, burst: { every: Infinity, count: 1 }, speed: 0, glyphs: "o", hold: 2 } satisfies System;
+  assert.equal(cells(drawn(held, 2.9), "o").length, 1);
+  assert.equal(cells(drawn(held, 4.01), "o").length, 0);
+});
+
+test("a picture from a piece or a grid, in its own colours, where an emitter of it puts its particles", () => {
+  // A grid in two colours sits in the middle, its colours kept.
+  const surf = Surface.from("ab\ncd", [0, 1, 1, 0], new Palette(["#ff0000", "#00ff00"]));
+  const p = particles({ cols: 6, rows: 4, back: surf }, []);
+  const { text, color } = snapshot(p, 0);
+  assert.equal(text, "      \n  ab  \n  cd  \n      ");
+  const at = (x: number, y: number) => p.meta.palette![color![y * 6 + x]];
+  assert.deepEqual([at(2, 1), at(3, 1), at(2, 2), at(3, 2)], ["#ff0000", "#00ff00", "#00ff00", "#ff0000"]);
+  // A banner in a colour for each theme keeps them, on paper and on a dark page.
+  const word = banner("hi", { effect: "still", shadow: "none", color: { light: "#aa0000", dark: "#ffaaaa" } });
+  const q = particles({ cols: 40, rows: 9, back: word }, []);
+  for (const [paper, want] of [[true, "#aa0000"], [false, "#ffaaaa"]] as const) {
+    const shot = snapshot(q, 0, { paper });
+    const flat = shot.text.replace(/\n/g, "");
+    assert.equal(flat.replace(/\s/g, ""), snapshot(word, 0, { mono: true }).text.replace(/\s/g, ""));
+    for (let i = 0; i < flat.length; i++) if (flat[i] !== " ") assert.equal(q.meta.palette![shot.color![i]], want, `paper ${paper}`);
+  }
+  // The picture and an emitter of the same piece line up: a burst drawing "#" on each character covers it exactly.
+  const covered = snapshot(particles({ back: WORD }, { emitter: { text: WORD }, burst: { every: Infinity }, speed: 0, life: 99, glyphs: "#" }), 1, { mono: true }).text;
+  assert.equal(covered.replace(/[\s#]/g, ""), "");
+  assert.equal(covered.replace(/[^#]/g, "").length, snapshot(WORD, 0, { mono: true }).text.replace(/\s/g, "").length);
+});
+
+test("a picture in more colours than leave room keeps fewer of its own, rather than throwing", () => {
+  // The fade's 30 or so colours, light and dark, and the sparks' 8 come to more than 64: the picture gives way.
+  const own = new Set(WORD.meta.palette);
+  const p = particles({ back: WORD }, { emitter: { text: WORD }, rate: 10, glyphs: " ", colors: { light: ["#b45309", "#fbbf24"], dark: ["#fffbeb", "#f59e0b"] } });
+  assert.ok(p.meta.palette!.length <= 64, `${p.meta.palette!.length} colours`);
+  for (const paper of [true, false]) {
+    const { text, color } = snapshot(p, 1, { paper });
+    const flat = text.replace(/\n/g, "");
+    let shown = 0;
+    for (let i = 0; i < flat.length; i++) if (flat[i] !== " ") assert.ok(own.has(p.meta.palette![color![i]]), `${p.meta.palette![color![i]]} is not the banner's`), shown++;
+    assert.ok(shown > 50);
+    // Still a fade: several of its colours, not one.
+    assert.ok(new Set(Array.from(flat, (c, i) => (c === " " ? -1 : color![i]))).size > 6);
+  }
+});
+
+test("a colour function needs a palette to pick from, and says so", () => {
+  assert.throws(() => particles({}, { emitter: "center", color: () => 0 }), /ascii\.rest: particles\(\)\.color picks each particle's colour from the piece's palette, and it has none: give particles\(\) a palette/);
+  assert.doesNotThrow(() => particles({ palette: ["#ff0000", "#00ff00"] }, { emitter: "center", color: () => 1 }));
+});
+
+test("fireworks fit a bigger sky: more sparks a shell, more shells across a wide one", () => {
+  const burst = (cols: number, rows: number) => presets.fireworks({ cols, rows })[0].burst!;
+  assert.deepEqual([burst(64, 24).every, burst(64, 24).count], [1.4, 40]);
+  const wide = burst(120, 36);
+  assert.equal(wide.count, 60);
+  assert.ok(Math.abs(wide.every - 1.12) < 1e-9, `${wide.every}`);
+  assert.equal(burst(320, 120).count, 80);
+  assert.equal(presets.fireworks({ cols: 120, rows: 36 }, { every: 3, count: 9 })[0].burst!.every, 3);
+});
+
+test("a system is read once, the first time it is drawn: changing it after changes nothing", () => {
+  const sys: System = { emitter: "center", rate: 10, speed: 0, glyphs: "a" };
+  const before = drawn(sys, 1).toString();
+  sys.glyphs = "b";
+  assert.equal(drawn(sys, 1).toString(), before);
+  assert.equal(drawn({ ...sys }, 1).toString(), before.replace(/a/g, "b"));
 });

@@ -25,8 +25,12 @@
  *
  *   // A word that holds for a second, then blows apart, each letter flying as itself.
  *   export default particles({ name: "boom", period: 3 }, {
- *     emitter: { text: "BOOM" }, burst: { every: 3 }, hold: 1, speed: [6, 14], gravity: 12, life: 3,
+ *     emitter: { text: "BOOM" }, burst: { every: 3 }, speed: [6, 14], gravity: 12, life: 3,
  *   });
+ *
+ *   // Sparks rising off a banner: the same piece as the picture behind and as where they are born.
+ *   const word = banner("ascii", { effect: "still" });
+ *   export default particles({ name: "sparks", back: word }, { emitter: { text: word }, direction: "up", spread: 50 });
  *
  * Units. Positions (an emitter's, a particle's x and y, `floor`) are columns
  * and rows of the grid. Speeds, gravity, wind and sway are in cells, a cell
@@ -34,11 +38,12 @@
  * shape of a character), so a burst thrown at the same speed every way is
  * round on the screen rather than twice as tall as it is wide.
  */
-import type { Options } from "../types.ts";
+import type { Options, Piece } from "../types.ts";
 import {
   EMPTY,
   INK,
   NONE,
+  asPiece,
   type Color,
   type KitPiece,
   type MakerSpec,
@@ -56,6 +61,7 @@ import {
   isHex,
   mix,
   piece,
+  rgb,
   snapshot,
   specOf,
   spread,
@@ -84,8 +90,9 @@ export type Place = "center" | "top" | "bottom" | "left" | "right" | "top-left" 
  *
  * `text`: on the characters of a picture, never its spaces: text as you would type it, or a piece, such as a
  * banner("hi"), whose still frame is taken, or a Surface. It sits at `at` ("center"), laid out as a Scenery is. Each
- * particle knows the character it was born on (`char`) and is drawn as it unless `glyphs` or `glyph` say otherwise, and a
- * burst puts one particle on each character, so the picture itself comes apart.
+ * particle knows the character it was born on (`char`). A burst puts one particle on each character and draws it as
+ * that character, unless `glyphs` or `glyph` say otherwise, so the picture itself comes apart; a rate sends sparks off
+ * it, drawn with the glyphs as any other system's are. The picture itself is drawn by giving it as `front` or `back`.
  */
 export type Emitter =
   | Edge
@@ -117,7 +124,7 @@ export interface Particle {
   id: number;
   /** Seconds since it was born. */
   age: number;
-  /** Seconds it lives. */
+  /** Seconds it lives, its hold included. */
   life: number;
   /** age / life: 0 at birth, near 1 as it dies. */
   k: number;
@@ -147,14 +154,20 @@ export interface Particle {
 
 /**
  * A particle system: where particles are born, how many, how they move, and how they look as they age. Every field
- * but `emitter` is optional; the defaults make small stars thrown every way from the emitter, fading "*", "+", ".".
- * Everything can be said in words and plain numbers (seconds, cells, degrees); `angle`, `wind` as a function and the
- * `glyph` and `color` functions are there for when you want the maths.
+ * but `emitter` is optional; the defaults make small stars thrown every way from the emitter, fading "*", "+", ".",
+ * or from a side, a slow fall of them straight across the grid. Everything can be said in words and plain numbers
+ * (seconds, cells, degrees); `angle`, `wind` as a function and the `glyph` and `color` functions are there for when you
+ * want the maths. A system is read once, the first time it is drawn: change it after and nothing changes, so make a new
+ * one instead.
  */
 export interface System {
   /** Where particles are born: "top", "bottom", "left", "right", "everywhere", "center", or a point, line, area or edge. */
   emitter: Emitter;
-  /** Particles born a second, spread evenly with a little jitter: 20. A system has a rate or a burst, not both. */
+  /**
+   * Particles born a second, spread evenly with a little jitter: 20, or from a side whose life is fitted to the grid
+   * (see `life`), one a second for each 10 cells of the side, so it shows about as many at any size. A system has a rate
+   * or a burst, not both.
+   */
   rate?: number;
   /**
    * Instead of a rate: `count` particles at once, every `every` seconds (Infinity for one burst only, which comes
@@ -166,12 +179,17 @@ export interface System {
    * 0, none. From text, a burst is spread evenly over its characters, and `count` is one a character unless you say.
    */
   burst?: { every: number; count?: number; first?: number; scatter?: boolean; rise?: number };
-  /** Seconds a particle lives: [1, 2]. */
+  /**
+   * Seconds a particle lives from its birth, its hold included: [1, 2], counted after the longest hold when there is
+   * one. From a side, by default, as long as it takes to cross the grid at the slower of its speeds (a second to a
+   * minute), so what falls from the top reaches the bottom.
+   */
   life?: Range;
   /**
-   * Seconds a particle holds still where it was born before it is thrown: 0. [low, high] for each to go in its own time,
-   * so a word crumbles letter by letter. Its life counts from its birth, the hold included. A `path` is told the age
-   * from birth and holds as it likes.
+   * Seconds a particle holds still where it was born before it is thrown: 0, or 1 for a burst from text, so the picture
+   * shows before it comes apart. [low, high] for each to go in its own time, so a word crumbles letter by letter. Its
+   * life counts from its birth, the hold included, so a life of 6 ends every grain at 6 s however long each held. A
+   * `path` is told the age from birth and holds as it likes.
    */
   hold?: Range;
   /** Cells a second it is thrown at: [2, 6]. */
@@ -268,15 +286,20 @@ export interface DrawOptions {
 }
 
 /**
- * A picture drawn with the particles, written as text: a skyline under fireworks, a cabin in the snow, a moon. Text alone
- * sits on the bottom row, in the middle, in the piece's ink; the object form says more.
+ * A picture drawn with the particles: a skyline under fireworks typed as text, a cabin in the snow, or a piece such as
+ * banner("hi") with sparks coming off it. Text alone sits on the bottom row, in the middle, in the piece's ink; a piece
+ * or a grid sits in the middle in its own colours, where an emitter of the same text puts its particles. The object
+ * form says more.
  */
 export interface Scenery {
-  /** The picture, as you would type it: blank lines at its start and end are dropped, the rest is laid out as written. */
-  art: string;
-  /** Where it sits on the grid: "bottom" (the middle of the bottom row) by default, or another Place. */
+  /**
+   * The picture: text as you would type it, a piece (its still frame, in its colours) or a Surface. Blank lines at its
+   * start and end are dropped, and the rest is laid out as written.
+   */
+  art: Source;
+  /** Where it sits on the grid: "bottom" (the middle of the bottom row) for text, "center" for a piece or a grid, or another Place. */
   at?: Place;
-  /** Its colour, #rrggbb or { light, dark }: the piece's ink by default. */
+  /** Its colour, #rrggbb or { light, dark }: a piece's or a grid's own colours, else the piece's ink. */
   color?: Themed<string>;
   /** Colours for some of its characters, as #rrggbb or { light, dark }: { "▪": "#fcd34d" } lights the windows. */
   paint?: Readonly<Record<string, Themed<string>>>;
@@ -295,10 +318,10 @@ export interface ParticlesOptions {
    * with a start, or a moving point or a wind function that isn't the same 8 seconds on. Given, it throws for those.
    */
   period?: number;
-  /** A picture drawn in front of the particles, so they pass behind it: text, or a Scenery. */
-  front?: string | Scenery;
+  /** A picture drawn in front of the particles, so they pass behind it: text, a piece, a Surface, or a Scenery. */
+  front?: Source | Scenery;
   /** A picture drawn behind the particles, so they pass in front of it. */
-  back?: string | Scenery;
+  back?: Source | Scenery;
 }
 
 // --- checking a system and filling in its defaults -------------------------------
@@ -447,10 +470,14 @@ interface Plan {
   trailGlyphs: Uint16Array | null;
   trailFade: Fade | null;
   path: ((p: Particle) => readonly [number, number]) | null;
-  // Drawn as the character of text it was born on: an emitter of text with no glyphs or glyph.
+  // Drawn as the character of text it was born on: a burst of text with no glyphs or glyph.
   own: boolean;
   start: number;
   emitter: Emit;
+  // The side particles come from, and whether their life and rate were left to be fitted to the box (see fit).
+  side: Edge | null;
+  fitLife: boolean;
+  fitRate: boolean;
   // The particle handed to glyph and colour functions, the heads drawn after the trails, the palette indices of the
   // colours for the surface last drawn on (and for this frame's theme), and the wind's running totals.
   p: Particle;
@@ -496,22 +523,35 @@ function fadeOf(spec: PaletteSpec, steps: number, what: string): Fade {
 const WORDS = [...EDGES, "everywhere", "center"] as const;
 const KINDS = ["point", "line", "area", "edge", "text"];
 
-// A picture's lines as written, without blank lines at either end or spaces at the ends of lines.
-function linesOf(art: string): string[] {
-  const lines = art.split("\n").map((l) => l.trimEnd());
-  while (lines.length && !lines[0]) lines.shift();
-  while (lines.length && !lines.at(-1)) lines.pop();
-  return lines;
+const isPiece = (v: unknown): v is Piece => !!v && typeof v === "object" && "meta" in v && typeof (v as { default?: unknown }).default === "function";
+const isSource = (v: unknown): v is Source => typeof v === "string" || v instanceof Surface || isPiece(v);
+
+// A picture as its lines, from text as typed, a piece's still frame or a grid, without blank lines at either end or
+// spaces at the ends of lines; `top` is how many blank lines went from above it. With `colours`, a piece or grid in
+// colour also gives its palette and each cell's colour in its frame (`cols` wide) on paper and on a dark page.
+function pictureOf(src: Source, colours: boolean) {
+  let text = src as string, palette: readonly string[] | null = null, light: Uint8Array | null = null, dark: Uint8Array | null = null, cols = 0;
+  if (typeof src !== "string") {
+    const p = asPiece(src);
+    const at = p.meta.still ?? 0;
+    text = snapshot(p, at, { mono: true }).text;
+    if (colours && p.meta.palette) {
+      (palette = p.meta.palette), (cols = p.meta.cols);
+      (light = snapshot(p, at, { paper: true }).color), (dark = snapshot(p, at).color);
+    }
+  }
+  const all = text.split("\n").map((l) => l.trimEnd());
+  let top = 0, end = all.length;
+  while (top < end && !all[top]) top++;
+  while (end > top && !all[end - 1]) end--;
+  return { lines: all.slice(top, end), top, palette, light, dark, cols };
 }
 
 // Text, a piece's still frame or a grid, laid out for an emitter: every character that isn't a space.
 function lettersOf(src: unknown, at: unknown, what: string): Letters {
-  const isPiece = !!src && typeof src === "object" && "meta" in src && typeof (src as { default?: unknown }).default === "function";
-  if (typeof src !== "string" && !(src instanceof Surface) && !isPiece)
-    fail(`${what}.emitter.text takes text, a piece such as banner("hi"), or a Surface, not ${JSON.stringify(src)}`);
+  if (!isSource(src)) fail(`${what}.emitter.text takes text, a piece such as banner("hi"), or a Surface, not ${JSON.stringify(src)}`);
   if (at !== undefined && !PLACES.includes(at as Place)) fail(`${what}.emitter.at takes a place, ${quoted(PLACES)}, not ${JSON.stringify(at)}`);
-  const text = typeof src === "string" ? src : snapshot(src as Source, isPiece ? ((src as { meta: { still?: number } }).meta.still ?? 0) : 0, { mono: true }).text;
-  const lines = linesOf(text);
+  const { lines } = pictureOf(src, false);
   const dx: number[] = [], dy: number[] = [], codes: number[] = [], chars: string[] = [];
   lines.forEach((line, r) => {
     for (let c = 0; c < line.length; c++) {
@@ -597,10 +637,13 @@ function plan(sys: System, n: number, what: string): Plan {
     if (b.rise && letters) fail(`${what}.burst.rise launches a burst from one place, so it can't come from text: drop rise, or use a point`);
     burst = { every: b.every, count: count!, first: b.first ?? 0, scatter: !!b.scatter || !!letters, rise: b.rise ?? 0 };
   }
-  const life = range(sys.life, [1, 2], `${what}.life`, 0, true);
-  const hold = range(sys.hold, [0, 0], `${what}.hold`, 0);
+  // A burst of text holds a second first, so the picture is seen before it comes apart; and with no life given, a
+  // particle lives a second or two after the longest hold, so none dies before it is thrown.
+  const hold = range(sys.hold, letters && burst ? [1, 1] : [0, 0], `${what}.hold`, 0);
+  const life = range(sys.life, sys.path ? [1, 2] : [1 + hold[1], 2 + hold[1]], `${what}.life`, 0, true);
   const speed = range(sys.speed, [2, 6], `${what}.speed`, 0);
-  const angle = headingOf(sys, "edge" in emitter ? emitter.edge : null, what);
+  const side = "edge" in emitter ? emitter.edge : null;
+  const angle = headingOf(sys, side, what);
   const gravity = sys.gravity ?? 0;
   if (!num(gravity)) fail(`${what}.gravity takes a number of cells a second squared, not ${String(sys.gravity)}`);
   let wind = 0, gusts: Plan["gusts"] = null;
@@ -670,7 +713,8 @@ function plan(sys: System, n: number, what: string): Plan {
     logX: bx === "bounce" && !path && !gusts && (bounciness < 1 || (drag > 0 && wind !== 0)) ? newLog() : null,
     logY: by === "bounce" && !path && (bounciness < 1 || gravity !== 0) ? newLog() : null,
     floor: sys.floor ?? null, splash, trail, trailGlyphs, trailFade, path,
-    own: !!letters && sys.glyphs === undefined && sys.glyph === undefined, start, emitter,
+    own: !!letters && !!burst && sys.glyphs === undefined && sys.glyph === undefined, start, emitter,
+    side, fitLife: !!side && sys.life === undefined && !path, fitRate: !!side && sys.life === undefined && !path && sys.rate === undefined && !burst,
     p: { id: 0, age: 0, life: 0, k: 0, x: 0, y: 0, vx: 0, vy: 0, t: 0, rand: 0, back: 0, x0: 0, y0: 0, angle: 0, speed: 0, hold: 0, char: "" },
     heads: { at: new Int32Array(64), ch: new Uint16Array(64), col: new Uint8Array(64), n: 0 },
     inks: null,
@@ -695,11 +739,38 @@ function plan(sys: System, n: number, what: string): Plan {
   return pl;
 }
 
+// The longest a particle of a plan is drawn after its birth: its life, its hold included, and its splash.
+const reachOf = (pl: Plan) => pl.life[1] + pl.splash.length * SPLASH;
+
+/*
+ * Fits a plan from a side, left with no life, to the box it crosses, in columns and rows (a row being A cells): each
+ * particle lives as long as it takes to cross it, thrown straight in at the slower of its speeds (a quarter of the
+ * fastest at least) and helped by gravity (or a steady wind, across), from a second to a minute, after its hold; and,
+ * left with no rate too, one is born a second for each 10 cells of the side. So what falls from the top reaches the
+ * bottom, about as thick at any size.
+ */
+function fit(pl: Plan, box: Box, A: number) {
+  const side = pl.side;
+  if (!side || !pl.fitLife) return;
+  const down = side === "top" || side === "bottom";
+  const height = ((pl.floor !== null ? Math.min(pl.floor, box.y1) : box.y1) - box.y0) * A, width = box.x1 - box.x0;
+  const inward = side === "top" || side === "left" ? 1 : -1;
+  const span = down ? height : width;
+  const v = Math.max(pl.speed[0], pl.speed[1] / 4) + (down ? 0 : inward * pl.wind);
+  const g = down ? inward * pl.gravity : 0;
+  // The time to cover the span, v a + g a^2 / 2 = span; one that never would keeps the usual life and rate.
+  const cross = g > 0 ? (Math.sqrt(v * v + 2 * g * span) - v) / g : v > 0 ? span / v : 0;
+  if (!(cross > 0)) return;
+  const L = Math.min(60, Math.max(1, cross)) + pl.hold[1];
+  if (pl.life[0] !== L || pl.life[1] !== L) pl.life = [L, L];
+  if (pl.fitRate) pl.rate = Math.max(0.1, (down ? width : height) / 10);
+}
+
 // How many particles a plan keeps alive at once, at most, repeating every `period` seconds (0 for none): a frame visits
 // each of them, so past ALIVE it throws. A period can make bursts come more often than `every` says, so this is checked
 // again with it.
 function checkAlive(pl: Plan, period: number) {
-  const reach = pl.life[1] + pl.splash.length * SPLASH;
+  const reach = reachOf(pl);
   let alive: number;
   if (pl.burst) {
     let every = pl.burst.every;
@@ -728,25 +799,39 @@ function plansOf(systems: Systems, what: string): Plan[] {
 
 // --- the motion -------------------------------------------------------------------
 
+// (1 - e^-ka) / k: how far a throw of 1 cell a second carries against drag k by age a. As k goes to 0 it goes to a,
+// and it is worked out so it stays exact on the way: the plain formula loses every digit to rounding by k = 1e-9.
+const carried = (k: number, a: number) => {
+  const ka = k * a;
+  return Math.abs(ka) < 1e-4 ? a * (1 - ka / 2 + (ka * ka) / 6) : -Math.expm1(-ka) / k;
+};
+
+// (a - carried) / k: how far a pull of 1 cell a second squared carries against drag k by age a, going to a^2 / 2.
+const pulled = (k: number, a: number) => {
+  const ka = k * a;
+  return Math.abs(ka) < 1e-4 ? a * a * (0.5 - ka / 6 + (ka * ka) / 24) : (a - carried(k, a)) / k;
+};
+
 // How far a particle has gone along one axis at age a: thrown at v0 through air moving at w, pulled by g, its speed
 // through the air spent by drag k a second. The closed form of dv/da = g - k (v - w); without drag, the parabola.
 function travel(v0: number, g: number, w: number, k: number, a: number): number {
   if (k === 0) return (v0 + w) * a + 0.5 * g * a * a;
-  return (w + g / k) * a + ((v0 - g / k) * (1 - Math.exp(-k * a))) / k;
+  return w * a + v0 * carried(k, a) + g * pulled(k, a);
 }
 
 // Its speed along the axis at age a.
 function pace(v0: number, g: number, w: number, k: number, a: number): number {
   if (k === 0) return v0 + w + g * a;
-  return w + g / k + (v0 - g / k) * Math.exp(-k * a);
+  return w + v0 * Math.exp(-k * a) + g * carried(k, a);
 }
 
-// The age at which its speed along the axis turns through zero, the top of its arc, or -1 if it never does.
+// The age at which its speed along the axis turns through zero, the top of its arc, or -1 if it never does. With
+// drag that is where e^-ka = (g + k w) / (g - k v0); it is found from that ratio less 1, which keeps its digits.
 function apex(v0: number, g: number, w: number, k: number): number {
   if (k === 0) return g !== 0 && -(v0 + w) / g > 0 ? -(v0 + w) / g : -1;
-  const c = w + g / k, d = v0 - g / k;
-  const e = d === 0 ? 0 : -c / d;
-  return e > 0 && e < 1 ? -Math.log(e) / k : -1;
+  const den = g - k * v0;
+  const q = den === 0 ? 0 : (k * (w + v0)) / den;
+  return q > -1 && q < 0 ? -Math.log1p(q) / k : -1;
 }
 
 // A position kept between lo and hi: wrapped round, or bounced back off the ends (folded, so a bounce loses nothing).
@@ -1312,8 +1397,9 @@ function drawPlan(s: Surface, pl: Plan, t: number, period: number, box: Box) {
   // Twinkling is drawn by the tenth of a second; with a period, in a whole number of steps a period.
   const slots = period ? Math.max(1, Math.round(period * 10)) : 0;
   wk.slot = slots ? mod(Math.floor((t / period) * slots), slots) : Math.floor(t * 10);
-  const reach = pl.life[1] + pl.splash.length * SPLASH;
-  if (period) checkAlive(pl, period);
+  fit(pl, box, A);
+  const reach = reachOf(pl);
+  if (period || pl.fitLife || pl.fitRate) checkAlive(pl, period);
   wk.gust = period ? period / Math.max(1, Math.round(period / GUST)) : GUST;
   if (pl.gusts) addWind(pl, t - reach - 1 - (pl.rate ? 1 / pl.rate : 0), t);
   pl.heads.n = 0;
@@ -1412,7 +1498,8 @@ function checkPeriod(v: unknown, what: string): number {
  * with anything else in one piece(). Systems are drawn in order, each over the last; within one, younger particles
  * over older ones and every particle over the trails. Colours are found in the surface's palette, so give the piece
  * paletteOf(systems) as its palette; on a surface with no palette, or in mono, particles are drawn in the ink. Make
- * the systems once, outside the drawing: each is checked the first time it is drawn.
+ * the systems once, outside the drawing: each is checked and read the first time it is drawn, and kept, so changing
+ * one after has no effect.
  *
  *   const snow = presets.snow({ cols: 64, rows: 24 });
  *   export default piece({ name: "snow", cols: 64, rows: 24, palette: paletteOf(snow) }, (t, s) => drawParticles(s, snow, t));
@@ -1430,17 +1517,26 @@ export function drawParticles(s: Surface, systems: Systems, t: number, o: DrawOp
   for (const pl of plans) drawPlan(s, pl, time, period, box);
 }
 
-// Colours as [light, dark] pairs, in order and each pair once, as a palette: one list when every pair is one colour.
-function paletteFrom(pairs: [string, string][], what: string): PaletteSpec | undefined {
+// Colours as [light, dark] pairs, in order and each pair once.
+function distinct(pairs: [string, string][]): [string, string][] {
   const seen = new Set<string>();
-  const list = pairs.filter(([a, b]) => {
+  return pairs.filter(([a, b]) => {
     const key = `${a}|${b}`.toLowerCase();
     return !seen.has(key) && !!seen.add(key);
   });
+}
+
+// Whether any pair is two colours, so the palette needs a list for each theme.
+const twoThemes = (list: [string, string][]) => list.some(([a, b]) => a.toLowerCase() !== b.toLowerCase());
+// How many colours distinct pairs take in a palette: one each, or two each when any pair differs between the themes.
+const total = (list: [string, string][]) => (twoThemes(list) ? list.length * 2 : list.length);
+
+// Colours as [light, dark] pairs, in order and each pair once, as a palette: one list when every pair is one colour.
+function paletteFrom(pairs: [string, string][], what: string): PaletteSpec | undefined {
+  const list = distinct(pairs);
   if (!list.length) return undefined;
-  const themed = list.some(([a, b]) => a.toLowerCase() !== b.toLowerCase());
-  const total = themed ? list.length * 2 : list.length;
-  if (total > 64) fail(`${what} have ${total} colours between them${themed ? ", light and dark" : ""}, past the 64 a piece can have: lower steps, or use fewer fades`);
+  const themed = twoThemes(list);
+  if (total(list) > 64) fail(`${what} have ${total(list)} colours between them${themed ? ", light and dark" : ""}, past the 64 a piece can have: lower steps, or use fewer fades`);
   return themed ? { light: list.map((p) => p[0]), dark: list.map((p) => p[1]) } : list.map((p) => p[0]);
 }
 
@@ -1450,16 +1546,21 @@ function pairsOf(spec: PaletteSpec, what: string): [string, string][] {
   return f.light.map((c, i) => [c, f.dark[i]]);
 }
 
-// The palette for systems and anything else drawn with them (`extra`): your own colours first, else INK when something
-// is drawn with no colour (`plain`) beside something with one, then `extra`'s colours, then every fade's.
-function paletteFor(list: readonly Plan[], own: PaletteSpec | undefined, extra: [string, string][], plain: boolean, what: string): PaletteSpec | undefined {
+// The colours for systems and anything else drawn with them (`extra`), as pairs: your own colours first, else INK when
+// something is drawn with no colour (`plain`) beside something with one, then `extra`'s colours, then every fade's.
+function pairsFor(list: readonly Plan[], own: PaletteSpec | undefined, extra: [string, string][], plain: boolean, what: string): [string, string][] {
   const fades = list.flatMap((pl) => [...pl.fades, ...(pl.trailFade ? [pl.trailFade] : [])]);
   const coloured = fades.length > 0 || extra.length > 0;
   const bare = plain || list.some((pl) => !pl.fades.length && !pl.trailFade);
   const pairs: [string, string][] = own !== undefined ? pairsOf(own, `${what}'s palette`) : coloured && bare ? [[INK.light, INK.dark]] : [];
   pairs.push(...extra);
   for (const f of fades) f.light.forEach((c, i) => pairs.push([c, f.dark[i]]));
-  return paletteFrom(pairs, `${what}: these particles`);
+  return pairs;
+}
+
+// The palette for systems and anything else drawn with them, as pairsFor() lists them.
+function paletteFor(list: readonly Plan[], own: PaletteSpec | undefined, extra: [string, string][], plain: boolean, what: string): PaletteSpec | undefined {
+  return paletteFrom(pairsFor(list, own, extra, plain, what), `${what}: these particles${extra.length ? " and pictures" : ""}`);
 }
 
 /**
@@ -1489,11 +1590,12 @@ const isThemedHex = (v: unknown): v is Themed<string> =>
   isHex(v) || (!!v && typeof v === "object" && isHex((v as { light: unknown }).light) && isHex((v as { dark: unknown }).dark));
 
 // A Scenery checked and laid out on a grid of `size`, or null for none.
-function artOf(v: string | Scenery | undefined, size: Size, what: string): Art | null {
+function artOf(v: Source | Scenery | undefined, size: Size, what: string): Art | null {
   if (v === undefined) return null;
-  const sc: Scenery = typeof v === "string" ? { art: v } : v;
-  if (!sc || typeof sc !== "object" || typeof sc.art !== "string") fail(`${what} takes text, or { art, at, color, paint, solid }, not ${JSON.stringify(v)}`);
-  const at = sc.at ?? "bottom";
+  const sc: Scenery = isSource(v) ? { art: v } : v;
+  if (!sc || typeof sc !== "object" || !isSource(sc.art))
+    fail(`${what} takes text, a piece, a Surface, or { art, at, color, paint, solid }, not ${JSON.stringify(v)}`);
+  const at = sc.at ?? (typeof sc.art === "string" ? "bottom" : "center");
   if (!PLACES.includes(at)) fail(`${what}.at takes a place, ${quoted(PLACES)}, not ${JSON.stringify(sc.at)}`);
   if (sc.color !== undefined && !isThemedHex(sc.color)) fail(`${what}.color takes #rrggbb or { light, dark }, not ${JSON.stringify(sc.color)}`);
   const paint = sc.paint ?? {};
@@ -1504,7 +1606,8 @@ function artOf(v: string | Scenery | undefined, size: Size, what: string): Art |
   }
   if (sc.solid !== undefined && typeof sc.solid !== "boolean") fail(`${what}.solid takes true or false, not ${JSON.stringify(sc.solid)}`);
   const solid = sc.solid ?? true;
-  const lines = linesOf(sc.art);
+  const pic = pictureOf(sc.art, sc.color === undefined);
+  const { lines } = pic;
   const w = Math.max(0, ...lines.map((l) => l.length)), h = lines.length;
   const x0 = Math.floor(SPOT[at][0] * (size.cols - w)), y0 = Math.floor(SPOT[at][1] * (size.rows - h));
   const pairs: [string, string][] = [];
@@ -1530,12 +1633,34 @@ function artOf(v: string | Scenery | undefined, size: Size, what: string): Art |
       const cc = code(ch);
       roofed[c] = 1;
       if (!inside) continue;
-      const k = Object.hasOwn(paint, ch) ? pairIndex(paint[ch]) : base;
+      // A piece or grid in colour keeps each character's own colours, for paper and for a dark page.
+      const i = (r + pic.top) * pic.cols + c;
+      const own = pic.palette && pic.light && pic.dark ? pairIndex({ light: pic.palette[pic.light[i]], dark: pic.palette[pic.dark[i]] }) : base;
+      const k = Object.hasOwn(paint, ch) ? pairIndex(paint[ch]) : own;
       if (k < 0) plain = true;
       at2.push(y * size.cols + x), chs.push(cc), ks.push(k);
     }
   });
   return { at: Int32Array.from(at2), ch: Uint16Array.from(chs), pair: Int16Array.from(ks), pairs, plain, inks: null };
+}
+
+// A picture's colours cut down to `n` pairs, spread evenly through its own in the order they first come (along a fade,
+// most often), each cell taking the nearest of them: for a picture in more colours than the piece has room for.
+function thin(art: Art, n: number) {
+  if (art.pairs.length <= n) return;
+  const keep = Array.from({ length: n }, (_, i) => art.pairs[Math.round((i * (art.pairs.length - 1)) / (n - 1))]);
+  const far = (a: string, b: string) => rgb(a).reduce((sum, v, i) => sum + (v - rgb(b)[i]) ** 2, 0);
+  const to = art.pairs.map(([l, d]) => {
+    let best = 0, bd = Infinity;
+    keep.forEach(([kl, kd], k) => {
+      const dd = far(l, kl) + far(d, kd);
+      if (dd < bd) (bd = dd), (best = k);
+    });
+    return best;
+  });
+  art.pair = art.pair.map((k) => (k < 0 ? k : to[k]));
+  art.pairs = keep;
+  art.inks = null;
 }
 
 // Draws a laid out picture into s, in its colours on a coloured piece.
@@ -1620,12 +1745,26 @@ export function particles<O extends Options = Options>(
     const odd = plans.find((pl) => unlike(pl, period));
     if (odd && spec?.period !== undefined) fail(`${odd.what} can't repeat every ${period} seconds as period asks: ${unlike(odd, period)}. Change that, or give period: 0`);
     if (odd) period = 0;
-    for (const pl of plans) checkAlive(pl, period);
+  }
+  // Fitted to the grid now, as each frame will fit them, so too many alive throws here and not on the first frame.
+  for (const pl of plans) {
+    fit(pl, { x0: 0, x1: cols, y0: 0, y1: rows }, full.cell ?? 2);
+    checkAlive(pl, period);
   }
   const back = artOf(spec?.back, size, "particles()'s back");
   const front = artOf(spec?.front, size, "particles()'s front");
   const arts = [back, front].filter((a): a is Art => !!a);
-  const palette = paletteFor(plans, full.palette, arts.flatMap((a) => a.pairs), arts.some((a) => a.plain), "particles()");
+  // A picture in more colours than leave room for the particles' keeps fewer of its own, a quarter fewer at a time.
+  const plain = arts.some((a) => a.plain);
+  const crowded = () => total(distinct(pairsFor(plans, full.palette, arts.flatMap((a) => a.pairs), plain, "particles()"))) > 64;
+  for (let n = Math.max(0, ...arts.map((a) => a.pairs.length)); n > 2 && crowded(); ) {
+    n = Math.max(2, Math.floor(n * 0.75));
+    for (const a of arts) thin(a, n);
+  }
+  const palette = paletteFor(plans, full.palette, arts.flatMap((a) => a.pairs), plain, "particles()");
+  // A colour function picks from the palette, so without one it would be ignored without a word.
+  const blind = palette ? undefined : plans.find((pl) => pl.color);
+  if (blind) fail(`${blind.what}.color picks each particle's colour from the piece's palette, and it has none: give particles() a palette, such as palette: ["#f97316", "#facc15"]`);
   const { period: _p, front: _f, back: _b, ...rest } = full as typeof full & ParticlesOptions;
   const o = period ? { period } : {};
   return piece<O>({ ...rest, palette, ...(period && rest.loop === undefined ? { loop: period } : {}) }, (t, s) => {
@@ -1694,9 +1833,9 @@ export interface SparksOptions {
 
 /** fireworks' options. */
 export interface FireworksOptions {
-  /** Seconds between shells: 1.4. */
+  /** Seconds between shells: 1.4 at 64 by 24, less in a sky wider than it is tall, so several burst across it. */
   every?: number;
-  /** Sparks a shell: 40. */
+  /** Sparks a shell: 40 at 64 by 24, more for the bigger shells of a bigger sky, up to 80. */
   count?: number;
   /** Seconds a shell climbs before it bursts: 1.1. 0 to burst out of nothing. */
   rise?: number;
@@ -1911,13 +2050,15 @@ function sparks(size: Size, o?: SparksOptions): System[] {
  */
 function fireworks(size: Size, o?: FireworksOptions): System[] {
   const { cols, rows } = sizeOf(size, "presets.fireworks");
-  const { every = 1.4, count = 40, rise = 1.1, colors = ["#ef4444", "#facc15", "#22c55e", "#38bdf8", "#e879f9"] } = optionsOf(o, "presets.fireworks");
+  // A shell's size goes with the sky: the smaller of its width and its height in cells. A bigger shell has more sparks
+  // round it, up to twice as many, and a sky wider than its shells are has them come more often, so it never looks empty.
+  const r = Math.min(cols, rows * 2);
+  const { every = 1.4 * Math.min(1, (4 / 3) * (r / cols)), count = Math.round(40 * Math.min(2, Math.max(1, r / 48))), rise = 1.1, colors = ["#ef4444", "#facc15", "#22c55e", "#38bdf8", "#e879f9"] } =
+    optionsOf(o, "presets.fireworks");
   if (!num(every) || every <= 0) fail(`presets.fireworks' every takes seconds between shells above 0, not ${String(every)}`);
   if (!Number.isInteger(count) || count < 1) fail(`presets.fireworks' count takes a whole number of sparks of 1 or more, not ${String(count)}`);
   if (!num(rise) || rise < 0) fail(`presets.fireworks' rise takes seconds of 0 or more, not ${String(rise)}`);
   if (!Array.isArray(colors) || !colors.length || !colors.every(isHex)) fail(`presets.fireworks' colors takes a list of #rrggbb, one for each shell in turn, not ${JSON.stringify(colors)}`);
-  // A shell's size goes with the sky: the smaller of its width and its height in cells.
-  const r = Math.min(cols, rows * 2);
   return [
     {
       emitter: { area: { x: cols * 0.2, y: rows * 0.24, cols: cols * 0.6, rows: rows * 0.22 } },
