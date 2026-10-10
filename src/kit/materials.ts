@@ -57,8 +57,10 @@ import {
 
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 
-// A value as an error shows it: NaN as NaN, a string in quotes, a list item by item, an object as JSON where it can be.
+// A value as an error shows it: NaN as NaN, a string in quotes, a list item by item, an object as JSON where it can be,
+// and a function by its name, since a maker passed without calling it (cup for cup()) is the usual slip.
 function show(v: unknown): string {
+  if (typeof v === "function") return v.name ? `${v.name}, a function: call it, ${v.name}()` : "a function";
   if (typeof v !== "object" || v === null) return typeof v === "string" ? JSON.stringify(v) : String(v);
   if (Array.isArray(v)) return `[${v.map(show).join(", ")}]`;
   try {
@@ -174,7 +176,7 @@ export const palettes = {
   lamp: { light: ["#fcd34d", "#d97706", "#92400e"], dark: ["#92400e", "#f59e0b", "#fef3c7"] },
   ceramic: { light: ["#374151", "#9ca3af", "#6b7280"], dark: ["#e5e7eb", "#6b7280", "#ffffff"] },
   wax: { light: ["#92400e", "#d6b98c", "#78350f"], dark: ["#fef3c7", "#a8a29e", "#ffffff"] },
-  moon: { light: ["#a16207", "#ca8a04", "#854d0e"], dark: ["#fef9c3", "#fde68a", "#ffffff"] },
+  moon: { light: ["#a16207", "#ca8a04", "#ca8a04"], dark: ["#fef9c3", "#fde68a", "#ffffff"] },
   night: { light: ["#334155", "#94a3b8", "#475569"], dark: ["#cbd5e1", "#475569", "#f1f5f9"] },
   stars: { light: ["#94a3b8", "#334155"], dark: ["#64748b", "#f8fafc"] },
   rose: { light: ["#be123c", "#e11d48", "#9f1239"], dark: ["#e11d48", "#fb7185", "#ffe4e6"] },
@@ -193,13 +195,14 @@ export const palettes = {
 /** The name of a palette in `palettes`. */
 export type PaletteName = keyof typeof palettes;
 
-// What a material or an emission takes as `colors`: a palette's name, stops for both pages, or { light, dark }.
-type Colors = PaletteName | PaletteSpec;
+/** What a material or an emission takes as `colors`: a palette's name, one colour, stops for both pages, or { light, dark }. */
+export type Colors = PaletteName | `#${string}` | PaletteSpec;
 
 // A material's colours: the named palette or the user's, spread along their fade to the n roles it draws with.
 function colorsOf(what: string, v: unknown, def: PaletteName, n: number): Duo {
   let spec: PaletteSpec;
   if (v === undefined) spec = palettes[def];
+  else if (isHex(v)) spec = [v];
   else if (typeof v === "string") {
     if (!Object.hasOwn(palettes, v)) fail(`${what} takes a palette's name, one of ${and(Object.keys(palettes))}, or colours as #rrggbb, not ${JSON.stringify(v)}`);
     spec = palettes[v as PaletteName];
@@ -581,7 +584,10 @@ export const area = {
    */
   where(test: (x: number, y: number, cols: number, rows: number) => boolean, box?: { x: number; y: number; cols: number; rows: number }): Area {
     if (typeof test !== "function") fail("area.where takes a function (x, y, cols, rows) => true for a point in the area");
-    if (box !== undefined) numbers("area.where's box", box as unknown as Record<string, number>, ["cols", "rows"]);
+    if (box !== undefined) {
+      if (!isObject(box)) fail(`area.where's box takes { x, y, cols, rows } in cells, not ${show(box)}`);
+      numbers("area.where's box", { x: box.x, y: box.y, cols: box.cols, rows: box.rows }, ["cols", "rows"]);
+    }
     return makeArea((cols, rows) => ({
       test: (x, y) => !!test(x, y, cols, rows),
       x0: box ? box.x : 0,
@@ -912,8 +918,9 @@ export function star(o?: ShapeOpts<{ points?: number; inner?: number }>): Area {
 
 /** A crescent moon, lit on its left: `flip` lights its right. Pale yellow by default. */
 export function moon(o?: ShapeOpts): Area {
-  // a disc less a slightly higher one to its right: a crescent thick enough to read at a few rows, its horns tipped up
-  return unitShape("moon", o, [], 1, { size: "small", at: "top-right" }, (px, py) => px * px + py * py <= 0.25 && (px - 0.3) ** 2 + (py + 0.06) ** 2 > 0.16, {
+  // a disc less one as big a third of the way to its right: a crescent thick enough to read at a few rows, its two horns
+  // coming to points above and below
+  return unitShape("moon", o, [], 1, { size: "small", at: "top-right" }, (px, py) => px * px + py * py <= 0.25 && (px - 0.33) ** 2 + py * py > 0.25, {
     material: () => solid({ colors: "moon", char: "█" }),
   });
 }
@@ -1295,7 +1302,10 @@ export interface Paint {
   readonly under: { readonly chars: Uint16Array; readonly colors: Uint8Array };
 }
 
-/** Draws a material's frame at t seconds. */
+/**
+ * Draws a material's frame at t seconds. For one with a period, t is brought into it first, 0 up to the period and
+ * round again, so it repeats exactly.
+ */
 export type MaterialDraw = (t: number, p: Paint) => void;
 
 /**
@@ -1339,11 +1349,24 @@ function tiled(x: number, y: number, wx: number, wy: number, seed: number): numb
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 
+// t brought into its period, from 0 up to it, so frames a whole period apart get the same t to the last bit and a part
+// repeats exactly, not only to within floating point at the edge of a band. A period of Infinity, or none, leaves t be.
+function lap(t: number, period: number | undefined): number {
+  if (period === undefined || !Number.isFinite(period)) return t;
+  const k = t / period;
+  // the share of the way round to a billionth: t / period a hair either side of a value comes out as that value
+  const f = Math.round((k - Math.floor(k)) * 1e9) / 1e9;
+  return f >= 1 ? 0 : f * period;
+}
+
 // --- the materials ---
 
 /** What every material and emission takes: its colours. Those that move take a `period` too, said on each. */
 export interface MaterialOptions {
-  /** A palette's name from `palettes`, colours as #rrggbb for both pages (spread along their fade to what it needs), or { light, dark }. */
+  /**
+   * A palette's name from `palettes`, one colour as #rrggbb, colours as #rrggbb for both pages (spread along their fade
+   * to what it needs), or { light, dark }.
+   */
   colors?: Colors;
 }
 
@@ -1876,9 +1899,10 @@ export function lava(o?: MaterialOptions & {
   return makeMaterial("lava", colors, period, (c) => {
     const { cols } = c;
     const w = Math.max(1, c.x1 - c.x0), h = Math.max(1, c.y1 - c.y0);
+    // blobs a quarter to two fifths of the way across, so they fill the lamp and merge as they pass
     const blobs = Array.from({ length: count }, (_, k) => ({
       u: 0.3 + 0.4 * hash(k, seed, 1),
-      r: Math.max(0.8, w * (0.1 + 0.08 * hash(k, seed, 2))),
+      r: Math.max(0.8, w * (0.13 + 0.07 * hash(k, seed, 2))),
       turns: 1 + (hash(k, seed, 3) > 0.6 ? 1 : 0),
       phase: hash(k, seed, 4) * TAU,
     }));
@@ -2018,6 +2042,7 @@ export function solid(o?: MaterialOptions & {
 }): Material {
   const p = optionsOf("solid()", o, ["colors", "char", "ramp", "edge"]);
   const colors = colorsOf("solid.colors", p.colors, "ink", 3);
+  if (p.char !== undefined && p.ramp !== undefined) fail("solid takes a char or a ramp, not both: a char fills it flat, a ramp shades it from the edge in");
   const chars = p.ramp !== undefined ? rampOf("solid.ramp", p.ramp, "█") : charOf("solid.char", p.char, "█");
   const edge = boolOf("solid.edge", p.edge, false);
   return makeMaterial("solid", colors, undefined, (c) => {
@@ -2208,11 +2233,11 @@ export interface MaterialCell {
 /**
  * A material of your own: a function of each cell and t that returns its character, or [character, colour index], or
  * "" (or null) to leave the cell as it is. Colour indices count from 0 in `colors`. A function that takes t moves:
- * give it `period` so the picture loops.
+ * give it `period` so the picture loops, and t then runs from 0 up to the period and round again.
  *
  *   const checks = material((c, t) => ((c.x + c.y + Math.floor(t * 2)) % 2 ? "#" : "."), { period: 1 });
  */
-export function material(draw: (cell: MaterialCell, t: number) => string | readonly [string, number] | null | undefined, o?: MaterialOptions & {
+export function material(draw: (cell: MaterialCell, t: number) => string | readonly [string, number?] | null | undefined, o?: MaterialOptions & {
   /** Its name, for errors: "material". */
   name?: string;
   /** How many colours `colors` is spread to: as many as it lists. */
@@ -2246,13 +2271,29 @@ export function material(draw: (cell: MaterialCell, t: number) => string | reado
         cell.edge = edges[k];
         const r = draw(cell, t);
         if (r === null || r === undefined || r === "") return;
-        const [ch, col] = typeof r === "string" ? [r, 0] : r;
-        if (typeof ch !== "string" || !ch) return;
-        const cc = ch.charCodeAt(0);
-        if (cc < 32 || (cc >= 0xd800 && cc <= 0xdfff)) fail(`${name} drew ${JSON.stringify(ch)}: a cell takes one printable character`);
-        pt.s.put(i, cc, Number.isInteger(col) && col >= 0 && col < n ? pt.color(col) : NONE);
+        if (typeof r !== "string" && !(Array.isArray(r) && typeof r[0] === "string"))
+          fail(`${name} gave ${show(r)}: a material's function returns a character, [character, colour index] or ""`);
+        const ch = typeof r === "string" ? r : r[0];
+        if (!ch) return;
+        pt.s.put(i, printable(name, ch), colorIn(name, typeof r === "string" ? 0 : r[1], n, pt));
       });
   });
+}
+
+// A character a function of yours drew, as its code: one printable character, as a cell takes.
+function printable(name: string, ch: string): number {
+  const cc = ch.charCodeAt(0);
+  if (cc < 32 || (cc >= 0x7f && cc <= 0x9f) || (cc >= 0xd800 && cc <= 0xdfff))
+    fail(`${name} drew ${JSON.stringify(ch)}: a cell takes one printable character, and U+${cc.toString(16).toUpperCase().padStart(4, "0")} is not one`);
+  return cc;
+}
+
+// A colour index a function of yours gave, 0 to n - 1 of its colours (0 when it gave none), as this page's palette index.
+function colorIn(name: string, col: unknown, n: number, pt: Paint): number {
+  if (col === undefined) return pt.color(0);
+  if (!Number.isInteger(col) || (col as number) < 0 || (col as number) >= n)
+    fail(`${name} gave colour ${show(col)}: it has ${n === 1 ? "one colour, 0" : `${n} colours, 0 to ${n - 1}`}, from its colors (give it more colors for more)`);
+  return pt.color(col as number);
 }
 
 // --- emissions: what something gives off -------------------------------------------------------
@@ -2288,14 +2329,15 @@ const isEmission = (v: unknown): v is Emission => isObject(v) && typeof v.emits 
 
 // Calls `fn` for each particle alive at t: particle i is born at i / rate plus a jitter, and its own random draws come
 // from hash(seed, i mod n), n being the births in a period, so the whole stream repeats every period exactly. Births
-// before 0 count too, so the first frame is already under way.
+// before 0 count too, so the first frame is already under way. A particle's age is 0 up to its life, never quite it,
+// so age / life stays below 1.
 function eachParticle(t: number, rate: number, period: number, life: number, seed: number, fn: (k: number, age: number) => void) {
   if (!(rate > 0)) return;
   const n = Math.max(1, Math.round(rate * period)), r = n / period;
   for (let i = Math.floor((t - life) * r) - 1; i <= Math.floor(t * r); i++) {
     const k = ((i % n) + n) % n;
     const age = t - (i + 0.85 * hash(seed, k, 101)) / r;
-    if (age >= 0 && age <= life) fn(k, age);
+    if (age >= 0 && age < life) fn(k, age);
   }
 }
 
@@ -2616,7 +2658,7 @@ export interface Emitted {
   age: number;
   /** Seconds it lives. */
   life: number;
-  /** age / life: 0 at birth, near 1 as it goes. */
+  /** age / life: 0 at birth, near 1 as it goes, never 1, so `chars[Math.floor(k * chars.length)]` is always a character. */
   k: number;
   /** Where it was born, in cells: x columns across and y rows down. */
   x: number;
@@ -2632,7 +2674,8 @@ export interface Emitted {
  * An emission of your own: particles born at `rate` a second where it comes from, each living `life` seconds, and a
  * function saying where each one is and what it looks like: [x, y, character], or [x, y, character, colour index], or
  * null to hide it. It is born along the top of where it comes from (`birth`), or at the point given; within an area
- * given as `inside`, it is drawn only inside it. Every frame depends only on t, and the stream repeats every `period`.
+ * given as `inside`, it is drawn only inside it. Every frame depends only on t, and the stream repeats every `period`:
+ * the t your function gets runs from 0 up to the period and round again.
  *
  *   const fireflies = emission((p) => [p.x + 3 * Math.sin(p.age * 2 + p.random(1) * 6), p.y - p.age, p.k < 0.5 ? "*" : "."], { birth: "anywhere" });
  */
@@ -2701,10 +2744,7 @@ export function emission(draw: (p: Emitted, t: number) => readonly [number, numb
           if (x < 0 || x >= cols || y < 0 || y >= rows || !r[2]) return;
           const i = y * cols + x;
           if (sp.inside && !sp.inside.inside[i]) return;
-          const cc = r[2].charCodeAt(0);
-          if (cc < 32 || (cc >= 0x7f && cc <= 0x9f) || (cc >= 0xd800 && cc <= 0xdfff)) fail(`${name} drew ${JSON.stringify(r[2])}: a cell takes one printable character`);
-          const col = r[3];
-          pt.s.put(i, cc, col === undefined ? pt.color(0) : Number.isInteger(col) && col >= 0 && col < n ? pt.color(col) : NONE);
+          pt.s.put(i, printable(name, r[2]), colorIn(name, r[3], n, pt));
         });
       };
     },
@@ -2792,8 +2832,8 @@ export interface PartOptions {
   /**
    * "bob" up and down (an ice cube floating), "sway" side to side, "swim" across its room and back, turning to face
    * the way it goes (a fish, which faces right), or "drift" right across the picture and round again (a cloud). Or a
-   * function of your own, t => [dx, dy]: give it `period` too, the seconds it takes to come round, or the picture will
-   * not loop. "none" by default.
+   * function of your own, t => [dx, dy]: give it `period` too, the seconds it takes to come round (t then runs from 0
+   * up to it and round again), or the picture will not loop. "none" by default.
    */
   move?: Move | MoveFn;
   /** How far, in cells: bob 1, sway 2, swim across the room it was placed in, drift the picture's width. */
@@ -2902,6 +2942,7 @@ function frameWindow(placed: Placed, parts: readonly Placed[], about: number | u
 export function shape(where: Area, what?: Material | PartOptions, o?: PartOptions): Part {
   areaOf("shape", where);
   if (isArea(what) && !isMaterial(what)) fail("shape takes a material second, not another area: give each area a shape() of its own, or join them with union()");
+  if (isEmission(what) && !isMaterial(what)) fail(`shape takes a material second, and ${what.name} is an emission: send it out with emit(${what.name}(), { from: area })`);
   if (what !== undefined && !isMaterial(what) && isObject(what) && o === undefined) (o = what as PartOptions), (what = undefined);
   const m = what ?? where.material?.() ?? solid();
   if (!isMaterial(m)) fail(`shape takes a material second, such as water(), glass() or solid(), not ${show(what)}`);
@@ -2909,6 +2950,9 @@ export function shape(where: Area, what?: Material | PartOptions, o?: PartOption
   const own = typeof p.move === "function" ? (p.move as MoveFn) : null;
   const move = own ? "own" : wordOf("shape's move", p.move, ["none", "bob", "sway", "swim", "drift"] as const, "none");
   const amount = p.amount === undefined ? undefined : numberOf("shape's amount", p.amount, 1, 0, 320);
+  // how far and how often belong to a move: without one they would do nothing, so say so
+  if (move === "none" && (p.amount !== undefined || p.period !== undefined))
+    fail(`shape's ${p.amount !== undefined ? "amount" : "period"} is for a move: give it move "bob", "sway", "swim" or "drift", or a function of your own`);
   // a move of your own with no period moves on without coming round, so the picture sets no loop
   const period = move === "none" ? undefined : move === "own" ? (p.period === undefined ? Infinity : periodOf("shape's period", p.period, 4)) : periodOf("shape's period", p.period, MOVES[move]);
   return {
@@ -2921,7 +2965,10 @@ export function shape(where: Area, what?: Material | PartOptions, o?: PartOption
       // a shape of parts draws each part in turn, each outlined on its own
       const parts = (where.pieces?.length ? where.pieces : [where]).map((a) => a.place(cols, rows));
       const all = (draws: MaterialDraw[]): MaterialDraw => (draws.length === 1 ? draws[0] : (t, pt) => draws.forEach((d) => d(t, pt)));
-      if (move === "none") return all(parts.map((q) => m.prepare(cellsOf(q, cols, rows))));
+      if (move === "none") {
+        const draw = all(parts.map((q) => m.prepare(cellsOf(q, cols, rows))));
+        return (t, pt) => draw(lap(t, m.period), pt);
+      }
       const f = placed.frame ?? { x0: 0, y0: 0, x1: cols, y1: rows };
       const w = placed.x1 - placed.x0;
       const reach = amount ?? (move === "bob" ? 1 : move === "sway" ? 2 : move === "swim" ? Math.max(0, Math.floor((f.x1 - f.x0 - w) / 2) - 1) : cols);
@@ -2932,12 +2979,14 @@ export function shape(where: Area, what?: Material | PartOptions, o?: PartOption
       const windowOf = (turned: boolean) => (windows[+turned] ??= frameWindow(placed, parts, turned ? cx : undefined, m, cols, rows, all));
       return (t, pt) => {
         let dx = 0, dy = 0, turn = false;
+        // the move's time and the material's, each brought into its own period
+        const mt = lap(t, period);
         if (own) {
-          const r = own(t);
-          if (!Array.isArray(r) || !Number.isFinite(r[0]) || !Number.isFinite(r[1])) fail(`shape's move gave ${show(r)} at t = ${t}: a move of your own returns [dx, dy] in cells, or [dx, dy, true] turned round`);
+          const r = own(mt);
+          if (!Array.isArray(r) || !Number.isFinite(r[0]) || !Number.isFinite(r[1])) fail(`shape's move gave ${show(r)} at t = ${mt}: a move of your own returns [dx, dy] in cells, or [dx, dy, true] turned round`);
           (dx = Math.round(r[0])), (dy = Math.round(r[1])), (turn = r[2] === true);
         } else {
-          const k = fract(t / (period as number));
+          const k = mt / (period as number);
           if (move === "bob") dy = Math.round(reach * Math.sin(TAU * k));
           else if (move === "sway") dx = Math.round(reach * Math.sin(TAU * k));
           else if (move === "swim") {
@@ -2946,10 +2995,10 @@ export function shape(where: Area, what?: Material | PartOptions, o?: PartOption
             turn = Math.cos(TAU * k) < 0;
           } else dx = Math.round(k * reach);
         }
-        const win = windowOf(turn);
-        win.lay(t, pt, dx, dy);
+        const win = windowOf(turn), at = lap(t, m.period);
+        win.lay(at, pt, dx, dy);
         // drifting off the right, it comes back in from the left
-        if (move === "drift" && reach > 0) win.lay(t, pt, dx - reach, dy);
+        if (move === "drift" && reach > 0) win.lay(at, pt, dx - reach, dy);
       };
     },
   };
@@ -2981,7 +3030,8 @@ export function emit(what: Emission, o?: EmitOptions): Part {
         const a = f as Anchor;
         point = [a.endsWith("left") ? 0.5 : a.endsWith("right") ? cols - 0.5 : cols / 2, a.startsWith("top") ? 0 : a.startsWith("bottom") ? rows : rows / 2];
       }
-      return what.emits({ from: isArea(f) ? cellsOf(f, cols, rows) : null, point, inside: p.inside ? cellsOf(p.inside, cols, rows) : null, cols, rows });
+      const draw = what.emits({ from: isArea(f) ? cellsOf(f, cols, rows) : null, point, inside: p.inside ? cellsOf(p.inside, cols, rows) : null, cols, rows });
+      return (t, pt) => draw(lap(t, what.period), pt);
     },
   };
 }
@@ -3009,6 +3059,7 @@ function partsOf(what: string, parts: unknown): readonly Part[] {
     if (isPart(part)) return;
     // the parts a picture is made of, said for what was given instead
     const n = `${what}'s part ${i + 1}`;
+    if (typeof part === "function") fail(`${n} is ${show(part)}, and give what it makes to shape() or emit()`);
     if (isArea(part)) fail(`${n} is an area: draw it with shape(area), or shape(area, material)`);
     if (isEmission(part)) fail(`${n} is an emission: send it out with emit(${part.name}(), { from: area })`);
     if (isMaterial(part)) fail(`${n} is a material: fill an area with it, shape(area, ${part.name}())`);
@@ -3077,8 +3128,8 @@ function stage(parts: readonly Part[], cols: number, rows: number, maps: (k: num
   };
 }
 
-// What drawParts() has set up for each grid it has drawn into.
-const staged = new WeakMap<Surface, { parts: readonly Part[]; draw: (t: number, s: Surface) => void }>();
+// What drawParts() has set up for each grid it has drawn into, for each list of parts drawn there.
+const staged = new WeakMap<Surface, WeakMap<readonly Part[], (t: number, s: Surface) => void>>();
 
 /**
  * Draws parts into a grid you already have, at t, over what is there: for mixing materials with your own drawing in
@@ -3093,8 +3144,11 @@ const staged = new WeakMap<Surface, { parts: readonly Part[]; draw: (t: number, 
  */
 export function drawParts(s: Surface, parts: readonly Part[], t: number): void {
   if (!(s instanceof Surface)) fail("drawParts takes the grid to draw into first, the s a piece() drawing is given");
-  let st = staged.get(s);
-  if (!st || st.parts !== parts) {
+  let lists = staged.get(s);
+  if (!lists) staged.set(s, (lists = new WeakMap()));
+  // set up once for each list of parts, so two lists drawn into one grid each keep theirs
+  let draw = Array.isArray(parts) ? lists.get(parts) : undefined;
+  if (!draw) {
     partsOf("drawParts", parts);
     const pal = s.palette;
     const maps = parts.map((part) => {
@@ -3102,10 +3156,10 @@ export function drawParts(s: Surface, parts: readonly Part[], t: number): void {
       const at = (list: readonly string[], paper: boolean) => Uint8Array.from(list, (c) => (pal ? pal.index(c, paper) : NONE));
       return [at(light, true), at(dark, false)];
     });
-    st = { parts, draw: stage(parts, s.cols, s.rows, (k, paper) => maps[k][paper ? 0 : 1]) };
-    staged.set(s, st);
+    draw = stage(parts, s.cols, s.rows, (k, paper) => maps[k][paper ? 0 : 1]);
+    lists.set(parts, draw);
   }
-  st.draw(Number.isFinite(t) ? t : 0, s);
+  draw(Number.isFinite(t) ? t : 0, s);
 }
 
 const SPEC_KEYS = ["name", "note", "category", "cols", "rows", "fps", "ground", "loop", "still", "clock", "options", "clear", "palette", "ink", "cell"];
@@ -3121,6 +3175,7 @@ export function picture<O extends Options = Options>(parts: readonly Part[], spe
   const sp = optionsOf("picture()'s spec", spec, SPEC_KEYS);
   if (sp.palette !== undefined || sp.ink !== undefined) fail("picture() makes its palette from its parts' colours: give each material `colors` instead of a palette or an ink");
   if (sp.cell !== undefined && sp.cell !== 2) fail(`picture() draws for cells twice as tall as wide, so its cell can only be 2, not ${show(sp.cell)}`);
+  if (sp.clear !== undefined && sp.clear !== true) fail("picture() empties its grid before each frame, so a frame depends only on t: leave clear out");
   const fixed = parts.every((part) => part.extent);
   let size = { cols: 64, rows: 24 };
   if (fixed && sp.cols === undefined && sp.rows === undefined) {

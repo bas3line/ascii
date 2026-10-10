@@ -104,13 +104,12 @@ const drawn = (p: Piece, t = 0) => {
 };
 const count = (a: Area, cols: number, rows: number) => cellsOf(a, cols, rows).list.length;
 
-// Frames a whole period apart are the same, but for at most a few cells where floating point rounds t / period the
-// other way right at the edge of a band (fract(9.7 / 4) is not quite fract(1.7 / 4)).
+// Frames a whole period apart are the same, character for character and colour for colour: each part's t is brought
+// into its period before it draws, so floating point cannot round t / period the other way at the edge of a band
+// (fract(9.7 / 4) is not quite fract(1.7 / 4)).
 function sameAfterPeriod(a: { text: string; color: Uint8Array | null }, b: { text: string; color: Uint8Array | null }, what: string) {
-  let differ = 0;
-  for (let i = 0; i < a.text.length; i++) if (a.text[i] !== b.text[i] || (a.color && b.color && a.color[i] !== b.color[i])) differ++;
-  assert.equal(a.text.length, b.text.length, what);
-  assert.ok(differ <= 3, `${what}: ${differ} cells differ`);
+  assert.equal(a.text, b.text, what);
+  assert.deepEqual(a.color, b.color, `${what}: colours`);
 }
 
 test("every named palette has colours for both pages", () => {
@@ -819,6 +818,89 @@ test("a cloud is drawn as ascii clouds are: puffs over a flat base, round at the
   }
   assert.ok(outside > 6, `${outside} cells of glow`);
   assert.throws(() => fire({ glow: -1 }), /fire\.glow takes a number from 0 to 6, not -1/);
+});
+
+test("every example repeats exactly on its loop, at every frame svg() samples, a loop and three loops on", () => {
+  // before each part's t was brought into its period, the house differed in 16 of these frames and the aquarium in 63
+  for (const [name, mod] of Object.entries({ aquarium, candle, coffee, cola, glassOfWater, houseAtNight, lavaLamp, rocket })) {
+    const p = mod.default, loop = p.meta.loop!;
+    const a = p.default(), b = p.default();
+    const ca = new Uint8Array(p.meta.cols * p.meta.rows), cb = new Uint8Array(p.meta.cols * p.meta.rows);
+    for (let k = 0; k < Math.round(loop * 15); k++)
+      for (const m of [1, 3]) {
+        const t = k / 15;
+        assert.equal(a(t, { color: ca }), b(t + m * loop, { color: cb }), `${name} at ${t} and ${m} loops on`);
+        assert.deepEqual(ca, cb, `${name}'s colours at ${t} and ${m} loops on`);
+      }
+  }
+});
+
+test("a moon is a crescent: lit on its left, both horns coming to points, mirrored top to bottom", () => {
+  const where = moon({ rows: 10, at: "center" });
+  const c = cellsOf(where, 40, 12), box = where.place(40, 12);
+  const mid = c.y0 + c.y1 - 1;
+  for (const i of c.list) {
+    const x = i % 40, y = Math.floor(i / 40);
+    assert.ok(c.inside[(mid - y) * 40 + x], `${x},${y} has no mirror below the middle`);
+  }
+  // on the left across the middle, a third of its disc thick; its horns reach round past the disc's middle, top and bottom
+  const middle = Math.floor((c.y0 + c.y1) / 2), centre = (box.x0 + box.x1) / 2;
+  assert.equal(c.left[middle], box.x0);
+  assert.ok(c.right[middle] - c.left[middle] + 1 < (box.x1 - box.x0) / 2, "a crescent, not a disc");
+  assert.ok(c.right[c.y0] > centre && c.right[c.y1 - 1] > centre, "horns at the top and the bottom");
+});
+
+test("the checks added in review: what your functions return, options that would do nothing, and colours as one #rrggbb", () => {
+  const cell = area.rect(0, 0, 2, 1);
+  const drawOf = (m: Material) => () => snapshot(picture([shape(cell, m)], { cols: 2, rows: 1 }), 0);
+  assert.throws(drawOf(material(() => 5 as never)), /material gave 5: a material's function returns a character, \[character, colour index\] or ""/);
+  assert.throws(drawOf(material(() => [7, 0] as never)), /material gave \[7, 0\]/);
+  assert.throws(drawOf(material(() => "\u007f")), /a cell takes one printable character, and U\+007F is not one/);
+  assert.throws(drawOf(material(() => ["#", 1])), /material gave colour 1: it has one colour, 0, from its colors/);
+  assert.throws(drawOf(material(() => ["#", 2], { colors: ["#ff0000", "#00ff00"] })), /it has 2 colours, 0 to 1/);
+  assert.equal(drawOf(material(() => ["#"]))().text, "##", "no colour index is colour 0");
+  const spark = (r: unknown) => () => snapshot(picture([emit(emission(() => r as never, { rate: 20 }))], { cols: 4, rows: 4 }), 1);
+  assert.throws(spark([1, 1, "*", 3]), /emission gave colour 3: it has one colour, 0/);
+  assert.throws(spark([1, 1, "\u0085"]), /emission drew .*U\+0085 is not one/);
+  // a particle's k never reaches 1, so it can index a string
+  const ks: number[] = [];
+  snapshot(picture([emit(emission((p) => (ks.push(p.k), [p.x, p.y, ".:*"[Math.floor(p.k * 3)]]), { rate: 40, life: 0.5 }))], { cols: 8, rows: 4 }), 2);
+  assert.ok(ks.length > 5 && ks.every((k) => k >= 0 && k < 1), `k from ${Math.min(...ks)} to ${Math.max(...ks)}`);
+  // area.where's box is checked whole
+  assert.throws(() => area.where(() => true, null as never), /area\.where's box takes \{ x, y, cols, rows \} in cells, not null/);
+  assert.throws(() => area.where(() => true, { x: 0, y: 0 } as never), /area\.where's box takes a number for cols, not undefined/);
+  // an emission is not a material, and how far or how often means nothing without a move
+  assert.throws(() => shape(cup(), bubbles() as never), /shape takes a material second, and bubbles is an emission: send it out with emit\(bubbles\(\), \{ from: area \}\)/);
+  assert.equal((shape(cup(), smoke()).what as Material).name, "smoke", "smoke is both, so it may fill an area");
+  assert.throws(() => shape(ball(), { amount: 3 }), /shape's amount is for a move: give it move "bob", "sway", "swim" or "drift"/);
+  assert.throws(() => shape(ball(), solid(), { period: 3 }), /shape's period is for a move/);
+  assert.throws(() => solid({ char: "#", ramp: "blocks" }), /solid takes a char or a ramp, not both/);
+  assert.throws(() => picture([shape(ball())], { clear: false }), /picture\(\) empties its grid before each frame, so a frame depends only on t: leave clear out/);
+  // one colour as #rrggbb, for both pages
+  const red = picture([shape(cell, solid({ colors: "#ff0000" }))], { cols: 2, rows: 1 });
+  const { color } = snapshot(red, 0);
+  assert.equal(red.meta.palette![color![0]], "#ff0000");
+  assert.equal(red.meta.palette![snapshot(red, 0, { paper: true }).color![0]], "#ff0000");
+  assert.throws(() => solid({ colors: "#ff00" as never }), /solid\.colors takes a palette's name/);
+  // a maker passed without calling it is named, not printed as its source
+  assert.throws(() => shape(cup as never), /shape takes an area, such as cup\(\), .* not cup, a function: call it, cup\(\)$/);
+  assert.throws(() => shape(cup(), glass as never), /not glass, a function: call it, glass\(\)$/);
+  assert.throws(() => emit(bubbles as never), /not bubbles, a function: call it, bubbles\(\)$/);
+  assert.throws(() => picture([cup as never]), /picture's part 1 is cup, a function: call it, cup\(\), and give what it makes to shape\(\) or emit\(\)/);
+});
+
+test("drawParts(): two lists of parts drawn into one grid are each set up once and keep their own", () => {
+  const a = [shape(area.rect(0, 0, 4, 1), solid({ char: "a" }))], b = [shape(area.rect(2, 1, 4, 1), solid({ char: "b" }))];
+  let setups = 0;
+  const counted = (parts: ReturnType<typeof shape>[]) => parts.map((p) => ({ ...p, setup: (c: number, r: number) => (setups++, p.setup(c, r)) }));
+  const ca = counted(a), cb = counted(b);
+  const both = piece({ name: "both", cols: 6, rows: 2 }, (t, s) => {
+    drawParts(s, ca, t);
+    drawParts(s, cb, t);
+  });
+  const frame = both.default();
+  for (const t of [0, 0.5, 1, 1.5]) assert.equal(frame(t), "aaaa  \n  bbbb");
+  assert.equal(setups, 2, "each list set up once, not once a frame");
 });
 
 test("edge cases: a one-cell picture, a shape bigger than the picture, a room with nothing in it", () => {

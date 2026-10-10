@@ -11,7 +11,7 @@ const home = house({ on: lawn, size: "medium" });
 
 export default picture([
   shape(sky(), starfield()),
-  shape(moon({ x: -6, y: 1 })),
+  shape(moon({ x: -3, y: 1 })),
   shape(cloud({ x: -12, y: 2, size: "tiny" }), { move: "drift" }),
   shape(home),
   shape(home.windows, neon({ colors: "lamp", char: "▒" })),
