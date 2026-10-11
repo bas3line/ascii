@@ -78,6 +78,7 @@ export * as flowField from "./flow-field.ts";
 export * as formControls from "./form-controls.ts";
 export * as fountain from "./fountain.ts";
 export * as fox from "./fox.ts";
+export * as foxGirl from "./fox-girl.ts";
 export * as fractalTree from "./fractal-tree.ts";
 export * as galaxy from "./galaxy.ts";
 export * as gauge from "./gauge.ts";
