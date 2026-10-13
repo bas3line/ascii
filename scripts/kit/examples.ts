@@ -1,8 +1,10 @@
-// npm run kit:examples [-- --svg <dir>] [--frames]
-// Plays every example in examples/kit through scripts/kit/show.ts, on a dark
-// page, on paper and in one ink, and fails if any of them breaks the frame
-// contract. With --svg it also writes each example's SVG, light and dark, into
-// that folder; with --frames it prints each example's frame at 1 second.
+// npm run kit:examples [-- --svg <dir>] [--frames] [--dir examples/markdown]
+// Plays every example in examples/kit (or the folder --dir names, as
+// npm run markdown:examples does with examples/markdown) through
+// scripts/kit/show.ts, on a dark page, on paper and in one ink, and fails if
+// any of them breaks the frame contract. With --svg it also writes each
+// example's SVG, light and dark, into that folder; with --frames it prints each
+// example's frame at 1 second.
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -14,14 +16,15 @@ const argv = process.argv.slice(2);
 const at = argv.indexOf("--svg");
 const dir = at >= 0 ? resolve(argv[at + 1] ?? "") : undefined;
 const frames = argv.includes("--frames");
+const from = argv.includes("--dir") ? argv[argv.indexOf("--dir") + 1] : "examples/kit";
 if (dir) mkdirSync(dir, { recursive: true });
 
-const files = readdirSync(join(root, "examples/kit"))
+const files = readdirSync(join(root, from))
   .filter((f) => f.endsWith(".ts"))
   .sort();
 let failed = 0;
 for (const f of files) {
-  const file = join("examples/kit", f);
+  const file = join(from, f);
   const name = f.slice(0, -3);
   const runs: string[][] = [["--at", "1"], ["--at", "1", "--paper"], ["--at", "1", "--mono"]];
   if (dir) runs.push(["--at", "1", "--svg", join(dir, `${name}.svg`)], ["--at", "1", "--dark", "--svg", join(dir, `${name}.dark.svg`)]);

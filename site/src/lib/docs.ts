@@ -36,6 +36,20 @@ export const DOCS = [
     ],
   },
   {
+    // The markdown components: what they are and how to write one, then a page for each group of them.
+    label: "markdown",
+    pages: [
+      { href: "/docs/markdown/", title: "markdown components" },
+      { href: "/docs/markdown-lettering/", title: "lettering" },
+      { href: "/docs/markdown-ornaments/", title: "ornaments" },
+      { href: "/docs/markdown-machines/", title: "machines" },
+      { href: "/docs/markdown-internals/", title: "inside a system" },
+      { href: "/docs/markdown-tokens/", title: "tokens" },
+      { href: "/docs/markdown-games/", title: "games" },
+      { href: "/docs/markdown-places/", title: "places" },
+    ],
+  },
+  {
     label: "make your own",
     pages: [
       { href: "/docs/kit/", title: "the kit" },

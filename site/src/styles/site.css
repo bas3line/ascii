@@ -1170,6 +1170,85 @@ pre.code {
   color: var(--muted);
 }
 
+/* --- markdown components ------------------------------------------------ */
+
+/*
+ * A component an ```ascii fence drew, a <pre class="ascii-md">: text in the art's face, set close so its box lines
+ * join, its tones in the site's own colours, and the one thing it marks with ink behind it, as the site marks the
+ * current page. In a well it takes the largest size that fits, as a piece does; in the docs, the code's size, or
+ * smaller on a narrow screen so it fits its column rather than scrolling. A QR code's rows sit flush, so no seam
+ * between its half blocks stops a phone reading it.
+ */
+pre.ascii-md {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--art);
+  line-height: 1.2;
+  letter-spacing: 0;
+  white-space: pre;
+  font-variant-ligatures: none;
+}
+
+.well pre.ascii-md {
+  font-size: min(13px, calc(92cqi / var(--cols) / 0.6), calc(88cqb / var(--rows) / 1.2));
+}
+
+.docs pre.ascii-md {
+  color: var(--ink);
+  font-family: var(--art);
+  line-height: 1.2;
+}
+
+/* its columns and the snippet's padding, 2ch and 10ch for [copy], in the snippet's width */
+.docs .snippet:has(> pre.ascii-md) {
+  container-type: inline-size;
+}
+
+.docs .snippet > pre.ascii-md {
+  font-size: min(0.8125rem, calc(100cqi / (var(--cols) + 12) / 0.6));
+}
+
+pre.ascii-md[data-md="qr"] {
+  line-height: 1;
+}
+
+.ascii-md .md-soft {
+  color: var(--muted);
+}
+
+.ascii-md .md-quiet {
+  color: color-mix(in srgb, var(--muted) 65%, var(--bg));
+}
+
+.ascii-md .md-accent {
+  color: light-dark(#c2410c, #f97316);
+}
+
+.ascii-md .md-good {
+  color: light-dark(#1a7f37, #3fb950);
+}
+
+.ascii-md .md-warn {
+  color: light-dark(#9a6700, #d29922);
+}
+
+.ascii-md .md-bad {
+  color: light-dark(#cf222e, #f85149);
+}
+
+.ascii-md .md-violet {
+  color: light-dark(#8250df, #bc8cff);
+}
+
+.ascii-md .md-glint {
+  color: light-dark(#be185d, #f778ba);
+}
+
+.ascii-md .md-mark {
+  background: var(--ink);
+  color: var(--bg);
+}
+
 /* --- narrow screens: the sidebar becomes a line of categories ------------ */
 
 @media (max-width: 860px) {

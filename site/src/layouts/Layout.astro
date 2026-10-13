@@ -1,6 +1,7 @@
 ---
 /*
- * The shell for every page: a sidebar index of every category and piece, the
+ * The shell for every page: a sidebar index of every category and piece, with
+ * the markdown components after the scenes as the home page has them, the
  * header with the theme switch, a footer with links to open an issue, [copy]
  * buttons for code blocks, tabs, and the script that mounts each piece as it
  * scrolls into view.
@@ -11,6 +12,7 @@ import SpeedInsights from "@vercel/speed-insights/astro";
 import Credit from "../components/Credit.astro";
 import Icon from "../components/Icon.astro";
 import { AUTHOR, NAME, REPO, SITE, groups, issue, pieces } from "../lib/library";
+import { catalog as components } from "ascii.rest/markdown";
 
 interface Props {
   title: string;
@@ -129,6 +131,21 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
                   </ul>
                 </>
               ))}
+              {i === 0 && (
+                <>
+                  <h3>
+                    <a href="/#markdown">markdown</a>
+                    <span class="count">{components.length}</span>
+                  </h3>
+                  <ul role="list" data-components>
+                    {components.map((c) => (
+                      <li>
+                        <a href={`/docs/markdown-${c.group}/#${c.kind}`}>{c.kind}</a>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </>
           ))}
         </nav>
@@ -158,9 +175,12 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
               group.categories.push(category);
             } else if (el.tagName === "UL") {
               category.list = el;
+              // a markdown component is found by its name alone: its link, /docs/markdown-games/, would match "docs"
+              var named = el.hasAttribute("data-components");
               for (var li = el.firstElementChild; li; li = li.nextElementSibling) {
                 var a = li.querySelector("a");
-                category.items.push({ li: li, a: a, words: [a.textContent.trim(), a.getAttribute("href").replace(/\//g, "")].join(" ") });
+                var name = a.textContent.trim();
+                category.items.push({ li: li, a: a, component: named, words: named ? name : [name, a.getAttribute("href").replace(/\//g, "")].join(" ") });
               }
             }
           }
@@ -168,6 +188,7 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
             var words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
             var first = null;
             var total = 0;
+            var parts = 0;
             var lead = true;
             groups.forEach(function (g) {
               var any = false;
@@ -179,6 +200,7 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
                   });
                   item.li.hidden = !hit;
                   if (hit) n++;
+                  if (hit && item.component) parts++;
                   if (hit && !first) first = item.a;
                 });
                 c.head.hidden = c.list.hidden = !n;
@@ -192,7 +214,12 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
               if (any) lead = false;
             });
             nav.classList.toggle("searching", words.length > 0);
-            found.textContent = !words.length ? "" : !total ? "nothing matches" : total + (total === 1 ? " piece" : " pieces");
+            // pieces and markdown components counted apart: "3 pieces, 1 component"
+            var count = function (k, one) {
+              return k + " " + one + (k === 1 ? "" : "s");
+            };
+            var said = [total - parts && count(total - parts, "piece"), parts && count(parts, "component")].filter(Boolean).join(", ");
+            found.textContent = !words.length ? "" : !total ? "nothing matches" : said;
             found.classList.toggle("sr", total > 0 || !words.length);
             mark();
             return words.length ? first : null;
@@ -394,6 +421,8 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
         } catch {}
         showMotion();
         replay(() => true);
+        // the markdown components play themselves: they listen for this, and start again playing or still
+        dispatchEvent(new CustomEvent("ascii-motion", { detail: motion }));
       });
 
       const inks = document.querySelectorAll<HTMLButtonElement>("button[data-ink]");

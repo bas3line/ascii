@@ -62,6 +62,17 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
+/**
+ * A text's 32-bit FNV-1a hash, a whole number 0 to 2^32 - 1: the same text, the same number, in every browser and in
+ * Node. It hashes the text's code points, so for plain ASCII it is FNV-1a of its bytes. A seed from words, for
+ * mulberry32: mulberry32(fnv1a32("bas3line")).
+ */
+export function fnv1a32(text: string): number {
+  let h = 0x811c9dc5;
+  for (const ch of String(text)) h = Math.imul(h ^ ch.codePointAt(0)!, 0x01000193) >>> 0;
+  return h >>> 0;
+}
+
 /** Smooth value noise 0 to 1 on a lattice of whole numbers, seeded. ascii.rest/kit's math has simplex noise and fbm too. */
 export function valueNoise(x: number, y: number, seed = 0): number {
   const xi = Math.floor(x), yi = Math.floor(y);

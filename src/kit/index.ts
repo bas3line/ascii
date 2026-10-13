@@ -152,6 +152,7 @@ export {
   colorOf,
   colorsOf,
   fail,
+  fnv1a32,
   fract,
   gradient,
   hash,
