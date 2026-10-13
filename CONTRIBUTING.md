@@ -143,7 +143,7 @@ A release is a tag. Pushing a tag `vX.Y.Z` runs [release.yml](.github/workflows/
    git push origin v0.4.0
    ```
 
-The workflow stops before publishing if the tag is not `v` and the version in `package.json`.
+The workflow stops before publishing if the tag is not `v` followed by the version in `package.json`.
 
 Once, before the first release from Actions, the owner sets up the trusted publisher on npmjs.com: in the package's **Settings**, under **Trusted Publisher**, choose **GitHub Actions** and enter `bas3line` as the user, `ascii` as the repository and `release.yml` as the workflow, with no environment. The fields are case-sensitive, and npm does not check them when they are saved, so a mistake shows up as a failed publish.
 
