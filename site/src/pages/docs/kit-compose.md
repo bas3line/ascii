@@ -133,7 +133,7 @@ export default sequence([rust, go, python], { seconds: 3 });
 
 A piece that plays once, a typed banner, still plays once after any of these but `repeat()` and `freeze()`, and after `border()`: its SVG types it, a delay's wait first, and holds.
 
-A whole loops when its parts do: its loop is the time after which they all come round together, up to 60 seconds. Its colours are its parts' merged, and past the 64 a piece can hold, the nearest ones are folded together.
+A whole loops when its parts do: its loop is the time after which they all come round together, up to 60 seconds. Its colours are its parts' colours, merged, and past the 64 a piece can hold, the nearest ones are folded together.
 
 Each of these is also a step on any piece the kit makes, so `stars().behind(pulsing(heart()))`, `gauge().border({ title: true })` and `sea().speed(2).named("calm")` read left to right; `over()` and `behind()` lay one piece over another, centred.
 
