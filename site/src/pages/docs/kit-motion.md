@@ -52,7 +52,7 @@ Every motion takes `speed` (`"slow"`, `"normal"`, `"fast"`, or times as fast), `
 | motion | what it does | its own options | one line |
 | --- | --- | --- | --- |
 | `spinning(thing)` | a 3D shape turns in 3D; a flat thing turns like a coin, its back mirrored. Once in 6 seconds. | `way`: `"tumble"`, `"turntable"`, `"wheel"`, `"flip"`; `cols`, `rows` | `spinning(torus())` |
-| `orbiting(thing)` | goes round in a circle, in front below and behind above. Once in 6 seconds. | `around`: a thing at the middle; `radius`: `"close"`, `"medium"`, `"far"` | `orbiting("*", { around: "sun" })` |
+| `orbiting(thing)` | goes round in a circle, in front when below and behind when above. Once in 6 seconds. | `around`: a thing at the middle; `radius`: `"close"`, `"medium"`, `"far"` | `orbiting("*", { around: "sun" })` |
 | `bouncing(thing)` | bounces on the ground with its shadow, landing every 1.2 seconds | `height`: `"low"`, `"medium"`, `"high"`; `shadow` | `bouncing(ball())` |
 | `floating(thing)` | rises and sinks gently, once in 3 seconds | `height`: `"low"`, `"medium"`, `"high"` | `floating(heart())` |
 | `swaying(thing)` | leans side to side as a tree does, or swings as a sign hangs | `amount`: `"subtle"`, `"medium"`, `"strong"`; `from`: `"bottom"`, `"top"` | `swaying(flame())` |
