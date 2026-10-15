@@ -15,6 +15,12 @@ export const PAGES = {
       "Your name or your project's in animated ascii block letters, with any font, shadow, colour, tagline and logo, for a GitHub README, a web page or a terminal.",
     path: "/banner/",
   },
+  studio: {
+    title: "scene studio",
+    description:
+      "Compose, tweak and synthesize living 200x100 animated ascii scenes with real-time controls, layered shaders, and photo ingestion.",
+    path: "/studio/",
+  },
 } as const;
 
 export type PageName = keyof typeof PAGES;

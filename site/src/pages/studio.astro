@@ -1,0 +1,996 @@
+---
+/*
+ * /studio/: interactive scene studio for ascii.rest.
+ * Live parameterized scene inspection, layered procedural shaders,
+ * timeline scrubbing, image-to-scene ingestion, and code synthesis.
+ */
+import Layout from "../layouts/Layout.astro";
+import { PAGES, pageCardOf } from "../lib/pages";
+---
+
+<Layout
+  title={`${PAGES.studio.title} · ascii.rest`}
+  description={PAGES.studio.description}
+  path={PAGES.studio.path}
+  card={pageCardOf("studio")}
+>
+  <div class="studio-app" id="studio-app">
+    <!-- Top toolbar: Presets & Quick Actions -->
+    <header class="studio-bar">
+      <div class="bar-group">
+        <span class="bar-label">preset</span>
+        <div class="pill-group" id="preset-pills">
+          <button class="pill active" type="button" data-preset="ocean-sunset">[ocean sunset]</button>
+          <button class="pill" type="button" data-preset="snow-mountain">[snow mountain]</button>
+          <button class="pill" type="button" data-preset="cyber-prism">[cyber prism]</button>
+        </div>
+      </div>
+
+      <div class="bar-group bar-right">
+        <span class="stat" id="stat-perf">0.0ms</span>
+        <button class="pill action" type="button" id="btn-export-code">[copy .ts]</button>
+      </div>
+    </header>
+
+    <!-- Main Viewport: The 200x100 Canvas -->
+    <main class="studio-viewport-wrap">
+      <div class="canvas-frame" id="canvas-frame">
+        <canvas id="studio-canvas" width="1280" height="640"></canvas>
+      </div>
+
+      <!-- Transport & Timeline Scrubber -->
+      <nav class="transport-bar">
+        <button class="pill transport-btn" type="button" id="btn-play" aria-label="Play or pause">
+          <span id="play-icon">⏸</span>
+        </button>
+
+        <div class="scrubber-wrap">
+          <input
+            type="range"
+            id="timeline-scrubber"
+            min="0"
+            max="16"
+            step="0.05"
+            value="0"
+            aria-label="Timeline scrubber"
+          />
+        </div>
+
+        <span class="time-display" id="time-display">0.00s</span>
+
+        <div class="pill-group speed-group">
+          <button class="pill speed-pill" type="button" data-speed="0.25">.25x</button>
+          <button class="pill speed-pill" type="button" data-speed="0.5">.5x</button>
+          <button class="pill speed-pill active" type="button" data-speed="1.0">1x</button>
+          <button class="pill speed-pill" type="button" data-speed="2.0">2x</button>
+        </div>
+      </nav>
+    </main>
+
+    <!-- Lower Workspace: Layer Sliders, Palette, Image Ingestion, Code -->
+    <section class="studio-workspace">
+      <nav class="tabs-nav" id="workspace-tabs">
+        <button class="tab-btn active" type="button" data-tab="tab-layers">[layers & controls]</button>
+        <button class="tab-btn" type="button" data-tab="tab-palette">[palette & halftone]</button>
+        <button class="tab-btn" type="button" data-tab="tab-image">[image to scene]</button>
+        <button class="tab-btn" type="button" data-tab="tab-code">[generated code]</button>
+      </nav>
+
+      <!-- Tab: Layers & Controls -->
+      <div class="tab-panel active" id="tab-layers">
+        <div class="layers-grid">
+          <aside class="layer-list" id="layer-list" aria-label="Layer list">
+            <!-- Rendered dynamically -->
+          </aside>
+          <div class="layer-controls" id="layer-controls" aria-label="Layer parameters">
+            <!-- Dynamic sliders rendered here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Palette & Halftone -->
+      <div class="tab-panel" id="tab-palette">
+        <div class="palette-panel">
+          <div class="halftone-controls">
+            <div class="control-row">
+              <label for="sel-ramp">glyph ramp</label>
+              <select id="sel-ramp">
+                <option value=" ·•●">classic dots [ ·•● ]</option>
+                <option value=" ⠂⠆⠖⣶">braille [ ⠂⠆⠖⣶ ]</option>
+                <option value=" .:-=+*#%@">ascii [ .:-=+*#%@ ]</option>
+              </select>
+            </div>
+            <div class="control-row">
+              <label for="sel-dither">dithering</label>
+              <select id="sel-dither">
+                <option value="bayer4">bayer 4x4 matrix</option>
+                <option value="bayer8">bayer 8x8 matrix</option>
+                <option value="none">threshold (no dither)</option>
+              </select>
+            </div>
+            <div class="control-row">
+              <label for="range-contrast">contrast curve</label>
+              <input type="range" id="range-contrast" min="0.5" max="2.0" step="0.05" value="1.0" />
+              <span class="range-val" id="val-contrast">1.0</span>
+            </div>
+            <div class="control-row">
+              <label for="col-ground">ground color</label>
+              <input type="color" id="col-ground" value="#0b0817" />
+              <span class="color-hex" id="hex-ground">#0b0817</span>
+            </div>
+          </div>
+
+          <div class="palette-swatches-wrap">
+            <label>palette colors (<span id="palette-count">0</span>)</label>
+            <div class="palette-grid" id="palette-grid">
+              <!-- Swatches rendered here -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Image Ingestion -->
+      <div class="tab-panel" id="tab-image">
+        <div class="image-ingest-panel">
+          <div class="drop-zone" id="image-drop" tabindex="0" role="button">
+            <input type="file" id="image-file-input" accept="image/*" hidden />
+            <p class="drop-msg">drop a landscape or photo here</p>
+            <p class="drop-sub">PNG, JPG, WebP, or click to choose file</p>
+          </div>
+          <div class="ingest-settings" id="ingest-settings">
+            <div class="control-row">
+              <label for="ingest-motion">motion preset</label>
+              <select id="ingest-motion">
+                <option value="water_ripple">Lower Plane Swell (Water)</option>
+                <option value="cloud_drift">Upper Plane Drift (Clouds)</option>
+                <option value="shimmer">Subtle Micro-Shimmer</option>
+                <option value="static">Static Halftone</option>
+              </select>
+            </div>
+            <div class="control-row">
+              <label for="ingest-split">horizon split row</label>
+              <input type="range" id="ingest-split" min="10" max="90" step="1" value="50" />
+              <span class="range-val" id="val-ingest-split">50</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Code -->
+      <div class="tab-panel" id="tab-code">
+        <div class="code-panel">
+          <div class="code-actions">
+            <span>standalone TypeScript piece (200x100, 15fps)</span>
+            <button class="pill" type="button" id="btn-copy-code-tab">[copy snippet]</button>
+          </div>
+          <pre class="code-view"><code id="code-output">// loading code...</code></pre>
+        </div>
+      </div>
+    </section>
+  </div>
+</Layout>
+
+<style>
+  /* Understated, sharp, instrument design system */
+  .studio-app {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    max-width: 1440px;
+    margin: 0 auto;
+    padding-bottom: 3rem;
+  }
+
+  .studio-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--well);
+    background: var(--bg);
+  }
+
+  .bar-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .bar-label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .pill-group {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .pill {
+    padding: 0.25rem 0.6rem;
+    border: 1px solid var(--well);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    cursor: pointer;
+    border-radius: 0;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+  }
+
+  .pill:hover {
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+
+  .pill.active {
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+  }
+
+  .pill.action {
+    background: var(--well);
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .pill.action:hover {
+    background: var(--ink);
+    color: var(--bg);
+  }
+
+  .stat {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+    padding: 0 0.5rem;
+  }
+
+  /* Viewport: Exactly 2:1 Widescreen Aspect */
+  .studio-viewport-wrap {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--well);
+    background: #000;
+  }
+
+  .canvas-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 200 / 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  #studio-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    image-rendering: pixelated;
+  }
+
+  /* Transport & Timeline Scrubber */
+  .transport-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg);
+    border-top: 1px solid var(--well);
+  }
+
+  .transport-btn {
+    min-width: 2.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+  }
+
+  .scrubber-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+
+  .scrubber-wrap input[type="range"] {
+    width: 100%;
+    accent-color: var(--ink);
+    cursor: pointer;
+  }
+
+  .time-display {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    min-width: 4rem;
+    text-align: right;
+    color: var(--muted);
+  }
+
+  /* Workspace Tabs */
+  .studio-workspace {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--well);
+    background: var(--bg);
+  }
+
+  .tabs-nav {
+    display: flex;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--well);
+    background: var(--well);
+  }
+
+  .tab-btn {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-right: 1px solid var(--bg);
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  .tab-btn:hover {
+    color: var(--ink);
+  }
+
+  .tab-btn.active {
+    background: var(--bg);
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .tab-panel {
+    display: none;
+    padding: 1rem;
+  }
+
+  .tab-panel.active {
+    display: block;
+  }
+
+  /* Layers Grid */
+  .layers-grid {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 1.5rem;
+    min-height: 280px;
+  }
+
+  @media (max-width: 768px) {
+    .layers-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .layer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    border-right: 1px solid var(--well);
+    padding-right: 1rem;
+  }
+
+  .layer-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--well);
+    cursor: pointer;
+    font-size: 0.8rem;
+  }
+
+  .layer-item.selected {
+    border-color: var(--ink);
+    background: var(--well);
+  }
+
+  .layer-toggle {
+    cursor: pointer;
+    margin-right: 0.5rem;
+  }
+
+  .layer-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .control-row {
+    display: grid;
+    grid-template-columns: 180px 1fr 60px;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.8rem;
+  }
+
+  @media (max-width: 600px) {
+    .control-row {
+      grid-template-columns: 120px 1fr 40px;
+    }
+  }
+
+  .control-row label {
+    color: var(--muted);
+  }
+
+  .control-row input[type="range"] {
+    width: 100%;
+    accent-color: var(--ink);
+  }
+
+  .control-row select,
+  .control-row input[type="color"] {
+    border: 1px solid var(--well);
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--mono);
+    padding: 0.2rem 0.4rem;
+    border-radius: 0;
+  }
+
+  .range-val {
+    font-family: var(--mono);
+    color: var(--text);
+    text-align: right;
+  }
+
+  /* Palette Panel */
+  .palette-panel {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 2rem;
+  }
+
+  @media (max-width: 768px) {
+    .palette-panel {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .halftone-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .palette-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 0.5rem;
+  }
+
+  .color-swatch {
+    width: 24px;
+    height: 24px;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+  }
+
+  /* Image Ingest Dropzone */
+  .image-ingest-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .drop-zone {
+    border: 1px dashed var(--muted);
+    padding: 2.5rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    background: var(--well);
+  }
+
+  .drop-zone:hover {
+    border-color: var(--ink);
+  }
+
+  .drop-msg {
+    font-size: 0.9rem;
+    color: var(--ink);
+    margin-bottom: 0.25rem;
+  }
+
+  .drop-sub {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  /* Code Panel */
+  .code-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .code-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .code-view {
+    margin: 0;
+    padding: 1rem;
+    background: var(--well);
+    border: 1px solid var(--well);
+    max-height: 420px;
+    overflow: auto;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--text);
+  }
+</style>
+
+<script>
+  import {
+    ALL_PRESETS,
+    compileSceneToCode,
+    createStudioSession,
+    getLayerDefinition,
+    hexToRgb,
+  } from "ascii.rest/studio";
+
+  // Active state
+  let currentPresetIdx = 0;
+  let session = createStudioSession(ALL_PRESETS[currentPresetIdx]);
+  let selectedLayerId = session.spec.layers[0]?.id || "";
+
+  // Playback state
+  let isPlaying = true;
+  let playbackSpeed = 1.0;
+  let currentTime = 0;
+  let lastTimestamp = performance.now();
+  let animId: number | null = null;
+
+  // DOM Elements
+  const canvas = document.getElementById("studio-canvas") as HTMLCanvasElement;
+  const ctx = canvas.getContext("2d", { alpha: false });
+  const playBtn = document.getElementById("btn-play") as HTMLButtonElement;
+  const playIcon = document.getElementById("play-icon") as HTMLSpanElement;
+  const scrubber = document.getElementById("timeline-scrubber") as HTMLInputElement;
+  const timeDisplay = document.getElementById("time-display") as HTMLSpanElement;
+  const perfDisplay = document.getElementById("stat-perf") as HTMLSpanElement;
+  const presetPills = document.querySelectorAll("#preset-pills .pill");
+  const speedPills = document.querySelectorAll(".speed-pill");
+  const tabButtons = document.querySelectorAll(".tab-btn");
+  const tabPanels = document.querySelectorAll(".tab-panel");
+  const layerListEl = document.getElementById("layer-list") as HTMLElement;
+  const layerControlsEl = document.getElementById("layer-controls") as HTMLElement;
+  const paletteGridEl = document.getElementById("palette-grid") as HTMLElement;
+  const paletteCountEl = document.getElementById("palette-count") as HTMLElement;
+  const colGroundInput = document.getElementById("col-ground") as HTMLInputElement;
+  const hexGroundLabel = document.getElementById("hex-ground") as HTMLSpanElement;
+  const selRamp = document.getElementById("sel-ramp") as HTMLSelectElement;
+  const selDither = document.getElementById("sel-dither") as HTMLSelectElement;
+  const rangeContrast = document.getElementById("range-contrast") as HTMLInputElement;
+  const valContrast = document.getElementById("val-contrast") as HTMLSpanElement;
+  const codeOutput = document.getElementById("code-output") as HTMLElement;
+  const btnExportCode = document.getElementById("btn-export-code") as HTMLButtonElement;
+  const btnCopyCodeTab = document.getElementById("btn-copy-code-tab") as HTMLButtonElement;
+  const imageDrop = document.getElementById("image-drop") as HTMLElement;
+  const imageFileInput = document.getElementById("image-file-input") as HTMLInputElement;
+  const ingestMotion = document.getElementById("ingest-motion") as HTMLSelectElement;
+  const ingestSplit = document.getElementById("ingest-split") as HTMLInputElement;
+  const valIngestSplit = document.getElementById("val-ingest-split") as HTMLSpanElement;
+
+  // Offscreen rendering buffers (200x100)
+  const COLS = 200;
+  const ROWS = 100;
+  const colorIndices = new Uint8Array(COLS * ROWS);
+  const colorMap = new Map<number, [number, number, number]>();
+
+  function updateColorMap() {
+    colorMap.clear();
+    const p = session.spec.palette;
+    for (let i = 0; i < p.length; i++) {
+      colorMap.set(i, hexToRgb(p[i]));
+    }
+  }
+
+  // Draw current frame to canvas
+  function renderFrame(t: number) {
+    if (!ctx) return;
+    const t0 = performance.now();
+
+    const frameFn = session.piece.default();
+    const chars = frameFn(t, { paper: false, color: colorIndices });
+
+    const elapsed = performance.now() - t0;
+    perfDisplay.textContent = `${elapsed.toFixed(1)}ms`;
+
+    const cellW = canvas.width / COLS;
+    const cellH = canvas.height / ROWS;
+
+    // Background fill
+    ctx.fillStyle = session.spec.ground;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.font = `${cellH * 1.15}px "ascii.rest mono", ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const idx = r * COLS + c;
+        const ch = chars[idx];
+        if (!ch || ch === " ") continue;
+
+        const rgb = colorMap.get(colorIndices[idx]);
+        if (rgb) {
+          ctx.fillStyle = `rgb(${Math.round(rgb[0] * 255)}, ${Math.round(rgb[1] * 255)}, ${Math.round(rgb[2] * 255)})`;
+        } else {
+          ctx.fillStyle = "#ffffff";
+        }
+
+        ctx.fillText(ch, (c + 0.5) * cellW, (r + 0.5) * cellH);
+      }
+    }
+  }
+
+  // Animation Loop
+  function tick(timestamp: number) {
+    if (isPlaying) {
+      const dt = (timestamp - lastTimestamp) / 1000;
+      currentTime = (currentTime + dt * playbackSpeed) % 16.0;
+      scrubber.value = currentTime.toFixed(2);
+      timeDisplay.textContent = `${currentTime.toFixed(2)}s`;
+    }
+    lastTimestamp = timestamp;
+
+    renderFrame(currentTime);
+    animId = requestAnimationFrame(tick);
+  }
+
+  // Build Layer UI
+  function updateLayerUI() {
+    layerListEl.innerHTML = "";
+    session.spec.layers.forEach((layer) => {
+      const row = document.createElement("div");
+      row.className = `layer-item ${layer.id === selectedLayerId ? "selected" : ""}`;
+
+      const left = document.createElement("label");
+      left.style.display = "flex";
+      left.style.alignItems = "center";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "layer-toggle";
+      cb.checked = layer.enabled;
+      cb.addEventListener("change", (e) => {
+        e.stopPropagation();
+        session.toggleLayer(layer.id, cb.checked);
+        updateCodeView();
+      });
+
+      const span = document.createElement("span");
+      span.textContent = layer.name;
+
+      left.appendChild(cb);
+      left.appendChild(span);
+      row.appendChild(left);
+
+      row.addEventListener("click", () => {
+        selectedLayerId = layer.id;
+        updateLayerUI();
+      });
+
+      layerListEl.appendChild(row);
+    });
+
+    renderSelectedLayerControls();
+  }
+
+  // Render parameters for selected layer
+  function renderSelectedLayerControls() {
+    layerControlsEl.innerHTML = "";
+    const activeLayer = session.spec.layers.find((l) => l.id === selectedLayerId);
+    if (!activeLayer) return;
+
+    const def = getLayerDefinition(activeLayer.type);
+    if (!def) return;
+
+    Object.entries(def.schema).forEach(([key, paramDef]) => {
+      const row = document.createElement("div");
+      row.className = "control-row";
+
+      const label = document.createElement("label");
+      label.textContent = paramDef.label;
+      row.appendChild(label);
+
+      if (paramDef.type === "number") {
+        const slider = document.createElement("input");
+        slider.type = "range";
+        slider.min = String(paramDef.min);
+        slider.max = String(paramDef.max);
+        slider.step = String(paramDef.step ?? 1);
+        slider.value = String(activeLayer.params[key] ?? paramDef.default);
+
+        const valSpan = document.createElement("span");
+        valSpan.className = "range-val";
+        valSpan.textContent = slider.value;
+
+        slider.addEventListener("input", () => {
+          valSpan.textContent = slider.value;
+          session.setParam(activeLayer.id, key, parseFloat(slider.value));
+          updateCodeView();
+        });
+
+        row.appendChild(slider);
+        row.appendChild(valSpan);
+      } else if (paramDef.type === "color") {
+        const picker = document.createElement("input");
+        picker.type = "color";
+        picker.value = activeLayer.params[key] ?? paramDef.default;
+
+        const hexSpan = document.createElement("span");
+        hexSpan.className = "range-val";
+        hexSpan.textContent = picker.value;
+
+        picker.addEventListener("input", () => {
+          hexSpan.textContent = picker.value;
+          session.setParam(activeLayer.id, key, picker.value);
+          updateCodeView();
+        });
+
+        row.appendChild(picker);
+        row.appendChild(hexSpan);
+      } else if (paramDef.type === "select") {
+        const sel = document.createElement("select");
+        paramDef.options.forEach((opt) => {
+          const o = document.createElement("option");
+          o.value = opt.value;
+          o.textContent = opt.label;
+          if (opt.value === (activeLayer.params[key] ?? paramDef.default)) {
+            o.selected = true;
+          }
+          sel.appendChild(o);
+        });
+
+        sel.addEventListener("change", () => {
+          session.setParam(activeLayer.id, key, sel.value);
+          updateCodeView();
+        });
+
+        row.appendChild(sel);
+        row.appendChild(document.createElement("span"));
+      } else if (paramDef.type === "boolean") {
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = !!(activeLayer.params[key] ?? paramDef.default);
+        cb.addEventListener("change", () => {
+          session.setParam(activeLayer.id, key, cb.checked);
+          updateCodeView();
+        });
+        row.appendChild(cb);
+        row.appendChild(document.createElement("span"));
+      }
+
+      layerControlsEl.appendChild(row);
+    });
+  }
+
+  // Update Palette View
+  function updatePaletteUI() {
+    colGroundInput.value = session.spec.ground;
+    hexGroundLabel.textContent = session.spec.ground;
+    paletteCountEl.textContent = String(session.spec.palette.length);
+
+    paletteGridEl.innerHTML = "";
+    session.spec.palette.forEach((hex) => {
+      const swatch = document.createElement("div");
+      swatch.className = "color-swatch";
+      swatch.style.backgroundColor = hex;
+      swatch.title = hex;
+      paletteGridEl.appendChild(swatch);
+    });
+  }
+
+  // Update Code View
+  function updateCodeView() {
+    codeOutput.textContent = compileSceneToCode(session.spec);
+  }
+
+  // Preset Selection
+  presetPills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      presetPills.forEach((p) => p.classList.remove("active"));
+      pill.classList.add("active");
+
+      const presetKey = pill.getAttribute("data-preset");
+      const found = ALL_PRESETS.find((p) => p.name.replace(/\s+/g, "-") === presetKey);
+      if (found) {
+        session = createStudioSession(found);
+        selectedLayerId = session.spec.layers[0]?.id || "";
+        updateColorMap();
+        updateLayerUI();
+        updatePaletteUI();
+        updateCodeView();
+      }
+    });
+  });
+
+  // Transport Controls
+  playBtn.addEventListener("click", () => {
+    isPlaying = !isPlaying;
+    playIcon.textContent = isPlaying ? "⏸" : "▶";
+  });
+
+  scrubber.addEventListener("input", () => {
+    currentTime = parseFloat(scrubber.value);
+    timeDisplay.textContent = `${currentTime.toFixed(2)}s`;
+    renderFrame(currentTime);
+  });
+
+  speedPills.forEach((pill) => {
+    pill.addEventListener("click", () => {
+      speedPills.forEach((p) => p.classList.remove("active"));
+      pill.classList.add("active");
+      playbackSpeed = parseFloat(pill.getAttribute("data-speed") || "1.0");
+    });
+  });
+
+  // Tab switching
+  tabButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tabButtons.forEach((b) => b.classList.remove("active"));
+      tabPanels.forEach((p) => p.classList.remove("active"));
+
+      btn.classList.add("active");
+      const tabId = btn.getAttribute("data-tab");
+      if (tabId) {
+        document.getElementById(tabId)?.classList.add("active");
+      }
+    });
+  });
+
+  // Palette & Halftone form listeners
+  colGroundInput.addEventListener("input", () => {
+    hexGroundLabel.textContent = colGroundInput.value;
+    session.updatePalette(session.spec.palette, colGroundInput.value);
+    updateCodeView();
+  });
+
+  selRamp.addEventListener("change", () => {
+    session.spec.halftone = session.spec.halftone || {};
+    session.spec.halftone.ramp = selRamp.value;
+    updateCodeView();
+  });
+
+  selDither.addEventListener("change", () => {
+    session.spec.halftone = session.spec.halftone || {};
+    session.spec.halftone.dither = selDither.value as any;
+    updateCodeView();
+  });
+
+  rangeContrast.addEventListener("input", () => {
+    valContrast.textContent = rangeContrast.value;
+    session.spec.halftone = session.spec.halftone || {};
+    session.spec.halftone.contrast = parseFloat(rangeContrast.value);
+    updateCodeView();
+  });
+
+  // Code copy buttons
+  function copyCode() {
+    const code = compileSceneToCode(session.spec);
+    navigator.clipboard.writeText(code).then(() => {
+      const origText = btnExportCode.textContent;
+      btnExportCode.textContent = "[copied!]";
+      setTimeout(() => (btnExportCode.textContent = origText), 1500);
+    });
+  }
+
+  btnExportCode.addEventListener("click", copyCode);
+  btnCopyCodeTab.addEventListener("click", copyCode);
+
+  // Image Drop & Ingestion
+  imageDrop.addEventListener("click", () => imageFileInput.click());
+  imageDrop.addEventListener("dragover", (e) => e.preventDefault());
+  imageDrop.addEventListener("drop", (e) => {
+    e.preventDefault();
+    if (e.dataTransfer?.files.length) {
+      handleImageUpload(e.dataTransfer.files[0]);
+    }
+  });
+
+  imageFileInput.addEventListener("change", () => {
+    if (imageFileInput.files?.length) {
+      handleImageUpload(imageFileInput.files[0]);
+    }
+  });
+
+  function handleImageUpload(file: File) {
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    img.onload = () => {
+      const offCanvas = document.createElement("canvas");
+      offCanvas.width = COLS;
+      offCanvas.height = ROWS;
+      const offCtx = offCanvas.getContext("2d");
+      if (!offCtx) return;
+
+      offCtx.drawImage(img, 0, 0, COLS, ROWS);
+      const imgData = offCtx.getImageData(0, 0, COLS, ROWS);
+
+      // Quantize and extract palette
+      const pixels = new Float32Array(COLS * ROWS * 3);
+      const extractedPalette: string[] = [];
+      const colorCounts = new Map<string, number>();
+
+      for (let i = 0; i < COLS * ROWS; i++) {
+        const r = imgData.data[i * 4] / 255;
+        const g = imgData.data[i * 4 + 1] / 255;
+        const b = imgData.data[i * 4 + 2] / 255;
+        pixels[i * 3] = r;
+        pixels[i * 3 + 1] = g;
+        pixels[i * 3 + 2] = b;
+
+        // Approximate hex clustering
+        const qr = Math.floor(r * 5) * 51;
+        const qg = Math.floor(g * 5) * 51;
+        const qb = Math.floor(b * 5) * 51;
+        const hex = `#${((1 << 24) + (qr << 16) + (qg << 8) + qb).toString(16).slice(1)}`;
+        colorCounts.set(hex, (colorCounts.get(hex) || 0) + 1);
+      }
+
+      // Top 32 dominant colors
+      const sorted = Array.from(colorCounts.entries()).sort((a, b) => b[1] - a[1]);
+      const palette = sorted.slice(0, 32).map((e) => e[0]);
+
+      // Construct synthesized scene spec
+      const imageSpec = {
+        name: file.name.replace(/\.[^/.]+$/, "").toLowerCase(),
+        ground: palette[0] || "#000000",
+        palette: palette.length ? palette : ["#000000", "#ffffff"],
+        fps: 15,
+        layers: [
+          {
+            id: "img-layer-1",
+            type: "image",
+            name: "Photo Plane",
+            enabled: true,
+            params: {
+              horizon: parseInt(ingestSplit.value),
+              motionType: ingestMotion.value,
+              motionSpeed: 1.0,
+              motionIntensity: 0.08,
+            },
+          },
+        ],
+      };
+
+      session = createStudioSession(imageSpec);
+      // Pass decoded pixels into layer
+      const imgInst = (session as any).piece;
+      selectedLayerId = "img-layer-1";
+      updateColorMap();
+      updateLayerUI();
+      updatePaletteUI();
+      updateCodeView();
+    };
+  }
+
+  // Initialize Studio
+  updateColorMap();
+  updateLayerUI();
+  updatePaletteUI();
+  updateCodeView();
+  requestAnimationFrame(tick);
+</script>

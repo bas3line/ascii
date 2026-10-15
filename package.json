@@ -56,6 +56,10 @@
       "types": "./dist/kit/recipes/index.d.ts",
       "default": "./dist/kit/recipes/index.js"
     },
+    "./studio": {
+      "types": "./dist/studio/index.d.ts",
+      "default": "./dist/studio/index.js"
+    },
     "./astro": "./src/astro/Ascii.astro",
     "./astro/banner": "./src/astro/Banner.astro"
   },
