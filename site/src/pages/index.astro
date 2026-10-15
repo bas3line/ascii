@@ -1,23 +1,17 @@
 ---
 /*
- * ascii.rest: hero scene preview, clean category switcher,
- * and modular collection grids by parent category.
+ * ascii.rest: hero scene preview, clean parent category switcher
+ * broken up according to the sidebar parents (scenes, components, brands, more).
  */
 import Layout from "../layouts/Layout.astro";
 import Art from "../components/Art.astro";
-import { categories, groups, pieces } from "../lib/library";
+import { groups, pieces } from "../lib/library";
 
 const hero = pieces.find((p) => p.slug === "aurora-fjord") ?? pieces[0];
 const description = `${pieces.length} animated ascii pieces for web pages. MIT licensed.`;
 ---
 
 <Layout title="ascii.rest: animated ascii art" description={description} path="/" home>
-  <a slot="notice" class="notice" href="/#scenes">
-    <span class="tag">new</span>
-    <span class="shine">19 new scenes: saturn rise, amer fort, lake pichola, snow train, black prism and more</span>
-    <span class="go">[view scenes]</span>
-  </a>
-
   <!-- Top Hero Scene -->
   <script is:inline>document.documentElement.classList.add("pick-hero");</script>
   <a class="hero" href={`/${hero.slug}/`} aria-label={`${hero.name}, one of the scenes`}>
@@ -26,139 +20,196 @@ const description = `${pieces.length} animated ascii pieces for web pages. MIT l
     </div>
   </a>
 
-  <!-- Category Filter Bar: Modular collection breakdown -->
+  <!-- Parent Group Switcher -->
   <section class="collection-section">
-    <nav class="cat-pill-bar" id="cat-pill-bar" aria-label="Filter collection by category">
-      {categories.map((c, i) => (
-        <button
-          class:list={["cat-pill", i === 0 && "active"]}
-          type="button"
-          data-cat={c.name}
-        >
-          [{c.name}] <span class="pill-count">{c.pieces.length}</span>
-        </button>
-      ))}
+    <nav class="group-tab-bar" id="group-tab-bar" aria-label="Collection parent sections">
+      {groups.map((group, i) => {
+        const total = group.categories.reduce((acc, c) => acc + c.pieces.length, 0);
+        return (
+          <button
+            class:list={["group-tab", i === 0 && "active"]}
+            type="button"
+            data-group={group.label}
+          >
+            <span class="tab-icon">{group.icon}</span>
+            <span class="tab-label">{group.label}</span>
+            <span class="tab-count">{total}</span>
+          </button>
+        );
+      })}
     </nav>
 
-    <!-- Individual Category Grids (One active at a time, or jump to by hash) -->
-    <div id="pieces-container">
-      {categories.map((category, i) => (
-        <section
-          id={category.name}
-          class:list={["category-view", i === 0 && "active"]}
-          data-category={category.name}
-        >
-          <div class="head">
-            <h2>{category.name}</h2>
-            <span class="count">{category.pieces.length} pieces</span>
+    <!-- Parent Views: one displayed at a time -->
+    <div id="parent-groups-container">
+      {groups.map((group, i) => {
+        const isScenes = group.label === "scenes";
+        return (
+          <div
+            id={`group-${group.label}`}
+            class:list={["group-view", i === 0 && "active"]}
+            data-group-view={group.label}
+          >
+            {isScenes ? (
+              <div class="grid wide">
+                {group.categories[0].pieces.map((piece) => (
+                  <a class="card" href={`/${piece.slug}/`}>
+                    <div class:list={["well", piece.ground && "scene"]} style={piece.ground && `--ground: ${piece.ground}`}>
+                      <Art piece={piece} />
+                    </div>
+                    <span class="name">{piece.name}</span>
+                    {piece.recent && <span class="new">new</span>}
+                    <span class="note">{piece.note}</span>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <div class="sub-categories-stack">
+                {group.categories.map((category) => (
+                  <section class="category-block" id={category.name}>
+                    <div class="head">
+                      <h2>{category.name}</h2>
+                      <span class="count">{category.pieces.length} pieces</span>
+                    </div>
+                    <div class="grid">
+                      {category.pieces.map((piece) => (
+                        <a class="card" href={`/${piece.slug}/`}>
+                          <div class:list={["well", piece.ground && "scene"]} style={piece.ground && `--ground: ${piece.ground}`}>
+                            <Art piece={piece} />
+                          </div>
+                          <span class="name">{piece.name}</span>
+                          {piece.recent && <span class="new">new</span>}
+                          <span class="note">{piece.note}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
           </div>
-
-          <div class:list={["grid", category.name === "scenes" && "wide"]}>
-            {category.pieces.map((piece) => (
-              <a class="card" href={`/${piece.slug}/`}>
-                <div class:list={["well", piece.ground && "scene"]} style={piece.ground && `--ground: ${piece.ground}`}>
-                  <Art piece={piece} />
-                </div>
-                <span class="name">{piece.name}</span>
-                {piece.recent && <span class="new">new</span>}
-                <span class="note">{piece.note}</span>
-              </a>
-            ))}
-          </div>
-        </section>
-      ))}
+        );
+      })}
     </div>
   </section>
 
   <style>
     .collection-section {
-      margin-top: 2rem;
+      margin-top: 1.5rem;
     }
 
-    .cat-pill-bar {
+    .group-tab-bar {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.35rem;
-      margin-bottom: 1.5rem;
+      gap: 0.4rem;
+      margin-bottom: 1.75rem;
       padding-bottom: 0.75rem;
       border-bottom: 1px solid var(--well);
     }
 
-    .cat-pill {
+    .group-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5ch;
       background: transparent;
       border: 1px solid var(--well);
       color: var(--muted);
       font-family: var(--mono);
-      font-size: 0.8rem;
-      padding: 0.25rem 0.55rem;
+      font-size: 0.85rem;
+      padding: 0.35rem 0.75rem;
       cursor: pointer;
       border-radius: 0;
       transition: color 0.1s, border-color 0.1s, background 0.1s;
     }
 
-    .cat-pill:hover {
+    .group-tab:hover {
       color: var(--ink);
       border-color: var(--ink);
     }
 
-    .cat-pill.active {
+    .group-tab.active {
       background: var(--ink);
       color: var(--bg);
       border-color: var(--ink);
     }
 
-    .cat-pill.active .pill-count {
-      color: var(--bg);
-      opacity: 0.8;
+    .tab-icon {
+      font-size: 0.95em;
     }
 
-    .pill-count {
+    .tab-count {
       font-size: 0.75em;
-      color: var(--muted);
+      opacity: 0.8;
       margin-left: 0.2ch;
     }
 
-    .category-view {
+    .group-view {
       display: none;
     }
 
-    .category-view.active {
+    .group-view.active {
       display: block;
+    }
+
+    .sub-categories-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 2.5rem;
+    }
+
+    .category-block .head {
+      margin-bottom: 0.75rem;
     }
   </style>
 
   <script is:inline>
-    // Tab switching for category breakdown & hash routing
+    // Tab switching for parent group breakdown & hash routing
     (function () {
-      var pills = document.querySelectorAll(".cat-pill");
-      var views = document.querySelectorAll(".category-view");
+      var tabs = document.querySelectorAll(".group-tab");
+      var views = document.querySelectorAll(".group-view");
 
-      function showCategory(catName) {
-        pills.forEach(function (p) {
-          p.classList.toggle("active", p.getAttribute("data-cat") === catName);
+      function showGroup(groupName) {
+        tabs.forEach(function (t) {
+          t.classList.toggle("active", t.getAttribute("data-group") === groupName);
         });
         views.forEach(function (v) {
-          v.classList.toggle("active", v.getAttribute("data-category") === catName);
+          v.classList.toggle("active", v.getAttribute("data-group-view") === groupName);
         });
       }
 
-      pills.forEach(function (pill) {
-        pill.addEventListener("click", function () {
-          var cat = pill.getAttribute("data-cat");
-          if (cat) {
-            showCategory(cat);
-            history.replaceState(null, "", "#" + cat);
+      tabs.forEach(function (tab) {
+        tab.addEventListener("click", function () {
+          var grp = tab.getAttribute("data-group");
+          if (grp) {
+            showGroup(grp);
+            history.replaceState(null, "", "#" + grp);
           }
         });
       });
 
       function handleHash() {
         var hash = location.hash.replace(/^#/, "");
-        if (hash) {
-          var match = Array.from(views).some(function (v) {
-            return v.getAttribute("data-category") === hash;
-          });
-          if (match) showCategory(hash);
+        if (!hash) return;
+
+        // Check if hash matches a parent group
+        var directMatch = Array.from(views).some(function (v) {
+          return v.getAttribute("data-group-view") === hash;
+        });
+        if (directMatch) {
+          showGroup(hash);
+          return;
+        }
+
+        // Check if hash matches a sub-category inside one of the parent groups
+        var subEl = document.getElementById(hash);
+        if (subEl) {
+          var parentView = subEl.closest(".group-view");
+          if (parentView) {
+            var grp = parentView.getAttribute("data-group-view");
+            if (grp) {
+              showGroup(grp);
+              subEl.scrollIntoView({ behavior: "smooth" });
+            }
+          }
         }
       }
 
@@ -171,7 +222,7 @@ const description = `${pieces.length} animated ascii pieces for web pages. MIT l
   <script is:inline>
     (function () {
       var hero = document.querySelector(".hero");
-      var cards = document.querySelectorAll("#scenes pre[data-piece]");
+      var cards = document.querySelectorAll("#group-scenes pre[data-piece]");
       try {
         if (hero && cards.length) {
           var from = cards[Math.floor(Math.random() * cards.length)];

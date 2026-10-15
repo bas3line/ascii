@@ -82,24 +82,27 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
       <aside class="side" id="side-bar">
         <!-- Top brand & collapse toggle -->
         <div class="side-head">
-          <a class="logo-mark" href="/" title="Home" aria-label="Home">@</a>
-          <button id="side-toggle" class="side-toggle" type="button" aria-label="Toggle sidebar" title="Toggle sidebar">
-            <span class="toggle-icon">›</span>
+          <button id="side-mark-btn" class="side-mark-btn" type="button" aria-label="Expand sidebar" title="Expand sidebar">
+            <span class="mark-icon">@</span>
+            <span class="mark-hover-icon" aria-hidden="true">›</span>
+          </button>
+          <a class="logo-link" href="/" title="Home" aria-label="Home">@</a>
+          <button id="side-toggle" class="side-toggle" type="button" aria-label="Collapse sidebar" title="Collapse sidebar">
+            <span class="toggle-icon">‹</span>
           </button>
         </div>
 
         <!-- Collapsed Icon Rail (shown when sidebar is in rail mode) -->
-        <div class="side-rail-icons" aria-hidden="true">
-          <a href="/" class="rail-icon" title="Home">@</a>
+        <nav class="side-rail-icons" aria-label="Quick navigation">
           <a href="/studio/" class="rail-icon" title="Studio" aria-current={path.startsWith("/studio/") ? "page" : undefined}>✦</a>
           <a href="/banner/" class="rail-icon" title="Make a banner" aria-current={path === "/banner/" ? "page" : undefined}>■</a>
           <a href="/make/" class="rail-icon" title="Image to ascii" aria-current={path === "/make/" ? "page" : undefined}>▦</a>
           <a href="/docs/" class="rail-icon" title="Docs" aria-current={path.startsWith("/docs/") ? "page" : undefined}>§</a>
           <div class="rail-divider"></div>
           {groups.map((group) => (
-            <a href={`/#${group.categories[0].name}`} class="rail-icon" title={group.label}>{group.icon || "·"}</a>
+            <a href={`/#${group.label}`} class="rail-icon" title={group.label} aria-label={group.label}>{group.icon || "·"}</a>
           ))}
-        </div>
+        </nav>
 
         <!-- Expanded Sidebar Content -->
         <div class="side-expanded-content">
@@ -133,6 +136,7 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
             {groups.map((group) => {
               const groupPieceCount = group.categories.reduce((acc, c) => acc + c.pieces.length, 0);
               const hasCurrent = group.categories.some((c) => c.pieces.some((p) => p.slug === current));
+              const isDirectList = group.categories.length === 1;
               return (
                 <details class="side-parent-group" open={hasCurrent}>
                   <summary class="side-parent-summary">
@@ -142,29 +146,42 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
                     </span>
                     <span class="count">{groupPieceCount}</span>
                   </summary>
-                  <div class="side-sub-groups">
-                    {group.categories.map((category) => {
-                      const catHasCurrent = category.pieces.some((p) => p.slug === current);
-                      return (
-                        <details class="side-cat-group" open={catHasCurrent}>
-                          <summary class="side-cat-summary">
-                            <span class="cat-name">{category.name}</span>
-                            <span class="count">{category.pieces.length}</span>
-                          </summary>
-                          <ul role="list">
-                            {category.pieces.map((piece) => (
-                              <li>
-                                <a href={`/${piece.slug}/`} aria-current={piece.slug === current ? "page" : undefined}>
-                                  {piece.name}
-                                </a>
-                                {piece.recent && <span class="new">new</span>}
-                              </li>
-                            ))}
-                          </ul>
-                        </details>
-                      );
-                    })}
-                  </div>
+                  {isDirectList ? (
+                    <ul role="list" class="side-direct-list">
+                      {group.categories[0].pieces.map((piece) => (
+                        <li>
+                          <a href={`/${piece.slug}/`} aria-current={piece.slug === current ? "page" : undefined}>
+                            {piece.name}
+                          </a>
+                          {piece.recent && <span class="new">new</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div class="side-sub-groups">
+                      {group.categories.map((category) => {
+                        const catHasCurrent = category.pieces.some((p) => p.slug === current);
+                        return (
+                          <details class="side-cat-group" open={catHasCurrent}>
+                            <summary class="side-cat-summary">
+                              <span class="cat-name">{category.name}</span>
+                              <span class="count">{category.pieces.length}</span>
+                            </summary>
+                            <ul role="list">
+                              {category.pieces.map((piece) => (
+                                <li>
+                                  <a href={`/${piece.slug}/`} aria-current={piece.slug === current ? "page" : undefined}>
+                                    {piece.name}
+                                  </a>
+                                  {piece.recent && <span class="new">new</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        );
+                      })}
+                    </div>
+                  )}
                 </details>
               );
             })}
@@ -175,67 +192,66 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
       </aside>
 
       <script is:inline>
-        // Search: as you type, the sidebar keeps the pieces whose name holds each word, or
-        // whose category starts with it, and drops the headings left empty. Enter opens the
-        // first, Esc clears, and / comes here from anywhere but a field. It shows before the
-        // script below puts the sidebar's scroll back, so that lands where it was.
+        // Search: as you type, filter pieces across direct lists and subcategories
         (function () {
           var form = document.querySelector(".find");
-          // The docs have their own index in the sidebar, and no search.
           if (!form) return;
           var input = form.querySelector("input");
           var found = form.querySelector(".found");
           var nav = document.querySelector(".side nav");
-          var groups = [];
-          var group, category;
-          for (var el = nav.firstElementChild; el; el = el.nextElementSibling) {
-            if (el.tagName === "H2") groups.push((group = { head: el, categories: [] }));
-            else if (el.tagName === "H3") {
-              var count = el.querySelector(".count");
-              category = { head: el, count: count, all: count.textContent, name: el.querySelector("a").textContent, list: null, items: [] };
-              group.categories.push(category);
-            } else if (el.tagName === "UL") {
-              category.list = el;
-              for (var li = el.firstElementChild; li; li = li.nextElementSibling) {
-                var a = li.querySelector("a");
-                category.items.push({ li: li, a: a, words: [a.textContent.trim(), a.getAttribute("href").replace(/\//g, "")].join(" ") });
-              }
-            }
-          }
+          if (!nav) return;
+
+          var allItems = Array.from(nav.querySelectorAll("li")).map(function (li) {
+            var a = li.querySelector("a");
+            return {
+              li: li,
+              a: a,
+              words: (a.textContent.trim() + " " + (a.getAttribute("href") || "").replace(/\//g, " ")).toLowerCase(),
+            };
+          });
+          var allParentDetails = Array.from(nav.querySelectorAll(".side-parent-group"));
+          var allCatDetails = Array.from(nav.querySelectorAll(".side-cat-group"));
+
           function filter() {
             var words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
-            var first = null;
             var total = 0;
-            var lead = true;
-            groups.forEach(function (g) {
-              var any = false;
-              g.categories.forEach(function (c) {
-                var n = 0;
-                c.items.forEach(function (item) {
-                  var hit = words.every(function (w) {
-                    return item.words.indexOf(w) >= 0 || c.name.indexOf(w) === 0;
-                  });
-                  item.li.hidden = !hit;
-                  if (hit) n++;
-                  if (hit && !first) first = item.a;
-                });
-                c.head.hidden = c.list.hidden = !n;
-                c.count.textContent = words.length ? n : c.all;
-                total += n;
-                if (n) any = true;
-              });
-              g.head.hidden = !any;
-              // the first group left takes the top, as the first does unfiltered
-              g.head.classList.toggle("lead", any && lead);
-              if (any) lead = false;
+            var first = null;
+
+            if (!words.length) {
+              allItems.forEach(function (item) { item.li.hidden = false; });
+              allParentDetails.forEach(function (d) { d.hidden = false; });
+              allCatDetails.forEach(function (d) { d.hidden = false; });
+              found.textContent = "";
+              found.classList.add("sr");
+              return null;
+            }
+
+            allItems.forEach(function (item) {
+              var hit = words.every(function (w) { return item.words.indexOf(w) >= 0; });
+              item.li.hidden = !hit;
+              if (hit) {
+                total++;
+                if (!first) first = item.a;
+              }
             });
-            nav.classList.toggle("searching", words.length > 0);
-            found.textContent = !words.length ? "" : !total ? "nothing matches" : total + (total === 1 ? " piece" : " pieces");
-            found.classList.toggle("sr", total > 0 || !words.length);
-            mark();
-            return words.length ? first : null;
+
+            allCatDetails.forEach(function (d) {
+              var visible = d.querySelectorAll("li:not([hidden])").length;
+              d.hidden = visible === 0;
+              if (visible > 0) d.open = true;
+            });
+
+            allParentDetails.forEach(function (d) {
+              var visible = d.querySelectorAll("li:not([hidden])").length;
+              d.hidden = visible === 0;
+              if (visible > 0) d.open = true;
+            });
+
+            found.textContent = !total ? "nothing matches" : total + (total === 1 ? " piece" : " pieces");
+            found.classList.toggle("sr", total > 0);
+            return first;
           }
-          // the / hint gives way while the field has focus or text
+
           function mark() {
             form.classList.toggle("on", input.value !== "" || document.activeElement === input);
           }
@@ -293,22 +309,24 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
       </script>
 
       <main class="page">
-        <slot name="notice" />
         <div class="top">
           <slot name="heading" />
           <span class="tools">
-            <button id="motion" class="button" type="button" hidden><span>[play anyway]</span></button>
-            <a href="/docs/">[docs]</a>
-            <a href={REPO}>[github]</a>
             <button id="theme" class="button" type="button" aria-label="Switch to dark theme" hidden><span>[dark]</span></button>
           </span>
         </div>
         <slot />
         <footer class="foot muted">
-          <div class="foot-bar">
-            <a href="/docs/">[docs]</a>
-            <a href={REPO}>[github]</a>
-            <span>{NAME}, MIT licensed.</span>
+          <div class="foot-inner">
+            <div class="foot-left">
+              <span class="foot-name">{NAME}</span>
+              <span class="foot-sep">/</span>
+              <span class="foot-lic">MIT licensed</span>
+            </div>
+            <div class="foot-right">
+              <a href="/docs/">[docs]</a>
+              <a href={REPO}>[github]</a>
+            </div>
           </div>
         </footer>
       </main>
@@ -317,24 +335,30 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
     <script is:inline>
       (function () {
         var frame = document.getElementById("main-frame");
+        var markBtn = document.getElementById("side-mark-btn");
         var toggle = document.getElementById("side-toggle");
-        if (!frame || !toggle) return;
+        if (!frame) return;
         var key = "ascii-side-collapsed";
         // Default to collapsed rail mode
         var isCollapsed = localStorage.getItem(key) !== "false";
         function applyState(collapsed) {
           frame.classList.toggle("side-collapsed", collapsed);
-          var icon = toggle.querySelector(".toggle-icon");
-          if (icon) icon.textContent = collapsed ? "›" : "‹";
         }
         applyState(isCollapsed);
-        toggle.addEventListener("click", function () {
-          isCollapsed = !frame.classList.contains("side-collapsed");
-          applyState(isCollapsed);
-          try {
-            localStorage.setItem(key, String(isCollapsed));
-          } catch (e) {}
-        });
+        if (markBtn) {
+          markBtn.addEventListener("click", function () {
+            isCollapsed = false;
+            applyState(isCollapsed);
+            try { localStorage.setItem(key, "false"); } catch (e) {}
+          });
+        }
+        if (toggle) {
+          toggle.addEventListener("click", function () {
+            isCollapsed = true;
+            applyState(isCollapsed);
+            try { localStorage.setItem(key, "true"); } catch (e) {}
+          });
+        }
       })();
     </script>
 

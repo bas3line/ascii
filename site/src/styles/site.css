@@ -63,7 +63,20 @@
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  scrollbar-gutter: stable;
+}
+
+/* Hide all scrollbars across all browsers and elements */
+html,
+body,
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 body {
@@ -180,20 +193,19 @@ a[aria-current="page"] {
 
 /* --- frame: sidebar and page -------------------------------------------- */
 
-/* --- frame: sidebar and page -------------------------------------------- */
-
 .frame {
   display: grid;
-  grid-template-columns: 24ch minmax(0, 1fr);
-  gap: 3.5ch;
-  width: min(100% - 2rem, 160ch);
-  margin-inline: auto;
-  transition: grid-template-columns 0.15s ease;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 1.5rem 0 0;
 }
 
 .frame.side-collapsed {
   grid-template-columns: 48px minmax(0, 1fr);
-  gap: 2.5ch;
+  gap: 1.25rem;
 }
 
 .side {
@@ -203,18 +215,99 @@ a[aria-current="page"] {
   height: 100vh;
   height: 100dvh;
   overflow-y: auto;
-  padding: 1.25rem 0.5ch 1.5rem;
-  scrollbar-width: thin;
+  padding: 1rem 0 1.5rem;
+  width: 100%;
+  border-right: 1px solid var(--well);
+}
+
+.frame:not(.side-collapsed) .side {
+  padding-inline: 0.5rem;
 }
 
 .side-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1rem;
+  height: 36px;
+  margin-bottom: 0.75rem;
 }
 
-.logo-mark {
+/* When collapsed into rail mode */
+.frame.side-collapsed .side-head {
+  justify-content: center;
+}
+
+.frame.side-collapsed .logo-link {
+  display: none;
+}
+
+.frame.side-collapsed .side-toggle {
+  display: none;
+}
+
+.frame.side-collapsed .side-mark-btn {
+  display: flex;
+}
+
+/* When expanded */
+.frame:not(.side-collapsed) .side-head {
+  justify-content: space-between;
+  padding: 0 0.5rem;
+}
+
+.frame:not(.side-collapsed) .side-mark-btn {
+  display: none;
+}
+
+.frame:not(.side-collapsed) .logo-link {
+  display: flex;
+}
+
+.frame:not(.side-collapsed) .side-toggle {
+  display: flex;
+}
+
+/* Rail top mark button with hover toggle swap: shows toggle IN PLACE OF THE ICON on hover */
+.side-mark-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 1.15rem;
+  font-weight: 700;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  line-height: 1;
+}
+
+.side-mark-btn .mark-hover-icon {
+  display: none;
+  font-size: 1.15rem;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.side-mark-btn:hover {
+  background: var(--well);
+  border-color: var(--well);
+}
+
+.side-mark-btn:hover .mark-icon {
+  display: none;
+}
+
+.side-mark-btn:hover .mark-hover-icon {
+  display: inline;
+}
+
+/* Expanded logo link */
+.logo-link {
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--ink);
@@ -227,25 +320,30 @@ a[aria-current="page"] {
   font-family: var(--mono);
 }
 
+/* Expanded collapse toggle (right-aligned) */
 .side-toggle {
   background: none;
   border: 1px solid transparent;
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 0.9rem;
+  font-size: 1.1rem;
   cursor: pointer;
-  padding: 0.15rem 0.4rem;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-left: auto;
+  border-radius: 0;
 }
 
 .side-toggle:hover {
   color: var(--ink);
   border-color: var(--well);
+  background: var(--well);
 }
 
-/* Collapsed rail mode */
+/* Collapsed rail mode display */
 .frame.side-collapsed .side-expanded-content {
   display: none;
 }
@@ -262,20 +360,23 @@ a[aria-current="page"] {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.5rem;
+  width: 100%;
 }
 
 .rail-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   font-family: var(--mono);
-  font-size: 0.95rem;
+  font-size: 1rem;
   color: var(--muted);
   text-decoration: none;
   border: 1px solid transparent;
+  border-radius: 0;
+  line-height: 1;
 }
 
 .rail-icon:hover {
@@ -290,10 +391,10 @@ a[aria-current="page"] {
 }
 
 .rail-divider {
-  width: 18px;
+  width: 24px;
   height: 1px;
   background: var(--well);
-  margin: 0.2rem 0;
+  margin: 0.4rem auto;
 }
 
 /* Collapsible navigation details and summaries */
@@ -364,6 +465,16 @@ a[aria-current="page"] {
 }
 
 .side-cat-group li {
+  margin: 0.15rem 0;
+}
+
+.side-direct-list {
+  padding-left: 1.5ch;
+  margin: 0.35rem 0 0.85rem;
+  list-style: none;
+}
+
+.side-direct-list li {
   margin: 0.15rem 0;
 }
 
@@ -540,110 +651,71 @@ a[aria-current="page"] {
 
 .page {
   min-width: 0;
-  padding: 1.25rem 0 2rem;
+  padding: 0.75rem 0 2rem;
 }
 
-.foot-bar {
+.foot {
+  width: 100%;
+  margin-top: 3.5rem;
+  padding: 1.5rem 0 2rem;
+  border-top: 1px solid var(--well);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.foot-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
   flex-wrap: wrap;
-  gap: 1.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--well);
-  margin-top: 2.5rem;
-  font-size: 0.85em;
+  gap: 1.25rem;
 }
 
-.foot-bar a {
+.foot-left {
+  display: flex;
+  align-items: baseline;
+  gap: 1ch;
+}
+
+.foot-name {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.foot-sep {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.foot-right {
+  display: flex;
+  align-items: center;
+  gap: 2ch;
+}
+
+.foot-right a {
   color: var(--muted);
   text-decoration: none;
 }
 
-.foot-bar a:hover {
+.foot-right a:hover {
   color: var(--ink);
 }
 
 /* --- page header -------------------------------------------------------- */
 
-/* The home page's word on what is new: a glint, the banners' own orange to pink, crosses it every few seconds. */
-.notice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.25rem 1.5ch;
-  margin-bottom: 2rem;
-  color: var(--ink);
-  text-decoration: none;
-}
-
-.notice .tag {
-  padding: 0 0.75ch;
-  background: var(--ink);
-  color: var(--bg);
-}
-
-.notice .shine {
-  background: linear-gradient(105deg, var(--ink) 0 42%, #f97316 47%, #f778ba 53%, var(--ink) 58% 100%) 100% 0 / 250% 100% no-repeat;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: notice-glint 4s ease-in-out infinite;
-}
-
-.notice .go {
-  color: var(--muted);
-}
-
-/* The whole line is one link, but only [take a look] lights up, as other links do: inverting the whole line, as
-   a:hover does, turned it into one solid bar and hid the tag and the glint. */
-@media (hover: hover) {
-  .notice:hover {
-    background: none;
-    color: var(--ink);
-  }
-}
-
-.notice:focus-visible {
-  background: none;
-  color: var(--ink);
-}
-
-.notice:hover .go,
-.notice:focus-visible .go {
-  background: var(--ink);
-  color: var(--bg);
-}
-
-@keyframes notice-glint {
-  0%,
-  15% {
-    background-position: 100% 0;
-  }
-  75%,
-  100% {
-    background-position: 0 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .notice .shine {
-    animation: none;
-    background: none;
-    color: var(--ink);
-  }
-}
-
 .top {
   display: flex;
   align-items: baseline;
   gap: 2ch;
+  margin-bottom: 1.25rem;
 }
 
 .top .tools {
   display: flex;
-  gap: 2ch;
-  margin: 0 -1ch 0 auto;
+  gap: 1.5ch;
+  margin-left: auto;
 }
 
 .lede {

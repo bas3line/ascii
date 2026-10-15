@@ -42,7 +42,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
 
         <nav class="transport-strip">
           <button class="pill transport-btn" type="button" id="btn-play" aria-label="Play or pause">
-            <span id="play-icon">⏸</span>
+            <span id="play-icon">⏸ pause</span>
           </button>
 
           <div class="scrubber-container">
@@ -95,36 +95,48 @@ import { PAGES, pageCardOf } from "../lib/pages";
 
         <!-- Panel Tab: Palette & Halftone -->
         <div class="panel-body" id="tab-palette">
-          <div class="control-row">
-            <label for="col-ground">ground color</label>
-            <div class="color-picker-wrap">
+          <div class="param-control-group param-row-between">
+            <label for="col-ground" class="param-label">ground color</label>
+            <div class="param-color-right">
               <input type="color" id="col-ground" value="#0b0817" />
-              <span class="range-val" id="hex-ground">#0b0817</span>
+              <span class="param-val" id="hex-ground">#0b0817</span>
             </div>
           </div>
 
-          <div class="control-row">
-            <label for="sel-ramp">glyph ramp</label>
-            <select id="sel-ramp">
-              <option value=" ·•●">dots [ ·•● ]</option>
-              <option value=" ⠂⠆⠖⣶">braille [ ⠂⠆⠖⣶ ]</option>
-              <option value=" .:-=+*#%@">ascii [ .:-=+*#%@ ]</option>
-            </select>
+          <div class="param-control-group">
+            <div class="param-control-header">
+              <label for="sel-ramp" class="param-label">glyph ramp</label>
+            </div>
+            <div class="param-widget">
+              <select id="sel-ramp">
+                <option value=" ·•●">dots [ ·•● ]</option>
+                <option value=" ⠂⠆⠖⣶">braille [ ⠂⠆⠖⣶ ]</option>
+                <option value=" .:-=+*#%@">ascii [ .:-=+*#%@ ]</option>
+              </select>
+            </div>
           </div>
 
-          <div class="control-row">
-            <label for="sel-dither">dithering</label>
-            <select id="sel-dither">
-              <option value="bayer4">bayer 4x4</option>
-              <option value="bayer8">bayer 8x8</option>
-              <option value="none">threshold</option>
-            </select>
+          <div class="param-control-group">
+            <div class="param-control-header">
+              <label for="sel-dither" class="param-label">dithering</label>
+            </div>
+            <div class="param-widget">
+              <select id="sel-dither">
+                <option value="bayer4">bayer 4x4</option>
+                <option value="bayer8">bayer 8x8</option>
+                <option value="none">threshold</option>
+              </select>
+            </div>
           </div>
 
-          <div class="control-row">
-            <label for="range-contrast">contrast</label>
-            <input type="range" id="range-contrast" min="0.5" max="2.0" step="0.05" value="1.0" />
-            <span class="range-val" id="val-contrast">1.0</span>
+          <div class="param-control-group">
+            <div class="param-control-header">
+              <label for="range-contrast" class="param-label">contrast</label>
+              <span class="param-val" id="val-contrast">1.0</span>
+            </div>
+            <div class="param-widget">
+              <input type="range" id="range-contrast" min="0.5" max="2.0" step="0.05" value="1.0" />
+            </div>
           </div>
 
           <div class="palette-swatches-section">
@@ -144,19 +156,28 @@ import { PAGES, pageCardOf } from "../lib/pages";
           </div>
 
           <div class="ingest-controls">
-            <div class="control-row">
-              <label for="ingest-motion">motion preset</label>
-              <select id="ingest-motion">
-                <option value="water_ripple">Lower Plane Swell</option>
-                <option value="cloud_drift">Upper Plane Drift</option>
-                <option value="shimmer">Micro-Shimmer</option>
-                <option value="static">Static Halftone</option>
-              </select>
+            <div class="param-control-group">
+              <div class="param-control-header">
+                <label for="ingest-motion" class="param-label">motion preset</label>
+              </div>
+              <div class="param-widget">
+                <select id="ingest-motion">
+                  <option value="water_ripple">Lower Plane Swell</option>
+                  <option value="cloud_drift">Upper Plane Drift</option>
+                  <option value="shimmer">Micro-Shimmer</option>
+                  <option value="static">Static Halftone</option>
+                </select>
+              </div>
             </div>
-            <div class="control-row">
-              <label for="ingest-split">horizon split</label>
-              <input type="range" id="ingest-split" min="10" max="90" step="1" value="50" />
-              <span class="range-val" id="val-ingest-split">50</span>
+
+            <div class="param-control-group">
+              <div class="param-control-header">
+                <label for="ingest-split" class="param-label">horizon split</label>
+                <span class="param-val" id="val-ingest-split">50</span>
+              </div>
+              <div class="param-widget">
+                <input type="range" id="ingest-split" min="10" max="90" step="1" value="50" />
+              </div>
             </div>
           </div>
         </div>
@@ -179,8 +200,8 @@ import { PAGES, pageCardOf } from "../lib/pages";
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    max-width: 1560px;
-    margin: 0 auto;
+    width: 100%;
+    margin: 0;
     font-family: var(--mono);
   }
 
@@ -258,8 +279,8 @@ import { PAGES, pageCardOf } from "../lib/pages";
   /* Two-column layout: Viewport Left, Controls Right */
   .studio-main-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
-    gap: 0.75rem;
+    grid-template-columns: minmax(0, 1fr) 420px;
+    gap: 1rem;
     align-items: start;
   }
 
@@ -298,19 +319,19 @@ import { PAGES, pageCardOf } from "../lib/pages";
   .transport-strip {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    padding: 0.4rem 0.6rem;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
     background: var(--bg);
     border-top: 1px solid var(--well);
   }
 
   .transport-btn {
-    min-width: 2rem;
+    min-width: 4.5rem;
     height: 1.8rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.85rem;
+    font-size: 0.75rem;
   }
 
   .scrubber-container {
@@ -330,6 +351,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
     min-width: 3.5rem;
     text-align: right;
     color: var(--muted);
+    font-variant-numeric: tabular-nums;
   }
 
   /* Controls Column (Right) */
@@ -338,26 +360,27 @@ import { PAGES, pageCardOf } from "../lib/pages";
     flex-direction: column;
     border: 1px solid var(--well);
     background: var(--bg);
-    min-height: 480px;
+    min-height: 520px;
   }
 
   .panel-tabs {
     display: flex;
     border-bottom: 1px solid var(--well);
-    background: var(--well);
+    background: var(--bg);
   }
 
   .panel-tab-btn {
     flex: 1;
-    padding: 0.4rem 0.5rem;
+    padding: 0.5rem 0.65rem;
     border: none;
-    border-right: 1px solid var(--bg);
+    border-bottom: 2px solid transparent;
     background: transparent;
     color: var(--muted);
     font-family: var(--mono);
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     cursor: pointer;
     border-radius: 0;
+    text-align: center;
   }
 
   .panel-tab-btn:hover {
@@ -365,18 +388,19 @@ import { PAGES, pageCardOf } from "../lib/pages";
   }
 
   .panel-tab-btn.active {
-    background: var(--bg);
+    background: var(--well);
     color: var(--ink);
+    border-bottom-color: var(--ink);
     font-weight: 500;
   }
 
   .panel-body {
     display: none;
-    padding: 0.75rem;
+    padding: 1rem;
     flex-direction: column;
-    gap: 0.85rem;
+    gap: 1.15rem;
     overflow-y: auto;
-    max-height: 520px;
+    max-height: 540px;
   }
 
   .panel-body.active {
@@ -388,25 +412,32 @@ import { PAGES, pageCardOf } from "../lib/pages";
     text-transform: uppercase;
     color: var(--muted);
     letter-spacing: 0.05em;
-    margin-bottom: 0.35rem;
-    border-bottom: 1px dotted var(--well);
-    padding-bottom: 0.2rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--well);
+    padding-bottom: 0.3rem;
   }
 
   .layer-stack-list {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.35rem;
   }
 
   .layer-item-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.3rem 0.5rem;
+    padding: 0.45rem 0.65rem;
     border: 1px solid var(--well);
+    background: transparent;
     cursor: pointer;
     font-size: 0.75rem;
+    transition: border-color 0.1s, background 0.1s;
+    border-radius: 0;
+  }
+
+  .layer-item-row:hover {
+    border-color: var(--muted);
   }
 
   .layer-item-row.selected {
@@ -414,71 +445,124 @@ import { PAGES, pageCardOf } from "../lib/pages";
     background: var(--well);
   }
 
+  .layer-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+
+  .layer-name {
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .layer-type-badge {
+    color: var(--muted);
+    font-size: 0.7rem;
+    opacity: 0.8;
+  }
+
   .layer-chk {
     cursor: pointer;
-    margin-right: 0.4rem;
+    margin: 0;
+    accent-color: var(--ink);
   }
 
   .params-list {
     display: flex;
     flex-direction: column;
-    gap: 0.65rem;
+    gap: 0.25rem;
   }
 
-  .control-row {
-    display: grid;
-    grid-template-columns: 100px 1fr 45px;
+  /* Two-line stacked control parameters (NO cramming, full slider width) */
+  .param-control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .param-control-group:last-child {
+    border-bottom: none;
+  }
+
+  .param-row-between {
+    flex-direction: row;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: space-between;
+  }
+
+  .param-control-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .param-label {
     font-size: 0.75rem;
-  }
-
-  .control-row label {
     color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
   }
 
-  .control-row input[type="range"] {
+  .param-val {
+    font-size: 0.75rem;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .param-widget {
     width: 100%;
-    accent-color: var(--ink);
   }
 
-  .control-row select,
-  .control-row input[type="color"] {
+  .param-widget input[type="range"] {
+    width: 100%;
+    margin: 0;
+    accent-color: var(--ink);
+    cursor: pointer;
+    display: block;
+  }
+
+  .param-widget select {
+    width: 100%;
+    padding: 0.35rem 0.5rem;
     border: 1px solid var(--well);
     background: var(--bg);
     color: var(--ink);
     font-family: var(--mono);
     font-size: 0.75rem;
-    padding: 0.15rem 0.3rem;
     border-radius: 0;
   }
 
-  .range-val {
-    color: var(--text);
-    text-align: right;
-    font-size: 0.75rem;
-  }
-
-  .color-picker-wrap {
+  .param-color-right {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.5rem;
+  }
+
+  .param-color-right input[type="color"] {
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--well);
+    padding: 0;
+    background: none;
+    cursor: pointer;
+    border-radius: 0;
   }
 
   .palette-swatches {
     display: flex;
     flex-wrap: wrap;
-    gap: 3px;
-    margin-top: 0.35rem;
+    gap: 4px;
+    padding: 0.5rem 0;
   }
 
   .color-swatch {
-    width: 18px;
-    height: 18px;
-    border: 1px solid rgba(0, 0, 0, 0.2);
+    width: 20px;
+    height: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
     box-sizing: border-box;
   }
 
@@ -725,7 +809,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
     renderSelectedLayerControls();
   }
 
-  // Render parameters for selected layer
+  // Render parameters for selected layer (clean 2-line stacked controls)
   function renderSelectedLayerControls() {
     layerControlsEl.innerHTML = "";
     const activeLayer = session.spec.layers.find((l) => l.id === selectedLayerId);
@@ -735,15 +819,17 @@ import { PAGES, pageCardOf } from "../lib/pages";
     if (!def) return;
 
     Object.entries(def.schema).forEach(([key, paramDef]) => {
-      const row = document.createElement("div");
-      row.className = "control-row";
-
-      const label = document.createElement("label");
-      label.textContent = paramDef.label;
-      label.title = paramDef.label;
-      row.appendChild(label);
-
       if (paramDef.type === "number") {
+        const group = document.createElement("div");
+        group.className = "param-control-group";
+
+        const header = document.createElement("div");
+        header.className = "param-control-header";
+
+        const label = document.createElement("span");
+        label.className = "param-label";
+        label.textContent = paramDef.label;
+
         const slider = document.createElement("input");
         slider.type = "range";
         slider.min = String(paramDef.min);
@@ -752,7 +838,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
         slider.value = String(activeLayer.params[key] ?? paramDef.default);
 
         const valSpan = document.createElement("span");
-        valSpan.className = "range-val";
+        valSpan.className = "param-val";
         valSpan.textContent = slider.value;
 
         slider.addEventListener("input", () => {
@@ -762,15 +848,30 @@ import { PAGES, pageCardOf } from "../lib/pages";
           updateCodeView();
         });
 
-        row.appendChild(slider);
-        row.appendChild(valSpan);
+        header.appendChild(label);
+        header.appendChild(valSpan);
+        group.appendChild(header);
+
+        const widget = document.createElement("div");
+        widget.className = "param-widget";
+        widget.appendChild(slider);
+        group.appendChild(widget);
+
+        layerControlsEl.appendChild(group);
       } else if (paramDef.type === "color") {
+        const group = document.createElement("div");
+        group.className = "param-control-group param-row-between";
+
+        const label = document.createElement("span");
+        label.className = "param-label";
+        label.textContent = paramDef.label;
+
         const picker = document.createElement("input");
         picker.type = "color";
         picker.value = activeLayer.params[key] ?? paramDef.default;
 
         const hexSpan = document.createElement("span");
-        hexSpan.className = "range-val";
+        hexSpan.className = "param-val";
         hexSpan.textContent = picker.value;
 
         picker.addEventListener("input", () => {
@@ -780,9 +881,26 @@ import { PAGES, pageCardOf } from "../lib/pages";
           updateCodeView();
         });
 
-        row.appendChild(picker);
-        row.appendChild(hexSpan);
+        const right = document.createElement("div");
+        right.className = "param-color-right";
+        right.appendChild(picker);
+        right.appendChild(hexSpan);
+
+        group.appendChild(label);
+        group.appendChild(right);
+        layerControlsEl.appendChild(group);
       } else if (paramDef.type === "select") {
+        const group = document.createElement("div");
+        group.className = "param-control-group";
+
+        const header = document.createElement("div");
+        header.className = "param-control-header";
+        const label = document.createElement("span");
+        label.className = "param-label";
+        label.textContent = paramDef.label;
+        header.appendChild(label);
+        group.appendChild(header);
+
         const sel = document.createElement("select");
         paramDef.options.forEach((opt) => {
           const o = document.createElement("option");
@@ -800,22 +918,36 @@ import { PAGES, pageCardOf } from "../lib/pages";
           updateCodeView();
         });
 
-        row.appendChild(sel);
-        row.appendChild(document.createElement("span"));
+        const widget = document.createElement("div");
+        widget.className = "param-widget";
+        widget.appendChild(sel);
+        group.appendChild(widget);
+
+        layerControlsEl.appendChild(group);
       } else if (paramDef.type === "boolean") {
+        const group = document.createElement("div");
+        group.className = "param-control-group param-row-between";
+
+        const label = document.createElement("label");
+        label.className = "param-label";
+        label.textContent = paramDef.label;
+        label.style.cursor = "pointer";
+
         const cb = document.createElement("input");
         cb.type = "checkbox";
+        cb.className = "layer-chk";
         cb.checked = !!(activeLayer.params[key] ?? paramDef.default);
         cb.addEventListener("change", () => {
           session.setParam(activeLayer.id, key, cb.checked);
           renderOnDemand();
           updateCodeView();
         });
-        row.appendChild(cb);
-        row.appendChild(document.createElement("span"));
-      }
 
-      layerControlsEl.appendChild(row);
+        label.appendChild(cb);
+        group.appendChild(label);
+        group.appendChild(cb);
+        layerControlsEl.appendChild(group);
+      }
     });
   }
 
