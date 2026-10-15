@@ -272,12 +272,17 @@ import { PAGES, pageCardOf } from "../lib/pages";
     display: grid;
     grid-template-columns: minmax(0, 1fr) 420px;
     gap: 1rem;
-    align-items: start;
+    align-items: stretch;
+    /* one screen: viewport and panel fill the first screen together, the code
+    strip starts under the fold, where scrolling brings it in. */
+    height: calc(100vh - 4.25rem);
+    height: calc(100dvh - 4.25rem);
   }
 
   @media (max-width: 1024px) {
     .studio-main-row {
       grid-template-columns: 1fr;
+      height: auto;
     }
   }
 
@@ -293,6 +298,8 @@ import { PAGES, pageCardOf } from "../lib/pages";
     position: relative;
     width: 100%;
     aspect-ratio: 200 / 100;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -345,7 +352,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
     flex-direction: column;
     border: 1px solid var(--well);
     background: var(--bg);
-    min-height: 520px;
+    min-height: 0;
   }
 
   .panel-tabs {
@@ -385,11 +392,17 @@ import { PAGES, pageCardOf } from "../lib/pages";
     flex-direction: column;
     gap: 1.15rem;
     overflow-y: auto;
-    max-height: 540px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
   .panel-body.active {
     display: flex;
+  }
+
+  .panel-body::-webkit-scrollbar {
+    display: none;
+    width: 0;
   }
 
   .section-title {
