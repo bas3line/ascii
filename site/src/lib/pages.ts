@@ -28,5 +28,5 @@ export type PageName = keyof typeof PAGES;
 /** A tool page's share card, for its `<Layout card>`. */
 export const pageCardOf = (page: PageName) => ({
   path: `/og/pages/${page}.png`,
-  alt: `${PAGES[page].title}, ascii.rest: ${PAGES[page].description}`,
+  alt: `${PAGES[page].title}, ascii.navinhill.com: ${PAGES[page].description}`,
 });

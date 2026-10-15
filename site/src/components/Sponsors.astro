@@ -20,10 +20,12 @@ const { home = false } = Astro.props;
 const sponsor = `https://github.com/sponsors/${AUTHOR.handle}`;
 const others = SUPPORT.filter((link) => link.href !== sponsor);
 const open = home ? 1 : Math.max(1, 4 - SPONSORS.length);
+const hasSponsors = SPONSORS.length > 0;
 ---
 
+{hasSponsors && (
 <section id="sponsors" class:list={["sponsors", home && "home"]} aria-label="sponsors">
-  {home && <p class="thanks">Thanks to the sponsors who make running ascii.rest possible.</p>}
+  {home && <p class="thanks">Thanks to the sponsors who make running this project possible.</p>}
   <ul class="slots" role="list">
     {SPONSORS.map((s) => (
       <li>
@@ -35,27 +37,9 @@ const open = home ? 1 : Math.max(1, 4 - SPONSORS.length);
         </a>
       </li>
     ))}
-    {Array.from({ length: open }, () => (
-      <li>
-        {home ? (
-          <a class="slot open" href={sponsor}><span class="label">become a sponsor</span></a>
-        ) : (
-          <a class="slot open" href={sponsor} aria-label="Sponsor ascii.rest on GitHub and your logo goes here">
-            <span class="label">your logo</span>
-          </a>
-        )}
-      </li>
-    ))}
   </ul>
-  {!home && (
-    <p class="ways">
-      <a href={sponsor}>[sponsor on github]</a>
-      {others.map((link) => (
-        <a class="quiet" href={link.href}><Icon name={link.icon} /><span>{link.label}</span></a>
-      ))}
-    </p>
-  )}
 </section>
+)}
 
 {home && (
   <section class="sponsors home acknowledgements" aria-label="acknowledgements">

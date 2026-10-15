@@ -404,12 +404,12 @@ const GITHUB =
  * card passes the site as the name and its path as `after`, set close. A piece
  * drawn from someone's design idea credits them too, just left of the mark.
  */
-function footer(name: string, scene: boolean, after = "ascii.rest", gap = 2, idea?: string) {
+function footer(name: string, scene: boolean, after = "ascii.navinhill.com", gap = 2, idea?: string) {
   const size = 26, y = HEIGHT - 52;
   const title = words(MEDIUM, name, SIDE, y, size);
   const siteX = SIDE + title.width + size * ADVANCE * gap;
   const site = words(TEXT, after, siteX, y, size);
-  const handle = "@bas3line";
+  const handle = "@jamesnavinhill";
   const hw = handle.length * size * ADVANCE;
   const by = words(TEXT, handle, WIDTH - SIDE - hw, y, size);
   const mark = 26, mx = WIDTH - SIDE - hw - 12 - mark, my = y - mark * 0.82;
@@ -578,10 +578,10 @@ export async function siteCard(count: number): Promise<Uint8Array> {
   const nameBase = Math.floor(nameTop + (84 - 84 * (A + D)) / 2 + 84 * A);
   const countBase = Math.floor(countTop + 28 * A);
   const rowBase = Math.round(rowTop + 22 * A);
-  const name = words(SEMIBOLD, "ascii.rest", SIDE, nameBase, 84, -1);
+  const name = words(SEMIBOLD, "ascii.navinhill.com", SIDE, nameBase, 84, -1);
   const line = words(TEXT, `${count} animated ascii pieces for the web`, SIDE, countBase, 28);
   const row = words(TEXT, "React · Next.js · Astro · HTML", SIDE, rowBase, 22);
-  const handle = "@bas3line";
+  const handle = "@jamesnavinhill";
   const hw = handle.length * 22 * ADVANCE;
   const by = words(MEDIUM, handle, WIDTH - SIDE - hw, rowBase, 22);
   const mark = 24, mx = WIDTH - SIDE - hw - 10 - mark, my = rowTop + (22 * (A + D) - mark) / 2;

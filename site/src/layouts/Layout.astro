@@ -29,7 +29,7 @@ const canonical = new URL(path, SITE);
 // The site's share card is night coast with the name and credit, made from the
 // scene itself; a piece page shows its own piece (pages/og/[slug].png.ts).
 const image = new URL(card?.path ?? "/og.png", SITE);
-const imageAlt = card?.alt ?? "ascii.rest: a dot-drawn lighthouse and cottage under moonlit clouds, by @bas3line";
+const imageAlt = card?.alt ?? "ascii.navinhill.com: ASCII Scene Studio by Navin Hill";
 // On a piece's page, a bug report starts out naming the piece.
 const bug = issue("bug", current ? { title: `${current}: `, where: current } : {});
 ---
@@ -70,10 +70,6 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
     <meta name="twitter:image:alt" content={imageAlt} />
     <!-- The site's face, Paper Mono, served from here: every page uses it, so it is fetched at once. -->
     <link rel="preload" href="/fonts/paper-mono.woff2" as="font" type="font/woff2" crossorigin />
-    <!-- Vercel's Web Analytics (page views, no cookies) and Speed Insights (each visit's real Core Web Vitals), both
-    loaded from the site's own /_vercel/ paths after the page. -->
-    <Analytics />
-    <SpeedInsights />
     <slot name="head" />
   </head>
 
@@ -576,5 +572,7 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
         select(0);
       });
     </script>
+    <Analytics />
+    <SpeedInsights />
   </body>
 </html>
