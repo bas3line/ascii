@@ -78,64 +78,100 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
   </head>
 
   <body>
-    <div class:list={["frame", home && "home"]}>
-      <aside class="side">
-        <a class="home" href="/">{NAME}</a>
-        <p class="by">by <a href="/author/" rel="author">@{AUTHOR.name}</a></p>
-        <p class="make">
-          <a href="/docs/" aria-current={path.startsWith("/docs/") ? "page" : undefined}>[docs]</a>
-          <a href="/banner/" aria-current={path === "/banner/" ? "page" : undefined}>[make a banner]</a>
-          <a href="/make/" aria-current={path === "/make/" ? "page" : undefined}>[image to ascii]</a>
-        </p>
-        {Astro.slots.has("side") ? (
-          <slot name="side" />
-        ) : (
-        <>
-        <form class="find" role="search" hidden>
-          <label class="sr" for="find">Search the pieces</label>
-          <input
-            id="find"
-            type="search"
-            placeholder={`search ${pieces.length} pieces`}
-            autocomplete="off"
-            autocapitalize="none"
-            spellcheck="false"
-            enterkeyhint="go"
-          />
-          <span class="key" aria-hidden="true">/</span>
-          <p class="found sr" role="status"></p>
-        </form>
-        <p class="asks">
-          <a href={issue("logo")}>[request a logo]</a>
-          <a href={issue("piece")}>[suggest a piece]</a>
-        </p>
-        <nav aria-label="Pieces">
-          {groups.map((group, i) => (
-            <>
-              <h2><a href={i ? `/#${group.categories[0].name}` : "/#pieces"}>{group.label}</a></h2>
-              {group.categories.map((category) => (
-                <>
-                  <h3>
-                    <a href={`/#${category.name}`}>{category.name}</a>
-                    <span class="count">{category.pieces.length}</span>
-                  </h3>
-                  <ul role="list">
-                    {category.pieces.map((piece) => (
-                      <li>
-                        <a href={`/${piece.slug}/`} aria-current={piece.slug === current ? "page" : undefined}>
-                          {piece.name}
-                        </a>
-                        {piece.recent && <span class="new">new</span>}
-                      </li>
-                    ))}
-                  </ul>
-                </>
-              ))}
-            </>
+    <div class:list={["frame", home && "home"]} id="main-frame">
+      <aside class="side" id="side-bar">
+        <!-- Top brand & collapse toggle -->
+        <div class="side-head">
+          <a class="logo-mark" href="/" title="Home" aria-label="Home">@</a>
+          <button id="side-toggle" class="side-toggle" type="button" aria-label="Toggle sidebar" title="Toggle sidebar">
+            <span class="toggle-icon">›</span>
+          </button>
+        </div>
+
+        <!-- Collapsed Icon Rail (shown when sidebar is in rail mode) -->
+        <div class="side-rail-icons" aria-hidden="true">
+          <a href="/" class="rail-icon" title="Home">@</a>
+          <a href="/studio/" class="rail-icon" title="Studio" aria-current={path.startsWith("/studio/") ? "page" : undefined}>✦</a>
+          <a href="/banner/" class="rail-icon" title="Make a banner" aria-current={path === "/banner/" ? "page" : undefined}>■</a>
+          <a href="/make/" class="rail-icon" title="Image to ascii" aria-current={path === "/make/" ? "page" : undefined}>▦</a>
+          <a href="/docs/" class="rail-icon" title="Docs" aria-current={path.startsWith("/docs/") ? "page" : undefined}>§</a>
+          <div class="rail-divider"></div>
+          {groups.map((group) => (
+            <a href={`/#${group.categories[0].name}`} class="rail-icon" title={group.label}>{group.icon || "·"}</a>
           ))}
-        </nav>
-        </>
-        )}
+        </div>
+
+        <!-- Expanded Sidebar Content -->
+        <div class="side-expanded-content">
+          <p class="make">
+            <a href="/studio/" aria-current={path.startsWith("/studio/") ? "page" : undefined}>[studio]</a>
+            <a href="/banner/" aria-current={path === "/banner/" ? "page" : undefined}>[make a banner]</a>
+            <a href="/make/" aria-current={path === "/make/" ? "page" : undefined}>[image to ascii]</a>
+            <a href="/docs/" aria-current={path.startsWith("/docs/") ? "page" : undefined}>[docs]</a>
+          </p>
+
+          {Astro.slots.has("side") ? (
+            <slot name="side" />
+          ) : (
+          <>
+          <form class="find" role="search" hidden>
+            <label class="sr" for="find">Search the pieces</label>
+            <input
+              id="find"
+              type="search"
+              placeholder={`search ${pieces.length} pieces`}
+              autocomplete="off"
+              autocapitalize="none"
+              spellcheck="false"
+              enterkeyhint="go"
+            />
+            <span class="key" aria-hidden="true">/</span>
+            <p class="found sr" role="status"></p>
+          </form>
+
+          <nav aria-label="Pieces">
+            {groups.map((group) => {
+              const groupPieceCount = group.categories.reduce((acc, c) => acc + c.pieces.length, 0);
+              const hasCurrent = group.categories.some((c) => c.pieces.some((p) => p.slug === current));
+              return (
+                <details class="side-parent-group" open={hasCurrent}>
+                  <summary class="side-parent-summary">
+                    <span class="side-parent-label">
+                      <span class="side-parent-icon">{group.icon || "·"}</span>
+                      <span>{group.label}</span>
+                    </span>
+                    <span class="count">{groupPieceCount}</span>
+                  </summary>
+                  <div class="side-sub-groups">
+                    {group.categories.map((category) => {
+                      const catHasCurrent = category.pieces.some((p) => p.slug === current);
+                      return (
+                        <details class="side-cat-group" open={catHasCurrent}>
+                          <summary class="side-cat-summary">
+                            <span class="cat-name">{category.name}</span>
+                            <span class="count">{category.pieces.length}</span>
+                          </summary>
+                          <ul role="list">
+                            {category.pieces.map((piece) => (
+                              <li>
+                                <a href={`/${piece.slug}/`} aria-current={piece.slug === current ? "page" : undefined}>
+                                  {piece.name}
+                                </a>
+                                {piece.recent && <span class="new">new</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      );
+                    })}
+                  </div>
+                </details>
+              );
+            })}
+          </nav>
+          </>
+          )}
+        </div>
       </aside>
 
       <script is:inline>
@@ -269,17 +305,38 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
         </div>
         <slot />
         <footer class="foot muted">
-          <p class="asks">
+          <div class="foot-bar">
             <a href="/docs/">[docs]</a>
-            <a href={issue("logo")}>[request a logo]</a>
-            <a href={issue("piece")}>[suggest a piece]</a>
-            <a href={bug}>[report a bug]</a>
-          </p>
-          <span>{NAME}, MIT licensed. <a class="source" href={REPO}><Icon name="github" /><span>Source on GitHub</span></a></span>
-          <Credit lead="Made by" />
+            <a href={REPO}>[github]</a>
+            <span>{NAME}, MIT licensed.</span>
+          </div>
         </footer>
       </main>
     </div>
+
+    <script is:inline>
+      (function () {
+        var frame = document.getElementById("main-frame");
+        var toggle = document.getElementById("side-toggle");
+        if (!frame || !toggle) return;
+        var key = "ascii-side-collapsed";
+        // Default to collapsed rail mode
+        var isCollapsed = localStorage.getItem(key) !== "false";
+        function applyState(collapsed) {
+          frame.classList.toggle("side-collapsed", collapsed);
+          var icon = toggle.querySelector(".toggle-icon");
+          if (icon) icon.textContent = collapsed ? "›" : "‹";
+        }
+        applyState(isCollapsed);
+        toggle.addEventListener("click", function () {
+          isCollapsed = !frame.classList.contains("side-collapsed");
+          applyState(isCollapsed);
+          try {
+            localStorage.setItem(key, String(isCollapsed));
+          } catch (e) {}
+        });
+      })();
+    </script>
 
     <script is:inline>
       (function () {

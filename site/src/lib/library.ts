@@ -31,11 +31,12 @@ const isRecent = (slug: string) => {
   return !day || (day !== opened && built - Date.parse(day) <= 30 * 86_400_000);
 };
 
-/** Sidebar order. The scenes first, then the pieces meant as page furniture with the logos last among them, then the rest. */
+/** Sidebar order. Scenes first, then components, brands, and more. */
 export const GROUPS = [
-  { label: "art", categories: ["scenes"] },
-  { label: "components", categories: ["ui", "data", "type", "logos", "companies", "distros"] },
-  { label: "more", categories: ["shapes", "space", "physics", "nature", "creatures", "objects", "generative", "effects"] },
+  { label: "scenes", icon: "☷", categories: ["scenes"] },
+  { label: "components", icon: "◫", categories: ["ui", "data", "type"] },
+  { label: "brands", icon: "◈", categories: ["logos", "companies", "distros"] },
+  { label: "more", icon: "✻", categories: ["shapes", "space", "physics", "nature", "creatures", "objects", "generative", "effects"] },
 ] as const;
 
 const sources = import.meta.glob<string>("../../../src/pieces/*.ts", { eager: true, query: "?raw", import: "default" });
@@ -74,12 +75,13 @@ export const categories = order
 
 export const groups = GROUPS.map((g) => ({
   label: g.label,
+  icon: g.icon,
   categories: categories.filter((c) => (g.categories as readonly string[]).includes(c.name)),
 })).filter((g) => g.categories.length);
 
 export const SITE = "https://ascii.rest";
 export const NAME = "ascii.rest";
-export const REPO = "https://github.com/bas3line/ascii";
+export const REPO = "https://github.com/jamesnavinhill/ascii";
 /**
  * A new issue on one of the repo's forms (.github/ISSUE_TEMPLATE), opened with
  * some fields filled: GitHub fills a form's text fields, and the title, from
@@ -89,7 +91,7 @@ export function issue(form: "bug" | "logo" | "piece", fields: Record<string, str
   const query = Object.entries(fields).map(([key, value]) => `&${key}=${encodeURIComponent(value)}`);
   return `${REPO}/issues/new?template=${form}.yml${query.join("")}`;
 }
-export const AUTHOR = { name: "Shubham", handle: "bas3line", url: "https://github.com/bas3line" };
+export const AUTHOR = { name: "Navin Hill", handle: "jamesnavinhill", url: "https://github.com/jamesnavinhill" };
 /** Where to find the author, in the order the author page lists them. */
 export const LINKS = [
   { label: "yshubham.com", icon: "globe", href: "https://yshubham.com" },

@@ -51,7 +51,6 @@ const idea = IDEAS[piece.slug];
     {piece.clock && <span>reads the clock</span>}
     {idea && <span>design idea by <a href={idea.url}>@{idea.handle}</a></span>}
     {logo && <button class="button" type="button" data-ink hidden><span>[mono]</span></button>}
-    <a href={issue("bug", { title: `${piece.slug}: `, where: piece.slug })}>[report a bug]</a>
   </p>
 
   <section class="block" style="margin-top: 2rem">
