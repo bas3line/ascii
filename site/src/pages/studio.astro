@@ -195,7 +195,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
   </div>
 </Layout>
 
-<style>
+<style is:global>
   .studio-cockpit {
     display: flex;
     flex-direction: column;
@@ -340,12 +340,6 @@ import { PAGES, pageCardOf } from "../lib/pages";
     align-items: center;
   }
 
-  .scrubber-container input[type="range"] {
-    width: 100%;
-    accent-color: var(--ink);
-    cursor: pointer;
-  }
-
   .time-readout {
     font-size: 0.75rem;
     min-width: 3.5rem;
@@ -408,13 +402,14 @@ import { PAGES, pageCardOf } from "../lib/pages";
   }
 
   .section-title {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
     color: var(--muted);
     letter-spacing: 0.05em;
-    margin-bottom: 0.5rem;
+    margin: 0.5rem 0 0.4rem;
+    padding-bottom: 0.25rem;
     border-bottom: 1px solid var(--well);
-    padding-bottom: 0.3rem;
+    font-family: var(--mono);
   }
 
   .layer-stack-list {
@@ -427,17 +422,18 @@ import { PAGES, pageCardOf } from "../lib/pages";
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.45rem 0.65rem;
+    padding: 0.5rem 0.75rem;
     border: 1px solid var(--well);
     background: transparent;
     cursor: pointer;
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     transition: border-color 0.1s, background 0.1s;
     border-radius: 0;
   }
 
   .layer-item-row:hover {
     border-color: var(--muted);
+    background: rgba(255, 255, 255, 0.02);
   }
 
   .layer-item-row.selected {
@@ -448,7 +444,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
   .layer-left {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.6rem;
     cursor: pointer;
   }
 
@@ -460,13 +456,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
   .layer-type-badge {
     color: var(--muted);
     font-size: 0.7rem;
-    opacity: 0.8;
-  }
-
-  .layer-chk {
-    cursor: pointer;
-    margin: 0;
-    accent-color: var(--ink);
+    opacity: 0.7;
   }
 
   .params-list {
@@ -479,9 +469,9 @@ import { PAGES, pageCardOf } from "../lib/pages";
   .param-control-group {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    gap: 0.4rem;
+    padding: 0.65rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   }
 
   .param-control-group:last-child {
@@ -498,58 +488,169 @@ import { PAGES, pageCardOf } from "../lib/pages";
     display: flex;
     align-items: baseline;
     justify-content: space-between;
+    width: 100%;
   }
 
   .param-label {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     color: var(--muted);
     text-transform: lowercase;
     letter-spacing: 0.02em;
+    font-family: var(--mono);
   }
 
   .param-val {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     color: var(--ink);
     font-variant-numeric: tabular-nums;
+    font-family: var(--mono);
+    text-align: right;
   }
 
   .param-widget {
     width: 100%;
   }
 
-  .param-widget input[type="range"] {
+  /* Custom precision dark sliders (thin groove + solid thumb) */
+  .param-widget input[type="range"],
+  .scrubber-container input[type="range"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
     width: 100%;
-    margin: 0;
-    accent-color: var(--ink);
+    height: 3px;
+    background: #282c34;
+    border-radius: 2px;
+    outline: none;
+    margin: 0.4rem 0;
     cursor: pointer;
-    display: block;
+    border: none;
+  }
+
+  .param-widget input[type="range"]::-webkit-slider-thumb,
+  .scrubber-container input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ffffff;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    margin-top: -5.5px;
+  }
+
+  .param-widget input[type="range"]::-webkit-slider-runnable-track,
+  .scrubber-container input[type="range"]::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 3px;
+    background: #282c34;
+    border-radius: 2px;
+    border: none;
+  }
+
+  .param-widget input[type="range"]::-moz-range-thumb,
+  .scrubber-container input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #ffffff;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  }
+
+  .param-widget input[type="range"]::-moz-range-track,
+  .scrubber-container input[type="range"]::-moz-range-track {
+    width: 100%;
+    height: 3px;
+    background: #282c34;
+    border-radius: 2px;
+    border: none;
   }
 
   .param-widget select {
     width: 100%;
-    padding: 0.35rem 0.5rem;
+    padding: 0.45rem 0.6rem;
     border: 1px solid var(--well);
     background: var(--bg);
     color: var(--ink);
     font-family: var(--mono);
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     border-radius: 0;
+    cursor: pointer;
   }
 
+  .param-widget select:focus {
+    outline: none;
+    border-color: var(--ink);
+  }
+
+  /* Custom Color Input: minimal square swatch */
   .param-color-right {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.6rem;
   }
 
   .param-color-right input[type="color"] {
-    width: 24px;
-    height: 24px;
-    border: 1px solid var(--well);
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
     padding: 0;
-    background: none;
+    margin: 0;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
     cursor: pointer;
     border-radius: 0;
+  }
+
+  .param-color-right input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+    border: none;
+  }
+
+  .param-color-right input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 0;
+  }
+
+  .param-color-right input[type="color"]::-moz-color-swatch {
+    border: none;
+    border-radius: 0;
+  }
+
+  /* Custom Checkbox */
+  input[type="checkbox"].layer-chk {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: transparent;
+    border: 1px solid var(--muted);
+    border-radius: 0;
+    cursor: pointer;
+    display: inline-grid;
+    place-content: center;
+    margin: 0;
+    vertical-align: middle;
+  }
+
+  input[type="checkbox"].layer-chk:checked {
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+
+  input[type="checkbox"].layer-chk:checked::before {
+    content: "✓";
+    font-size: 11px;
+    color: var(--bg);
+    line-height: 1;
+    font-weight: 700;
   }
 
   .palette-swatches {
@@ -776,9 +877,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
       row.className = `layer-item-row ${layer.id === selectedLayerId ? "selected" : ""}`;
 
       const left = document.createElement("label");
-      left.style.display = "flex";
-      left.style.alignItems = "center";
-      left.style.cursor = "pointer";
+      left.className = "layer-left";
 
       const cb = document.createElement("input");
       cb.type = "checkbox";
@@ -792,11 +891,17 @@ import { PAGES, pageCardOf } from "../lib/pages";
       });
 
       const span = document.createElement("span");
+      span.className = "layer-name";
       span.textContent = layer.name;
 
       left.appendChild(cb);
       left.appendChild(span);
       row.appendChild(left);
+
+      const typeBadge = document.createElement("span");
+      typeBadge.className = "layer-type-badge";
+      typeBadge.textContent = layer.type;
+      row.appendChild(typeBadge);
 
       row.addEventListener("click", () => {
         selectedLayerId = layer.id;
@@ -943,7 +1048,6 @@ import { PAGES, pageCardOf } from "../lib/pages";
           updateCodeView();
         });
 
-        label.appendChild(cb);
         group.appendChild(label);
         group.appendChild(cb);
         layerControlsEl.appendChild(group);
