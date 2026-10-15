@@ -54,6 +54,10 @@ export function compileSceneToPiece(spec: SceneSpec): Piece {
     if (!l.enabled) continue;
     const inst = createLayerInstance(l.type);
     inst.init(ctx, l.params);
+    // Attach decoded raster pixels to image-plane layers when present.
+    if (spec.imagePixels && spec.imagePixels.length === COLS * ROWS * 3) {
+      inst.setImagePixels?.(spec.imagePixels);
+    }
     layerInstances.push({ instance: inst, layer: l });
   }
 
@@ -120,7 +124,7 @@ export function compileSceneToPiece(spec: SceneSpec): Piece {
 
 /** Creates a live interactive studio session for real-time scene tweaking. */
 export function createStudioSession(initialSpec: SceneSpec): StudioSession {
-  let currentSpec = JSON.parse(JSON.stringify(initialSpec)) as SceneSpec;
+  let currentSpec = cloneSpec(initialSpec);
   let activePiece = compileSceneToPiece(currentSpec);
   let activeFrameFn = activePiece.default();
 
@@ -155,8 +159,26 @@ export function createStudioSession(initialSpec: SceneSpec): StudioSession {
       if (ground) currentSpec.ground = ground;
       rebuild();
     },
+    setImagePixels(pixels: Float32Array) {
+      currentSpec.imagePixels = pixels;
+      rebuild();
+    },
     getFrame(t: number): string {
       return activeFrameFn(t);
     },
+  };
+}
+
+/**
+ * Deep-clones a spec without mangling the runtime Float32Array image buffer
+ * (JSON round-trips would turn it into a sparse object and break image scenes).
+ */
+function cloneSpec(spec: SceneSpec): SceneSpec {
+  return {
+    ...spec,
+    palette: [...spec.palette],
+    halftone: spec.halftone ? { ...spec.halftone } : spec.halftone,
+    layers: spec.layers.map((l) => ({ ...l, params: { ...l.params } })),
+    imagePixels: spec.imagePixels ? new Float32Array(spec.imagePixels) : spec.imagePixels,
   };
 }

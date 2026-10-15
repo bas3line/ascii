@@ -77,6 +77,11 @@ export interface SceneSpec {
     contrast?: number;
   };
   layers: LayerSpec[];
+  /**
+   * Runtime-only: decoded 200x100 RGB floats (r,g,b per cell) for image-plane
+   * scenes. Not serialized to JSON; passed straight to the image layer.
+   */
+  imagePixels?: Float32Array;
 }
 
 /** Context provided to layer instances during rendering. */
@@ -100,6 +105,8 @@ export interface LayerInstance {
     bufB: Float32Array,
     bufDepth: Float32Array
   ): void;
+  /** Optional: receive decoded raster pixels (the image layer). */
+  setImagePixels?(pixels: Float32Array): void;
 }
 
 /** Definition and factory for a layer type in the registry. */
@@ -118,5 +125,6 @@ export interface StudioSession {
   setParam(layerId: string, paramKey: string, value: any): void;
   toggleLayer(layerId: string, enabled?: boolean): void;
   updatePalette(palette: string[], ground?: string): void;
+  setImagePixels(pixels: Float32Array): void;
   getFrame(t: number): string;
 }

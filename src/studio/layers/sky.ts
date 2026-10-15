@@ -4,6 +4,7 @@
  * Part of ascii.rest, MIT licensed.
  */
 import { clamp, hexToRgb, smoothstep } from "../halftone.ts";
+import { hash, noise } from "../noise.ts";
 import type {
   LayerDefinition,
   LayerInstance,
@@ -74,26 +75,6 @@ export const skySchema: ParamSchema = {
     default: "#fff5d8",
   },
 };
-
-function hash(x: number, y: number): number {
-  let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
-
-function noise(x: number, y: number): number {
-  const xi = Math.floor(x);
-  const yi = Math.floor(y);
-  const fx = x - xi;
-  const fy = y - yi;
-  const u = fx * fx * (3 - 2 * fx);
-  const v = fy * fy * (3 - 2 * fy);
-  const a = hash(xi, yi);
-  const b = hash(xi + 1, yi);
-  const c = hash(xi, yi + 1);
-  const d = hash(xi + 1, yi + 1);
-  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-}
 
 export class SkyLayer implements LayerInstance {
   init(_ctx: RenderContext, _params: ParamValues): void {}

@@ -459,25 +459,27 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
         playing.push({ pre, piece, fps, el, stop });
       }
 
-      const motionButton = document.getElementById("motion") as HTMLButtonElement;
-      const showMotion = () => {
-        motionButton.hidden = !reduced.matches;
-        motionButton.firstElementChild!.textContent = motion ? "[hold still]" : "[play anyway]";
-        motionButton.setAttribute(
-          "aria-label",
-          motion ? "Hold the pieces still, as your system asks" : "Your system asks for reduced motion, so the pieces hold still. Play them anyway",
-        );
-      };
-      showMotion();
-      reduced.addEventListener("change", showMotion);
-      motionButton.addEventListener("click", () => {
-        motion = !motion;
-        try {
-          localStorage.setItem("ascii-motion", motion ? "play" : "still");
-        } catch {}
+      const motionButton = document.getElementById("motion") as HTMLButtonElement | null;
+      if (motionButton) {
+        const showMotion = () => {
+          motionButton.hidden = !reduced.matches;
+          motionButton.firstElementChild!.textContent = motion ? "[hold still]" : "[play anyway]";
+          motionButton.setAttribute(
+            "aria-label",
+            motion ? "Hold the pieces still, as your system asks" : "Your system asks for reduced motion, so the pieces hold still. Play them anyway",
+          );
+        };
         showMotion();
-        replay(() => true);
-      });
+        reduced.addEventListener("change", showMotion);
+        motionButton.addEventListener("click", () => {
+          motion = !motion;
+          try {
+            localStorage.setItem("ascii-motion", motion ? "play" : "still");
+          } catch {}
+          showMotion();
+          replay(() => true);
+        });
+      }
 
       const inks = document.querySelectorAll<HTMLButtonElement>("button[data-ink]");
       const label = () =>

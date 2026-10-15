@@ -859,6 +859,24 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
     line-height: 1.4;
   }
 
+    .param-vec-axis {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .param-vec-axis-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .param-vec-axis input[type="range"] {
+      width: 100%;
+    }
+
   .color-swatch.clickable {
     cursor: pointer;
   }
@@ -1037,20 +1055,21 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
     createStudioSession,
     getLayerDefinition,
     hexToRgb,
-  } from "ascii.rest/studio";
+      sceneBySlug,
+    } from "ascii.rest/studio";
 
   // What the studio is showing: a library piece, or a scene-engine spec
-  // (the image ingestion runs through the engine too).
-  type Active =
-    | {
-        kind: "piece";
-        slug: string;
-        mod: Piece;
-        frame: Frame;
-        options: Record<string, unknown>;
-        colorOverride: Record<number, string>;
-      }
-    | { kind: "scene"; session: StudioSession; name: string };
+    // (the image ingestion runs through the engine too).
+    type Active =
+      | {
+          kind: "piece";
+          slug: string;
+          mod: Piece;
+          frame: Frame;
+          options: Record<string, unknown>;
+          colorOverride: Record<number, string>;
+        }
+      | { kind: "scene"; session: StudioSession; name: string };
 
   let active: Active | null = null;
   let session: StudioSession | null = null;
@@ -1180,15 +1199,17 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
   });
   resizeObserver.observe(canvasBox);
 
-  // Draw one frame: walk the piece's text the way mount() does, newline
-  // resets the column, each glyph drawn on top of the ground fill.
+  // Draw current frame to canvas using the same logic as mount.ts
   function renderFrame(t: number) {
     if (!ctx || !active) return;
     const started = performance.now();
     const meta = activeMeta();
     const ground = currentGround();
 
-    const needed = meta.cols * meta.rows;
+    const cols = meta.cols;
+    const rows = meta.rows;
+
+    const needed = cols * rows;
     if (colorIndices.length !== needed) colorIndices = new Uint8Array(needed);
 
     const env: Env = { paper: !!ground && !isDark(ground), color: colorIndices };
@@ -1204,11 +1225,10 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
     }
     perfDisplay.textContent = `${(performance.now() - started).toFixed(1)}ms`;
 
-    const cols = meta.cols;
-    const rows = meta.rows;
     const cellW = canvas.width / cols;
     const cellH = canvas.height / rows;
 
+    // Fill background
     ctx.fillStyle = ground ?? "#070b16";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -1217,29 +1237,33 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
     ctx.textBaseline = "middle";
 
     const ink = inkFor(ground);
-    let col = 0;
-    let row = 0;
+
+    // Draw text character by character, matching mount.ts behavior
+    let x = 0;
+    let y = 0;
     for (let k = 0; k < text.length; k++) {
-      const ch = text[k];
-      if (ch === "\n") {
-        col = 0;
-        row++;
-        if (row >= rows) break;
+      const c = text.charCodeAt(k);
+      if (c === 10) {
+        // newline
+        x = 0;
+        y++;
         continue;
       }
-      if (col >= cols) {
-        col = 0;
-        row++;
-        if (row >= rows) break;
+      if (x >= cols) {
+        x = 0;
+        y++;
       }
-      if (ch !== " ") {
-        const color = colorMap.get(colorIndices[row * cols + col]);
-        ctx.fillStyle = color
-          ? `rgb(${Math.round(color[0] * 255)}, ${Math.round(color[1] * 255)}, ${Math.round(color[2] * 255)})`
+      if (y < rows && c !== 32) {
+        // not a space
+        const idx = y * cols + x;
+        const paletteColor = colorIndices[idx];
+        const charColor = colorMap.get(paletteColor);
+        ctx.fillStyle = charColor
+          ? `rgb(${Math.round(charColor[0] * 255)}, ${Math.round(charColor[1] * 255)}, ${Math.round(charColor[2] * 255)})`
           : ink;
-        ctx.fillText(ch, (col + 0.5) * cellW, (row + 0.5) * cellH);
+        ctx.fillText(text[k], (x + 0.5) * cellW, (y + 0.5) * cellH);
       }
-      col++;
+      x++;
     }
   }
 
@@ -1314,6 +1338,18 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
     });
   }
 
+    // Picker routing: parametrized scenes (from the studio registry) go through
+    // the scene engine; every other piece loads from the library as before.
+    function selectBySlug(slug: string) {
+      const spec = sceneBySlug.get(slug);
+      if (spec) {
+        selectSpec(spec);
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        selectPiece(slug);
+      }
+    }
+
   // Scene-engine specs come from the image ingestion, guarded the same way
   // so a slow file read can't overwrite a newer selection.
   function selectSpec(spec: SceneSpec) {
@@ -1331,12 +1367,13 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
   function updateLayerUI() {
     layerStackWrap.hidden = active === null || active.kind !== "scene";
     paramsTitle.textContent = active?.kind === "scene" ? "parameters" : "options";
-    if (active !== null && active.kind === "piece") {
-      buildOptionsControls();
-      return;
-    }
-    layerControlsEl.innerHTML = "";
-    if (active === null || active.kind !== "scene") return;
+      layerListEl.innerHTML = "";
+      if (active !== null && active.kind === "piece") {
+        buildOptionsControls();
+        return;
+      }
+      layerControlsEl.innerHTML = "";
+      if (active === null || active.kind !== "scene") return;
 
     active.session.spec.layers.forEach((layer) => {
       const row = document.createElement("div");
@@ -1496,6 +1533,65 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
         widget.appendChild(sel);
         group.appendChild(widget);
 
+        layerControlsEl.appendChild(group);
+      } else if (paramDef.type === "vec2") {
+        const group = document.createElement("div");
+        group.className = "param-control-group";
+
+        const header = document.createElement("div");
+        header.className = "param-control-header";
+
+        const label = document.createElement("span");
+        label.className = "param-label";
+        label.textContent = paramDef.label;
+        header.appendChild(label);
+        group.appendChild(header);
+
+        const current = (activeLayer.params[key] ?? paramDef.default) as [number, number];
+
+        const widget = document.createElement("div");
+        widget.className = "param-widget";
+        widget.style.display = "grid";
+        widget.style.gridTemplateColumns = "1fr 1fr";
+        widget.style.gap = "0.5rem";
+
+        const makeSlider = (axis: 0 | 1) => {
+          const wrap = document.createElement("div");
+          wrap.className = "param-vec-axis";
+
+          const axisLabel = document.createElement("span");
+          axisLabel.className = "param-vec-axis-label";
+          axisLabel.textContent = axis === 0 ? "x" : "y";
+
+          const slider = document.createElement("input");
+          slider.type = "range";
+          slider.min = String(paramDef.min[axis]);
+          slider.max = String(paramDef.max[axis]);
+          slider.step = String(paramDef.step ?? 1);
+          slider.value = String(current[axis]);
+
+          const val = document.createElement("span");
+          val.className = "param-val";
+          val.textContent = slider.value;
+
+          slider.addEventListener("input", () => {
+            val.textContent = slider.value;
+            const next: [number, number] = [...current];
+            next[axis] = parseFloat(slider.value);
+            if (active?.kind === "scene") active.session.setParam(activeLayer.id, key, next);
+            renderOnDemand();
+            updateCodeView();
+          });
+
+          wrap.appendChild(axisLabel);
+          wrap.appendChild(slider);
+          wrap.appendChild(val);
+          return wrap;
+        };
+
+        widget.appendChild(makeSlider(0));
+        widget.appendChild(makeSlider(1));
+        group.appendChild(widget);
         layerControlsEl.appendChild(group);
       } else if (paramDef.type === "boolean") {
         const group = document.createElement("div");
@@ -1745,6 +1841,7 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
   }
 
   const camel = (slug: string) => slug.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+  const sceneSlugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
   function updateCodeView() {
     if (!active) return;
@@ -1977,8 +2074,8 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
     row.innerHTML = `<span class="picker-name">${item.name}</span><span class="picker-count">${item.slug}</span>`;
     row.addEventListener("click", () => {
       closePanel();
-      const current = active?.kind === "piece" ? active.slug : null;
-      if (current !== item.slug) selectPiece(item.slug);
+            const current = active?.kind === "piece" ? active.slug : active?.kind === "scene" ? sceneSlugOf(active.name) : null;
+            if (current !== item.slug) selectBySlug(item.slug);
     });
     return row;
   }
@@ -2135,36 +2232,40 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
 
       const sorted = Array.from(colorCounts.entries()).sort((a, b) => b[1] - a[1]);
       const palette = sorted.slice(0, 32).map((e) => e[0]);
+            if (palette.length < 2) palette.push("#000000", "#ffffff");
 
-      const imageSpec: SceneSpec = {
-        name: file.name.replace(/\.[^/.]+$/, "").toLowerCase(),
-        ground: palette[0] || "#000000",
-        palette: palette.length ? palette : ["#000000", "#ffffff"],
-        fps: 15,
-        layers: [
-          {
-            id: "img-layer-1",
-            type: "image",
-            name: "Photo Plane",
-            enabled: true,
-            params: {
-              horizon: parseInt(ingestSplit.value),
-              motionType: ingestMotion.value,
-              motionSpeed: 1.0,
-              motionIntensity: 0.08,
-            },
-          },
-        ],
-      };
+            const imageSpec: SceneSpec = {
+              name: file.name.replace(/\.[^/.]+$/, "").toLowerCase(),
+              ground: palette[0] || "#000000",
+              palette: palette.length ? palette : ["#000000", "#ffffff"],
+              fps: 15,
+              imagePixels: pixels,
+              layers: [
+                {
+                  id: "img-layer-1",
+                  type: "image",
+                  name: "Photo Plane",
+                  enabled: true,
+                  params: {
+                    horizon: parseInt(ingestSplit.value),
+                    motionType: ingestMotion.value,
+                    motionSpeed: 1.0,
+                    motionIntensity: 0.08,
+                  },
+                },
+              ],
+            };
 
-      selectSpec(imageSpec);
-    };
+            selectSpec(imageSpec);
+            // The decoded raster lives on the spec; the session threads it into the
+            // image layer when it compiles the piece.
+          };
   }
 
   // Initialize on the library's own ocean sunset
   (async () => {
     try {
-      await selectPiece("ocean-sunset");
+        selectBySlug("ocean-sunset");
     } catch (err) {
       codeOutput.textContent = `// could not load the first piece: ${(err as Error).message}`;
     }

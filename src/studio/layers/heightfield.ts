@@ -4,6 +4,7 @@
  * Part of ascii.rest, MIT licensed.
  */
 import { clamp, hexToRgb, smoothstep } from "../halftone.ts";
+import { fbm, hash, noise } from "../noise.ts";
 import type {
   LayerDefinition,
   LayerInstance,
@@ -20,6 +21,18 @@ export const heightfieldSchema: ParamSchema = {
     min: 10,
     max: 90,
     step: 1,
+  },
+  style: {
+    type: "select",
+    label: "silhouette style",
+    default: "peaks",
+    options: [
+      { label: "Alpine Peaks", value: "peaks" },
+      { label: "Rolling Hills", value: "hills" },
+      { label: "Dunes", value: "dunes" },
+      { label: "City Skyline", value: "city" },
+      { label: "Pine Ridges", value: "pines" },
+    ],
   },
   peakHeight: {
     type: "number",
@@ -57,36 +70,47 @@ export const heightfieldSchema: ParamSchema = {
   },
 };
 
-function hash(x: number, y: number): number {
-  let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
+/** The ridge elevation at a column, per silhouette style. */
+function elevationAt(
+  x: number,
+  horizon: number,
+  peakHeight: number,
+  freq: number,
+  style: string,
+  W: number
+): number {
+  const n = fbm(x * freq, 12.34, 4);
 
-function noise(x: number, y: number): number {
-  const xi = Math.floor(x);
-  const yi = Math.floor(y);
-  const fx = x - xi;
-  const fy = y - yi;
-  const u = fx * fx * (3 - 2 * fx);
-  const v = fy * fy * (3 - 2 * fy);
-  const a = hash(xi, yi);
-  const b = hash(xi + 1, yi);
-  const c = hash(xi, yi + 1);
-  const d = hash(xi + 1, yi + 1);
-  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-}
-
-function fbm(x: number, y: number, octaves = 3): number {
-  let sum = 0;
-  let amp = 0.5;
-  let freq = 1.0;
-  for (let i = 0; i < octaves; i++) {
-    sum += amp * noise(x * freq, y * freq);
-    amp *= 0.5;
-    freq *= 2.0;
+  switch (style) {
+    case "hills": {
+      // soft rounded hills that rise and fall gently, more sun-like mounds
+      const e = peakHeight * Math.pow(n, 1.1) + 0.3 * Math.sin(x * 0.04 + 1.7);
+      return horizon - e;
+    }
+    case "dunes": {
+      // long windswept dunes: broad swells broken by fine ripples
+      const broad = Math.sin(x * 0.021 + 2.3) * 0.5 + 0.5;
+      const ripple = noise(x * 0.08, 3.1) * 0.25;
+      const e = peakHeight * 0.6 * broad + ripple * 4.0;
+      return horizon - e;
+    }
+    case "city": {
+      // blocky skyline of varying heights, mostly flat with sharp steps
+      const cell = Math.floor(x / 4.0);
+      const seed = hash(cell, 7) * 1.3;
+      const h = (0.25 + 0.65 * seed) * peakHeight;
+      const wobble = noise(x * 0.6, cell) * 2.5;
+      return Math.floor(horizon - h * (1 + wobble * 0.15));
+    }
+    case "pines": {
+      // irregular ridges under fine conifer fuzz, lower than alpine peaks
+      const e = peakHeight * 0.55 * Math.pow(n, 1.15) + 0.25 * noise(x * 0.5, 0.9) * peakHeight * 0.5;
+      return horizon - e;
+    }
+    case "peaks":
+    default:
+      return horizon - peakHeight * Math.pow(n, 1.2);
   }
-  return sum;
 }
 
 export class HeightfieldLayer implements LayerInstance {
@@ -104,6 +128,7 @@ export class HeightfieldLayer implements LayerInstance {
     const peakHeight = params.peakHeight ?? 24;
     const freq = params.frequency ?? 0.03;
     const roughness = params.roughness ?? 0.5;
+    const style = params.style ?? "peaks";
 
     const cBase = hexToRgb(params.color ?? "#1c1432");
     const cHigh = hexToRgb(params.highlight ?? "#b23c7c");
@@ -113,14 +138,13 @@ export class HeightfieldLayer implements LayerInstance {
 
     for (let x = 0; x < W; x++) {
       // Calculate ridge curve elevation at column x
-      const n = fbm(x * freq, 12.34, 4);
-      const elevation = peakHeight * Math.pow(n, 1.2);
-      const ridgeY = horizon - elevation;
+      const ridgeY = elevationAt(x, horizon, peakHeight, freq, style, W);
 
-      // Slope derivative for lighting (catch light on eastward facing slopes)
-      const nNext = fbm((x + 1) * freq, 12.34, 4);
-      const slope = (nNext - n) * 15.0;
-      const lightCatch = smoothstep(-0.2, 0.8, slope);
+      // Slope derivative for lighting (catch light on the rising faces)
+      const n = elevationAt(x, horizon, peakHeight, freq, style, W);
+      const nNext = elevationAt(x + 1, horizon, peakHeight, freq, style, W);
+      const slope = (nNext - n) * 0.5;
+      const lightCatch = smoothstep(-1.5, 2.0, slope);
 
       const startRow = Math.max(0, Math.floor(ridgeY));
       for (let r = startRow; r < Math.min(H, horizon + 2); r++) {
