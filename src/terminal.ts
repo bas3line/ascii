@@ -41,6 +41,8 @@ export interface PlayOptions {
   options?: Options;
   /** Where to draw: process.stdout by default. Keys are read from process.stdin. */
   out?: Output;
+  /** Stops it, as a key does, when aborted: for playing a file again when it changes. */
+  signal?: AbortSignal;
 }
 
 export interface Played {
@@ -233,20 +235,23 @@ function painter({ cols, rows, palette, ground, cell = 2 }: Meta, colour: boolea
   return Object.assign(out, { size, paint });
 }
 
-/** A piece's first frame as plain text, its rows paired as on a terminal: for a pipe or a log, where nothing plays. */
+/**
+ * A piece's frame as plain text, its rows paired as on a terminal: for a pipe or a log, where nothing plays. The frame
+ * is the one the piece names to be held still, `meta.still`, every letter of a typed banner say, or else its first.
+ */
 export async function still(piece: Piece | PieceName, { light = false, options = {} }: Pick<PlayOptions, "light" | "options"> = {}): Promise<string> {
   const mod = await resolve(piece);
   const cells = painter(mod.meta, false);
   // its whole size: there is no terminal to fit
   cells.size(mod.meta.cols, Math.ceil(mod.meta.rows / 2));
-  cells.paint(mod.default({ ...mod.meta.options, ...options })(0, { paper: light }));
+  cells.paint(mod.default({ ...mod.meta.options, ...options })(mod.meta.still ?? 0, { paper: light }));
   return Array.from({ length: cells.rows }, (_, y) => cells.ch.slice(y * cells.cols, (y + 1) * cells.cols).join("")).join("\n");
 }
 
 /** Plays a piece in the terminal. Resolves when it stops: after `seconds`, on a key or on Ctrl+C. */
 export async function play(
   piece: Piece | PieceName,
-  { seconds, mono = false, light = false, fps, options = {}, out = process.stdout }: PlayOptions = {},
+  { seconds, mono = false, light = false, fps, options = {}, out = process.stdout, signal }: PlayOptions = {},
 ): Promise<Played> {
   const { meta, default: make } = await resolve(piece);
   const cells = painter(meta, !mono);
@@ -337,6 +342,7 @@ export async function play(
       clearInterval(timer);
       clearTimeout(end);
       out.off?.("resize", resize);
+      signal?.removeEventListener("abort", aborted);
       process.off("SIGINT", interrupt);
       process.off("SIGTERM", terminate);
       process.off("exit", restore);
@@ -379,6 +385,10 @@ export async function play(
         draw();
       });
 
+    // Asked to stop from outside, it stops as a key stops it.
+    const aborted = () => stop();
+    if (signal?.aborted) return done(played);
+    signal?.addEventListener("abort", aborted, { once: true });
     process.on("SIGINT", interrupt);
     process.on("SIGTERM", terminate);
     // If the program exits while it plays, the terminal is put back on the way out.
@@ -410,3 +420,6 @@ export async function play(
     if (seconds !== undefined && seconds * 1000 < 2 ** 31) end = setTimeout(() => stop(), Math.max(0, seconds * 1000));
   });
 }
+
+// A text in block letters, printed where the cursor is: a CLI's name as it starts.
+export { banner, type Bannered, type PrintOptions } from "./print.ts";

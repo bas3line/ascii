@@ -1,6 +1,7 @@
 /*
- * <ascii-art>: any piece in the library, as one tag. Importing this module
- * defines the tag; on a server, where there is no DOM, it does nothing.
+ * <ascii-art>: any piece in the library, as one tag, and <ascii-banner>: any
+ * text as a banner. Importing this module defines both tags; on a server,
+ * where there is no DOM, it does nothing.
  * Part of ascii.rest by @bas3line (https://github.com/bas3line), MIT licensed.
  *
  *   <script type="module" src="https://ascii.rest/ascii.js"></script>
@@ -10,7 +11,8 @@
  *
  * Attributes:
  *   piece    a piece's file name: "donut", "night-coast"
- *   src      or the URL of any module that follows the piece contract
+ *   src      or the URL of any module that follows the piece contract, or whose
+ *            default export is a piece, as a kit file's is
  *   fps      overrides the piece's frame rate
  *   options  JSON overriding the piece's option defaults: '{"text":"hello"}'
  *   label    what the picture shows, for screen readers; the piece's name otherwise
@@ -21,8 +23,9 @@
  * element holds before it loads (a first frame rendered on the server, say)
  * stays until the piece is ready.
  */
+import { banner, type BannerOptions } from "./banner.ts";
 import { isPiece, load } from "./library.ts";
-import { mount, type MountOptions } from "./mount.ts";
+import { mount, pieceIn, type MountOptions } from "./mount.ts";
 import type { Piece } from "./types.ts";
 
 // :where gives these no specificity, so any rule of the page's own wins. Where the system monospace face lacks the box
@@ -35,13 +38,24 @@ const STYLE =
 // On a server there is no HTMLElement to extend; the class is never used there.
 const Base = (typeof HTMLElement === "undefined" ? class {} : HTMLElement) as typeof HTMLElement;
 
+// One start for any number of changes in a row, such as every attribute's as the tag upgrades, a microtask later.
+const queued = new WeakSet<HTMLElement>();
+const soon = (el: HTMLElement, start: () => void) => {
+  if (queued.has(el)) return;
+  queued.add(el);
+  queueMicrotask(() => {
+    queued.delete(el);
+    if (el.isConnected) start();
+  });
+};
+
 export class AsciiArt extends Base {
   static observedAttributes = ["piece", "src", "fps", "options", "label", "mono"];
   #stop: (() => void) | null = null;
   #run = 0;
 
   connectedCallback() {
-    this.#start();
+    soon(this, () => this.#start());
   }
 
   disconnectedCallback() {
@@ -51,7 +65,7 @@ export class AsciiArt extends Base {
   }
 
   attributeChangedCallback() {
-    if (this.isConnected) this.#start();
+    if (this.isConnected) soon(this, () => this.#start());
   }
 
   async #start() {
@@ -61,7 +75,8 @@ export class AsciiArt extends Base {
     let piece: Piece;
     let options: MountOptions;
     try {
-      if (src) piece = (await import(/* @vite-ignore */ /* webpackIgnore: true */ new URL(src, document.baseURI).href)) as Piece;
+      // A kit file's piece is its default export; a library piece's module is the piece.
+      if (src) piece = pieceIn(await import(/* @vite-ignore */ /* webpackIgnore: true */ new URL(src, document.baseURI).href), src);
       else if (isPiece(name)) piece = await load[name]();
       else return;
       options = JSON.parse(this.getAttribute("options") || "{}") as MountOptions;
@@ -83,13 +98,78 @@ export class AsciiArt extends Base {
   }
 }
 
-/** Defines the tag, once. Importing this module calls it for "ascii-art". */
+/**
+ * <ascii-banner>: any text as a banner (banner() in ascii.rest/banner), as one tag.
+ *
+ *   <ascii-banner text="hello" color="#f97316,#f778ba" shadow="rounded"></ascii-banner>
+ *
+ * Attributes: text; font, shadow, fill, effect and speed as banner() takes them; color, a colour or several for a
+ * fade, comma separated; shadow-color; pixel and gap, numbers; options, JSON for any other option; label; mono. An
+ * empty attribute is as good as none. One banner() can't take draws nothing and says why in the console.
+ */
+export class AsciiBanner extends Base {
+  static observedAttributes = ["text", "font", "shadow", "fill", "effect", "speed", "color", "shadow-color", "pixel", "gap", "options", "label", "mono"];
+  #stop: (() => void) | null = null;
+
+  connectedCallback() {
+    soon(this, () => this.#start());
+  }
+
+  disconnectedCallback() {
+    this.#stop?.();
+    this.#stop = null;
+  }
+
+  attributeChangedCallback() {
+    if (this.isConnected) soon(this, () => this.#start());
+  }
+
+  #start() {
+    const get = (name: string) => this.getAttribute(name)?.trim() || undefined;
+    const num = (name: string) => (get(name) !== undefined && !Number.isNaN(+get(name)!) ? +get(name)! : undefined);
+    const list = (v: string | undefined) => (v === undefined ? undefined : v.includes(",") ? v.split(",").map((c) => c.trim()) : v.trim());
+    let piece: Piece;
+    try {
+      const options = { ...(JSON.parse(get("options") || "{}") as BannerOptions) };
+      const set = <K extends keyof BannerOptions>(key: K, value: BannerOptions[K] | undefined) => value !== undefined && (options[key] = value);
+      set("font", get("font") as BannerOptions["font"]);
+      set("shadow", get("shadow"));
+      set("fill", get("fill"));
+      set("effect", get("effect") as BannerOptions["effect"]);
+      set("speed", num("speed"));
+      set("pixel", num("pixel"));
+      set("gap", num("gap"));
+      set("color", list(get("color")));
+      set("shadowColor", get("shadow-color"));
+      piece = banner(get("text") ?? "", options);
+    } catch (error) {
+      console.warn("<ascii-banner> could not draw:", error);
+      return;
+    }
+    const el = document.createElement(piece.meta.palette && !this.hasAttribute("mono") ? "canvas" : "pre");
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", get("label") || piece.meta.name);
+    this.#stop?.();
+    this.replaceChildren(el);
+    this.#stop = mount(el, piece);
+  }
+}
+
+/** Defines the tags, once: <ascii-art>, or `tag`, and <ascii-banner>. Importing this module calls it. */
 export function define(tag = "ascii-art") {
-  if (typeof customElements === "undefined" || customElements.get(tag)) return;
-  const style = document.createElement("style");
-  style.textContent = tag === "ascii-art" ? STYLE : STYLE.replaceAll("ascii-art", tag);
-  document.head.append(style);
-  customElements.define(tag, tag === "ascii-art" ? AsciiArt : class extends AsciiArt {});
+  if (typeof customElements === "undefined") return;
+  if (!customElements.get(tag)) {
+    const style = document.createElement("style");
+    style.textContent = tag === "ascii-art" ? STYLE : STYLE.replaceAll("ascii-art", tag);
+    document.head.append(style);
+    customElements.define(tag, tag === "ascii-art" ? AsciiArt : class extends AsciiArt {});
+  }
+  if (!customElements.get("ascii-banner")) {
+    const style = document.createElement("style");
+    style.textContent = STYLE.replaceAll("ascii-art", "ascii-banner");
+    document.head.append(style);
+    customElements.define("ascii-banner", AsciiBanner);
+  }
 }
 
 define();
@@ -97,5 +177,6 @@ define();
 declare global {
   interface HTMLElementTagNameMap {
     "ascii-art": AsciiArt;
+    "ascii-banner": AsciiBanner;
   }
 }

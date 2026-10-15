@@ -1,6 +1,6 @@
 {
-  // The library (src/) and the scripts. Imports carry their .ts extension so
-  // node runs the sources directly; the build rewrites them to .js.
+  // The library (src/), the scripts and the kit's examples. Imports carry their
+  // .ts extension so node runs the sources directly; the build rewrites them to .js.
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
@@ -17,6 +17,6 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src", "scripts"],
+  "include": ["src", "scripts", "examples"],
   "exclude": ["src/astro"]
 }

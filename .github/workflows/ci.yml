@@ -18,3 +18,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run gen && git diff --exit-code src/pieces/index.ts src/library.ts
+      # The kit: its tests, every example through the frame contract, and the docs' code against the build.
+      - run: npm test
+      - run: npm run kit:examples
+      - run: npm run kit:docs

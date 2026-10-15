@@ -189,7 +189,7 @@ export default function fireworks(): Frame {
         if (p.look === "peony") {
           // A short streak behind each rim spark, on the outer part of its path
           // only, so the middle stays open and the burst is round.
-          if (!p.inner && a < 0.75) stroke(s, p, Math.max(back(p, a, 0.6), a - 0.12), a, (u, dx, dy) => streak(dx, dy));
+          if (!p.inner && a < 0.75) stroke(s, p, Math.max(back(p, a, 0.6), a - 0.12), a, (_, dx, dy) => streak(dx, dy));
           heads.push([x, y, a < 0.7 ? "*" : f < 0.6 ? "+" : "."]);
         } else if (p.look === "ring") {
           if (a < 0.15) continue;

@@ -10,5 +10,6 @@
     "types": ["node"]
   },
   "include": ["src"],
-  "exclude": ["src/astro"]
+  // Tests run from the sources with node --test; the package ships none.
+  "exclude": ["src/astro", "src/**/*.test.ts"]
 }
