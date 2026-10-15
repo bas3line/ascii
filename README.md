@@ -10,6 +10,10 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-181717?logo=typescript&logoColor=white)](src/types.ts)
 [![License](https://img.shields.io/badge/license-MIT-181717)](LICENSE)
 
+<p align="center"><sub>
+Special thanks to the original creator: <a href="https://github.com/bas3line">@bas3line</a> (<a href="https://x.com/inlovewithgo">@inlovewithgo</a>) &mdash; original source code at <a href="https://github.com/bas3line/ascii">bas3line/ascii</a>.
+</sub></p>
+
 </div>
 
 ---

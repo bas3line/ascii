@@ -1,12 +1,18 @@
 ---
 /*
- * /studio/: interactive scene studio for ascii.rest.
- * Viewport on left, control panel on right, code view underneath.
+ * /studio/: the studio for every piece in the library.
+ * Piece picker top left (search, then groups, then items), viewport on left,
+ * control panel on right, code view underneath the first screen.
  * Zero CPU burn when paused.
  */
 import Layout from "../layouts/Layout.astro";
 import { PAGES, pageCardOf } from "../lib/pages";
+import { groups } from "../lib/library";
 ---
+
+{/* Every piece the studio can load, grouped as the sidebar groups them: the
+picker reads this catalog and load[name]() fetches the module on selection. */}
+<script type="application/json" id="studio-catalog" is:inline set:html={JSON.stringify({ groups: groups.map((g) => ({ label: g.label, icon: g.icon, categories: g.categories.map((c) => ({ name: c.name, items: c.pieces.map((p) => ({ slug: p.slug, name: p.name })) })) })) })} />
 
 <Layout
   title={`${PAGES.studio.title} · ascii.navinhill.com`}
@@ -15,11 +21,26 @@ import { PAGES, pageCardOf } from "../lib/pages";
   card={pageCardOf("studio")}
 >
   <div slot="heading" class="studio-header-presets">
-    <span class="header-scene-label">scene</span>
-    <div class="pill-group" id="preset-pills">
-      <button class="pill active" type="button" data-preset="ocean-sunset">[ocean sunset]</button>
-      <button class="pill" type="button" data-preset="snow-mountain">[snow mountain]</button>
-      <button class="pill" type="button" data-preset="cyber-prism">[cyber prism]</button>
+    <span class="header-scene-label">piece</span>
+    <div class="piece-picker" id="piece-picker">
+      <button class="pill picker-btn" id="picker-btn" type="button" aria-haspopup="menu" aria-expanded="false">
+        <span class="picker-value" id="picker-value">ocean sunset</span>
+        <span class="picker-caret" aria-hidden="true">▾</span>
+      </button>
+      <div class="picker-panel" id="picker-panel" hidden>
+        <div class="picker-search">
+          <input
+            id="picker-search"
+            type="search"
+            placeholder="search all pieces"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+            aria-label="Search all pieces"
+          />
+        </div>
+        <div class="picker-menu" id="picker-menu" role="menu" aria-label="Every piece"></div>
+      </div>
     </div>
   </div>
 
@@ -75,7 +96,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
 
         <!-- Panel Tab: Layers & Parameters -->
         <div class="panel-body active" id="tab-layers">
-          <div class="layer-stack-wrap">
+          <div class="layer-stack-wrap" id="layer-stack-wrap">
             <div class="section-title">layer stack</div>
             <div class="layer-stack-list" id="layer-list">
               <!-- Dynamically populated -->
@@ -83,7 +104,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
           </div>
 
           <div class="params-wrap">
-            <div class="section-title">parameters</div>
+            <div class="section-title" id="params-title">parameters</div>
             <div class="params-list" id="layer-controls">
               <!-- Sliders dynamically populated -->
             </div>
@@ -92,13 +113,15 @@ import { PAGES, pageCardOf } from "../lib/pages";
 
         <!-- Panel Tab: Palette & Halftone -->
         <div class="panel-body" id="tab-palette">
-          <div class="param-control-group param-row-between">
+          <div class="param-control-group param-row-between" id="ground-row">
             <label for="col-ground" class="param-label">ground color</label>
             <div class="param-color-right">
               <input type="color" id="col-ground" value="#0b0817" />
               <span class="param-val" id="hex-ground">#0b0817</span>
             </div>
           </div>
+
+          <div id="halftone-rows">
 
           <div class="param-control-group">
             <div class="param-control-header">
@@ -135,12 +158,14 @@ import { PAGES, pageCardOf } from "../lib/pages";
               <input type="range" id="range-contrast" min="0.5" max="2.0" step="0.05" value="1.0" />
             </div>
           </div>
+          </div>
 
           <div class="palette-swatches-section">
             <div class="section-title">palette (<span id="palette-count">0</span>)</div>
             <div class="palette-swatches" id="palette-grid">
               <!-- Swatches rendered here -->
             </div>
+            <p class="palette-note" id="palette-note" hidden>this piece is drawn in one ink</p>
           </div>
         </div>
 
@@ -184,15 +209,25 @@ import { PAGES, pageCardOf } from "../lib/pages";
     <!-- Bottom: Full-Width Code Panel Underneath -->
     <section class="code-strip">
       <div class="code-head">
-        <span>standalone TypeScript piece (200x100, 15fps)</span>
+        <span id="code-label">standalone TypeScript piece</span>
         <button class="pill" type="button" id="btn-copy-code-tab">[copy code]</button>
       </div>
       <pre class="code-display"><code id="code-output">// loading code...</code></pre>
     </section>
   </div>
+
+  <p class="studio-credit">
+    <a href="https://github.com/bas3line/ascii" target="_blank" rel="noopener noreferrer">original ascii.rest</a>
+    <span>by</span>
+    <a href="https://x.com/inlovewithgo" target="_blank" rel="noopener noreferrer">@inlovewithgo</a>
+  </p>
 </Layout>
 
 <style is:global>
+  [hidden] {
+    display: none !important;
+  }
+
   .studio-cockpit {
     display: flex;
     flex-direction: column;
@@ -206,6 +241,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
     display: flex;
     align-items: center;
     gap: 0.6rem;
+    min-height: 28px;
   }
 
   .header-scene-label {
@@ -213,6 +249,202 @@ import { PAGES, pageCardOf } from "../lib/pages";
     color: var(--muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+  }
+
+  /* --- piece picker -------------------------------------------------------- */
+
+  .piece-picker {
+    position: relative;
+  }
+
+  .picker-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 240px;
+  }
+
+  .picker-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .picker-caret {
+    color: var(--muted);
+    font-size: 0.7rem;
+    line-height: 1;
+    transition: transform 0.12s ease;
+  }
+
+  .picker-btn[aria-expanded="true"] {
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+  }
+
+  .picker-btn[aria-expanded="true"] .picker-caret {
+    color: var(--bg);
+    transform: rotate(180deg);
+  }
+
+  .picker-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 60;
+    width: min(320px, calc(100vw - 2rem));
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--well);
+    background: var(--bg);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+  }
+
+  .picker-panel.open-up {
+    top: auto;
+    bottom: calc(100% + 6px);
+  }
+
+  .picker-search {
+    display: flex;
+    padding: 0.45rem 0.5rem;
+    border-bottom: 1px solid var(--well);
+  }
+
+  .picker-search input {
+    width: 100%;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    padding: 0.25rem 0.4rem;
+    outline: none;
+  }
+
+  .picker-search input:focus {
+    border-color: var(--well);
+    background: var(--well);
+  }
+
+  .picker-search input::placeholder {
+    color: var(--muted);
+  }
+
+  .picker-menu {
+    max-height: var(--picker-max, 420px);
+    min-height: 60px;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    overscroll-behavior: contain;
+    padding: 0.25rem 0;
+  }
+
+  .picker-menu::-webkit-scrollbar {
+    display: none;
+    width: 0;
+  }
+
+  .picker-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: calc(100% - 0.5rem);
+    margin: 0 0.25rem;
+    padding: 0.3rem 0.5rem;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  .picker-row:hover,
+  .picker-row.picker-active {
+    background: var(--well);
+    color: var(--ink);
+  }
+
+  .picker-group .picker-icon {
+    color: var(--muted);
+    width: 1.1em;
+    text-align: center;
+  }
+
+  .picker-group .picker-label {
+    flex: 1;
+  }
+
+  .picker-count {
+    font-size: 0.7rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .picker-back {
+    color: var(--muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--well);
+    margin-bottom: 0.25rem;
+    border-radius: 0;
+    width: 100%;
+    padding: 0.35rem 0.6rem;
+  }
+
+  .picker-back:hover {
+    background: var(--well);
+    color: var(--ink);
+  }
+
+  .picker-cat {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.35rem 0.55rem 0.15rem;
+    padding-bottom: 0.2rem;
+    border-bottom: 1px solid var(--well);
+    font-size: 0.62rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+
+  .picker-item .picker-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .picker-empty {
+    padding: 0.6rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+
+  .picker-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+
+  .picker-title .picker-icon {
+    width: 1.1em;
+    text-align: center;
   }
 
   .studio-header-tools {
@@ -270,13 +502,13 @@ import { PAGES, pageCardOf } from "../lib/pages";
   /* Two-column layout: Viewport Left, Controls Right */
   .studio-main-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 420px;
+    grid-template-columns: minmax(0, 1fr) 400px;
     gap: 1rem;
     align-items: stretch;
     /* one screen: viewport and panel fill the first screen together, the code
     strip starts under the fold, where scrolling brings it in. */
-    height: calc(100vh - 4.25rem);
-    height: calc(100dvh - 4.25rem);
+    height: calc(100vh - 3.9rem);
+    height: calc(100dvh - 3.9rem);
   }
 
   @media (max-width: 1024px) {
@@ -355,6 +587,12 @@ import { PAGES, pageCardOf } from "../lib/pages";
     min-height: 0;
   }
 
+  @media (min-width: 1025px) {
+    .controls-column {
+      overflow: hidden;
+    }
+  }
+
   .panel-tabs {
     display: flex;
     border-bottom: 1px solid var(--well);
@@ -391,6 +629,8 @@ import { PAGES, pageCardOf } from "../lib/pages";
     padding: 1rem;
     flex-direction: column;
     gap: 1.15rem;
+    min-height: 0;
+    flex: 1;
     overflow-y: auto;
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -591,6 +831,38 @@ import { PAGES, pageCardOf } from "../lib/pages";
     border-color: var(--ink);
   }
 
+  .param-widget input[type="text"],
+  .param-widget input[type="search"],
+  .param-widget input[type="number"],
+  .param-widget textarea {
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--well);
+    background: var(--well);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    border-radius: 0;
+  }
+
+  .param-widget input[type="text"]:focus,
+  .param-widget input[type="number"]:focus,
+  .param-widget textarea:focus {
+    outline: none;
+    border-color: var(--muted);
+    background: var(--bg);
+  }
+
+  .param-widget textarea {
+    resize: vertical;
+    min-height: 3.2rem;
+    line-height: 1.4;
+  }
+
+  .color-swatch.clickable {
+    cursor: pointer;
+  }
+
   /* Custom Color Input: minimal square swatch */
   .param-color-right {
     display: flex;
@@ -664,6 +936,16 @@ import { PAGES, pageCardOf } from "../lib/pages";
     padding: 0.5rem 0;
   }
 
+  .palette-note {
+    margin: 0.2rem 0 0;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .hidden {
+    display: none !important;
+  }
+
   .color-swatch {
     width: 20px;
     height: 20px;
@@ -726,21 +1008,55 @@ import { PAGES, pageCardOf } from "../lib/pages";
     white-space: pre;
     overflow-x: auto;
   }
+
+  .studio-credit {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .studio-credit a {
+    color: var(--muted);
+    text-decoration: none;
+    border-bottom: 1px solid var(--well);
+  }
+
+  .studio-credit a:hover {
+    color: var(--ink);
+    border-bottom-color: var(--ink);
+  }
 </style>
 
 <script>
+  import { load } from "ascii.rest";
+  import type { Env, Frame, Meta, Options, Piece } from "ascii.rest";
+  import type { SceneSpec, StudioSession } from "ascii.rest/studio";
   import {
-    ALL_PRESETS,
     compileSceneToCode,
     createStudioSession,
     getLayerDefinition,
     hexToRgb,
   } from "ascii.rest/studio";
 
-  // Active session state
-  let currentPresetIdx = 0;
-  let session = createStudioSession(ALL_PRESETS[currentPresetIdx]);
-  let selectedLayerId = session.spec.layers[0]?.id || "";
+  // What the studio is showing: a library piece, or a scene-engine spec
+  // (the image ingestion runs through the engine too).
+  type Active =
+    | {
+        kind: "piece";
+        slug: string;
+        mod: Piece;
+        frame: Frame;
+        options: Record<string, unknown>;
+        colorOverride: Record<number, string>;
+      }
+    | { kind: "scene"; session: StudioSession; name: string };
+
+  let active: Active | null = null;
+  let session: StudioSession | null = null;
+  let selectedLayerId = "";
+  let groundOverride: string | null = null;
+  let loadToken = 0;
 
   // Playback state
   let isPlaying = true;
@@ -752,25 +1068,32 @@ import { PAGES, pageCardOf } from "../lib/pages";
   // DOM Elements
   const canvas = document.getElementById("studio-canvas") as HTMLCanvasElement;
   const ctx = canvas.getContext("2d", { alpha: false });
+  const canvasBox = document.getElementById("canvas-box") as HTMLElement;
   const playBtn = document.getElementById("btn-play") as HTMLButtonElement;
   const playIcon = document.getElementById("play-icon") as HTMLSpanElement;
   const scrubber = document.getElementById("timeline-scrubber") as HTMLInputElement;
   const timeDisplay = document.getElementById("time-display") as HTMLSpanElement;
   const perfDisplay = document.getElementById("stat-perf") as HTMLSpanElement;
-  const presetPills = document.querySelectorAll("#preset-pills .pill");
   const speedPills = document.querySelectorAll(".speed-pill");
   const panelTabs = document.querySelectorAll(".panel-tab-btn");
   const panelBodies = document.querySelectorAll(".panel-body");
+  const layerStackWrap = document.getElementById("layer-stack-wrap") as HTMLElement;
   const layerListEl = document.getElementById("layer-list") as HTMLElement;
+  const paramsTitle = document.getElementById("params-title") as HTMLElement;
   const layerControlsEl = document.getElementById("layer-controls") as HTMLElement;
+  const paletteSection = document.querySelector(".palette-swatches-section") as HTMLElement;
   const paletteGridEl = document.getElementById("palette-grid") as HTMLElement;
   const paletteCountEl = document.getElementById("palette-count") as HTMLElement;
+  const paletteNote = document.getElementById("palette-note") as HTMLElement;
   const colGroundInput = document.getElementById("col-ground") as HTMLInputElement;
   const hexGroundLabel = document.getElementById("hex-ground") as HTMLSpanElement;
+  const groundRow = document.getElementById("ground-row") as HTMLElement;
+  const halftoneRows = document.getElementById("halftone-rows") as HTMLElement;
   const selRamp = document.getElementById("sel-ramp") as HTMLSelectElement;
   const selDither = document.getElementById("sel-dither") as HTMLSelectElement;
   const rangeContrast = document.getElementById("range-contrast") as HTMLInputElement;
   const valContrast = document.getElementById("val-contrast") as HTMLSpanElement;
+  const codeLabel = document.getElementById("code-label") as HTMLElement;
   const codeOutput = document.getElementById("code-output") as HTMLElement;
   const btnExportCode = document.getElementById("btn-export-code") as HTMLButtonElement;
   const btnCopyCodeTab = document.getElementById("btn-copy-code-tab") as HTMLButtonElement;
@@ -778,80 +1101,158 @@ import { PAGES, pageCardOf } from "../lib/pages";
   const imageFileInput = document.getElementById("image-file-input") as HTMLInputElement;
   const ingestMotion = document.getElementById("ingest-motion") as HTMLSelectElement;
   const ingestSplit = document.getElementById("ingest-split") as HTMLInputElement;
-  const valIngestSplit = document.getElementById("val-ingest-split") as HTMLSpanElement;
 
-  // Offscreen rendering buffers (200x100)
-  const COLS = 200;
-  const ROWS = 100;
-  const colorIndices = new Uint8Array(COLS * ROWS);
+  const pickerBtn = document.getElementById("picker-btn") as HTMLButtonElement;
+  const pickerValue = document.getElementById("picker-value") as HTMLElement;
+  const pickerPanel = document.getElementById("picker-panel") as HTMLElement;
+  const pickerMenu = document.getElementById("picker-menu") as HTMLElement;
+  const pickerSearch = document.getElementById("picker-search") as HTMLInputElement;
+
+  // Cell colors, indexed the way frames write them: one palette index per cell.
+  let colorIndices = new Uint8Array(0);
   const colorMap = new Map<number, [number, number, number]>();
+
+  function activeMeta(): Meta {
+    return active!.kind === "piece" ? active.mod.meta : active!.session.piece.meta;
+  }
+
+  function currentGround(): string | null {
+    if (!active) return null;
+    if (active.kind === "scene") return active.session.spec.ground;
+    return groundOverride ?? active.mod.meta.ground ?? null;
+  }
+
+  function activePalette(): readonly string[] | null {
+    if (!active) return null;
+    if (active.kind === "scene") return active.session.spec.palette;
+    return active.mod.meta.palette ?? null;
+  }
 
   function updateColorMap() {
     colorMap.clear();
-    const p = session.spec.palette;
-    for (let i = 0; i < p.length; i++) {
-      colorMap.set(i, hexToRgb(p[i]));
+    const palette = activePalette();
+    if (!palette) return;
+    const overrides = active!.kind === "piece" ? active.colorOverride : undefined;
+    for (let i = 0; i < palette.length; i++) {
+      const hex = overrides && overrides[i] ? overrides[i] : palette[i];
+      colorMap.set(i, hexToRgb(hex));
     }
   }
 
-  // Draw current frame to canvas once
+  // Whether a hex color reads as dark, judged the way mount() judges it.
+  function isDark(hex: string): boolean {
+    const c = hexToRgb(hex);
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] < 0.5;
+  }
+
+  // One ink for cells the piece left uncolored, honouring the ground.
+  function inkFor(ground: string | null): string {
+    if (ground) return isDark(ground) ? "#f5f6f7" : "#131518";
+    return "#f5f6f7";
+  }
+
+  // Canvas sizing: the bitmap matches the piece's cell grid exactly
+  // (rows * cell cells tall); CSS maps it into the stage box undistorted.
+  function sizeCanvas() {
+    const meta = active?.kind === "piece" ? active.mod.meta : active?.session.piece.meta;
+    if (!meta) return;
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const width = Math.max(320, canvasBox.clientWidth * dpr);
+    const nextW = Math.round(width);
+    const nextH = Math.round((width * meta.rows * (meta.cell ?? 2)) / meta.cols);
+    if (canvas.width !== nextW || canvas.height !== nextH) {
+      canvas.width = nextW;
+      canvas.height = nextH;
+    }
+  }
+
+  // Render on-demand (used when paused or after a resize)
+  function renderOnDemand() {
+    if (active) renderFrame(currentTime);
+  }
+
+  const resizeObserver = new ResizeObserver(() => {
+    if (!active) return;
+    const wasH = canvas.height;
+    sizeCanvas();
+    if (!isPlaying || canvas.height !== wasH) renderOnDemand();
+  });
+  resizeObserver.observe(canvasBox);
+
+  // Draw one frame: walk the piece's text the way mount() does, newline
+  // resets the column, each glyph drawn on top of the ground fill.
   function renderFrame(t: number) {
-    if (!ctx) return;
-    const t0 = performance.now();
+    if (!ctx || !active) return;
+    const started = performance.now();
+    const meta = activeMeta();
+    const ground = currentGround();
 
-    const frameFn = session.piece.default();
-    const chars = frameFn(t, { paper: false, color: colorIndices });
+    const needed = meta.cols * meta.rows;
+    if (colorIndices.length !== needed) colorIndices = new Uint8Array(needed);
 
-    const elapsed = performance.now() - t0;
-    perfDisplay.textContent = `${elapsed.toFixed(1)}ms`;
+    const env: Env = { paper: !!ground && !isDark(ground), color: colorIndices };
 
-    const cellW = canvas.width / COLS;
-    const cellH = canvas.height / ROWS;
+    let text: string;
+    try {
+      text = active.kind === "piece" ? active.frame(t, env) : active.session.piece.default()(t, env);
+    } catch (err) {
+      pausePlayback();
+      perfDisplay.textContent = "err";
+      codeOutput.textContent = `// ${meta.name}: ${(err as Error).message}`;
+      return;
+    }
+    perfDisplay.textContent = `${(performance.now() - started).toFixed(1)}ms`;
 
-    ctx.fillStyle = session.spec.ground;
+    const cols = meta.cols;
+    const rows = meta.rows;
+    const cellW = canvas.width / cols;
+    const cellH = canvas.height / rows;
+
+    ctx.fillStyle = ground ?? "#070b16";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.font = `${cellH * 1.15}px "ascii.rest mono", ui-monospace, monospace`;
+    ctx.font = `${(cellW * 1.15).toFixed(2)}px "ascii.rest mono", ui-monospace, monospace`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const idx = r * COLS + c;
-        const ch = chars[idx];
-        if (!ch || ch === " ") continue;
-
-        const rgb = colorMap.get(colorIndices[idx]);
-        if (rgb) {
-          ctx.fillStyle = `rgb(${Math.round(rgb[0] * 255)}, ${Math.round(rgb[1] * 255)}, ${Math.round(rgb[2] * 255)})`;
-        } else {
-          ctx.fillStyle = "#ffffff";
-        }
-
-        ctx.fillText(ch, (c + 0.5) * cellW, (r + 0.5) * cellH);
+    const ink = inkFor(ground);
+    let col = 0;
+    let row = 0;
+    for (let k = 0; k < text.length; k++) {
+      const ch = text[k];
+      if (ch === "\n") {
+        col = 0;
+        row++;
+        if (row >= rows) break;
+        continue;
       }
+      if (col >= cols) {
+        col = 0;
+        row++;
+        if (row >= rows) break;
+      }
+      if (ch !== " ") {
+        const color = colorMap.get(colorIndices[row * cols + col]);
+        ctx.fillStyle = color
+          ? `rgb(${Math.round(color[0] * 255)}, ${Math.round(color[1] * 255)}, ${Math.round(color[2] * 255)})`
+          : ink;
+        ctx.fillText(ch, (col + 0.5) * cellW, (row + 0.5) * cellH);
+      }
+      col++;
     }
   }
 
-  // Render on-demand (used when paused or scrubbing)
-  function renderOnDemand() {
-    renderFrame(currentTime);
-  }
-
-  // Animation Loop with complete pause shutdown (0% CPU when paused)
+  // Animation loop with complete pause shutdown (0% CPU when paused)
   function tick(timestamp: number) {
     if (!isPlaying) {
       animId = null;
-      return; // STOP: do not request next frame!
+      return;
     }
-
     const dt = (timestamp - lastTimestamp) / 1000;
     lastTimestamp = timestamp;
-
     currentTime = (currentTime + dt * playbackSpeed) % 16.0;
     scrubber.value = currentTime.toFixed(2);
     timeDisplay.textContent = `${currentTime.toFixed(2)}s`;
-
     renderFrame(currentTime);
     animId = requestAnimationFrame(tick);
   }
@@ -873,10 +1274,70 @@ import { PAGES, pageCardOf } from "../lib/pages";
     }
   }
 
-  // Build Layer Stack UI
+  // --- selection ------------------------------------------------------------
+
+  function setActive(next: Active) {
+    active = next;
+    groundOverride = null;
+    const meta = activeMeta();
+    pickerValue.textContent = next.kind === "piece" ? meta.name : next.name;
+    selectedLayerId = next.kind === "scene" ? next.session.spec.layers[0]?.id || "" : "";
+    updateColorMap();
+    sizeCanvas();
+    updateLayerUI();
+    updatePaletteUI();
+    updateCodeView();
+    currentTime = 0;
+    scrubber.value = "0";
+    timeDisplay.textContent = "0.00s";
+    renderOnDemand();
+  }
+
+  async function selectPiece(slug: string) {
+    const token = ++loadToken;
+    let mod: Piece;
+    try {
+      mod = await load[slug]();
+    } catch (err) {
+      codeOutput.textContent = `// could not load ${slug}: ${(err as Error).message}`;
+      return;
+    }
+    if (token !== loadToken || mod === (active?.kind === "piece" ? active.mod : null)) return;
+    setActive({
+      kind: "piece",
+      slug,
+      mod,
+      frame: mod.default({ ...(mod.meta.options ?? {}) }),
+      options: { ...(mod.meta.options ?? {}) },
+      colorOverride: {},
+    });
+  }
+
+  // Scene-engine specs come from the image ingestion, guarded the same way
+  // so a slow file read can't overwrite a newer selection.
+  function selectSpec(spec: SceneSpec) {
+    setActive({ kind: "scene", session: createStudioSession(spec), name: getSpecTitle(spec) });
+  }
+
+  function getSpecTitle(spec: SceneSpec): string {
+    return spec.name || "image";
+  }
+
+  // --- panels ---------------------------------------------------------------
+  // Layer stack + parameters for scene-engine items; the piece's own options
+  // for library pieces.
+
   function updateLayerUI() {
-    layerListEl.innerHTML = "";
-    session.spec.layers.forEach((layer) => {
+    layerStackWrap.hidden = active === null || active.kind !== "scene";
+    paramsTitle.textContent = active?.kind === "scene" ? "parameters" : "options";
+    if (active !== null && active.kind === "piece") {
+      buildOptionsControls();
+      return;
+    }
+    layerControlsEl.innerHTML = "";
+    if (active === null || active.kind !== "scene") return;
+
+    active.session.spec.layers.forEach((layer) => {
       const row = document.createElement("div");
       row.className = `layer-item-row ${layer.id === selectedLayerId ? "selected" : ""}`;
 
@@ -889,7 +1350,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
       cb.checked = layer.enabled;
       cb.addEventListener("change", (e) => {
         e.stopPropagation();
-        session.toggleLayer(layer.id, cb.checked);
+        active!.kind === "scene" && active.session.toggleLayer(layer.id, cb.checked);
         renderOnDemand();
         updateCodeView();
       });
@@ -908,6 +1369,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
       row.appendChild(typeBadge);
 
       row.addEventListener("click", () => {
+        if (active?.kind !== "scene") return;
         selectedLayerId = layer.id;
         updateLayerUI();
       });
@@ -918,10 +1380,11 @@ import { PAGES, pageCardOf } from "../lib/pages";
     renderSelectedLayerControls();
   }
 
-  // Render parameters for selected layer (clean 2-line stacked controls)
+  // Parameters for the selected layer of a scene-engine item (2-line stacked controls)
   function renderSelectedLayerControls() {
     layerControlsEl.innerHTML = "";
-    const activeLayer = session.spec.layers.find((l) => l.id === selectedLayerId);
+    if (active?.kind !== "scene") return;
+    const activeLayer = active.session.spec.layers.find((l) => l.id === selectedLayerId);
     if (!activeLayer) return;
 
     const def = getLayerDefinition(activeLayer.type);
@@ -952,7 +1415,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
 
         slider.addEventListener("input", () => {
           valSpan.textContent = slider.value;
-          session.setParam(activeLayer.id, key, parseFloat(slider.value));
+          if (active?.kind === "scene") active.session.setParam(activeLayer.id, key, parseFloat(slider.value));
           renderOnDemand();
           updateCodeView();
         });
@@ -985,7 +1448,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
 
         picker.addEventListener("input", () => {
           hexSpan.textContent = picker.value;
-          session.setParam(activeLayer.id, key, picker.value);
+          if (active?.kind === "scene") active.session.setParam(activeLayer.id, key, picker.value);
           renderOnDemand();
           updateCodeView();
         });
@@ -1022,7 +1485,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
         });
 
         sel.addEventListener("change", () => {
-          session.setParam(activeLayer.id, key, sel.value);
+          if (active?.kind === "scene") active.session.setParam(activeLayer.id, key, sel.value);
           renderOnDemand();
           updateCodeView();
         });
@@ -1047,7 +1510,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
         cb.className = "layer-chk";
         cb.checked = !!(activeLayer.params[key] ?? paramDef.default);
         cb.addEventListener("change", () => {
-          session.setParam(activeLayer.id, key, cb.checked);
+          if (active?.kind === "scene") active.session.setParam(activeLayer.id, key, cb.checked);
           renderOnDemand();
           updateCodeView();
         });
@@ -1059,54 +1522,477 @@ import { PAGES, pageCardOf } from "../lib/pages";
     });
   }
 
-  // Update Palette View
-  function updatePaletteUI() {
-    colGroundInput.value = session.spec.ground;
-    hexGroundLabel.textContent = session.spec.ground;
-    paletteCountEl.textContent = String(session.spec.palette.length);
+  // A control for every entry in a piece's own defaults: numbers as number
+  // fields, booleans as checkboxes, text as inputs, string lists as
+  // comma-separated values, anything else as JSON.
+  function buildOptionsControls() {
+    if (active?.kind !== "piece") return;
+    const item = active;
+    const defaults: Options = item.mod.meta.options ?? {};
 
+    const commit = (value: Options) => {
+      try {
+        item.frame = item.mod.default(value);
+      } catch (err) {
+        codeOutput.textContent = `// ${item.mod.meta.name}: ${(err as Error).message}`;
+      }
+      renderOnDemand();
+    };
+    const setOption = (key: string, value: unknown) => {
+      item.options[key] = value;
+      commit({ ...defaults, ...item.options });
+    };
+
+    Object.entries(defaults).forEach(([key, def]) => {
+      if (typeof def === "number") {
+        const group = document.createElement("div");
+        group.className = "param-control-group param-row-between";
+
+        const label = document.createElement("label");
+        label.className = "param-label";
+        label.textContent = key;
+
+        const input = document.createElement("input");
+        input.type = "number";
+        input.step = "any";
+        input.value = typeof item.options[key] === "number" ? String(item.options[key]) : String(def);
+        input.addEventListener("change", () => {
+          const n = parseFloat(input.value);
+          if (Number.isFinite(n)) setOption(key, n);
+        });
+
+        group.appendChild(label);
+        group.appendChild(input);
+        layerControlsEl.appendChild(group);
+      } else if (typeof def === "boolean") {
+        const group = document.createElement("div");
+        group.className = "param-control-group param-row-between";
+
+        const label = document.createElement("label");
+        label.className = "param-label";
+        label.style.cursor = "pointer";
+        label.textContent = key;
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.className = "layer-chk";
+        cb.checked = item.options[key] ?? def;
+        cb.addEventListener("change", () => setOption(key, cb.checked));
+
+        group.appendChild(label);
+        group.appendChild(cb);
+        layerControlsEl.appendChild(group);
+      } else if (typeof def === "string") {
+        const group = document.createElement("div");
+        group.className = "param-control-group";
+
+        const label = document.createElement("div");
+        label.className = "param-label";
+        label.textContent = key;
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = String(item.options[key] ?? def);
+        input.spellcheck = false;
+        input.addEventListener("change", () => setOption(key, input.value));
+
+        const widget = document.createElement("div");
+        widget.className = "param-widget";
+        widget.appendChild(input);
+        group.appendChild(label);
+        group.appendChild(widget);
+        layerControlsEl.appendChild(group);
+      } else if (Array.isArray(def) && def.length > 0 && def.every((v) => typeof v === "string")) {
+        const group = document.createElement("div");
+        group.className = "param-control-group";
+
+        const label = document.createElement("div");
+        label.className = "param-label";
+        label.textContent = key;
+
+        const input = document.createElement("input");
+        input.type = "text";
+        const current = item.options[key] ?? def;
+        input.value = Array.isArray(current) ? (current as string[]).join(", ") : String(current);
+        input.placeholder = "comma separated";
+        input.spellcheck = false;
+        input.addEventListener("change", () => {
+          const list = input.value.split(",").map((s) => s.trim()).filter(Boolean);
+          setOption(key, list.length ? list : (def as string[]));
+        });
+
+        const widget = document.createElement("div");
+        widget.className = "param-widget";
+        widget.appendChild(input);
+        group.appendChild(label);
+        group.appendChild(widget);
+        layerControlsEl.appendChild(group);
+      } else {
+        const group = document.createElement("div");
+        group.className = "param-control-group";
+
+        const label = document.createElement("div");
+        label.className = "param-label";
+        label.textContent = key;
+
+        const textarea = document.createElement("textarea");
+        textarea.rows = 3;
+        textarea.spellcheck = false;
+        const current = item.options[key] ?? def;
+        textarea.value = JSON.stringify(current, null, 2);
+        textarea.addEventListener("change", () => {
+          try {
+            setOption(key, JSON.parse(textarea.value));
+          } catch {
+            textarea.value = JSON.stringify(item.options[key] ?? def, null, 2);
+          }
+        });
+
+        const widget = document.createElement("div");
+        widget.className = "param-widget";
+        widget.appendChild(textarea);
+        group.appendChild(label);
+        group.appendChild(widget);
+        layerControlsEl.appendChild(group);
+      }
+    });
+  }
+
+  // --- palette tab ------------------------------------------------------------
+  // Ground and swatches apply to everything; the halftone rows belong to the
+  // scene engine. A swatch click recolors that palette entry.
+
+  function updatePaletteUI() {
+    const ground = currentGround();
+    const palette = activePalette();
+
+    groundRow.hidden = ground === null;
+    if (ground) {
+      colGroundInput.value = groundOverride ?? ground;
+      hexGroundLabel.textContent = colGroundInput.value;
+    }
+
+    halftoneRows.hidden = active?.kind !== "scene";
+    paletteNote.hidden = palette !== null;
+    paletteSection.hidden = palette === null;
+    if (!palette) return;
+
+    paletteCountEl.textContent = String(palette.length);
     paletteGridEl.innerHTML = "";
-    session.spec.palette.forEach((hex) => {
+    palette.forEach((hex, i) => {
+      const override = active?.kind === "piece" ? active.colorOverride[i] : undefined;
       const swatch = document.createElement("div");
-      swatch.className = "color-swatch";
-      swatch.style.backgroundColor = hex;
-      swatch.title = hex;
+      swatch.className = "color-swatch clickable";
+      swatch.style.backgroundColor = override ?? hex;
+      swatch.title = `${override ?? hex} — ${i}`;
+      swatch.dataset.index = String(i);
       paletteGridEl.appendChild(swatch);
     });
   }
 
-  // Update Code View
-  function updateCodeView() {
-    codeOutput.textContent = compileSceneToCode(session.spec);
+  function setSwatch(index: number, hex: string) {
+    if (active?.kind === "scene") {
+      const palette = [...active.session.spec.palette];
+      palette[index] = hex;
+      active.session.updatePalette(palette, active.session.spec.ground);
+      renderOnDemand();
+    } else if (active?.kind === "piece") {
+      active.colorOverride = { ...active.colorOverride, [index]: hex };
+      updateColorMap();
+      renderOnDemand();
+    }
+    updatePaletteUI();
+    updateCodeView();
   }
 
-  // Preset Selection
-  presetPills.forEach((pill) => {
-    pill.addEventListener("click", () => {
-      presetPills.forEach((p) => p.classList.remove("active"));
-      pill.classList.add("active");
+  const swatchPicker = document.createElement("input");
+  swatchPicker.type = "color";
 
-      const presetKey = pill.getAttribute("data-preset");
-      const found = ALL_PRESETS.find((p) => p.name.replace(/\s+/g, "-") === presetKey);
-      if (found) {
-        session = createStudioSession(found);
-        selectedLayerId = session.spec.layers[0]?.id || "";
-        updateColorMap();
-        updateLayerUI();
-        updatePaletteUI();
-        updateCodeView();
-        renderOnDemand();
-      }
-    });
+  function rgbToHex(css: string): string {
+    const m = css.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (!m) return "#000000";
+    return `#${[1, 2, 3].map((i) => Number(m[i]).toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  paletteGridEl.addEventListener("click", (e) => {
+    const target = (e.target as HTMLElement).closest(".color-swatch") as HTMLElement | null;
+    if (!target || active === null) return;
+    const index = Array.from(paletteGridEl.children).indexOf(target);
+    if (index < 0) return;
+    swatchPicker.value = rgbToHex(getComputedStyle(target).backgroundColor);
+    swatchPicker.oninput = () => setSwatch(index, swatchPicker.value);
+    swatchPicker.click();
   });
 
-  // Transport Controls
-  playBtn.addEventListener("click", () => {
-    if (isPlaying) {
-      pausePlayback();
-    } else {
-      startPlayback();
+  // --- code view ---------------------------------------------------------------
+  // Scene-engine items get the generated standalone piece; library pieces show
+  // their own TypeScript, fetched from the site's registry.
+
+  let codeToken = 0;
+  const sourceCache = new Map<string, string>();
+
+  async function fetchSource(slug: string): Promise<string> {
+    const cached = sourceCache.get(slug);
+    if (cached !== undefined) return cached;
+    const res = await fetch(`/r/${slug}.json`);
+    if (!res.ok) throw new Error(`registry responded ${res.status}`);
+    const item = await res.json();
+    const source: unknown = item.files?.[0]?.content;
+    if (typeof source !== "string") throw new Error("registry item has no source");
+    sourceCache.set(slug, source);
+    return source;
+  }
+
+  const camel = (slug: string) => slug.replace(/-([a-z0-9])/g, (_, c: string) => c.toUpperCase());
+
+  function updateCodeView() {
+    if (!active) return;
+    const meta = activeMeta();
+    if (active.kind === "scene") {
+      codeToken++;
+      codeLabel.textContent = `standalone TypeScript piece (${meta.cols}x${meta.rows}, ${meta.fps}fps)`;
+      codeOutput.textContent = compileSceneToCode(active.session.spec);
+      return;
     }
+    const item = active;
+    const token = ++codeToken;
+    codeLabel.textContent = `${meta.name} — source (${meta.cols}x${meta.rows}, ${meta.fps}fps)`;
+    codeOutput.textContent = `// loading source of ${meta.name}...`;
+    fetchSource(item.slug)
+      .then((source) => {
+        if (token === codeToken && active === item) codeOutput.textContent = source;
+      })
+      .catch((err) => {
+        if (token !== codeToken || active !== item) return;
+        const options = { ...(item.mod.meta.options ?? {}), ...item.options };
+        const opts = Object.keys(options).length ? `, ${JSON.stringify(options)}` : "";
+        codeOutput.textContent =
+          `// registry unavailable (${(err as Error).message}) — run it like this:\n` +
+          `import { mount } from "ascii.rest";\n` +
+          `import { ${camel(item.slug)} } from "ascii.rest/pieces";\n\n` +
+          `mount(document.querySelector("pre")!, ${camel(item.slug)}${opts});`;
+      });
+  }
+
+  // --- piece picker --------------------------------------------------------------
+  // Search first, then groups: choosing a group opens its item menu. The panel
+  // opens downward when the screen has room, upward along the top otherwise.
+
+  interface CatalogItem {
+    slug: string;
+    name: string;
+  }
+  interface CatalogCategory {
+    name: string;
+    items: CatalogItem[];
+  }
+  interface CatalogGroup {
+    label: string;
+    icon: string;
+    categories: CatalogCategory[];
+  }
+
+  const catalog: { groups: CatalogGroup[] } = JSON.parse(
+    document.getElementById("studio-catalog")!.textContent ?? '{"groups":[]}'
+  );
+  const everyItem = catalog.groups.flatMap((g) =>
+    g.categories.flatMap((c) => c.items.map((i) => ({ ...i, group: g.label, icon: g.icon, category: c.name })))
+  );
+  const bySlug = new Map(everyItem.map((i) => [i.slug, i]));
+
+  let pickerOpen = false;
+  let pickerView: { type: "root" } | { type: "group"; index: number } | { type: "search"; query: string } = { type: "root" };
+  let pickerCursor = -1;
+
+  function openPanel() {
+    if (pickerOpen) return;
+    pickerOpen = true;
+    pickerView = { type: "root" };
+    pickerSearch.value = "";
+    renderMenu();
+    pickerPanel.hidden = false;
+    pickerBtn.setAttribute("aria-expanded", "true");
+    positionPanel();
+    pickerSearch.focus();
+  }
+
+  function closePanel() {
+    if (!pickerOpen) return;
+    pickerOpen = false;
+    pickerPanel.hidden = true;
+    pickerBtn.setAttribute("aria-expanded", "false");
+    pickerBtn.focus();
+  }
+
+  // Smart placement: measure the panel, then open it below the button when the
+  // screen has room, above it when it doesn't, capped to the space either way.
+  function positionPanel() {
+    pickerPanel.style.visibility = "hidden";
+    const needed = pickerPanel.scrollHeight;
+    const anchor = pickerBtn.getBoundingClientRect();
+    const below = window.innerHeight - anchor.bottom - 16;
+    const above = anchor.top - 16;
+    const cap = Math.min(needed, 480);
+    if (below < Math.min(cap, 220) && above > below) {
+      pickerPanel.classList.add("open-up");
+      pickerPanel.style.setProperty("--picker-max", `${Math.max(140, Math.min(cap, above))}px`);
+    } else {
+      pickerPanel.classList.remove("open-up");
+      pickerPanel.style.setProperty("--picker-max", `${Math.max(140, Math.min(cap, Math.max(below, 140)))}px`);
+    }
+    pickerPanel.style.visibility = "";
+  }
+
+  pickerBtn.addEventListener("click", () => {
+    pickerOpen ? closePanel() : openPanel();
+  });
+
+  window.addEventListener("resize", () => {
+    if (pickerOpen) positionPanel();
+  });
+
+  document.addEventListener("pointerdown", (e) => {
+    if (!pickerOpen) return;
+    const t = e.target as Node;
+    if (pickerPanel.contains(t) || pickerBtn.contains(t)) return;
+    closePanel();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (!pickerOpen) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      closePanel();
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      const rows = visibleRows();
+      if (!rows.length) return;
+      e.preventDefault();
+      pickerCursor = e.key === "ArrowDown"
+        ? (pickerCursor < 0 ? 0 : (pickerCursor + 1) % rows.length)
+        : (pickerCursor < 0 ? rows.length - 1 : (pickerCursor - 1 + rows.length) % rows.length);
+      markCursor(rows);
+    } else if (e.key === "Enter") {
+      const rows = visibleRows();
+      const row = pickerCursor >= 0 ? rows[pickerCursor] : rows[0];
+      if (row) {
+        e.preventDefault();
+        (row as HTMLElement).click();
+      }
+    } else if (e.key === "ArrowLeft" && pickerView.type !== "root" && document.activeElement !== pickerSearch) {
+      e.preventDefault();
+      pickerView = { type: "root" };
+      renderMenu();
+    }
+  });
+
+  function visibleRows(): Element[] {
+    return Array.from(pickerMenu.querySelectorAll<HTMLElement>(".picker-row:not([hidden])"));
+  }
+
+  function markCursor(rows: Element[]) {
+    rows.forEach((r, i) => r.classList.toggle("picker-active", i === pickerCursor));
+    rows[pickerCursor]?.scrollIntoView({ block: "nearest" });
+  }
+
+  function renderMenu() {
+    pickerCursor = -1;
+    pickerMenu.innerHTML = "";
+
+    if (pickerView.type === "root") {
+      catalog.groups.forEach((group, index) => {
+        const count = group.categories.reduce((sum, c) => sum + c.items.length, 0);
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "picker-row picker-group";
+        row.setAttribute("role", "menuitem");
+        row.innerHTML = `<span class="picker-icon">${group.icon}</span><span class="picker-label">${group.label}</span><span class="picker-count">${count}</span>`;
+        row.addEventListener("click", () => {
+          pickerView = { type: "group", index };
+          renderMenu();
+        });
+        pickerMenu.appendChild(row);
+      });
+      return;
+    }
+
+    if (pickerView.type === "group") {
+      const group = catalog.groups[pickerView.index];
+      const back = document.createElement("button");
+      back.type = "button";
+      back.className = "picker-row picker-back";
+      back.innerHTML = `<span>‹</span><span>all groups</span>`;
+      back.addEventListener("click", () => {
+        pickerView = { type: "root" };
+        renderMenu();
+      });
+      pickerMenu.appendChild(back);
+
+      const title = document.createElement("div");
+      title.className = "picker-title";
+      title.innerHTML = `<span class="picker-icon">${group.icon}</span><span>${group.label}</span>`;
+      pickerMenu.appendChild(title);
+
+      group.categories.forEach((category) => {
+        const head = document.createElement("div");
+        head.className = "picker-cat";
+        head.innerHTML = `<span>${category.name}</span><span class="picker-count">${category.items.length}</span>`;
+        pickerMenu.appendChild(head);
+        category.items.forEach((item) => pickerMenu.appendChild(itemRow(item)));
+      });
+      return;
+    }
+
+    // search: flat matches across every group, in the order they appear
+    const words = pickerView.query.toLowerCase().split(/\s+/).filter(Boolean);
+    const hits = words.length
+      ? everyItem.filter((i) => words.every((w) => `${i.name} ${i.slug} ${i.category}`.includes(w)))
+      : [];
+    if (!hits.length) {
+      const empty = document.createElement("div");
+      empty.className = "picker-empty";
+      empty.textContent = `nothing matches "${pickerView.query}"`;
+      pickerMenu.appendChild(empty);
+      return;
+    }
+    let lastGroup = "";
+    hits.forEach((item) => {
+      if (item.group !== lastGroup) {
+        lastGroup = item.group;
+        const head = document.createElement("div");
+        head.className = "picker-cat";
+        head.innerHTML = `<span class="picker-icon">${item.icon}</span><span>${item.group}</span>`;
+        pickerMenu.appendChild(head);
+      }
+      pickerMenu.appendChild(itemRow(item));
+    });
+  }
+
+  function itemRow(item: { slug: string; name: string }): HTMLButtonElement {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "picker-row picker-item";
+    row.setAttribute("role", "menuitem");
+    row.dataset.slug = item.slug;
+    row.innerHTML = `<span class="picker-name">${item.name}</span><span class="picker-count">${item.slug}</span>`;
+    row.addEventListener("click", () => {
+      closePanel();
+      const current = active?.kind === "piece" ? active.slug : null;
+      if (current !== item.slug) selectPiece(item.slug);
+    });
+    return row;
+  }
+
+  pickerSearch.addEventListener("input", () => {
+    const query = pickerSearch.value.trim();
+    pickerView = query ? { type: "search", query } : { type: "root" };
+    renderMenu();
+  });
+
+  // --- transport ---------------------------------------------------------------
+
+  playBtn.addEventListener("click", () => {
+    if (isPlaying) pausePlayback();
+    else startPlayback();
   });
 
   scrubber.addEventListener("input", () => {
@@ -1137,50 +2023,69 @@ import { PAGES, pageCardOf } from "../lib/pages";
     });
   });
 
-  // Palette & Halftone form listeners
+  // Palette & halftone form listeners (scene engine only)
   colGroundInput.addEventListener("input", () => {
-    hexGroundLabel.textContent = colGroundInput.value;
-    session.updatePalette(session.spec.palette, colGroundInput.value);
-    renderOnDemand();
-    updateCodeView();
+    if (active?.kind === "scene") {
+      hexGroundLabel.textContent = colGroundInput.value;
+      active.session.updatePalette(active.session.spec.palette, colGroundInput.value);
+      renderOnDemand();
+      updateCodeView();
+    } else if (active?.kind === "piece") {
+      groundOverride = colGroundInput.value;
+      hexGroundLabel.textContent = colGroundInput.value;
+      renderOnDemand();
+    }
   });
 
   selRamp.addEventListener("change", () => {
-    session.spec.halftone = session.spec.halftone || {};
-    session.spec.halftone.ramp = selRamp.value;
+    if (active?.kind !== "scene") return;
+    const spec = active.session.spec;
+    spec.halftone = spec.halftone || {};
+    spec.halftone.ramp = selRamp.value;
     renderOnDemand();
     updateCodeView();
   });
 
   selDither.addEventListener("change", () => {
-    session.spec.halftone = session.spec.halftone || {};
-    session.spec.halftone.dither = selDither.value as any;
+    if (active?.kind !== "scene") return;
+    const spec = active.session.spec;
+    spec.halftone = spec.halftone || {};
+    spec.halftone.dither = selDither.value as "bayer4" | "bayer8" | "none";
     renderOnDemand();
     updateCodeView();
   });
 
   rangeContrast.addEventListener("input", () => {
+    if (active?.kind !== "scene") return;
     valContrast.textContent = rangeContrast.value;
-    session.spec.halftone = session.spec.halftone || {};
-    session.spec.halftone.contrast = parseFloat(rangeContrast.value);
+    const spec = active.session.spec;
+    spec.halftone = spec.halftone || {};
+    spec.halftone.contrast = parseFloat(rangeContrast.value);
     renderOnDemand();
     updateCodeView();
   });
 
   // Code copy buttons
   function copyCode() {
-    const code = compileSceneToCode(session.spec);
+    const code = codeOutput.textContent ?? "";
     navigator.clipboard.writeText(code).then(() => {
       const origText = btnExportCode.textContent;
       btnExportCode.textContent = "[copied!]";
-      setTimeout(() => (btnExportCode.textContent = origText), 1500);
+      btnCopyCodeTab.textContent = "[copied!]";
+      setTimeout(() => {
+        btnExportCode.textContent = origText;
+        btnCopyCodeTab.textContent = "[copy code]";
+      }, 1500);
     });
   }
 
   btnExportCode.addEventListener("click", copyCode);
   btnCopyCodeTab.addEventListener("click", copyCode);
 
-  // Image Drop & Ingestion
+  // Image drop & ingestion: a photo becomes a one-layer scene spec
+  const COLS = 200;
+  const ROWS = 100;
+
   imageDrop.addEventListener("click", () => imageFileInput.click());
   imageDrop.addEventListener("dragover", (e) => e.preventDefault());
   imageDrop.addEventListener("drop", (e) => {
@@ -1230,7 +2135,7 @@ import { PAGES, pageCardOf } from "../lib/pages";
       const sorted = Array.from(colorCounts.entries()).sort((a, b) => b[1] - a[1]);
       const palette = sorted.slice(0, 32).map((e) => e[0]);
 
-      const imageSpec = {
+      const imageSpec: SceneSpec = {
         name: file.name.replace(/\.[^/.]+$/, "").toLowerCase(),
         ground: palette[0] || "#000000",
         palette: palette.length ? palette : ["#000000", "#ffffff"],
@@ -1251,20 +2156,17 @@ import { PAGES, pageCardOf } from "../lib/pages";
         ],
       };
 
-      session = createStudioSession(imageSpec);
-      selectedLayerId = "img-layer-1";
-      updateColorMap();
-      updateLayerUI();
-      updatePaletteUI();
-      updateCodeView();
-      renderOnDemand();
+      selectSpec(imageSpec);
     };
   }
 
-  // Initialize
-  updateColorMap();
-  updateLayerUI();
-  updatePaletteUI();
-  updateCodeView();
-  startPlayback();
+  // Initialize on the library's own ocean sunset
+  (async () => {
+    try {
+      await selectPiece("ocean-sunset");
+    } catch (err) {
+      codeOutput.textContent = `// could not load the first piece: ${(err as Error).message}`;
+    }
+    startPlayback();
+  })();
 </script>
