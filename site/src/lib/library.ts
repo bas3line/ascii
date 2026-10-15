@@ -81,6 +81,29 @@ export const SITE = "https://ascii.rest";
 export const NAME = "ascii.rest";
 export const REPO = "https://github.com/bas3line/ascii";
 /**
+ * The repo's stars when the site was built, for the header's [github] link; the
+ * page asks GitHub again as it opens (Layout.astro). Null when GitHub can't be
+ * reached, and the link is plain [github]. GITHUB_TOKEN, when set, lifts the
+ * build's shared rate limit.
+ */
+export const STARS: number | null = await (async () => {
+  try {
+    const token = process.env.GITHUB_TOKEN;
+    const res = await fetch(`https://api.github.com/repos/${REPO.slice("https://github.com/".length)}`, {
+      headers: { accept: "application/vnd.github+json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
+    const { stargazers_count } = (await res.json()) as { stargazers_count?: unknown };
+    return typeof stargazers_count === "number" ? stargazers_count : null;
+  } catch (error) {
+    console.warn(`ascii: no star count: ${(error as Error).message}`);
+    return null;
+  }
+})();
+/** 872 as "872", 1234 as "1.2k", 12345 as "12k". */
+export const stars = (n: number) => (n < 1000 ? String(n) : n < 10000 ? `${(Math.floor(n / 100) / 10).toString()}k` : `${Math.floor(n / 1000)}k`);
+/**
  * A new issue on one of the repo's forms (.github/ISSUE_TEMPLATE), opened with
  * some fields filled: GitHub fills a form's text fields, and the title, from
  * query parameters named by their ids.
@@ -103,6 +126,30 @@ export const SUPPORT = [
   { label: "Buy Me a Coffee", icon: "coffee", href: "https://buymeacoffee.com/bas3line" },
   { label: "PayPal", icon: "paypal", href: "https://paypal.me/ShubhamYadav886" },
 ] as const;
+/**
+ * Who sponsors ascii.rest, in this order: under the home page's first scene, on the author page and in the README. Each
+ * is shown by its own official logo, `/sponsors/<logo>.svg` for a light page and `<logo>.dark.svg` for a dark one, at
+ * `height` rem in its box: Command Code's wordmark from commandcode.ai/brand, Vercel's logotype from the press kit on
+ * vercel.com/geist/brands, Cloudflare's logo with its wordmark from cloudflare.com/img.
+ */
+export const SPONSORS = [
+  { name: "Command Code", href: "https://commandcode.ai", logo: "command-code", height: 1.6 },
+  { name: "Vercel", href: "https://vercel.com", logo: "vercel", height: 1.5 },
+  { name: "Cloudflare", href: "https://www.cloudflare.com", logo: "cloudflare", height: 3.1 },
+] as const;
+/**
+ * Who else ascii.rest thanks, under the sponsors on the home page and in the README's acknowledgements, each by its own
+ * logo in `/thanks/` and what it gives: Greptile's wordmark from greptile.com/wordmark-logo.svg (white on a dark page, as
+ * Greptile publishes it only in #2A2A2A), Paper's logo from paper.design's own header, in that header's two colours.
+ */
+export const THANKS = [
+  { name: "Greptile", href: "https://www.greptile.com", logo: "greptile", height: 1.5, for: "reviews our pull requests" },
+  { name: "Paper", href: "https://paper.design/mono", logo: "paper", height: 1.5, for: "Paper Mono, our typeface" },
+] as const;
+/** Pieces drawn from someone else's design idea, credited on the piece's page and its share card. */
+export const IDEAS: Partial<Record<string, { handle: string; url: string }>> = {
+  "black-prism": { handle: "satvikxs", url: "https://github.com/satvikxs" },
+};
 export const INSTALL = "npm install ascii.rest";
 
 const optionsOf = (piece: Piece) => (piece.options && Object.keys(piece.options).length ? piece.options : null);

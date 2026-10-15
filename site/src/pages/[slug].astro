@@ -1,13 +1,15 @@
 ---
 /*
- * One piece: a large live preview with its downloads, the ways to put it on a
- * page, and its source.
+ * One piece: a large live preview with its downloads and ways to share it, the
+ * ways to put it on a page, and its source.
  */
 import Layout from "../layouts/Layout.astro";
 import Art from "../components/Art.astro";
 import Downloads from "../components/Downloads.astro";
+import Share from "../components/Share.astro";
 import Usage from "../components/Usage.astro";
-import { REPO, issue, pieces, type Piece } from "../lib/library";
+import { highlight } from "../lib/highlight";
+import { IDEAS, REPO, issue, pieces, type Piece } from "../lib/library";
 
 export function getStaticPaths() {
   return pieces.map((piece, i) => ({
@@ -27,6 +29,8 @@ const { piece, prev, next } = Astro.props;
 const logo = Boolean(piece.palette && !piece.ground);
 const bytes = new TextEncoder().encode(piece.source).length;
 const kb = bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} kB`;
+const idea = IDEAS[piece.slug];
+const sourceHtml = await highlight(piece.source, "ts");
 ---
 
 <Layout
@@ -34,7 +38,7 @@ const kb = bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} kB`;
   description={`${piece.note}. An animated ascii piece for web pages, with the code to use it.`}
   path={`/${piece.slug}/`}
   current={piece.slug}
-  card={{ path: `/og/${piece.slug}.png`, alt: `${piece.name}, on ascii.rest: ${piece.note}, by @bas3line` }}
+  card={{ path: `/og/${piece.slug}.png`, alt: `${piece.name}, on ascii.rest: ${piece.note}, by @bas3line${idea ? `, design idea by @${idea.handle}` : ""}` }}
 >
   <h1 slot="heading">{piece.name}</h1>
 
@@ -47,6 +51,7 @@ const kb = bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} kB`;
     {logo && <span>in colour or one ink</span>}
     <span>{kb}</span>
     {piece.clock && <span>reads the clock</span>}
+    {idea && <span>design idea by <a href={idea.url}>@{idea.handle}</a></span>}
     {logo && <button class="button" type="button" data-ink hidden><span>[mono]</span></button>}
     <a href={issue("bug", { title: `${piece.slug}: `, where: piece.slug })}>[report a bug]</a>
   </p>
@@ -56,11 +61,13 @@ const kb = bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} kB`;
       <Art piece={piece} />
     </div>
     <Downloads piece={piece} />
+    <Share piece={piece} />
   </section>
 
   <section class="block">
     <div class="head">
       <h2>use it</h2>
+      <span class="tools"><a href="/docs/">[docs]</a><a href="/docs/copy/">[copy it in]</a></span>
     </div>
     <Usage piece={piece} />
   </section>
@@ -74,7 +81,7 @@ const kb = bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} kB`;
         <a href={`${REPO}/blob/main/src/pieces/${piece.slug}.ts`}>[github]</a>
       </span>
     </div>
-    <pre class="code" id="source-code">{piece.source}</pre>
+    <pre class="code" id="source-code" set:html={sourceHtml} />
   </section>
 
   <nav class="pager" aria-label="Pieces">

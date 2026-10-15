@@ -6,9 +6,11 @@
  * scrolls into view.
  */
 import "../styles/site.css";
+import Analytics from "@vercel/analytics/astro";
+import SpeedInsights from "@vercel/speed-insights/astro";
 import Credit from "../components/Credit.astro";
 import Icon from "../components/Icon.astro";
-import { AUTHOR, NAME, REPO, SITE, groups, issue, pieces } from "../lib/library";
+import { AUTHOR, NAME, REPO, SITE, STARS, groups, issue, pieces, stars } from "../lib/library";
 
 interface Props {
   title: string;
@@ -18,9 +20,11 @@ interface Props {
   current?: string;
   /** The share card, 1200x630, when the page has its own: path and alt text. */
   card?: { path: string; alt: string };
+  /** The home page, which on a phone puts its scene before the sidebar's line of categories. */
+  home?: boolean;
 }
 
-const { title, description, path, current, card } = Astro.props;
+const { title, description, path, current, card, home } = Astro.props;
 const canonical = new URL(path, SITE);
 // The site's share card is night coast with the name and credit, made from the
 // scene itself; a piece page shows its own piece (pages/og/[slug].png.ts).
@@ -64,16 +68,29 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={image} />
     <meta name="twitter:image:alt" content={imageAlt} />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!-- The site's face, Paper Mono, served from here: every page uses it, so it is fetched at once. -->
+    <link rel="preload" href="/fonts/paper-mono.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- Vercel's Web Analytics (page views, no cookies) and Speed Insights (each visit's real Core Web Vitals), both
+    loaded from the site's own /_vercel/ paths after the page. -->
+    <Analytics />
+    <SpeedInsights />
+    <slot name="head" />
   </head>
 
   <body>
-    <div class="frame">
+    <div class:list={["frame", home && "home"]}>
       <aside class="side">
         <a class="home" href="/">{NAME}</a>
         <p class="by">by <a href="/author/" rel="author">@{AUTHOR.name}</a></p>
+        <p class="make">
+          <a href="/docs/" aria-current={path.startsWith("/docs/") ? "page" : undefined}>[docs]</a>
+          <a href="/banner/" aria-current={path === "/banner/" ? "page" : undefined}>[make a banner]</a>
+          <a href="/make/" aria-current={path === "/make/" ? "page" : undefined}>[image to ascii]</a>
+        </p>
+        {Astro.slots.has("side") ? (
+          <slot name="side" />
+        ) : (
+        <>
         <form class="find" role="search" hidden>
           <label class="sr" for="find">Search the pieces</label>
           <input
@@ -117,6 +134,8 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
             </>
           ))}
         </nav>
+        </>
+        )}
       </aside>
 
       <script is:inline>
@@ -126,6 +145,8 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
         // script below puts the sidebar's scroll back, so that lands where it was.
         (function () {
           var form = document.querySelector(".find");
+          // The docs have their own index in the sidebar, and no search.
+          if (!form) return;
           var input = form.querySelector("input");
           var found = form.querySelector(".found");
           var nav = document.querySelector(".side nav");
@@ -236,17 +257,20 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
       </script>
 
       <main class="page">
+        <slot name="notice" />
         <div class="top">
           <slot name="heading" />
           <span class="tools">
             <button id="motion" class="button" type="button" hidden><span>[play anyway]</span></button>
-            <a href={REPO}>[github]</a>
+            <a href="/docs/">[docs]</a>
+            <a class="repo" href={REPO} aria-label={STARS === null ? undefined : `GitHub, ${STARS} stars`}>[<Icon name="github" />github<span class="stars" hidden={STARS === null}><Icon name="star" /><span>{STARS === null ? "" : stars(STARS)}</span></span>]</a>
             <button id="theme" class="button" type="button" aria-label="Switch to dark theme" hidden><span>[dark]</span></button>
           </span>
         </div>
         <slot />
         <footer class="foot muted">
           <p class="asks">
+            <a href="/docs/">[docs]</a>
             <a href={issue("logo")}>[request a logo]</a>
             <a href={issue("piece")}>[suggest a piece]</a>
             <a href={bug}>[report a bug]</a>
@@ -295,6 +319,48 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
           mq.addEventListener("change", function (e) {
             if (!saved()) show(e.matches ? "dark" : "light");
           });
+      })();
+    </script>
+
+    <script is:inline>
+      // The header's star count is the build's; ask GitHub for today's. Every piece is a full page load and GitHub
+      // allows a visitor 60 asks an hour, so the answer is kept for an hour. Any failure leaves the build's count, and
+      // waits ten minutes before asking again, so an outage or a spent limit isn't asked on every page.
+      (function () {
+        var a = document.querySelector(".top .repo");
+        if (!a || !window.fetch) return;
+        var key = "ascii-stars";
+        var wait = "ascii-stars-wait";
+        var hour = 36e5;
+        function failed() {
+          try {
+            localStorage.setItem(wait, String(Date.now() + 6e5));
+          } catch (e) {}
+        }
+        function show(n) {
+          var s = a.querySelector(".stars");
+          s.lastElementChild.textContent = n < 1000 ? String(n) : n < 10000 ? Math.floor(n / 100) / 10 + "k" : Math.floor(n / 1000) + "k";
+          s.hidden = false;
+          a.setAttribute("aria-label", "GitHub, " + n + " stars");
+        }
+        try {
+          var kept = JSON.parse(localStorage.getItem(key) || "null");
+          if (kept && Date.now() - kept.at < hour && typeof kept.n === "number") return show(kept.n);
+          if (Date.now() < +localStorage.getItem(wait)) return;
+        } catch (e) {}
+        fetch("https://api.github.com/repos/" + a.getAttribute("href").replace("https://github.com/", ""))
+          .then(function (r) {
+            return r.ok ? r.json() : null;
+          })
+          .then(function (repo) {
+            if (!repo || typeof repo.stargazers_count !== "number") return failed();
+            show(repo.stargazers_count);
+            try {
+              localStorage.setItem(key, JSON.stringify({ n: repo.stargazers_count, at: Date.now() }));
+              localStorage.removeItem(wait);
+            } catch (e) {}
+          })
+          .catch(failed);
       })();
     </script>
 
@@ -417,18 +483,27 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
       );
       document.querySelectorAll<HTMLElement>("pre[data-piece]").forEach((pre) => io.observe(pre));
 
+      // Each [copy] button copies the text of the element it names, then shows its own label again. Where the browser
+      // won't copy, a hidden source is shown and selected, so it can be copied by hand.
       document.querySelectorAll<HTMLButtonElement>("button[data-copy]").forEach((button) => {
         button.hidden = false;
         const label = button.firstElementChild as HTMLElement;
+        const own = label.textContent;
         button.addEventListener("click", async () => {
-          const text = document.getElementById(button.dataset.copy!)?.textContent ?? "";
+          const source = document.getElementById(button.dataset.copy!);
+          const text = source?.textContent ?? "";
+          if (text.trim() === "" || button.getAttribute("aria-disabled") === "true") return;
           try {
             await navigator.clipboard.writeText(text);
             label.textContent = "[copied]";
           } catch {
             label.textContent = "[select and copy]";
+            if (source) {
+              source.hidden = false;
+              getSelection()?.selectAllChildren(source);
+            }
           }
-          setTimeout(() => (label.textContent = "[copy]"), 1600);
+          setTimeout(() => (label.textContent = own), 1600);
         });
       });
 

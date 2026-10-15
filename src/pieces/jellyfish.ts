@@ -99,7 +99,7 @@ export default function jellyfish(): Frame {
       const u = -0.92 + (1.84 * i) / 7;
       const wob = (d: number) => Math.sin(d * 0.5 - t * 3 + i * 1.9);
       const len = 8.5 + 3.2 * (1 - Math.abs(u)) + ((i * 3) % 5) * 0.8;
-      strand(len, 0.06, (d, at) => at.x + u * at.half * (1 - 0.01 * d) + (0.05 + d * 0.013) * d * wob(d), (x, y, dx, bow, d, f) => {
+      strand(len, 0.06, (d, at) => at.x + u * at.half * (1 - 0.01 * d) + (0.05 + d * 0.013) * d * wob(d), (x, y, dx, bow, _d, f) => {
         const ch = f > 0.9 ? "." : f > 0.8 ? ":" : dx > 0.6 ? "\\" : dx < -0.6 ? "/" : bow > 0.22 ? "(" : bow < -0.22 ? ")" : "|";
         put(x, y, ch);
       });
@@ -108,7 +108,7 @@ export default function jellyfish(): Frame {
     // where it turns face on.
     for (let i = 0; i < 2; i++) {
       const s = i ? 1 : -1;
-      strand(10, 0.09, (d, at) => at.x + s * 2 * (1 - d * 0.06) * (at.half / 10) + 0.9 * Math.sin(d * 0.6 - t * 2.2 + i * 2.5), (x, y, dx, bow, d, f) => {
+      strand(10, 0.09, (d, at) => at.x + s * 2 * (1 - d * 0.06) * (at.half / 10) + 0.9 * Math.sin(d * 0.6 - t * 2.2 + i * 2.5), (x, y, _dx, _bow, d, f) => {
         const tw = Math.cos(d * 1.1 + i * 1.3 - t * 1.6);
         if (f > 0.8) return put(x, y, f > 0.9 ? "." : ":");
         if (Math.abs(tw) < 0.35) return put(x, y, ":");

@@ -9,8 +9,9 @@
  * shape of a character, or 1 for a square grid.
  *
  * Play time only advances while the element is on screen and the tab is open,
- * and prefers-reduced-motion keeps the first frame unless `motion` is set (for
- * a page that offers its own play control). Returns a stop function.
+ * and prefers-reduced-motion holds it still, on the frame at `meta.still` or
+ * else the first, unless `motion` is set (for a page that offers its own play
+ * control). Returns a stop function.
  *
  *   import { mount } from "ascii.rest";
  *   import { donut } from "ascii.rest/pieces";
@@ -24,6 +25,21 @@ import type { Env, Frame, Meta, Options, Piece } from "./types.ts";
  * offers its own control, such as a play button the reader presses.
  */
 export type MountOptions = Options & { fps?: number; motion?: boolean };
+
+const isPiece = (v: unknown): v is Piece =>
+  !!v && typeof v === "object" && !!(v as Piece).meta && typeof (v as Piece).meta === "object" && typeof (v as Piece).default === "function";
+
+/**
+ * The piece in a module a page imported, as <ascii-art src> imports one: its default export when that is a piece, as a
+ * kit file's `export default sea()` is, or else the module itself when it exports meta and a default function, as the
+ * library's pieces do. Throws, saying so, for a module with neither.
+ */
+export function pieceIn(mod: unknown, from: string): Piece {
+  const given = (mod as { default?: unknown } | null)?.default;
+  if (isPiece(given)) return given;
+  if (isPiece(mod)) return mod;
+  throw new Error(`ascii.rest: ${from} has no piece: export one as its default, export default sea(), or export meta and a default function`);
+}
 
 export function mount(el: HTMLElement, piece: Piece | Piece["default"], options: MountOptions = {}): () => void {
   const make = typeof piece === "function" ? piece : piece.default;
@@ -41,7 +57,10 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
     return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] < 128;
   };
   const env = (): Env => ({ paper: canvas && ground ? !dark(ground) : dark(getComputedStyle(el).color), color });
-  let t = 0;
+  // Held still for reduced motion, it shows the moment the piece names for that: every letter of a typed banner.
+  // matchMedia is checked for: a still piece needs nothing else of a browser's, and may be drawn where there is none.
+  const reduced = !motion && typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let t = reduced ? (meta.still ?? 0) : 0;
   let draw = () => {
     el.textContent = frame(t, env());
   };

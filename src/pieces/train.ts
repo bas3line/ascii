@@ -85,7 +85,6 @@ export default function train(): Frame {
   const left = (t: number) => Math.floor((((X0 + SPEED * t) % SPAN) + SPAN) % SPAN) - LEN; // the train's left edge
   const OMEGA = SPEED / (2 * RIM); // radians a second the wheels turn
   const BEAT = Math.PI / 2 / OMEGA; // four beats to a turn
-  const DT = BEAT / 4; // smoke is let go in four puffs a beat, the first the strongest
   // The track and the ballast under it, which never move.
   const track: [number, number, string][] = [];
   for (let c = 0; c < cols; c++) {
