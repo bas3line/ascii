@@ -120,7 +120,7 @@ ascii/
 
 ## Author
 
-Created and maintained by **[Navin Hill](https://github.com/jamesnavinhill)** ([navinhill.com](https://navinhill.com)).
+Forked and maintained by **[Navin Hill](https://github.com/jamesnavinhill)** ([navinhill.com](https://navinhill.com)).
 
 ## License
 
