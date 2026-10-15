@@ -1,0 +1,62 @@
+/*
+ * The scene in a subject-hero, and the one control in its corner.
+ *
+ * mount() gives the canvas `width: 100%` and `aspect-ratio: 200 / 100`, which
+ * is right: every ascii.rest scene is 200x100 cells, so the canvas is as wide
+ * as the hero and exactly half as tall, and the piece is drawn undistorted.
+ *
+ * Nothing here may set the canvas's height: the bitmap is 2:1 and any other
+ * box stretches it. The hero keeps subject.css's 400px and the scene's own
+ * ground colour fills whatever the canvas does not cover, so a content column
+ * narrower than 800px reads as one band rather than a letterboxed picture.
+ */
+.subject-hero-scene {
+  background: #0b0817;
+}
+
+.subject-hero-art {
+  display: block;
+  width: 100%;
+}
+
+/* The toggle: top right corner, on hover, on keyboard focus, and always on a
+   touch screen, which has no hover to reveal it with. */
+.scene-hero-toggle {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  background: rgb(0 0 0 / 0.4);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 160ms ease, background-color 160ms ease;
+}
+
+.subject-hero:hover .scene-hero-toggle,
+.scene-hero-toggle:focus-visible {
+  opacity: 1;
+}
+
+.scene-hero-toggle:hover {
+  background: rgb(0 0 0 / 0.62);
+}
+
+@media (hover: none) {
+  .scene-hero-toggle {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-hero-toggle {
+    transition: none;
+  }
+}

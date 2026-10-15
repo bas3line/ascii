@@ -1,0 +1,81 @@
+/*
+ * An ascii.rest scene as a page header.
+ *
+ * mount() gives the canvas it creates `width: 100%` and `aspect-ratio: 200 / 100`
+ * — the piece's own cols and rows — so the scene always fills its container's
+ * width and is exactly half as tall. At 1280px wide that is a 1280x640 canvas
+ * (measured in Chrome), and at 1440px it is 720px tall.
+ *
+ *   --band     keeps a fixed slice of the middle, so a full-bleed strip works.
+ *              The scene still draws at the container's full width, so its
+ *              horizon and moon stay where the artist put them; the frame just
+ *              crops what is above and below.
+ *   --natural  lets the height follow the width: a real 2:1 hero.
+ *
+ * Point --header-fade at your page's background and the strip melts into it.
+ */
+
+.page-header {
+  position: relative;
+  --header-fade: #0b0e14;
+  /* Scenes carry their own ground colour (#080b12 for night coast), so the
+     title stays light whatever the page theme is: only the fade changes. */
+  --header-ink: #ffffff;
+}
+
+.page-header__art {
+  display: block;
+  width: 100%;
+}
+
+/* natural: the title sits on the scene's lower left. */
+.page-header--natural .page-header__text {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: clamp(16px, 3vw, 44px);
+}
+
+/* band: crop to a slice. The height is how much of the scene you see. */
+.page-header--band {
+  height: clamp(180px, 26vw, 420px);
+  overflow: hidden;
+}
+
+.page-header--band .page-header__text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  padding: 0 24px;
+  /* The fade is this container's own background: painted behind its text and
+     over the art, with no z-index to get wrong. */
+  background: linear-gradient(to bottom, transparent 40%, var(--header-fade));
+}
+
+.page-header__eyebrow {
+  margin: 0 0 8px;
+  font: 500 12px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  color: var(--header-ink);
+}
+
+.page-header__title {
+  margin: 0;
+  color: var(--header-ink);
+  font-size: clamp(28px, 5vw, 64px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  /* The scene is busy: a soft shadow keeps the title legible over any of it. */
+  text-shadow: 0 2px 24px rgb(0 0 0 / 0.75), 0 0 2px rgb(0 0 0 / 0.9);
+}
+
+/* A light page: the fade becomes the page's own colour, the ink stays white
+   because the scene underneath is still a dark one. */
+@media (prefers-color-scheme: light) {
+  .page-header {
+    --header-fade: #faf9f7;
+  }
+}

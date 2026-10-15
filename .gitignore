@@ -4,3 +4,5 @@ dist/
 .vercel/
 .wrangler/
 .DS_Store
+.zwork/
+*.log
