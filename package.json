@@ -3,11 +3,11 @@
   "version": "0.4.0",
   "description": "Animated ascii art for web pages, READMEs and terminals, in TypeScript: React, Next.js, Astro, one HTML tag, SVG, or copied into your project, and a kit for making your own.",
   "license": "MIT",
-  "author": "bas3line (https://github.com/bas3line)",
-  "homepage": "https://ascii.rest/docs/",
+  "author": "Navin Hill (https://github.com/jamesnavinhill)",
+  "homepage": "https://ascii.navinhill.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bas3line/ascii.git"
+    "url": "git+https://github.com/jamesnavinhill/ascii.git"
   },
   "keywords": ["ascii", "ascii-art", "animation", "react", "nextjs", "astro", "web-component", "astro-component", "terminal", "cli", "banner", "svg", "readme", "github-readme", "shadcn", "generative-art", "creative-coding"],
   "type": "module",

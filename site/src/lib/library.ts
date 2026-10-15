@@ -79,8 +79,8 @@ export const groups = GROUPS.map((g) => ({
   categories: categories.filter((c) => (g.categories as readonly string[]).includes(c.name)),
 })).filter((g) => g.categories.length);
 
-export const SITE = "https://ascii.rest";
-export const NAME = "ascii.rest";
+export const SITE = "https://ascii.navinhill.com";
+export const NAME = "ascii.navinhill.com";
 export const REPO = "https://github.com/jamesnavinhill/ascii";
 /**
  * A new issue on one of the repo's forms (.github/ISSUE_TEMPLATE), opened with
@@ -94,10 +94,9 @@ export function issue(form: "bug" | "logo" | "piece", fields: Record<string, str
 export const AUTHOR = { name: "Navin Hill", handle: "jamesnavinhill", url: "https://github.com/jamesnavinhill" };
 /** Where to find the author, in the order the author page lists them. */
 export const LINKS = [
-  { label: "yshubham.com", icon: "globe", href: "https://yshubham.com" },
-  { label: "@inlovewithgo", icon: "x", href: "https://x.com/inlovewithgo" },
-  { label: "extractings", icon: "linkedin", href: "https://www.linkedin.com/in/extractings/" },
-  { label: "@bas3line", icon: "github", href: "https://github.com/bas3line" },
+  { label: "navinhill.com", icon: "globe", href: "https://navinhill.com" },
+  { label: "@jamesnavinhill", icon: "x", href: "https://x.com/jamesnavinhill" },
+  { label: "@jamesnavinhill", icon: "github", href: "https://github.com/jamesnavinhill" },
 ] as const;
 /** Ways to support the work, on the author page. */
 export const SUPPORT = [

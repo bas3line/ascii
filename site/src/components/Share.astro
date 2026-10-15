@@ -18,7 +18,7 @@ const { piece } = Astro.props;
 const url = `${SITE}/${piece.slug}/`;
 const logo = ["logos", "companies", "distros"].includes(piece.category);
 const readme = looping(piece.category, piece.options);
-const via = LINKS.find((link) => link.icon === "x")!.label.slice(1);
+const via = LINKS.find((link) => link.icon === "x")?.label.replace(/^@/, "") || "jamesnavinhill";
 const text = logo ? `${piece.name}, in animated ascii, for any page or README` : `${piece.name}: ${piece.note}, in animated ascii`;
 const x = `https://x.com/intent/tweet?${new URLSearchParams({ text, url, via })}`;
 const linkedin = `https://www.linkedin.com/sharing/share-offsite/?${new URLSearchParams({ url })}`;
