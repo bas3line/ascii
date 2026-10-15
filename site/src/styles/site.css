@@ -707,15 +707,39 @@ a[aria-current="page"] {
 
 .top {
   display: flex;
-  align-items: baseline;
-  gap: 2ch;
-  margin-bottom: 1.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .top .tools {
   display: flex;
+  align-items: center;
   gap: 1.5ch;
   margin-left: auto;
+}
+
+.theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 0;
+  border: 1px solid transparent;
+  padding: 0;
+  margin: 0;
+}
+
+.theme-btn:hover {
+  color: var(--ink);
+  background: var(--well);
+  border-color: var(--well);
 }
 
 .lede {

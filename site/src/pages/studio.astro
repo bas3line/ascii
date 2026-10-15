@@ -14,24 +14,21 @@ import { PAGES, pageCardOf } from "../lib/pages";
   path={PAGES.studio.path}
   card={pageCardOf("studio")}
 >
+  <div slot="heading" class="studio-header-presets">
+    <span class="header-scene-label">scene</span>
+    <div class="pill-group" id="preset-pills">
+      <button class="pill active" type="button" data-preset="ocean-sunset">[ocean sunset]</button>
+      <button class="pill" type="button" data-preset="snow-mountain">[snow mountain]</button>
+      <button class="pill" type="button" data-preset="cyber-prism">[cyber prism]</button>
+    </div>
+  </div>
+
+  <div slot="tools" class="studio-header-tools">
+    <span class="stat" id="stat-perf">0.0ms</span>
+    <button class="pill action" type="button" id="btn-export-code">[copy .ts]</button>
+  </div>
+
   <div class="studio-cockpit" id="studio-cockpit">
-    <!-- Top toolbar: Presets & Actions -->
-    <header class="studio-topbar">
-      <div class="topbar-left">
-        <label for="scene-select" class="topbar-label">scene</label>
-        <div class="pill-group" id="preset-pills">
-          <button class="pill active" type="button" data-preset="ocean-sunset">[ocean sunset]</button>
-          <button class="pill" type="button" data-preset="snow-mountain">[snow mountain]</button>
-          <button class="pill" type="button" data-preset="cyber-prism">[cyber prism]</button>
-        </div>
-      </div>
-
-      <div class="topbar-right">
-        <span class="stat" id="stat-perf">0.0ms</span>
-        <button class="pill action" type="button" id="btn-export-code">[copy .ts]</button>
-      </div>
-    </header>
-
     <!-- Main Workspace: Viewport (Left) + Control Panel (Right) -->
     <div class="studio-main-row">
       <!-- Left: The Viewport + Transport Bar -->
@@ -205,29 +202,23 @@ import { PAGES, pageCardOf } from "../lib/pages";
     font-family: var(--mono);
   }
 
-  .studio-topbar {
+  .studio-header-presets {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    padding: 0.4rem 0.6rem;
-    border: 1px solid var(--well);
-    background: var(--bg);
+    gap: 0.6rem;
   }
 
-  .topbar-left,
-  .topbar-right {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .topbar-label {
+  .header-scene-label {
     font-size: 0.75rem;
     color: var(--muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+  }
+
+  .studio-header-tools {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
   }
 
   .pill-group {
@@ -712,15 +703,15 @@ import { PAGES, pageCardOf } from "../lib/pages";
 
   .code-display {
     margin: 0;
-    padding: 0.75rem;
+    padding: 1rem;
     background: var(--well);
     border: 1px solid var(--well);
-    max-height: 240px;
-    overflow: auto;
     font-family: var(--mono);
-    font-size: 0.75rem;
-    line-height: 1.45;
+    font-size: 0.8rem;
+    line-height: 1.5;
     color: var(--text);
+    white-space: pre;
+    overflow-x: auto;
   }
 </style>
 

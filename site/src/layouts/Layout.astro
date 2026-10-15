@@ -312,7 +312,8 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
         <div class="top">
           <slot name="heading" />
           <span class="tools">
-            <button id="theme" class="button" type="button" aria-label="Switch to dark theme" hidden><span>[dark]</span></button>
+            <slot name="tools" />
+            <button id="theme" class="button theme-btn" type="button" aria-label="Toggle theme" hidden><span class="theme-icon">☀</span></button>
           </span>
         </div>
         <slot />
@@ -376,9 +377,11 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
           }
         }
         function show(t) {
-          var next = t === "dark" ? "light" : "dark";
+          var isDark = t === "dark";
+          var next = isDark ? "light" : "dark";
           r.dataset.theme = t;
-          b.firstChild.textContent = "[" + next + "]";
+          var icon = b.querySelector(".theme-icon") || b.firstChild;
+          if (icon) icon.textContent = isDark ? "☀" : "☾";
           b.setAttribute("aria-label", "Switch to " + next + " theme");
         }
         function paintBar(t) {
