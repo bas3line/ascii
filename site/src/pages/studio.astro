@@ -1113,7 +1113,8 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
   const colorMap = new Map<number, [number, number, number]>();
 
   function activeMeta(): Meta {
-    return active!.kind === "piece" ? active.mod.meta : active!.session.piece.meta;
+    if (!active) throw new Error("nothing is loaded");
+    return active.kind === "piece" ? active.mod.meta : active.session.piece.meta;
   }
 
   function currentGround(): string | null {
@@ -1131,8 +1132,8 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
   function updateColorMap() {
     colorMap.clear();
     const palette = activePalette();
-    if (!palette) return;
-    const overrides = active!.kind === "piece" ? active.colorOverride : undefined;
+    if (!palette || !active) return;
+    const overrides = active.kind === "piece" ? active.colorOverride : undefined;
     for (let i = 0; i < palette.length; i++) {
       const hex = overrides && overrides[i] ? overrides[i] : palette[i];
       colorMap.set(i, hexToRgb(hex));
@@ -1297,7 +1298,7 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
     const token = ++loadToken;
     let mod: Piece;
     try {
-      mod = await load[slug]();
+      mod = await load[slug as keyof typeof load]();
     } catch (err) {
       codeOutput.textContent = `// could not load ${slug}: ${(err as Error).message}`;
       return;
@@ -1350,7 +1351,7 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
       cb.checked = layer.enabled;
       cb.addEventListener("change", (e) => {
         e.stopPropagation();
-        active!.kind === "scene" && active.session.toggleLayer(layer.id, cb.checked);
+        if (active?.kind === "scene") active.session.toggleLayer(layer.id, cb.checked);
         renderOnDemand();
         updateCodeView();
       });
@@ -1576,7 +1577,7 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
         const cb = document.createElement("input");
         cb.type = "checkbox";
         cb.className = "layer-chk";
-        cb.checked = item.options[key] ?? def;
+        cb.checked = Boolean(item.options[key] ?? def);
         cb.addEventListener("change", () => setOption(key, cb.checked));
 
         group.appendChild(label);
