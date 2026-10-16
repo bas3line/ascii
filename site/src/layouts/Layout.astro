@@ -74,7 +74,13 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
   </head>
 
   <body>
-    <div class:list={["frame", home && "home"]} id="main-frame">
+      <button id="menu-burger" class="menu-burger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="side-bar">
+        <span class="burger-bar"></span>
+        <span class="burger-bar"></span>
+        <span class="burger-bar"></span>
+      </button>
+      <div class="menu-scrim" id="menu-scrim" hidden></div>
+      <div class:list={["frame", home && "home"]} id="main-frame">
       <aside class="side" id="side-bar">
         <!-- Top brand & collapse toggle -->
         <div class="side-head">
@@ -359,6 +365,44 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
         }
       })();
     </script>
+
+        <script is:inline>
+          // Mobile: the sidebar drops into a drawer opened by the pancake button.
+          (function () {
+            var burger = document.getElementById("menu-burger");
+            var scrim = document.getElementById("menu-scrim");
+            var body = document.body;
+            if (!burger || !scrim) return;
+
+            function open() {
+              body.classList.add("menu-open");
+              burger.setAttribute("aria-expanded", "true");
+              burger.setAttribute("aria-label", "Close menu");
+              scrim.hidden = false;
+            }
+            function close() {
+              body.classList.remove("menu-open");
+              burger.setAttribute("aria-expanded", "false");
+              burger.setAttribute("aria-label", "Open menu");
+              scrim.hidden = true;
+            }
+
+            burger.addEventListener("click", function () {
+              body.classList.contains("menu-open") ? close() : open();
+            });
+            scrim.addEventListener("click", close);
+            document.addEventListener("keydown", function (e) {
+              if (e.key === "Escape" && body.classList.contains("menu-open")) {
+                e.preventDefault();
+                close();
+              }
+            });
+            // Closing the menu by tapping a link inside the drawer.
+            document.querySelector(".side")?.addEventListener("click", function (e) {
+              if (e.target instanceof Element && e.target.closest("a")) close();
+            });
+          })();
+        </script>
 
     <script is:inline>
       (function () {

@@ -13,6 +13,25 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of kite festival. Defaults are the original values. */
+export interface KiteFestivalOptions {
+  [key: string]: unknown;
+  /** The row where the farthest roofs meet the hills. */
+  horizon: number;
+  /** The sun's column. */
+  sunX: number;
+  /** The sun's row. */
+  sunY: number;
+  /** The sun's radius in cells. */
+  sunRadius: number;
+  /** How much glow the sun casts on the sky. */
+  sunGlow: number;
+  /** How many kites crowd the sky. */
+  kiteCount: number;
+  /** How large the kites are. */
+  kiteSize: number;
+}
+
 export const meta = {
   name: "kite festival",
   category: "scenes",
@@ -22,20 +41,35 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#1a0f17",
-  // Dot size carries the dark; every colour here is a hue at full strength.
-  palette: [
+    options: {
+      horizon: 62,
+      sunX: 56,
+      sunY: 50,
+      sunRadius: 6.5,
+      sunGlow: 1,
+      kiteCount: 66,
+      kiteSize: 1,
+    },
+    params: {
+      horizon: { label: "horizon", min: 45, max: 75, step: 1 },
+      sunX: { label: "sun x", min: 20, max: 180, step: 1 },
+      sunY: { label: "sun y", min: 20, max: 70, step: 1 },
+      sunRadius: { label: "sun radius", min: 3, max: 14, step: 0.5 },
+      sunGlow: { label: "sun glow", min: 0, max: 2, step: 0.05 },
+      kiteCount: { label: "kite count", min: 20, max: 120, step: 1 },
+      kiteSize: { label: "kite size", min: 0.5, max: 2, step: 0.05 },
+    },
+    // Dot size carries the dark; every colour here is a hue at full strength.
+    palette: [
     "#6a5af0", "#8a78d0", "#c08cc8", "#f0a0c0", "#ffab7a", "#ffc25e", "#ffdc8c", "#fff6dc",
     "#9c7ae0", "#7a62c4", "#b89ae8",
     "#ff5f58", "#ff8478", "#ffaa9c", "#ffd6c4",
     "#ff2f7d", "#ff8fc4", "#ffd400", "#22c55e", "#a3e635", "#e8102a", "#1f6fff", "#5ec8ff",
     "#8b3dff", "#ffffff", "#ff7a00",
   ],
-} satisfies Meta;
+  } satisfies Meta<KiteFestivalOptions>;
 
 const W = 200, H = 100;
-const HZ = 62; // where the farthest roofs meet the hills
-const SUN = [56, 50];
-const SUN_R = 6.5;
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
@@ -121,7 +155,7 @@ const STOPS: [number, RGB][] = [
   [0.9, [1, 0.76, 0.38]],
   [1, [1, 0.86, 0.52]],
 ];
-function skyAt(x: number, y: number): RGB {
+function skyAt(x: number, y: number, HZ: number, SUN: number[], glow: number): RGB {
   const v = clamp(y / HZ);
   let i = 0;
   while (i < STOPS.length - 2 && v > STOPS[i + 1][0]) i++;
@@ -129,12 +163,12 @@ function skyAt(x: number, y: number): RGB {
   const k = (v - v0) / (v1 - v0);
   const dx = x - SUN[0], dy = y - SUN[1];
   const d = Math.sqrt(dx * dx + dy * dy);
-  const glow = 0.3 * Math.exp(-d / 7) + 0.22 * Math.exp(-d / 24) + 0.12 * Math.exp(-Math.abs(dy) / 7 - Math.abs(dx) / 90);
-  return [mix(a[0], b[0], k) + glow, mix(a[1], b[1], k) + glow * 0.82, mix(a[2], b[2], k) + glow * 0.48];
+  const glowT = (0.3 * Math.exp(-d / 7) + 0.22 * Math.exp(-d / 24) + 0.12 * Math.exp(-Math.abs(dy) / 7 - Math.abs(dx) / 90)) * glow;
+  return [mix(a[0], b[0], k) + glowT, mix(a[1], b[1], k) + glowT * 0.82, mix(a[2], b[2], k) + glowT * 0.48];
 }
 // the dust that lies over the town, a dimmer gold than the sky above it
-function hazeAt(x: number): RGB {
-  const c = skyAt(x, HZ - 4);
+function hazeAt(x: number, HZ: number, SUN: number[], glow: number): RGB {
+  const c = skyAt(x, HZ - 4, HZ, SUN, glow);
   return [c[0] * 0.8, c[1] * 0.72, c[2] * 0.72];
 }
 
@@ -148,7 +182,9 @@ type Kite = {
   tail: number; // a loose string running off-picture, its length
 };
 
-export default function kiteFestival(): Frame {
+export default function kiteFestival(o: Partial<KiteFestivalOptions> = {}): Frame {
+  const { horizon = meta.options.horizon, sunX = meta.options.sunX, sunY = meta.options.sunY, sunRadius = meta.options.sunRadius, sunGlow = meta.options.sunGlow, kiteCount = meta.options.kiteCount, kiteSize = meta.options.kiteSize } = o;
+  const HZ = horizon, SUN = [sunX, sunY], SUN_R = sunRadius;
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -182,7 +218,7 @@ export default function kiteFestival(): Frame {
     for (let x = 0; x < W; x++) {
       const k = r * W + x;
       const y = r + 0.5;
-      const [sr, sg, sb] = skyAt(x + 0.5, y);
+      const [sr, sg, sb] = skyAt(x + 0.5, y, HZ, SUN, sunGlow);
       (skR[k] = sr), (skG[k] = sg), (skB[k] = sb);
       let cr = sr, cg = sg, cb = sb;
       const dx = x + 0.5 - SUN[0], dy = y - SUN[1];
@@ -294,7 +330,7 @@ export default function kiteFestival(): Frame {
 
   // a wall colour, lit by `light`, sunk into the dust by `haze`
   const wall = (x: number, r: number, c: RGB, light: number, haze: number, d: number) => {
-    const hz = hazeAt(x + 0.5);
+    const hz = hazeAt(x + 0.5, HZ, SUN, sunGlow);
     put(x, r, [mix(c[0] * light, hz[0], haze), mix(c[1] * light, hz[1], haze), mix(c[2] * light, hz[2], haze)], d, 0.04);
   };
 
@@ -401,7 +437,7 @@ export default function kiteFestival(): Frame {
             else if (y < slab && (dx / rr) ** 2 + ((y - slab) / (rr * 0.95)) ** 2 <= 1) light = 0.6 + 0.5 * clamp(-dx / rr + 0.3);
             else if (y < slab && Math.abs(dx) < 0.5 && y > slab - rr * 0.95 - 1.1) light = 0.9;
             if (light < 0 || x < 0 || x >= W || r < 0) continue;
-            const hz = hazeAt(x + 0.5);
+            const hz = hazeAt(x + 0.5, HZ, SUN, sunGlow);
             const c: RGB = [1 * light, 0.84 * light, 0.72 * light]; // whitewashed, as most of them are
             put(x, r, [mix(c[0], hz[0], L.haze), mix(c[1], hz[1], L.haze), mix(c[2], hz[2], L.haze)], L.d, 0.04);
           }
@@ -427,7 +463,7 @@ export default function kiteFestival(): Frame {
     const a = Math.floor(hash(seed, 1) * PAPER.length);
     let b = Math.floor(hash(seed, 2) * PAPER.length);
     if (b === a) b = (b + 3) % PAPER.length;
-    const h = 1.8 + 6.4 * Math.pow(z, 1.5);
+    const h = (1.8 + 6.4 * Math.pow(z, 1.5)) * kiteSize;
     return {
       x, y, z, h, w: h * (0.8 + 0.08 * hash(seed, 3)),
       A: PAPER[a], B: PAPER[b], design: Math.floor(hash(seed, 4) * 6),
@@ -440,7 +476,7 @@ export default function kiteFestival(): Frame {
   };
   // Each kite keeps clear sky round it, so every one reads as a diamond.
   const room = (x: number, y: number, z: number) => {
-    const h = 1.8 + 6.4 * Math.pow(z, 1.5);
+      const h = (1.8 + 6.4 * Math.pow(z, 1.5)) * kiteSize;
     if (Math.hypot(x - SUN[0], y - SUN[1]) < SUN_R + h + 3) return false; // leave the sun clear
     if (y > ridgeS(x) - h - 2 || y < h - 2) return false; // and the fort's skyline
     for (const K of kites) if (Math.hypot(K.x - x, (K.y - y) * 0.8) < (K.h + h) * 1.05 + 4) return false;
@@ -467,7 +503,7 @@ export default function kiteFestival(): Frame {
     kites.push(k);
   });
   // and the crowd, more of them small and far, till the sky holds about seventy
-  for (let i = 0; i < 2000 && kites.length < 66; i++) {
+  for (let i = 0; i < 2000 && kites.length < kiteCount; i++) {
     const z = 0.04 + 0.7 * Math.pow(hash(i, 61), 1.6);
     const alt = 6 + hash(i, 62) * 72;
     const y = HZ - 3 - alt * (0.3 + 0.8 * z);

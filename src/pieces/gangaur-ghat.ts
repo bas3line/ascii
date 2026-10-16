@@ -12,6 +12,25 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of gangaur ghat. Defaults are the original values. */
+export interface GangaurGhatOptions {
+  [key: string]: unknown;
+  /** The near waterline, under the ghat. */
+  waterline: number;
+  /** The far shore, under the palace. */
+  farShore: number;
+  /** Where the old city ends and the lake reaches back. */
+  cityEnd: number;
+  /** The moon's column. */
+  moonX: number;
+  /** The moon's row. */
+  moonY: number;
+  /** The gateway's centre. */
+  gatewayX: number;
+  /** How many diyas drift across the water. */
+  diyas: number;
+}
+
 export const meta = {
   name: "gangaur ghat",
   category: "scenes",
@@ -35,15 +54,28 @@ export const meta = {
     // starlight, set directly and never matched
     "#dfe6ff",
   ],
-} satisfies Meta;
+      options: {
+        waterline: 64,
+        farShore: 58,
+        cityEnd: 142,
+        moonX: 170,
+        moonY: 13,
+        gatewayX: 75,
+        diyas: 52,
+      },
+      params: {
+        waterline: { label: "waterline", min: 45, max: 75, step: 1 },
+        farShore: { label: "far shore", min: 40, max: 70, step: 1 },
+        cityEnd: { label: "old city", min: 110, max: 170, step: 1 },
+        moonX: { label: "moon position", min: 100, max: 200, step: 1 },
+        moonY: { label: "moon height", min: 4, max: 40, step: 1 },
+        gatewayX: { label: "gateway", min: 40, max: 120, step: 1 },
+        diyas: { label: "diyas", min: 0, max: 100, step: 1 },
+      },
+    } satisfies Meta<GangaurGhatOptions>;
 
-const W = 200, H = 100;
-const HZ = 64; // the near waterline, under the ghat
-const FAR = 58; // the far shore, under the palace
-const SHORE = 142; // where the old city ends and the lake reaches back
-const MOON = [170, 13];
-const GX = 75; // the gateway's centre
-const DOTS = " ·•●";
+    const W = 200, H = 100;
+    const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 // how far a dot's colour may be brightened to make up for its size: small dots
 // in dark areas stay dark instead of turning into a pale speckle
@@ -92,23 +124,30 @@ const smooth = (a: number, b: number, v: number) => {
 const mix = (a: number, b: number, k: number) => a + (b - a) * k;
 const hex = (s: string) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16) / 255);
 
-const wlF = (x: number) => (x < SHORE ? HZ : FAR);
 // the crest of the old city's hill, highest a little left of the gateway
 const ridgeF = (x: number) => 23 + 30 * ((x - 50) / 92) ** 2 + 3 * (fbm(x * 0.08, 1.3, 3, 0) - 0.5);
 // the Aravalli hills, far behind the palace
 const hillsF = (x: number) => 50 - 7 * fbm(x * 0.022, 4.1, 3, 0) - 3 * smooth(120, 175, x);
 
-// The night sky: ink overhead, a lighter blue at the horizon.
-function skyAt(x: number, y: number): [number, number, number] {
-  const v = clamp(y / FAR);
-  const dmx = x - MOON[0], dmy = y - MOON[1];
-  const halo = Math.exp(-Math.sqrt(dmx * dmx + dmy * dmy) / 14) * 0.16;
-  // the palace and the town lift the horizon a little, warm
-  const city = Math.exp(-Math.max(0, FAR - y) / 7) * (0.05 + 0.05 * smooth(130, 175, x));
-  return [0.03 + 0.08 * v * v + 0.7 * halo + city * 0.9, 0.045 + 0.12 * v * v + 0.8 * halo + city * 0.6, 0.15 + 0.24 * Math.pow(v, 1.5) + halo + city * 0.35];
-}
+export default function gangaurGhat(o: Partial<GangaurGhatOptions> = {}): Frame {
+  const HZ = o.waterline ?? meta.options.waterline;
+  const FAR = o.farShore ?? meta.options.farShore;
+  const SHORE = o.cityEnd ?? meta.options.cityEnd;
+  const MOON = [o.moonX ?? meta.options.moonX, o.moonY ?? meta.options.moonY];
+  const GX = o.gatewayX ?? meta.options.gatewayX;
+  const DIYAS = o.diyas ?? meta.options.diyas;
 
-export default function gangaurGhat(): Frame {
+  const wlF = (x: number) => (x < SHORE ? HZ : FAR);
+  // The night sky: ink overhead, a lighter blue at the horizon.
+  const skyAt = (x: number, y: number): [number, number, number] => {
+    const v = clamp(y / FAR);
+    const dmx = x - MOON[0], dmy = y - MOON[1];
+    const halo = Math.exp(-Math.sqrt(dmx * dmx + dmy * dmy) / 14) * 0.16;
+    // the palace and the town lift the horizon a little, warm
+    const city = Math.exp(-Math.max(0, FAR - y) / 7) * (0.05 + 0.05 * smooth(130, 175, x));
+    return [0.03 + 0.08 * v * v + 0.7 * halo + city * 0.9, 0.045 + 0.12 * v * v + 0.8 * halo + city * 0.6, 0.15 + 0.24 * Math.pow(v, 1.5) + halo + city * 0.35];
+  };
+
   const P = meta.palette.map(hex);
   const STAR = P.length - 1;
   const N = W * H;
@@ -419,7 +458,7 @@ export default function gangaurGhat(): Frame {
 
   // --- the floating diyas: each rides a slow, winding current ---------------------
   const diyas: [number, number, number, number, number][] = [];
-  for (let i = 0; i < 52; i++) {
+  for (let i = 0; i < DIYAS; i++) {
     const q = hash(i, 61);
     const y = HZ + 3 + 32 * Math.pow(q, 0.95);
     const dir = hash(i, 65) < 0.62 ? 1 : -1;

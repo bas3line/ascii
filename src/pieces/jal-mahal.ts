@@ -11,6 +11,23 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of jal mahal. Defaults are the original values. */
+export interface JalMahalOptions {
+  [key: string]: unknown;
+  /** The waterline row. */
+  waterline: number;
+  /** The sun's column. */
+  sunX: number;
+  /** The sun's row. */
+  sunY: number;
+  /** The sun's radius. */
+  sunRadius: number;
+  /** Speed of the drifting mist. */
+  mistSpeed: number;
+  /** The boat's resting column. */
+  boatX: number;
+}
+
 export const meta = {
   name: "jal mahal",
   category: "scenes",
@@ -29,12 +46,26 @@ export const meta = {
     "#4a3226", "#6e4a32",
     "#fbfaf7",
   ],
-} satisfies Meta;
+      options: {
+        waterline: 62,
+        sunX: 148,
+        sunY: 30,
+        sunRadius: 7.5,
+        mistSpeed: 1.6,
+        boatX: 158,
+      },
+      params: {
+        waterline: { label: "waterline", min: 45, max: 75, step: 1 },
+        sunX: { label: "sun position", min: 80, max: 190, step: 1 },
+        sunY: { label: "sun height", min: 8, max: 55, step: 1 },
+        sunRadius: { label: "sun radius", min: 3, max: 14, step: 0.5 },
+        mistSpeed: { label: "mist drift", min: 0, max: 4, step: 0.05 },
+        boatX: { label: "boat position", min: 100, max: 195, step: 1 },
+      },
+    } satisfies Meta<JalMahalOptions>;
 
-const W = 200, H = 100;
-const WATER = 62; // the waterline
-const SUN = [148, 30];
-const DOTS = " ·•●";
+    const W = 200, H = 100;
+    const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 
@@ -77,19 +108,25 @@ const smooth = (a: number, b: number, v: number) => {
 const mix = (a: number, b: number, k: number) => a + (b - a) * k;
 const hex = (s: string) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16) / 255);
 
-// The sky at a row, before the sun: misty blue overhead, rose in the middle,
-// pale gold low down where the light comes through.
-function skyAt(y: number): [number, number, number] {
-  const v = clamp(y / WATER);
-  if (v < 0.45) {
-    const k = smooth(0, 0.45, v);
-    return [mix(0.4, 0.86, k), mix(0.47, 0.62, k), mix(0.68, 0.68, k)];
-  }
-  const k = smooth(0.45, 0.95, v);
-  return [mix(0.86, 1.0, k), mix(0.62, 0.84, k), mix(0.68, 0.6, k)];
-}
+export default function jalMahal(o: Partial<JalMahalOptions> = {}): Frame {
+  const WATER = o.waterline ?? meta.options.waterline;
+  const SUN = [o.sunX ?? meta.options.sunX, o.sunY ?? meta.options.sunY];
+  const SUN_R = o.sunRadius ?? meta.options.sunRadius;
+  const MIST_SPEED = o.mistSpeed ?? meta.options.mistSpeed;
+  const BOAT_X = o.boatX ?? meta.options.boatX;
 
-export default function jalMahal(): Frame {
+  // The sky at a row, before the sun: misty blue overhead, rose in the middle,
+  // pale gold low down where the light comes through.
+  const skyAt = (y: number): [number, number, number] => {
+    const v = clamp(y / WATER);
+    if (v < 0.45) {
+      const k = smooth(0, 0.45, v);
+      return [mix(0.4, 0.86, k), mix(0.47, 0.62, k), mix(0.68, 0.68, k)];
+    }
+    const k = smooth(0.45, 0.95, v);
+    return [mix(0.86, 1.0, k), mix(0.62, 0.84, k), mix(0.68, 0.6, k)];
+  };
+
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -146,9 +183,9 @@ export default function jalMahal(): Frame {
         const warm = Math.exp(-ds / 40);
         cr = mix(cr, 1.0, cl * 0.55), cg = mix(cg, 0.76 + 0.12 * warm, cl * 0.55), cb = mix(cb, 0.74 - 0.1 * warm, cl * 0.55);
       }
-      if (ds < 7.5) {
+      if (ds < SUN_R) {
         // the sun, softened by the mist, a little paler at its middle
-        const a = smooth(7.5, 6.2, ds);
+              const a = smooth(SUN_R, SUN_R - 1.3, ds);
         cr = mix(cr, 1.0, a), cg = mix(cg, 0.9 + 0.08 * smooth(7, 0, ds), a), cb = mix(cb, 0.6 + 0.3 * smooth(7, 0, ds), a);
       }
       // hills, front to back; each fades toward the sky colour at its foot,
@@ -298,7 +335,7 @@ export default function jalMahal(): Frame {
   };
 
   return (t, { color } = {}) => {
-    const drift = t * 1.6;
+    const drift = t * MIST_SPEED;
 
     for (let r = 0; r < H; r++) {
       const y = r + 0.5;
@@ -345,7 +382,7 @@ export default function jalMahal(): Frame {
 
     // the boat, dark against the sun's path, rocking a little as it drifts,
     // with its boatman and pole
-    const bx = 158 + 4 * Math.sin(t * 0.08), by = 79 + 0.4 * Math.sin(t * 1.3);
+    const bx = BOAT_X + 4 * Math.sin(t * 0.08), by = 79 + 0.4 * Math.sin(t * 1.3);
     const WOOD = [0.24, 0.15, 0.12], WOOD2 = [0.4, 0.26, 0.18], MAN = [0.2, 0.15, 0.19];
     // rings spreading out from the pole, behind the hull
     for (let ring = 0; ring < 2; ring++) {

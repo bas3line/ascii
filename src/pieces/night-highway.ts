@@ -17,6 +17,27 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of night highway. Defaults are the original values. */
+export interface NightHighwayOptions {
+  [key: string]: unknown;
+  /** The horizon row. */
+  horizon: number;
+  /** The vanishing point's column. */
+  vanishX: number;
+  /** Focal length in cells. */
+  focal: number;
+  /** Driving speed, in camera heights a second. */
+  speed: number;
+  /** The moon's column. */
+  moonX: number;
+  /** The moon's row. */
+  moonY: number;
+  /** The moon's radius in cells. */
+  moonRadius: number;
+  /** How high the telephone poles stand. */
+  poleHeight: number;
+}
+
 export const meta = {
   name: "night highway",
   category: "scenes",
@@ -27,6 +48,26 @@ export const meta = {
   fps: 15,
   loop: 12,
   ground: "#07080f",
+  options: {
+    horizon: 50,
+    vanishX: 100,
+    focal: 110,
+    speed: 16,
+    moonX: 158,
+    moonY: 14,
+    moonRadius: 4.6,
+    poleHeight: 6.3,
+  },
+  params: {
+    horizon: { label: "horizon", min: 30, max: 70, step: 1 },
+    vanishX: { label: "vanishing point", min: 40, max: 160, step: 1 },
+    focal: { label: "focal length", min: 70, max: 160, step: 1 },
+    speed: { label: "driving speed", min: 0, max: 40, step: 0.5 },
+    moonX: { label: "moon position", min: 100, max: 200, step: 1 },
+    moonY: { label: "moon height", min: 5, max: 30, step: 0.5 },
+    moonRadius: { label: "moon radius", min: 2, max: 10, step: 0.2 },
+    poleHeight: { label: "pole height", min: 4, max: 10, step: 0.2 },
+  },
   palette: [
     "#0d1226", "#141b38", "#1c264c", "#263463", "#34457a", "#4a5d96", "#6b7fb3", "#9aa8d0", "#cdd5ea", "#f4f6fc",
     "#2a1d45", "#43285e", "#643474", "#8a4683",
@@ -34,22 +75,16 @@ export const meta = {
     "#16161e", "#24232d", "#383744", "#55535f",
     "#7a1622", "#d42a32", "#ff6a5c",
     "#d9b44a", "#3fd6c8", "#fff4d8", "#3a2a2a",
-  ],
-} satisfies Meta;
+      ],
+    } satisfies Meta<NightHighwayOptions>;
 
-const W = 200, H = 100;
-const HY = 50; // the horizon row
-const VPX = 100; // the vanishing point's column
-const F = 110; // focal length in cells
-const T = 12; // the loop, in seconds: every motion below repeats in it
-const V = 16; // driving speed, in camera heights a second
-const SHUT = (V / 15) * 0.9; // how far we travel while the shutter is open
-const FAR = 112; // nothing is drawn beyond this depth
-const ROAD_R = 0.68, ROAD_L = -1.92, CENTRE = -0.62, LANE_L = -1.27;
-const POLE_X = 2.2, POLE_GAP = 24, POST_GAP = 12, DASH = 1.2, DASH_GAP = 3;
-const MOON = [158, 14], MOON_R = 4.6;
-const ONCOMING = [9.4, 2.6, 6.0]; // when each oncoming car leaves the horizon
-const DOTS = " ·•●";
+    const W = 200, H = 100;
+    const T = 12; // the loop, in seconds: every motion below repeats in it
+    const FAR = 112; // nothing is drawn beyond this depth
+    const ROAD_R = 0.68, ROAD_L = -1.92, CENTRE = -0.62, LANE_L = -1.27;
+    const POLE_X = 2.2, POLE_GAP = 24, POST_GAP = 12, DASH = 1.2, DASH_GAP = 3;
+    const ONCOMING = [9.4, 2.6, 6.0]; // when each oncoming car leaves the horizon
+    const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 
@@ -101,7 +136,15 @@ const span = (u: number, len: number, period: number) => {
   return k * len + Math.min(u - k * period, len);
 };
 
-export default function nightHighway(): Frame {
+export default function nightHighway(o: Partial<NightHighwayOptions> = {}): Frame {
+  const { horizon = meta.options.horizon, vanishX = meta.options.vanishX, focal = meta.options.focal, speed = meta.options.speed, moonX = meta.options.moonX, moonY = meta.options.moonY, moonRadius = meta.options.moonRadius, poleHeight = meta.options.poleHeight } = o;
+  const HY = horizon;
+  const VPX = vanishX;
+  const F = focal;
+  const V = speed;
+  const SHUT = (V / 15) * 0.9; // how far we travel while the shutter is open
+  const MOON = [moonX, moonY], MOON_R = moonRadius;
+  const PH = poleHeight;
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -384,8 +427,8 @@ export default function nightHighway(): Frame {
         if (z < 0.7) continue;
         if (kind === 2) {
           things.push([z, () => {
-            box(xp - 0.12, xp + 0.12, 0, 6.3, z, 0.008, 0.006, 0.012, 1);
-            box(xp - 0.6, xp + 0.6, 5.5, 5.66, z, 0.008, 0.006, 0.012, 1);
+                    box(xp - 0.12, xp + 0.12, 0, PH, z, 0.008, 0.006, 0.012, 1);
+                    box(xp - 0.6, xp + 0.6, PH - 0.8, PH - 0.64, z, 0.008, 0.006, 0.012, 1);
           }]);
         } else {
           things.push([z, () => {

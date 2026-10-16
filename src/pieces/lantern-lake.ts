@@ -14,6 +14,25 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of lantern lake. Defaults are the original values. */
+export interface LanternLakeOptions {
+  [key: string]: unknown;
+  /** The waterline row. */
+  waterline: number;
+  /** The middle of the festival on the far shore. */
+  festivalX: number;
+  /** The boat's middle column. */
+  boatX: number;
+  /** The boat's waterline row. */
+  boatWaterline: number;
+  /** The boat's scale. */
+  boatScale: number;
+  /** Seconds from one let-go to the next. */
+  cycle: number;
+  /** How many lanterns the festival lets go. */
+  lanterns: number;
+}
+
 export const meta = {
   name: "lantern lake",
   category: "scenes",
@@ -40,20 +59,28 @@ export const meta = {
     "#4a5578", "#5d6a92", "#7381ab",
     "#c4cdec", "#e4e9fb", "#ffffff",
   ],
-} satisfies Meta;
+      options: {
+        waterline: 64,
+        festivalX: 100,
+        boatX: 108.5,
+        boatWaterline: 90,
+        boatScale: 1.4,
+        cycle: 20,
+        lanterns: 240,
+      },
+      params: {
+        waterline: { label: "waterline", min: 45, max: 80, step: 1 },
+        festivalX: { label: "festival position", min: 30, max: 170, step: 1 },
+        boatX: { label: "boat position", min: 60, max: 160, step: 1 },
+        boatWaterline: { label: "boat distance", min: 60, max: 100, step: 1 },
+        boatScale: { label: "boat scale", min: 0.5, max: 2.5, step: 0.05 },
+        cycle: { label: "lantern cycle", min: 5, max: 40, step: 1 },
+        lanterns: { label: "lanterns", min: 20, max: 400, step: 10 },
+      },
+    } satisfies Meta<LanternLakeOptions>;
 
-const W = 200, H = 100;
-const WL = 64; // the waterline
-const SRC = 100; // the middle of the festival on the far shore
-// the boat's middle and its waterline, far enough out that the lantern held
-// over its head sits against the dark trees' reflection
-const BX = 108.5, BW = 90;
-const SC = 1.4; // the boat's scale
-const FX = BX - 3 * SC; // where the figure stands in it
-// The figure lets a lantern go this far into every cycle and lights the
-// next one at LIT, so it holds one up most of the time.
-const CYCLE = 20, LET_GO = 3, LIT = 6;
-const HELD = 5 * SC; // the boat's lanterns, in cells tall
+    const W = 200, H = 100;
+    const LET_GO = 3, LIT = 6;
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
@@ -142,7 +169,16 @@ interface Flight {
   wide: boolean; // starts anywhere along the shore, not just at the festival
 }
 
-export default function lanternLake(): Frame {
+export default function lanternLake(o: Partial<LanternLakeOptions> = {}): Frame {
+  const WL = o.waterline ?? meta.options.waterline;
+  const SRC = o.festivalX ?? meta.options.festivalX;
+  const BX = o.boatX ?? meta.options.boatX;
+  const BW = o.boatWaterline ?? meta.options.boatWaterline;
+  const SC = o.boatScale ?? meta.options.boatScale;
+  const CYCLE = o.cycle ?? meta.options.cycle;
+  const LANTERNS = o.lanterns ?? meta.options.lanterns;
+  const FX = BX - 3 * SC; // where the figure stands in it
+  const HELD = 5 * SC; // the boat's lanterns, in cells tall
   const P = meta.palette.map(hex);
   const STAR = P.length - 3; // the first of the stars' colours
   const SL = STAR - 3; // and of the far range's slate
@@ -309,7 +345,7 @@ export default function lanternLake(): Frame {
   // Let go on the far shore. Each climbs from below the scrub, so its start is
   // hidden, and either burns out or sails off the top before it starts again.
   const shore: Flight[] = [];
-  for (let i = 0; i < 240; i++) {
+    for (let i = 0; i < LANTERNS; i++) {
     const near = i >= 196;
     const s = near ? 1.5 + 1.7 * hash(i, 11) ** 1.5 : 0.45 + 0.9 * hash(i, 11) ** 1.4;
     const v = 0.3 + 0.62 * s;

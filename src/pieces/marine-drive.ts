@@ -11,6 +11,25 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of marine drive. Defaults are the original values. */
+export interface MarineDriveOptions {
+  [key: string]: unknown;
+  /** The sea horizon row. */
+  horizon: number;
+  /** Nariman point, where the necklace ends. */
+  tip: number;
+  /** The moon's column. */
+  moonX: number;
+  /** The moon's row. */
+  moonY: number;
+  /** The moon's radius. */
+  moonRadius: number;
+  /** How many cars are moving along the drive. */
+  cars: number;
+  /** Speed of the drifting clouds. */
+  cloudDrift: number;
+}
+
 export const meta = {
   name: "marine drive",
   category: "scenes",
@@ -30,15 +49,29 @@ export const meta = {
     "#132c38", "#1c3f4f", "#2a5868",
     "#29283a", "#3c3a4c", "#565266", "#79738a",
   ],
-} satisfies Meta;
+      options: {
+        horizon: 40,
+        tip: 176,
+        moonX: 189,
+        moonY: 13,
+        moonRadius: 4.5,
+        cars: 26,
+        cloudDrift: 1.3,
+      },
+      params: {
+        horizon: { label: "horizon", min: 25, max: 55, step: 1 },
+        tip: { label: "nariman point", min: 120, max: 195, step: 1 },
+        moonX: { label: "moon position", min: 120, max: 200, step: 1 },
+        moonY: { label: "moon height", min: 4, max: 40, step: 1 },
+        moonRadius: { label: "moon radius", min: 2, max: 10, step: 0.5 },
+        cars: { label: "cars", min: 0, max: 60, step: 1 },
+        cloudDrift: { label: "cloud drift", min: 0, max: 3, step: 0.05 },
+      },
+    } satisfies Meta<MarineDriveOptions>;
 
-const W = 200, H = 100;
-const HZ = 40; // the sea horizon
-const TIP = 176; // nariman point, where the necklace ends
-const MOON = [189, 13];
-const MOON_R = 4.5;
-// darker seas on the moon's face: [dx, dy, radius]
-const MARIA = [[-1.4, -1.2, 1.6], [1.3, 0.8, 1.4], [-0.6, 2, 1.1]];
+    const W = 200, H = 100;
+    // darker seas on the moon's face: [dx, dy, radius]
+    const MARIA = [[-1.4, -1.2, 1.6], [1.3, 0.8, 1.4], [-0.6, 2, 1.1]];
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
@@ -84,20 +117,6 @@ const smooth = (a: number, b: number, v: number) => {
 const mix = (a: number, b: number, k: number) => a + (b - a) * k;
 const hex = (s: string) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16) / 255);
 
-// The shoreline: steep and near at the left, flat and far toward the point.
-const shoreF = (x: number) => 50 + 34 * Math.pow(Math.max(0, 1 - x / TIP), 2.2);
-// How large one unit of distance along the drive looks at column x.
-const scF = (x: number) => 0.5 + 1.9 * Math.pow(Math.max(0, 1 - x / TIP), 1.5);
-const seaTop = (x: number) => (x <= TIP ? shoreF(x) : Math.max(HZ, 50 - (x - TIP) * 1.6));
-const wallTopF = (x: number) => shoreF(x) - Math.max(1, scF(x));
-const roadTopF = (x: number) => wallTopF(x) - Math.max(1, 1.5 * scF(x));
-// The city's sodium glow in the sky, weaker out over the open sea.
-const glowF = (x: number, y: number) => {
-  const over = 0.5 + 0.5 * smooth(TIP + 24, TIP - 16, x);
-  const h = Math.max(0, HZ - y);
-  return over * (Math.exp(-h / 4) * 0.5 + Math.exp(-h / 12) * 0.12);
-};
-
 interface Building {
   u0: number;
   u1: number;
@@ -106,7 +125,28 @@ interface Building {
   crown: boolean;
 }
 
-export default function marineDrive(): Frame {
+export default function marineDrive(o: Partial<MarineDriveOptions> = {}): Frame {
+  const HZ = o.horizon ?? meta.options.horizon;
+  const TIP = o.tip ?? meta.options.tip;
+  const MOON = [o.moonX ?? meta.options.moonX, o.moonY ?? meta.options.moonY];
+  const MOON_R = o.moonRadius ?? meta.options.moonRadius;
+  const CARS = o.cars ?? meta.options.cars;
+  const CLOUD_DRIFT = o.cloudDrift ?? meta.options.cloudDrift;
+
+  // The shoreline: steep and near at the left, flat and far toward the point.
+  const shoreF = (x: number) => 50 + 34 * Math.pow(Math.max(0, 1 - x / TIP), 2.2);
+  // How large one unit of distance along the drive looks at column x.
+  const scF = (x: number) => 0.5 + 1.9 * Math.pow(Math.max(0, 1 - x / TIP), 1.5);
+  const seaTop = (x: number) => (x <= TIP ? shoreF(x) : Math.max(HZ, 50 - (x - TIP) * 1.6));
+  const wallTopF = (x: number) => shoreF(x) - Math.max(1, scF(x));
+  const roadTopF = (x: number) => wallTopF(x) - Math.max(1, 1.5 * scF(x));
+  // The city's sodium glow in the sky, weaker out over the open sea.
+  const glowF = (x: number, y: number) => {
+    const over = 0.5 + 0.5 * smooth(TIP + 24, TIP - 16, x);
+    const h = Math.max(0, HZ - y);
+    return over * (Math.exp(-h / 4) * 0.5 + Math.exp(-h / 12) * 0.12);
+  };
+
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -487,7 +527,7 @@ export default function marineDrive(): Frame {
   const U0 = -6, NB = Math.ceil((UEND + 12) / BIN);
   const laneA = new Float32Array(NB), laneB = new Float32Array(NB);
   const cars: [number, number, number][] = [];
-  for (let i = 0; i < 26; i++) cars.push([hash(i, 51) * (UEND + 12), 4.2 + 1.6 * hash(i, 52), i & 1]);
+  for (let i = 0; i < CARS; i++) cars.push([hash(i, 51) * (UEND + 12), 4.2 + 1.6 * hash(i, 52), i & 1]);
   const binLo = new Int32Array(W), binHi = new Int32Array(W);
   for (let x = 0; x < W; x++) {
     binLo[x] = Math.max(0, Math.floor((Uof(x) - U0) / BIN));
@@ -496,7 +536,7 @@ export default function marineDrive(): Frame {
   const colA = new Float32Array(W), colB = new Float32Array(W);
 
   return (t, { color } = {}) => {
-    const drift = t * 1.3;
+    const drift = t * CLOUD_DRIFT;
     // cars: tail lights heading out to the point, headlights coming home
     laneA.fill(0), laneB.fill(0);
     const span = UEND + 12;

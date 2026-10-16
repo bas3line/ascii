@@ -10,6 +10,29 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of kyoto dusk. Defaults are the original values. */
+export interface KyotoDuskOptions {
+  [key: string]: unknown;
+  /** The far bank of the pond. */
+  shore: number;
+  /** The pagoda's axis. */
+  pagodaX: number;
+  /** The moon's column. */
+  moonX: number;
+  /** The moon's row. */
+  moonY: number;
+  /** The lantern's axis. */
+  lanternX: number;
+  /** The lantern's foot row. */
+  lanternBase: number;
+  /** The lantern's scale. */
+  lanternScale: number;
+  /** How many petals drift through the frame. */
+  petals: number;
+  /** Speed of the drifting cloud streaks. */
+  cloudSpeed: number;
+}
+
 export const meta = {
   name: "kyoto dusk",
   category: "scenes",
@@ -32,15 +55,32 @@ export const meta = {
     "#4a3038", "#6a4448",
     "#2b3a6a", "#3e4f86",
   ],
-} satisfies Meta;
+      options: {
+        shore: 80,
+        pagodaX: 141,
+        moonX: 176,
+        moonY: 17,
+        lanternX: 53,
+        lanternBase: 98,
+        lanternScale: 1.8,
+        petals: 50,
+        cloudSpeed: 0.8,
+      },
+      params: {
+        shore: { label: "far bank", min: 65, max: 90, step: 1 },
+        pagodaX: { label: "pagoda", min: 100, max: 190, step: 1 },
+        moonX: { label: "moon position", min: 120, max: 200, step: 1 },
+        moonY: { label: "moon height", min: 4, max: 40, step: 1 },
+        lanternX: { label: "lantern position", min: 30, max: 90, step: 1 },
+        lanternBase: { label: "lantern foot", min: 85, max: 100, step: 1 },
+        lanternScale: { label: "lantern scale", min: 1, max: 3, step: 0.05 },
+        petals: { label: "petals", min: 0, max: 120, step: 1 },
+        cloudSpeed: { label: "cloud drift", min: 0, max: 2, step: 0.05 },
+      },
+    } satisfies Meta<KyotoDuskOptions>;
 
-const W = 200, H = 100;
-const SHORE = 80; // the far bank of the pond, where the pagoda stands
-const PX = 141; // the pagoda's axis
-const MOON = [176, 17];
-const LX = 53, LB = 98, LS = 1.8; // the lantern's axis, foot and scale
-const LAMP = [LX, LB - (LB - 83) * LS]; // its lit opening
-const DOTS = " ·•●";
+    const W = 200, H = 100;
+    const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 
@@ -99,49 +139,60 @@ function seg(px: number, py: number, ax: number, ay: number, bx: number, by: num
 const EAVE = [68.5, 58, 48.5, 40, 32.5]; // where each roof's eave sits
 const ROOF = [14.5, 13.4, 12.3, 11.2, 10.1]; // each roof's half-width
 const BODY = [6.4, 5.9, 5.4, 4.9, 4.4];
-function pagoda(dx: number, y: number): number {
-  const ax = Math.abs(dx);
-  // stone base
-  if (y >= 76 && y < SHORE + 0.5) return ax <= 9.5 - (y < 77 ? 1 : 0) ? 1 : 0;
-  for (let i = 0; i < 5; i++) {
-    const e = EAVE[i], R = ROOF[i];
-    // a roof: thin at its upturned tips, rising in a shallow concave curve to the body
-    const u = ax / R;
-    if (u <= 1) {
-      const lift = 3.5 * u * u * u * u;
-      const bottom = e - lift + 0.6;
-      const top = e - lift - 1.2 - 3.6 * Math.pow(1 - u, 1.7);
-      if (y >= top && y < bottom) {
-        if (y < top + 0.9) return 4;
-        if (y > bottom - 1.0) return 3;
-        return 2;
-      }
-    }
-    // the storey beneath this roof, up from the roof below it (or the base)
-    const floor = i === 0 ? 76 : EAVE[i - 1] - 3.6;
-    if (y >= e + 0.6 && y < floor && ax <= BODY[i]) {
-      if (i === 0 && ax <= 1 && y > 72 && y < 75.5) return 6;
-      // a railed balcony under each roof
-      if (y < e + 2 && ax <= BODY[i] + 1.2) return 3;
-      return 1;
-    }
-    if (i > 0 && y >= e + 0.6 && y < e + 2 && ax <= BODY[i] + 1.2) return 3;
-  }
-  // the spire: a mast with nine rings and a flame-shaped finial
-  const top = EAVE[4] - 1.2 - 3.6 - 0.2;
-  if (y < top && y >= 9) {
-    if (y >= top - 1.5) return ax <= 2.4 ? 3 : 0; // the roof box
-    if (y >= 15 && y < top - 1.5) {
-      const ring = Math.floor((y - 15) / 1.2) & 1;
-      return ax <= (ring ? 1.4 : 0.55) ? 5 : 0;
-    }
-    if (y >= 12) return ax <= 1.3 - (y - 12) * 0.2 ? 5 : 0;
-    return ax <= 0.6 ? 5 : 0;
-  }
-  return 0;
-}
 
-export default function kyotoDusk(): Frame {
+export default function kyotoDusk(o: Partial<KyotoDuskOptions> = {}): Frame {
+  const SHORE = o.shore ?? meta.options.shore;
+  const PX = o.pagodaX ?? meta.options.pagodaX;
+  const MOON = [o.moonX ?? meta.options.moonX, o.moonY ?? meta.options.moonY];
+  const LX = o.lanternX ?? meta.options.lanternX;
+  const LB = o.lanternBase ?? meta.options.lanternBase;
+  const LS = o.lanternScale ?? meta.options.lanternScale;
+  const LAMP = [LX, LB - (LB - 83) * LS]; // its lit opening
+  const PETALS = o.petals ?? meta.options.petals;
+  const CLOUD_SPEED = o.cloudSpeed ?? meta.options.cloudSpeed;
+
+  const pagoda = (dx: number, y: number): number => {
+    const ax = Math.abs(dx);
+    // stone base
+    if (y >= 76 && y < SHORE + 0.5) return ax <= 9.5 - (y < 77 ? 1 : 0) ? 1 : 0;
+    for (let i = 0; i < 5; i++) {
+      const e = EAVE[i], R = ROOF[i];
+      // a roof: thin at its upturned tips, rising in a shallow concave curve to the body
+      const u = ax / R;
+      if (u <= 1) {
+        const lift = 3.5 * u * u * u * u;
+        const bottom = e - lift + 0.6;
+        const top = e - lift - 1.2 - 3.6 * Math.pow(1 - u, 1.7);
+        if (y >= top && y < bottom) {
+          if (y < top + 0.9) return 4;
+          if (y > bottom - 1.0) return 3;
+          return 2;
+        }
+      }
+      // the storey beneath this roof, up from the roof below it (or the base)
+      const floor = i === 0 ? 76 : EAVE[i - 1] - 3.6;
+      if (y >= e + 0.6 && y < floor && ax <= BODY[i]) {
+        if (i === 0 && ax <= 1 && y > 72 && y < 75.5) return 6;
+        // a railed balcony under each roof
+        if (y < e + 2 && ax <= BODY[i] + 1.2) return 3;
+        return 1;
+      }
+      if (i > 0 && y >= e + 0.6 && y < e + 2 && ax <= BODY[i] + 1.2) return 3;
+    }
+    // the spire: a mast with nine rings and a flame-shaped finial
+    const top = EAVE[4] - 1.2 - 3.6 - 0.2;
+    if (y < top && y >= 9) {
+      if (y >= top - 1.5) return ax <= 2.4 ? 3 : 0; // the roof box
+      if (y >= 15 && y < top - 1.5) {
+        const ring = Math.floor((y - 15) / 1.2) & 1;
+        return ax <= (ring ? 1.4 : 0.55) ? 5 : 0;
+      }
+      if (y >= 12) return ax <= 1.3 - (y - 12) * 0.2 ? 5 : 0;
+      return ax <= 0.6 ? 5 : 0;
+    }
+    return 0;
+  };
+
   const P = meta.palette.map(hex);
   const N = W * H;
   const out = new Array<string>(N);
@@ -474,7 +525,7 @@ export default function kyotoDusk(): Frame {
 
   // petals: each with its own drift, fall, sway and tumble
   const petals: { x: number; y: number; vx: number; vy: number; sw: number; sf: number; ph: number; tum: number }[] = [];
-  for (let i = 0; i < 50; i++)
+  for (let i = 0; i < PETALS; i++)
     petals.push({
       // most of them near the tree, thinning out downwind
       x: Math.pow(hash(i, 101), 2.2) * 140, y: hash(i, 102) * (H + 20),
@@ -499,7 +550,7 @@ export default function kyotoDusk(): Frame {
   return (t, { color } = {}) => {
     // the flame breathes, with now and then a gutter
     const flick = 0.82 + 0.1 * Math.sin(t * 7.3) * Math.sin(t * 3.1 + 1) + 0.12 * (noise(t * 4, 3.3, 0) - 0.5) * 2;
-    const cdrift = (((t * 0.8) % CW) + CW) % CW;
+    const cdrift = (((t * CLOUD_SPEED) % CW) + CW) % CW;
 
     // petals in the air this frame
     pmask.fill(0);

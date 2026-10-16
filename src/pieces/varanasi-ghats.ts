@@ -9,6 +9,21 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of varanasi ghats. Defaults are the original values. */
+export interface VaranasiGhatsOptions {
+  [key: string]: unknown;
+  /** The far bank's row. */
+  waterline: number;
+  /** Where the ghats meet the far bank. */
+  ghats: number;
+  /** The afterglow's column. */
+  glowX: number;
+  /** How many diyas drift downstream. */
+  diyas: number;
+  /** The boatman's speed across the reach. */
+  boatSpeed: number;
+}
+
 export const meta = {
   name: "varanasi ghats",
   category: "scenes",
@@ -36,13 +51,24 @@ export const meta = {
     // starlight, set directly and never matched
     "#d6d4ee",
   ],
-} satisfies Meta;
+      options: {
+        waterline: 60,
+        ghats: 150,
+        glowX: 156,
+        diyas: 34,
+        boatSpeed: 0.1,
+      },
+      params: {
+        waterline: { label: "far bank", min: 40, max: 75, step: 1 },
+        ghats: { label: "ghats", min: 100, max: 190, step: 1 },
+        glowX: { label: "afterglow", min: 90, max: 190, step: 1 },
+        diyas: { label: "diyas", min: 0, max: 80, step: 1 },
+        boatSpeed: { label: "boat speed", min: 0, max: 0.5, step: 0.01 },
+      },
+    } satisfies Meta<VaranasiGhatsOptions>;
 
-const W = 200, H = 100;
-const HZ = 60; // the far bank
-const END = 150; // where the ghats meet the far bank
-const GLOW = [156, HZ - 1.5]; // the afterglow, sitting on the far bank
-const DOTS = " ·•●";
+    const W = 200, H = 100;
+    const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 // how far a dot's colour may be brightened to make up for its size: small dots
 // in dark areas stay dark instead of turning into a pale speckle
@@ -120,22 +146,28 @@ for (let i = 0; i <= RL; i++) {
 }
 const rampAt = (h: number) => ((h < 0 ? 0 : h > 1 ? 1 : h) * RL + 0.5) | 0;
 
-// The waterline along the ghats, near at the left and running away to the right.
-const wlF = (x: number) => (x < END ? HZ + 0.5 + 20 * Math.pow(1 - x / END, 1.6) : HZ + 0.5);
-const scF = (x: number) => 0.45 + 1.75 * Math.pow(Math.max(0, 1 - x / END), 1.3);
-const stepTopF = (x: number) => wlF(x) - 9.5 * scF(x) * (0.3 + 0.7 * smooth(END, END - 16, x));
+export default function varanasiGhats(o: Partial<VaranasiGhatsOptions> = {}): Frame {
+  const HZ = o.waterline ?? meta.options.waterline;
+  const END = o.ghats ?? meta.options.ghats;
+  const GLOW: [number, number] = [o.glowX ?? meta.options.glowX, HZ - 1.5];
+  const DIYAS = o.diyas ?? meta.options.diyas;
+  const BOAT_SPEED = o.boatSpeed ?? meta.options.boatSpeed;
 
-// The dusk sky's heat: low overhead, rising toward the horizon, hottest at the glow.
-function skyHeat(x: number, y: number): number {
-  const v = clamp(y / HZ);
-  const dx = Math.abs(x - GLOW[0]), dy = Math.abs(GLOW[1] - y);
-  // a wide warm band along the horizon, and a small hot core on the bank
-  const wide = 0.46 * Math.exp(-dx / 55 - dy / 23);
-  const core = 0.24 * Math.exp(-Math.sqrt((dx / 13) ** 2 + (dy / 4.5) ** 2));
-  return 0.06 + 0.42 * v * v + wide + core;
-}
+  // The waterline along the ghats, near at the left and running away to the right.
+  const wlF = (x: number) => (x < END ? HZ + 0.5 + 20 * Math.pow(1 - x / END, 1.6) : HZ + 0.5);
+  const scF = (x: number) => 0.45 + 1.75 * Math.pow(Math.max(0, 1 - x / END), 1.3);
+  const stepTopF = (x: number) => wlF(x) - 9.5 * scF(x) * (0.3 + 0.7 * smooth(END, END - 16, x));
 
-export default function varanasiGhats(): Frame {
+  // The dusk sky's heat: low overhead, rising toward the horizon, hottest at the glow.
+  const skyHeat = (x: number, y: number): number => {
+    const v = clamp(y / HZ);
+    const dx = Math.abs(x - GLOW[0]), dy = Math.abs(GLOW[1] - y);
+    // a wide warm band along the horizon, and a small hot core on the bank
+    const wide = 0.46 * Math.exp(-dx / 55 - dy / 23);
+    const core = 0.24 * Math.exp(-Math.sqrt((dx / 13) ** 2 + (dy / 4.5) ** 2));
+    return 0.06 + 0.42 * v * v + wide + core;
+  };
+
   const P = meta.palette.map(hex);
   const STAR = P.length - 1;
   const N = W * H;
@@ -429,7 +461,7 @@ export default function varanasiGhats(): Frame {
 
   // --- the floating diyas ------------------------------------------------------
   const diyas: [number, number, number, number][] = [];
-  for (let i = 0; i < 34; i++) {
+    for (let i = 0; i < DIYAS; i++) {
     const q = hash(i, 61);
     const y = HZ + 5 + 34 * Math.pow(q, 1.3);
     diyas.push([hash(i, 62) * 260 - 30, y, hash(i, 63) * 50, 0.6 + 0.6 * hash(i, 64)]);
@@ -536,7 +568,7 @@ export default function varanasiGhats(): Frame {
     }
 
     const drift = t * 0.9 + 720; // starts with the long streaks over the glow
-    const bx = ((((159 - t * 0.1 + 24) % 250) + 250) % 250) - 24, by = 71 + Math.sin(t * 0.9) * 0.15;
+    const bx = ((((159 - t * BOAT_SPEED + 24) % 250) + 250) % 250) - 24, by = 71 + Math.sin(t * 0.9) * 0.15;
 
     for (let r = 0; r < H; r++) {
       const y = r + 0.5;

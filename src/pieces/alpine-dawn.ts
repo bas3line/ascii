@@ -12,6 +12,29 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of alpine dawn. Defaults are the original values. */
+export interface AlpineDawnOptions {
+  [key: string]: unknown;
+  /** The eye level, in rows. */
+  horizon: number;
+  /** The camera height above the water. */
+  cameraHeight: number;
+  /** Distance to the far shore. */
+  shoreDistance: number;
+  /** First row of open water. */
+  shore: number;
+  /** The sun's column. */
+  sunX: number;
+  /** The sun's row. */
+  sunY: number;
+  /** The sun's radius in cells. */
+  sunRadius: number;
+  /** Speed of the drifting valley mist. */
+  mistSpeed: number;
+  /** Speed of the drifting high cloud. */
+  cloudSpeed: number;
+}
+
 export const meta = {
   name: "alpine dawn",
   category: "scenes",
@@ -21,7 +44,29 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#090c18",
-  palette: [
+    options: {
+      horizon: 56.5,
+      cameraHeight: 1.5,
+      shoreDistance: 46,
+      shore: 62,
+      sunX: 151,
+      sunY: 50,
+      sunRadius: 4.5,
+      mistSpeed: 1.1,
+      cloudSpeed: 0.8,
+    },
+    params: {
+      horizon: { label: "horizon", min: 40, max: 70, step: 0.5 },
+      cameraHeight: { label: "camera height", min: 0.5, max: 4, step: 0.1 },
+      shoreDistance: { label: "shore distance", min: 20, max: 90, step: 1 },
+      shore: { label: "shoreline", min: 52, max: 75, step: 1 },
+      sunX: { label: "sun position", min: 40, max: 190, step: 1 },
+      sunY: { label: "sun height", min: 10, max: 60, step: 1 },
+      sunRadius: { label: "sun radius", min: 2, max: 12, step: 0.5 },
+      mistSpeed: { label: "mist drift", min: 0, max: 3, step: 0.05 },
+      cloudSpeed: { label: "cloud drift", min: 0, max: 3, step: 0.05 },
+    },
+    palette: [
     "#0e1430", "#151d40", "#1d2752", "#263365", "#314179", "#3e508c", "#4f62a0", "#6577b3", "#8090c4", "#9eaad3", "#bec6e2",
     "#4b3e6c", "#6a5482", "#8c6a92", "#b0829c", "#cf96a4",
     "#e8a9a8", "#f5bcaa", "#ffd0b0", "#ffe2c2", "#fff1e0", "#fdfaf6",
@@ -32,15 +77,10 @@ export const meta = {
     "#a3a7c6", "#c6c3d8", "#e0d4dc",
     "#5a4f7e", "#7b6c9c", "#9a8cb6", "#b8a8c8", "#d8bccb",
   ],
-} satisfies Meta;
+} satisfies Meta<AlpineDawnOptions>;
 
 const W = 200, H = 100;
 const K = 0.62; // tangent of half the field of view, across the width
-const HZ = 56.5; // eye level, in rows
-const CAM = 1.5; // camera height above the water
-const SHORE_Z = 46; // distance to the far shore
-const SHORE = 62; // first row of open water
-const SUN = [151, 50];
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
@@ -96,58 +136,66 @@ const smooth = (a: number, b: number, v: number) => {
 const mix = (a: number, b: number, k: number) => a + (b - a) * k;
 const hex = (s: string) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16) / 255);
 
-// Peaks as pyramids, each turned a little, placed by where their summits
-// should land on screen: [column, row, distance, spread, turn].
-const PEAKS = [
-  [66, 11, 140, 0.95, 0.3],
-  [38, 26, 115, 1.1, -0.15],
-  [116, 22, 175, 0.9, 0.2],
-  [92, 33, 150, 1.0, 0.1],
-  [96, 25, 340, 1.1, 0.4],
-  [180, 38, 200, 1.5, -0.1],
-  [8, 30, 160, 1.2, 0.25],
-].map(([sx, row, z, f, a]) => {
-  const h = CAM + ((HZ - row) / 100) * K * z - 1.5;
-  return [((sx - 100) / 100) * K * z, z, h, h * f, Math.cos(a), Math.sin(a)];
-});
+export default function alpineDawn(o: Partial<AlpineDawnOptions> = {}): Frame {
+  const { horizon = meta.options.horizon, cameraHeight = meta.options.cameraHeight, shoreDistance = meta.options.shoreDistance, shore = meta.options.shore, sunX = meta.options.sunX, sunY = meta.options.sunY, sunRadius = meta.options.sunRadius, mistSpeed = meta.options.mistSpeed, cloudSpeed = meta.options.cloudSpeed } = o;
+  const HZ = horizon;
+  const CAM = cameraHeight;
+  const SHORE_Z = shoreDistance;
+  const SHORE = shore;
+  const SUN = [sunX, sunY];
+  const SUN_R = sunRadius;
 
-function terrain(x: number, z: number): number {
-  let h = 0;
-  for (const [px, pz, ph, pr, c, s] of PEAKS) {
-    const dx = x - px, dz = z - pz;
-    const rx = dx * c - dz * s, rz = dx * s + dz * c;
-    const v = ph * (1 - (Math.abs(rx) + Math.abs(rz)) / pr);
-    if (v > h) h = v;
-  }
-  const hills = (1 + 3 * fbm(x * 0.04, z * 0.04, 3, 0)) * smooth(SHORE_Z, SHORE_Z + 15, z);
-  if (hills > h) h = hills;
-  // crags, deeper on the high ground
-  h += ((ridged(x * 0.06, z * 0.06, 3) - 0.45) * 6 + (ridged(x * 0.2, z * 0.2, 2) - 0.45) * 1.6) * smooth(4, 22, h);
-  return h;
-}
+  // Peaks as pyramids, each turned a little, placed by where their summits
+  // should land on screen: [column, row, distance, spread, turn].
+  const PEAKS = [
+    [66, 11, 140, 0.95, 0.3],
+    [38, 26, 115, 1.1, -0.15],
+    [116, 22, 175, 0.9, 0.2],
+    [92, 33, 150, 1.0, 0.1],
+    [96, 25, 340, 1.1, 0.4],
+    [180, 38, 200, 1.5, -0.1],
+    [8, 30, 160, 1.2, 0.25],
+  ].map(([sx, row, z, f, a]) => {
+    const h = CAM + ((HZ - row) / 100) * K * z - 1.5;
+    return [((sx - 100) / 100) * K * z, z, h, h * f, Math.cos(a), Math.sin(a)];
+  });
 
-// Distance along a ray from height `oy` with slope `v` and spread `u` to the
-// terrain beyond the shore, or 0 when it reaches the sky.
-function march(u: number, v: number, oy: number): number {
-  let z = SHORE_Z, prev = z;
-  for (let i = 0; i < 260 && z < 520; i++) {
-    const gap = oy + v * z - terrain(u * z, z);
-    if (gap < 0) {
-      let a = prev, b = z;
-      for (let j = 0; j < 7; j++) {
-        const m = (a + b) / 2;
-        if (oy + v * m - terrain(u * m, m) < 0) b = m;
-        else a = m;
-      }
-      return b;
+  function terrain(x: number, z: number): number {
+    let h = 0;
+    for (const [px, pz, ph, pr, c, s] of PEAKS) {
+      const dx = x - px, dz = z - pz;
+      const rx = dx * c - dz * s, rz = dx * s + dz * c;
+      const v = ph * (1 - (Math.abs(rx) + Math.abs(rz)) / pr);
+      if (v > h) h = v;
     }
-    prev = z;
-    z += Math.max(0.35, gap * 0.45) + z * 0.002;
+    const hills = (1 + 3 * fbm(x * 0.04, z * 0.04, 3, 0)) * smooth(SHORE_Z, SHORE_Z + 15, z);
+    if (hills > h) h = hills;
+    // crags, deeper on the high ground
+    h += ((ridged(x * 0.06, z * 0.06, 3) - 0.45) * 6 + (ridged(x * 0.2, z * 0.2, 2) - 0.45) * 1.6) * smooth(4, 22, h);
+    return h;
   }
-  return 0;
-}
 
-export default function alpineDawn(): Frame {
+  // Distance along a ray from height `oy` with slope `v` and spread `u` to the
+  // terrain beyond the shore, or 0 when it reaches the sky.
+  function march(u: number, v: number, oy: number): number {
+    let z = SHORE_Z, prev = z;
+    for (let i = 0; i < 260 && z < 520; i++) {
+      const gap = oy + v * z - terrain(u * z, z);
+      if (gap < 0) {
+        let a = prev, b = z;
+        for (let j = 0; j < 7; j++) {
+          const m = (a + b) / 2;
+          if (oy + v * m - terrain(u * m, m) < 0) b = m;
+          else a = m;
+        }
+        return b;
+      }
+      prev = z;
+      z += Math.max(0.35, gap * 0.45) + z * 0.002;
+    }
+    return 0;
+  }
+
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -343,7 +391,7 @@ export default function alpineDawn(): Frame {
   return (t, { color } = {}) => {
     const warm = 0.75 - 0.5 * Math.exp(-t / 60); // rose first light warming toward gold
     const line = 6 + 4 * Math.exp(-t / 70); // the sunlit line creeps down the slopes
-    const drift = t * 1.1;
+    const drift = t * mistSpeed;
     const pulse = 1 + 0.06 * Math.sin((t / 8) * Math.PI * 2); // the sun's glow breathes
     for (let x = 0; x < W; x++) wisp[x] = noise((x + drift * 0.6) * 0.06, 3.7, 0);
 
@@ -408,7 +456,7 @@ export default function alpineDawn(): Frame {
           }
           // high cloud, rose-gold toward the sun and mauve away from it
           if (r < CR) {
-            const sx = x + t * 0.8, ix = Math.floor(sx), fx = sx - ix;
+            const sx = x + t * cloudSpeed, ix = Math.floor(sx), fx = sx - ix;
             const c0 = cloud[r * CW + (ix % CW)], c1 = cloud[r * CW + ((ix + 1) % CW)];
             const c = (c0 + (c1 - c0) * fx) * (0.35 + 0.65 * smooth(40, 150, x));
             if (c > 0.01) {
@@ -423,8 +471,8 @@ export default function alpineDawn(): Frame {
           // the sun, just clearing the ridge
           const dx = x + 0.5 - SUN[0], dy = y - SUN[1];
           const ds = Math.sqrt(dx * dx + dy * dy);
-          if (ds < 4.5) {
-            const a = smooth(4.5, 3.3, ds);
+          if (ds < SUN_R) {
+                      const a = smooth(SUN_R, 3.3, ds);
             cr = mix(cr, 1, a);
             cg = mix(cg, 0.96, a);
             cb = mix(cb, 0.86, a);

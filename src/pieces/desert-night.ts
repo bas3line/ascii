@@ -13,6 +13,27 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of desert night. Defaults are the original values. */
+export interface DesertNightOptions {
+  [key: string]: unknown;
+  /** The horizon row, in cells. */
+  horizon: number;
+  /** How wide the view is: projection scale. */
+  scale: number;
+  /** Camera height above the dunes. */
+  cameraHeight: number;
+  /** No dune is taller than this. */
+  duneHeight: number;
+  /** The far town's column. */
+  townX: number;
+  /** The far town's rows below the horizon. */
+  townDepth: number;
+  /** The acacia's column. */
+  acacia: number;
+  /** Diameter of the milky way's arch. */
+  arcScale: number;
+}
+
 export const meta = {
   name: "desert night",
   category: "scenes",
@@ -22,6 +43,26 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#04060c",
+  options: {
+    horizon: 64,
+    scale: 0.62,
+    cameraHeight: 6,
+    duneHeight: 16,
+    townX: 30,
+    townDepth: 66,
+    acacia: 150,
+    arcScale: 1,
+  },
+  params: {
+    horizon: { label: "horizon", min: 50, max: 80, step: 1 },
+    scale: { label: "view scale", min: 0.4, max: 0.9, step: 0.01 },
+    cameraHeight: { label: "camera height", min: 3, max: 12, step: 0.5 },
+    duneHeight: { label: "dune height", min: 8, max: 26, step: 1 },
+    townX: { label: "town position", min: 0, max: 200, step: 1 },
+    townDepth: { label: "town depth", min: 55, max: 80, step: 1 },
+    acacia: { label: "acacia position", min: 80, max: 190, step: 1 },
+    arcScale: { label: "milky way width", min: 0.5, max: 1.6, step: 0.05 },
+  },
   palette: [
     "#0a1024", "#101830", "#16213f", "#1e2b50", "#283864", "#34477a", "#45598f", "#5a6fa6", "#7488bd",
     "#93a5d2", "#b6c3e4", "#d8e0f2", "#f4f6fb",
@@ -31,21 +72,12 @@ export const meta = {
     "#2a2448", "#3d3466", "#57498a", "#7a68a8",
     "#ffd8a8", "#cfe0ff", "#a9c4ff",
     "#ff9a52", "#e07a3e",
-    "#0d0f1a", "#151827",
-  ],
-} satisfies Meta;
+        "#0d0f1a", "#151827",
+      ],
+    } satisfies Meta<DesertNightOptions>;
 
-const W = 200, H = 100;
-const K = 0.62;
-const HZ = 64; // eye level, in rows
-const CAM = 6;
-const HMAX = 16; // no dune is taller
-const TOWN = [30, 66]; // the far glow, just under the horizon
-const CORE = [152, 38]; // the galaxy's bright centre
-const ARC = [50, 209.8, 199.8]; // the milky way's arch: centre and radius
-const ARC_S = [-1.035, 0.8]; // its angle at the core, and the sweep to the west edge
-const ACACIA = 150;
-const DOTS = " ·•●";
+    const W = 200, H = 100;
+    const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 
@@ -90,50 +122,56 @@ function phase(x: number, z: number): number {
   return q - Math.floor(q);
 }
 
-// The tall dune the acacia stands on: a sharp crest that snakes toward us from
-// its summit, a gentle face on the town's side and a steep one on the other.
-const crestX = (z: number) => {
-  const k = clamp((z - 22) / 52);
-  return -4 + 26 * k * k * (3 - 2 * k) + 5 * Math.sin((z - 22) * 0.09);
-};
-function ridge(x: number, z: number): number {
-  if (z < 8) return 0;
-  const hc = z <= 74 ? 0.5 + 13 * Math.pow(clamp((z - 12) / 62), 1.25) : 13.5 * (1 - (z - 74) / 9);
-  const dx = x - crestX(z);
-  return hc - (dx < 0 ? -dx * 0.36 : dx * 0.8);
-}
-
-function dunes(x: number, z: number): number {
-  const u = phase(x, z);
-  const prof = u < 0.72 ? Math.pow(u / 0.72, 1.5) : Math.pow((1 - u) / 0.28, 0.75);
-  const rg = ridge(x, z);
-  // the field lies low around the big dune so its faces stay clean
-  const amp = (1 + 4.5 * fbm(x * 0.008 + 5, z * 0.008, 2)) * (1 - 0.8 * smooth(-3, 3, rg));
-  return Math.max(prof * amp, rg) + 0.3 * fbm(x * 0.05, z * 0.05, 2);
-}
-
-function march(u: number, v: number): number {
-  let z = 3, prev = z;
-  for (let i = 0; i < 300 && z < 600; i++) {
-    const y = CAM + v * z;
-    if (v > 0 && y > HMAX) return 0;
-    const gap = y - dunes(u * z, z);
-    if (gap < 0) {
-      let a = prev, b = z;
-      for (let j = 0; j < 7; j++) {
-        const m = (a + b) / 2;
-        if (CAM + v * m - dunes(u * m, m) < 0) b = m;
-        else a = m;
+export default function desertNight(o: Partial<DesertNightOptions> = {}): Frame {
+  const { horizon = meta.options.horizon, scale = meta.options.scale, cameraHeight = meta.options.cameraHeight, duneHeight = meta.options.duneHeight } = o;
+  const TOWN = [o.townX ?? meta.options.townX, o.townDepth ?? meta.options.townDepth];
+  const ACACIA = o.acacia ?? meta.options.acacia;
+  const arcScale = o.arcScale ?? meta.options.arcScale;
+  const HZ = horizon;
+  const K = scale;
+  const CAM = cameraHeight;
+  const HMAX = duneHeight;
+  const CORE = [152, 38];
+  const ARC = [50, 209.8, 199.8 * arcScale];
+  const ARC_S = [-1.035, 0.8];
+  const crestX = (z: number) => {
+    const k = clamp((z - 22) / 52);
+    return -4 + 26 * k * k * (3 - 2 * k) + 5 * Math.sin((z - 22) * 0.09);
+  };
+  const ridge = (x: number, z: number): number => {
+    if (z < 8) return 0;
+    const hc = z <= 74 ? 0.5 + 13 * Math.pow(clamp((z - 12) / 62), 1.25) : 13.5 * (1 - (z - 74) / 9);
+    const dx = x - crestX(z);
+    return hc - (dx < 0 ? -dx * 0.36 : dx * 0.8);
+  };
+  const dunes = (x: number, z: number): number => {
+    const u = phase(x, z);
+    const prof = u < 0.72 ? Math.pow(u / 0.72, 1.5) : Math.pow((1 - u) / 0.28, 0.75);
+    const rg = ridge(x, z);
+    // the field lies low around the big dune so its faces stay clean
+    const amp = (1 + 4.5 * fbm(x * 0.008 + 5, z * 0.008, 2)) * (1 - 0.8 * smooth(-3, 3, rg));
+    return Math.max(prof * amp, rg) + 0.3 * fbm(x * 0.05, z * 0.05, 2);
+  };
+  const march = (u: number, v: number): number => {
+    let z = 3, prev = z;
+    for (let i = 0; i < 300 && z < 600; i++) {
+      const y = CAM + v * z;
+      if (v > 0 && y > HMAX) return 0;
+      const gap = y - dunes(u * z, z);
+      if (gap < 0) {
+        let a = prev, b = z;
+        for (let j = 0; j < 7; j++) {
+          const m = (a + b) / 2;
+          if (CAM + v * m - dunes(u * m, m) < 0) b = m;
+          else a = m;
+        }
+        return b;
       }
-      return b;
+      prev = z;
+      z += Math.max(0.25, gap * 0.5) + z * 0.004;
     }
-    prev = z;
-    z += Math.max(0.25, gap * 0.5) + z * 0.004;
-  }
-  return 0;
-}
-
-export default function desertNight(): Frame {
+    return 0;
+  };
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);

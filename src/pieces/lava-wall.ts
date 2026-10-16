@@ -10,6 +10,21 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of lava wall. Defaults are the original values. */
+export interface LavaWallOptions {
+  [key: string]: unknown;
+  /** The sign's width in cells. */
+  signWidth: number;
+  /** How large the lamps and their spacing are. */
+  lampSize: number;
+  /** How strong the lamps' and sign's glow is. */
+  glowStrength: number;
+  /** How large the wax blobs are. */
+  blobSize: number;
+  /** How fast the wax rises and sinks. */
+  waxSpeed: number;
+}
+
 export const meta = {
   name: "lava wall",
   category: "scenes",
@@ -20,7 +35,21 @@ export const meta = {
   fps: 15,
   loop: 30,
   ground: "#08070a",
-  palette: [
+    options: {
+      signWidth: 62,
+      lampSize: 1,
+      glowStrength: 1,
+      blobSize: 1,
+      waxSpeed: 1,
+    },
+    params: {
+      signWidth: { label: "sign width", min: 40, max: 80, step: 1 },
+      lampSize: { label: "lamp size", min: 0.6, max: 1.6, step: 0.05 },
+      glowStrength: { label: "glow", min: 0, max: 2.5, step: 0.05 },
+      blobSize: { label: "blob size", min: 0.3, max: 2, step: 0.05 },
+      waxSpeed: { label: "wax speed", min: 0, max: 3, step: 0.05 },
+    },
+    palette: [
     "#16121a", "#221c22", "#33282a", "#4a3a32", "#6e5442", "#9a7658",
     "#404041", "#707074", "#a9a9ae", "#e8e4de",
     "#5c1616", "#9e211d", "#dc362b", "#ff6a52",
@@ -30,7 +59,7 @@ export const meta = {
     "#2f1842", "#6b2f92", "#b45ddc", "#e2508c",
     "#1d3768", "#3f80d2",
   ],
-} satisfies Meta;
+  } satisfies Meta<LavaWallOptions>;
 
 const W = 200, H = 100;
 const LOOP = 30;
@@ -91,7 +120,7 @@ const SHELVES = [
 ];
 const LAMP_H = 16; // a lamp's height in lamp units: base 0..4, glass 4..14, cap above
 const GLASS_LO = 4, GLASS_HI = 14;
-const SIGN_W = 62, SIGN_X = 100 - SIGN_W / 2, SIGN_Y = 1;
+const SIGN_Y = 1;
 
 function hash(x: number, y: number): number {
   let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
@@ -137,7 +166,9 @@ function blur(a: Float32Array, r: number): void {
     }
 }
 
-export default function lavaWall(): Frame {
+export default function lavaWall(o: Partial<LavaWallOptions> = {}): Frame {
+  const { signWidth = meta.options.signWidth, lampSize = meta.options.lampSize, glowStrength = meta.options.glowStrength, blobSize = meta.options.blobSize, waxSpeed = meta.options.waxSpeed } = o;
+  const SIGN_W = signWidth, SIGN_X = 100 - SIGN_W / 2;
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -216,9 +247,10 @@ export default function lavaWall(): Frame {
   const lampOf = new Int16Array(N).fill(-1);
   const lu = new Float32Array(N), lv = new Float32Array(N);
   const shelfOf = new Int8Array(N).fill(-1);
-  SHELVES.forEach(({ s, top }, j) => {
-    const bottom = top + LAMP_H * s;
-    const sp = 10.5 * s;
+  SHELVES.forEach(({ s: s0, top }, j) => {
+      const s = s0 * lampSize;
+      const bottom = top + LAMP_H * s;
+      const sp = 10.5 * s;
     for (let i = -12; i <= 12; i++) {
       const cx = 100 + (i + (j % 2) * 0.5 - 0.25) * sp;
       if (cx < -5 || cx > W + 5) continue;
@@ -348,13 +380,13 @@ export default function lavaWall(): Frame {
       for (let b = 0; b < NB; b++) {
         const B = L.blobs[b], i = id * NB + b;
         if (B[5] === 0) {
-          (blobX[i] = 0), (blobY[i] = B[1]), (blobR[i] = B[2] * B[2]), (blobS[i] = 1 / B[3]);
+                  (blobX[i] = 0), (blobY[i] = B[1]), (blobR[i] = (B[2] * blobSize) * (B[2] * blobSize)), (blobS[i] = 1 / B[3]);
           continue;
         }
-        const a = ((tt / LOOP) * B[0] + B[1]) * Math.PI * 2;
+                const a = ((tt / LOOP) * B[0] * waxSpeed + B[1]) * Math.PI * 2;
         const by = 5.3 + (0.5 - 0.5 * Math.cos(a)) * 7.2;
         const hw = halfWidth(by);
-        const br = B[2] * (0.8 + 0.2 * Math.sin(a * 0.5 + B[4]) ** 2) * Math.min(1, hw / 2.2);
+                const br = B[2] * blobSize * (0.8 + 0.2 * Math.sin(a * 0.5 + B[4]) ** 2) * Math.min(1, hw / 2.2);
         blobX[i] = 0.45 * hw * Math.sin(a * 2 + B[4] * 6.28);
         blobY[i] = by;
         blobR[i] = br * br;
@@ -370,7 +402,7 @@ export default function lavaWall(): Frame {
         let cr = 0, cg = 0, cb = 0, floor = 0;
 
         // the room: the dark wall, the lamps' light on it, and the sign's
-        const sr = spill[k * 3], sg = spill[k * 3 + 1], sb = spill[k * 3 + 2];
+        const sr = spill[k * 3] * glowStrength, sg = spill[k * 3 + 1] * glowStrength, sb = spill[k * 3 + 2] * glowStrength;
         const hn = haloNear[k], hf = haloFar[k];
         // a ring of glow round the sign, kept out of the seams inside it
         const halo = hf * 0.3 * (1 - 0.85 * smooth(0.15, 0.6, hn)) * hum;

@@ -11,6 +11,23 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of deep reef. Defaults are the original values. */
+export interface DeepReefOptions {
+  [key: string]: unknown;
+  /** The surface band's row. */
+  surface: number;
+  /** Where the sea floor would meet the haze. */
+  horizon: number;
+  /** The column the sun shows through the surface. */
+  sunX: number;
+  /** The sun's row, above the frame. */
+  sunY: number;
+  /** The sea fan's reach in cells. */
+  fanSize: number;
+  /** How many fish make up the school. */
+  fish: number;
+}
+
 export const meta = {
   name: "deep reef",
   category: "scenes",
@@ -20,9 +37,25 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#03101a",
-  // A dot is never drawn darker than about half brightness (dot size carries
-  // the darkness), so the palette starts at mid tones.
-  palette: [
+    options: {
+      surface: 15,
+      horizon: 61,
+      sunX: 136,
+      sunY: -12,
+      fanSize: 27,
+      fish: 150,
+    },
+    params: {
+      surface: { label: "surface band", min: 5, max: 30, step: 1 },
+      horizon: { label: "haze horizon", min: 45, max: 75, step: 1 },
+      sunX: { label: "sun position", min: 40, max: 180, step: 1 },
+      sunY: { label: "sun height", min: -30, max: 10, step: 1 },
+      fanSize: { label: "sea fan size", min: 10, max: 45, step: 1 },
+      fish: { label: "school size", min: 0, max: 400, step: 1 },
+    },
+    // A dot is never drawn darker than about half brightness (dot size carries
+    // the darkness), so the palette starts at mid tones.
+    palette: [
     "#114a66", "#165c78", "#1d708a", "#27869b", "#3a9fae", "#58b9c0", "#80d2d2", "#b0e8e2", "#e2fbf5",
     "#5e6b62", "#87927f", "#aab39a", "#cfd2b4",
     "#38461a", "#5a6420", "#857f2a", "#b0a03c", "#d6c25a", "#efe08e",
@@ -30,12 +63,9 @@ export const meta = {
     "#6a3a78", "#9a5aa8", "#c88ad0",
     "#6f8a98", "#9fb8c6", "#cfe3ea",
   ],
-} satisfies Meta;
+} satisfies Meta<DeepReefOptions>;
 
 const W = 200, H = 100;
-const SURF = 15; // the surface band
-const HZ = 61; // where the sea floor would meet the haze
-const SUNX = 136; // where the sun shows through the surface
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
@@ -86,7 +116,11 @@ function prng(seed: number): () => number {
   };
 }
 
-export default function deepReef(): Frame {
+export default function deepReef(o: Partial<DeepReefOptions> = {}): Frame {
+  const { surface = meta.options.surface, horizon = meta.options.horizon, sunX = meta.options.sunX, sunY = meta.options.sunY, fanSize = meta.options.fanSize, fish: fishCount = meta.options.fish } = o;
+  const SURF = surface; // the surface band
+  const HZ = horizon; // where the sea floor would meet the haze
+  const SUNX = sunX; // where the sun shows through the surface
   const P = meta.palette.map(hex);
   const N = W * H;
 
@@ -140,7 +174,7 @@ export default function deepReef(): Frame {
   const wr = new Float32Array(N), wg = new Float32Array(N), wb = new Float32Array(N);
   // which shaft each cell sits in: shafts fan out from the sun, above the frame
   const rayAt = new Uint16Array(N);
-  const SUNY = -12, RAYS = 320;
+  const SUNY = sunY, RAYS = 320;
   for (let r = 0; r < H; r++) {
     for (let x = 0; x < W; x++) {
       const k = r * W + x, v = (r + 0.5) / H;
@@ -182,7 +216,7 @@ export default function deepReef(): Frame {
   const rock = [0.016, 0.03, 0.042];
   // [x, crest row, half width, fog, coral kind]
   const BOMMIES = [[114, 69, 9, 0.18, 0], [94, 63.6, 4, 0.5, 2], [139, 64.4, 4, 0.42, 1]];
-  const FAN_C = [167, rightTop(167) + 1.5], FAN_R = 27;
+  const FAN_C = [167, rightTop(167) + 1.5], FAN_R = fanSize;
   for (let r = 0; r < H; r++) {
     for (let x = 0; x < W; x++) {
       const k = r * W + x, y = r + 0.5;
@@ -346,7 +380,7 @@ export default function deepReef(): Frame {
     return (s - 2) * 1.7;
   };
   const fish: { a: number; b: number; ph: number; sp: number }[] = [];
-  for (let i = 0; i < 150; i++) fish.push({ a: gauss() * 10, b: gauss() * 3.8, ph: rnd() * 6.28, sp: 0.8 + rnd() * 0.6 });
+  for (let i = 0; i < fishCount; i++) fish.push({ a: gauss() * 10, b: gauss() * 3.8, ph: rnd() * 6.28, sp: 0.8 + rnd() * 0.6 });
   // kelp: x, base row, length, width, phase, and how much water hides it
   const kelp: { bx: number; base: number; len: number; sz: number; ph: number; haze: number }[] = [];
   for (const [bx, base, len, sz, ph, haze] of [

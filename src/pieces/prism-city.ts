@@ -15,6 +15,25 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of prism city. Defaults are the original values. */
+export interface PrismCityOptions {
+  [key: string]: unknown;
+  /** The row where the skyline stands and the water begins above. */
+  bank: number;
+  /** The first row of water. */
+  water: number;
+  /** The base of the low cloud. */
+  cloudHeight: number;
+  /** The tower's axis. */
+  towerX: number;
+  /** The tower shaft's half width. */
+  shaftWidth: number;
+  /** The spire's half width at its base. */
+  spireWidth: number;
+  /** The row where the shaft ends and the spire begins. */
+  shoulder: number;
+}
+
 export const meta = {
   name: "prism city",
   category: "scenes",
@@ -24,7 +43,25 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#06080f",
-  palette: [
+    options: {
+      bank: 64,
+      water: 70,
+      cloudHeight: 42,
+      towerX: 100.5,
+      shaftWidth: 7,
+      spireWidth: 10,
+      shoulder: 37,
+    },
+    params: {
+      bank: { label: "bank row", min: 55, max: 70, step: 1 },
+      water: { label: "water row", min: 60, max: 80, step: 1 },
+      cloudHeight: { label: "cloud height", min: 28, max: 52, step: 1 },
+      towerX: { label: "tower x", min: 60, max: 140, step: 0.5 },
+      shaftWidth: { label: "shaft width", min: 3, max: 14, step: 0.5 },
+      spireWidth: { label: "spire width", min: 4, max: 20, step: 0.5 },
+      shoulder: { label: "shoulder", min: 25, max: 50, step: 1 },
+    },
+    palette: [
     "#111a33", "#16213f", "#1c2a50", "#233463", "#2b4077", "#364e8b", "#445f9f", "#5874b2", "#7089c0", "#8a9cc4",
     "#a3b1cf", "#c8d2e4", "#eef1f6", "#ffffff",
     "#ffe9ae", "#ffd27c",
@@ -33,19 +70,11 @@ export const meta = {
     "#0e1220", "#1a2030", "#283044",
     "#9c2a26", "#ff4b3e",
   ],
-} satisfies Meta;
+  } satisfies Meta<PrismCityOptions>;
 
 const W = 200, H = 100;
 const LOOP = 12; // seconds, after which every motion is back where it began
 const TAU = Math.PI * 2;
-const BANK = 64; // the top of the viaduct, where the buildings stand
-const WL = 70; // the first row of water
-const TX = 100.5; // the tower's axis
-const SHAFT_HALF = 7; // the shaft's half width
-const HALF = 10; // the spire's, at its base
-const SHOULDER = 37; // where the shaft ends and the spire begins
-const APEX = SHOULDER - HALF * Math.sqrt(3); // an equilateral spire
-const CLOUD_BASE = 42;
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
@@ -87,7 +116,7 @@ const hex = (s: string) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16) 
 
 // The cloud's outline as a signed distance: a big lobe on the left, a smaller
 // one on the right, small feet at either end, all cut off on one flat base.
-function cloudDist(x: number, y: number): number {
+function cloudDist(x: number, y: number, CLOUD_BASE: number): number {
   const circ = (cx: number, cy: number, r: number) => Math.hypot(x - cx, y - cy) - r;
   const bx = Math.max(62 - x, x - 128, 0), by = Math.max(32 - y, 0);
   let d = Math.min(circ(84, 25, 17), circ(114, 30, 11), circ(64, 35, 7), circ(126, 36, 6), Math.hypot(bx, by) - 0.01);
@@ -102,7 +131,10 @@ interface Block {
   kind: number; // 0 grid of windows, 1 lit floors in bands, 2 sparse
 }
 
-export default function prismCity(): Frame {
+export default function prismCity(o: Partial<PrismCityOptions> = {}): Frame {
+  const { bank = meta.options.bank, water = meta.options.water, cloudHeight = meta.options.cloudHeight, towerX = meta.options.towerX, shaftWidth = meta.options.shaftWidth, spireWidth = meta.options.spireWidth, shoulder = meta.options.shoulder } = o;
+  const BANK = bank, WL = water, CLOUD_BASE = cloudHeight, TX = towerX, SHAFT_HALF = shaftWidth, HALF = spireWidth, SHOULDER = shoulder;
+  const APEX = SHOULDER - HALF * Math.sqrt(3); // an equilateral spire
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -172,7 +204,7 @@ export default function prismCity(): Frame {
 
       // the cloud, lit from below: hot orange along the base, cooler and
       // darker up into the lobes, brightest over the middle of the city
-      const d = cloudDist(xc, y);
+      const d = cloudDist(xc, y, CLOUD_BASE);
       if (d < 1.2) {
         const c = smooth(1.2, -1.2, d);
         const lb = Math.pow(smooth(6, CLOUD_BASE, y), 1.6);

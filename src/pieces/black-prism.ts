@@ -17,6 +17,23 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of black prism. Defaults are the original values. */
+export interface BlackPrismOptions {
+  [key: string]: unknown;
+  /** The apex's row. */
+  top: number;
+  /** Scene cells to one logo column. */
+  scale: number;
+  /** Where the beam meets the left face, as a fraction from the apex. */
+  enter: number;
+  /** Where the beam leaves the right face, as a fraction from the apex. */
+  leave: number;
+  /** How many dust motes drift through the light. */
+  dust: number;
+  /** How strongly the beam pulses. */
+  pulse: number;
+}
+
 export const meta = {
   name: "black prism",
   category: "scenes",
@@ -26,14 +43,30 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#000000",
-  palette: [
+    options: {
+      top: 12,
+      scale: 1.36,
+      enter: 0.46,
+      leave: 0.5,
+      dust: 700,
+      pulse: 0.16,
+    },
+    params: {
+      top: { label: "apex row", min: 2, max: 30, step: 1 },
+      scale: { label: "prism scale", min: 0.8, max: 2.2, step: 0.02 },
+      enter: { label: "beam entry", min: 0.1, max: 0.8, step: 0.01 },
+      leave: { label: "beam exit", min: 0.1, max: 0.8, step: 0.01 },
+      dust: { label: "dust motes", min: 0, max: 2000, step: 50 },
+      pulse: { label: "beam pulse", min: 0, max: 0.4, step: 0.01 },
+    },
+    palette: [
     "#161616", "#242424", "#363636", "#4a4a4a", "#636363", "#7e7e7e", "#9c9c9c", "#bcbcbc",
     "#dcdcdc", "#ffffff",
     "#ff2a3c", "#9a1c28", "#ff7417", "#a04a10", "#ffdf2e", "#a08c1c",
     "#38f56a", "#1f9a42", "#24dcff", "#16879e", "#3a64ff", "#233f9e",
     "#9a4cff", "#5f2f9e", "#fff4c8", "#d4f6ff", "#ffd2d6",
   ],
-} satisfies Meta;
+  } satisfies Meta<BlackPrismOptions>;
 
 // The vercel logo's ink, as src/pieces/vercel.ts draws it: non-space is inside.
 const INK = String.raw`
@@ -66,17 +99,12 @@ const INK = String.raw`
 `;
 
 const W = 200, H = 100;
-const SCALE = 1.36; // scene cells to one logo column; a logo row is two of those
-const TOP = 12; // the apex's row
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 
-// Where the beam meets each face, as a fraction from the apex down the face,
-// and the spread of the spectrum it leaves as, in radians below the horizontal.
-const ENTER = 0.46, LEAVE = 0.5;
+// The spread of the spectrum the beam leaves as, in radians below the horizontal.
 const RED = 0.05, VIOLET = 0.4;
-const DUST = 700;
 
 function hash(x: number, y: number): number {
   let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
@@ -120,7 +148,9 @@ function spectrum(u: number): [number, number, number] {
   return [mix(a[0], b[0], k), mix(a[1], b[1], k), mix(a[2], b[2], k)];
 }
 
-export default function blackPrism(): Frame {
+export default function blackPrism(o: Partial<BlackPrismOptions> = {}): Frame {
+  const { top = meta.options.top, scale = meta.options.scale, enter = meta.options.enter, leave = meta.options.leave, dust = meta.options.dust, pulse = meta.options.pulse } = o;
+  const TOP = top, SCALE = scale, ENTER = enter, LEAVE = leave, DUST = dust, PULSE = pulse;
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -231,7 +261,7 @@ export default function blackPrism(): Frame {
   const R = new Float32Array(N), G = new Float32Array(N), B = new Float32Array(N);
 
   return (t, { color } = {}) => {
-    const pulse = 0.84 + 0.16 * Math.sin(t * 1.6);
+    const pulse = 0.84 + PULSE * Math.sin(t * 1.6);
     spark.fill(0);
     for (const [mx, my, vx, vy, ph, tw] of motes) {
       const x = (((mx + vx * t + 2 * Math.sin(t * 0.4 + ph)) % W) + W) % W;

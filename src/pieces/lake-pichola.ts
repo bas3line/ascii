@@ -12,6 +12,23 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of lake pichola. Defaults are the original values. */
+export interface LakePicholaOptions {
+  [key: string]: unknown;
+  /** The far shore's row: the lake begins here. */
+  horizon: number;
+  /** The sun's column. */
+  sunX: number;
+  /** The sun's row. */
+  sunY: number;
+  /** The Lake Palace's waterline. */
+  lakePalaceY: number;
+  /** Where the City Palace stands on its terrace. */
+  plinth: number;
+  /** Speed of the drifting clouds. */
+  cloudDrift: number;
+}
+
 export const meta = {
   name: "lake pichola",
   category: "scenes",
@@ -28,14 +45,26 @@ export const meta = {
     "#f6e6d0", "#e8cdb0", "#d4a888", "#b88a78", "#8e6a6a", "#6a4a58", "#c88a9a",
     "#ffd070", "#ff9a3c", "#b8323a", "#140c1c",
   ],
-} satisfies Meta;
+      options: {
+        horizon: 62,
+        sunX: 58,
+        sunY: 48,
+        lakePalaceY: 72,
+        plinth: 54,
+        cloudDrift: 0.6,
+      },
+      params: {
+        horizon: { label: "far shore", min: 45, max: 75, step: 1 },
+        sunX: { label: "sun position", min: 20, max: 140, step: 1 },
+        sunY: { label: "sun height", min: 25, max: 60, step: 1 },
+        lakePalaceY: { label: "lake palace", min: 60, max: 85, step: 1 },
+        plinth: { label: "city palace", min: 40, max: 62, step: 1 },
+        cloudDrift: { label: "cloud drift", min: 0, max: 2, step: 0.05 },
+      },
+    } satisfies Meta<LakePicholaOptions>;
 
-const W = 200, H = 100;
-const HORIZON = 62; // the far shore: the lake begins on this row
-const SUN = [58, 48];
-const LP_Y = 72; // the Lake Palace's waterline
-const PLINTH = 54; // where the City Palace stands on its terrace
-const DOTS = " ·•●";
+    const W = 200, H = 100;
+    const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 
@@ -163,7 +192,12 @@ const lampGlow = (h: number, t: number) => {
   return on * (0.86 + 0.14 * Math.sin(t * (3 + h * 5) + h * 60));
 };
 
-export default function lakePichola(): Frame {
+export default function lakePichola(o: Partial<LakePicholaOptions> = {}): Frame {
+  const HORIZON = o.horizon ?? meta.options.horizon;
+  const SUN = [o.sunX ?? meta.options.sunX, o.sunY ?? meta.options.sunY];
+  const LP_Y = o.lakePalaceY ?? meta.options.lakePalaceY;
+  const PLINTH = o.plinth ?? meta.options.plinth;
+  const CLOUD_DRIFT = o.cloudDrift ?? meta.options.cloudDrift;
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -433,7 +467,7 @@ export default function lakePichola(): Frame {
   };
 
   return (t, { color } = {}) => {
-    const drift = t * 0.6;
+    const drift = t * CLOUD_DRIFT;
 
     // the birds: a loose flock crossing the afterglow, wings beating
     for (const k of marked) birds[k] = 0;

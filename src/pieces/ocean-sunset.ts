@@ -12,6 +12,25 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of ocean sunset. Defaults are the original values. */
+export interface OceanSunsetOptions {
+  [key: string]: unknown;
+  /** The horizon row. */
+  horizon: number;
+  /** The sun's column. */
+  sunX: number;
+  /** How far above the horizon the sun sits. */
+  sunHeight: number;
+  /** The sun's radius in cells. */
+  sunRadius: number;
+  /** Speed of the swell and chop. */
+  waveSpeed: number;
+  /** Speed of the drifting cloud bands. */
+  cloudSpeed: number;
+  /** The sloop's mast column. */
+  boat: number;
+}
+
 export const meta = {
   name: "ocean sunset",
   category: "scenes",
@@ -21,6 +40,24 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#0b0817",
+  options: {
+    horizon: 56,
+    sunX: 134,
+    sunHeight: 4.5,
+    sunRadius: 8.5,
+    waveSpeed: 1,
+    cloudSpeed: 1,
+    boat: 112,
+  },
+  params: {
+    horizon: { label: "horizon", min: 40, max: 70, step: 1 },
+    sunX: { label: "sun position", min: 40, max: 170, step: 1 },
+    sunHeight: { label: "sun height", min: 2, max: 20, step: 0.5 },
+    sunRadius: { label: "sun radius", min: 3, max: 20, step: 0.5 },
+    waveSpeed: { label: "wave speed", min: 0, max: 3, step: 0.05 },
+    cloudSpeed: { label: "cloud drift", min: 0, max: 3, step: 0.05 },
+    boat: { label: "boat position", min: 60, max: 160, step: 1 },
+  },
   palette: [
     "#140f2c", "#1e1640", "#2b1c52", "#3d2266", "#552a74",
     "#6e2c78", "#90327c", "#b23c7c", "#d24f7a", "#ea6a78",
@@ -33,13 +70,9 @@ export const meta = {
     "#1c2a5c", "#2e4078",
     "#7d3f8f", "#a24f98", "#c8649e", "#de8bb5",
   ],
-} satisfies Meta;
+} satisfies Meta<OceanSunsetOptions>;
 
 const W = 200, H = 100;
-const HZ = 56; // the horizon
-const SUN = [134, HZ - 4.5];
-const SR = 8.5; // the sun's radius
-const BOAT = 112; // the sloop's mast
 // wind chop on the swell: [dir x, dir z, wavenumber, slope, speed, offset]
 const CHOP = [
   [-0.45, 0.89, 22, 0.07, 2.1, 0.4],
@@ -110,13 +143,20 @@ function gradient(v: number, out: number[]): void {
 }
 
 // The headland: its skyline row at x, and the row where its foot meets the sea.
-const ridge = (x: number) =>
+const ridge = (x: number, HZ: number) =>
   HZ + 2.5 - 11 * Math.pow(smooth(54, 32, x), 0.7) - 2.4 * Math.exp(-(((x - 19) / 9) ** 2)) - 2 * fbm(x * 0.21, 3.3, 3, 0);
-const shore = (x: number) => HZ + 1.5 + 5 * smooth(54, 4, x);
+const shore = (x: number, HZ: number) => HZ + 1.5 + 5 * smooth(54, 4, x);
 // a sea stack off the point
-const stack = (x: number) => (x > 52 && x < 58 ? HZ - 3.5 - 1.6 * fbm(x * 0.6, 8.1, 2, 0) + 2.5 * ((x - 55) / 3) ** 4 : 1e9);
+const stack = (x: number, HZ: number) => (x > 52 && x < 58 ? HZ - 3.5 - 1.6 * fbm(x * 0.6, 8.1, 2, 0) + 2.5 * ((x - 55) / 3) ** 4 : 1e9);
 
-export default function oceanSunset(): Frame {
+export default function oceanSunset(o: Partial<OceanSunsetOptions> = {}): Frame {
+  const { horizon = meta.options.horizon, sunX = meta.options.sunX, sunHeight = meta.options.sunHeight, sunRadius = meta.options.sunRadius } = o;
+  const waveSpeed = o.waveSpeed ?? meta.options.waveSpeed;
+  const cloudSpeed = o.cloudSpeed ?? meta.options.cloudSpeed;
+  const BOAT = o.boat ?? meta.options.boat;
+  const HZ = horizon;
+  const SUN = [sunX, HZ - sunHeight];
+  const SR = sunRadius;
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -182,23 +222,23 @@ export default function oceanSunset(): Frame {
   const edge = new Float32Array(LANDH).fill(-1);
   for (let r = 0; r < LANDH; r++) {
     const y = r + 0.5;
-    for (let x = 0; x < LANDW; x++) if (y >= ridge(x + 0.5) && y < shore(x + 0.5)) edge[r] = x;
+    for (let x = 0; x < LANDW; x++) if (y >= ridge(x + 0.5, HZ) && y < shore(x + 0.5, HZ)) edge[r] = x;
   }
   for (let r = 0; r < LANDH; r++) {
     const y = r + 0.5;
     for (let x = 0; x < LANDW; x++) {
       const k = r * W + x, xc = x + 0.5;
-      const t0 = ridge(xc), st = stack(xc);
+      const t0 = ridge(xc, HZ), st = stack(xc, HZ);
       let cr!: number, cg!: number, cb!: number;
-      if ((y >= t0 && y < shore(xc)) || (y >= st && y < HZ + 1.2)) {
+            if ((y >= t0 && y < shore(xc, HZ)) || (y >= st && y < HZ + 1.2)) {
         land[k] = 1;
-        const isStack = !(y >= t0 && y < shore(xc));
+              const isStack = !(y >= t0 && y < shore(xc, HZ));
         const top = isStack ? st : t0;
         // dark violet rock in rough strata
         const s = 0.6 + 0.8 * fbm(x * 0.22, y * 0.7, 3, 0);
         cr = 0.06 * s, cg = 0.042 * s, cb = 0.15 * s;
         // the sun is low and to the right: slopes that drop toward it catch it
-        const facing = clamp(0.4 + (isStack ? 0.5 : (ridge(xc + 1.2) - ridge(xc - 1.2)) * 0.45));
+              const facing = clamp(0.4 + (isStack ? 0.5 : (ridge(xc + 1.2, HZ) - ridge(xc - 1.2, HZ)) * 0.45));
         const rim = smooth(top + 2.4, top + 0.4, y) * facing;
         // the cliff face, warm where it turns to the sun, broken by crags
         const crag = smooth(0.35, 0.75, fbm(x * 0.4 + 3, y * 0.5, 3, 0));
@@ -207,7 +247,7 @@ export default function oceanSunset(): Frame {
         cr = mix(cr, 0.95, lit), cg = mix(cg, 0.38, lit * 0.95), cb = mix(cb, 0.3, lit * 0.9);
       }
       for (const [tx, th, tw] of PINES) {
-        const tb = ridge(tx);
+        const tb = ridge(tx, HZ);
         const dy = y - (tb - th);
         // a conifer: a spire that widens in tiers of branches
         const tier = (dy + th * 0.3) / 2.4;
@@ -287,7 +327,7 @@ export default function oceanSunset(): Frame {
   const SKR = new Float32Array(HZ * W), SKG = new Float32Array(HZ * W), SKB = new Float32Array(HZ * W);
 
   return (t, { color } = {}) => {
-    const dUp = t * 0.9, dLo = t * 1.7;
+      const dUp = t * 0.9 * cloudSpeed, dLo = t * 1.7 * cloudSpeed;
     for (let r = 0; r < HZ; r++) {
       const y = r + 0.5;
       for (let x = 0; x < W; x++) {
@@ -396,12 +436,12 @@ export default function oceanSunset(): Frame {
         const dx = x + 0.5 - SUN[0];
         const X = (x + 0.5 - 100) / dz;
         // the long swell rolls toward us; shorter chop rides on it
-        const p = 13 * (Z + 0.05 * X) + 2.2 * fbm(X * 0.35 + 3, Z * 0.4, 2, 0) + t * 0.8;
+        const p = 13 * (Z + 0.05 * X) + 2.2 * fbm(X * 0.35 + 3, Z * 0.4, 2, 0) + t * 0.8 * waveSpeed;
         const wv = Math.sin(p), slope = Math.cos(p);
         let sz = 0.11 * slope * clamp(1.4 / (13 * rows)), sxl = 0.015 * slope;
         for (let i = 0; i < CHOP.length; i++) {
           const [kx, kz, kk, a, w, f] = CHOP[i];
-          const ph = kk * (kx * X + kz * Z) - w * t + f;
+          const ph = kk * (kx * X + kz * Z) - w * t * waveSpeed + f;
           const c = Math.cos(ph) * a * clamp(1.6 / (kk * rows));
           sz += c * kz, sxl += c * kx;
         }
@@ -447,7 +487,7 @@ export default function oceanSunset(): Frame {
         if (x < LANDW + 4 && dz < 26) {
           const xs = x + 0.5 + 1.3 * Math.sin(y * 1.1 + t * 1.2 + x * 0.05);
           const ix = Math.max(0, Math.min(LANDW - 1, xs | 0));
-          const ft = shore(ix + 0.5);
+          const ft = shore(ix + 0.5, HZ);
           if (y > ft) {
             const my = Math.floor(2 * ft - y);
             if (my >= 0 && my < LANDH) {

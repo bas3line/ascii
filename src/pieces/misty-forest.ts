@@ -11,6 +11,27 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of misty forest. Defaults are the original values. */
+export interface MistyForestOptions {
+  [key: string]: unknown;
+  /** The sun's column. */
+  sunX: number;
+  /** The sun's row. */
+  sunY: number;
+  /** The sun's radius in cells. */
+  sunRadius: number;
+  /** Speed of the drifting high cloud. */
+  cloudSpeed: number;
+  /** How fast the beam pattern drifts. */
+  beamDrift: number;
+  /** How fast the beams sway. */
+  beamSway: number;
+  /** The rate of the beams' brightening pulse. */
+  beamPulse: number;
+  /** How many dust motes float in the light. */
+  motes: number;
+}
+
 export const meta = {
   name: "misty forest",
   category: "scenes",
@@ -32,11 +53,29 @@ export const meta = {
     // the clear sky above the fog, deepening overhead
     "#a9c3cc", "#8eadb8", "#6f93a2", "#53798a", "#3d6172", "#2b4a5a",
   ],
-} satisfies Meta;
+options: {
+    sunX: 146,
+    sunY: 45.5,
+    sunRadius: 3.4,
+    cloudSpeed: 0.6,
+    beamDrift: 1.6,
+    beamSway: 0.35,
+    beamPulse: 0.7,
+    motes: 110,
+  },
+  params: {
+    sunX: { label: "sun position", min: 60, max: 190, step: 1 },
+    sunY: { label: "sun height", min: 20, max: 60, step: 0.5 },
+    sunRadius: { label: "sun radius", min: 1.5, max: 8, step: 0.1 },
+    cloudSpeed: { label: "cloud drift", min: 0, max: 3, step: 0.05 },
+    beamDrift: { label: "beam drift", min: 0, max: 4, step: 0.05 },
+    beamSway: { label: "beam sway", min: 0, max: 2, step: 0.05 },
+    beamPulse: { label: "beam pulse", min: 0, max: 2, step: 0.05 },
+    motes: { label: "dust motes", min: 0, max: 300, step: 1 },
+  },
+} satisfies Meta<MistyForestOptions>;
 
 const W = 200, H = 100;
-const SUN: [number, number] = [146, 45.5];
-const SUN_R = 3.4;
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
@@ -92,7 +131,10 @@ const LAYERS = [
 ];
 const NEAR = LAYERS.length - 1;
 
-export default function mistyForest(): Frame {
+export default function mistyForest(o: Partial<MistyForestOptions> = {}): Frame {
+  const { sunX = meta.options.sunX, sunY = meta.options.sunY, sunRadius = meta.options.sunRadius, cloudSpeed = meta.options.cloudSpeed, beamDrift = meta.options.beamDrift, beamSway = meta.options.beamSway, beamPulse = meta.options.beamPulse, motes: moteCount = meta.options.motes } = o;
+  const SUN = [sunX, sunY];
+  const SUN_R = sunRadius;
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -353,7 +395,7 @@ export default function mistyForest(): Frame {
 
   // dust in the air: [x, y, drift speed, bob phase, size]
   const motes: [number, number, number, number, number][] = [];
-  for (let i = 0; i < 110; i++) motes.push([hash(i, 1) * W, 50 + hash(i, 2) * 44, 0.3 + hash(i, 3) * 0.8, hash(i, 4) * 6.28, hash(i, 5)]);
+  for (let i = 0; i < moteCount; i++) motes.push([hash(i, 1) * W, 50 + hash(i, 2) * 44, 0.3 + hash(i, 3) * 0.8, hash(i, 4) * 6.28, hash(i, 5)]);
   const mote = new Float32Array(N);
   const moteCells: number[] = [];
 
@@ -370,8 +412,8 @@ export default function mistyForest(): Frame {
     }
     // the beams hold their places (the gaps in the trees do not move) and
     // only sway a hair; a second, slower pattern drifts across them
-    const shiftA = 2 * Math.sin(t * 0.35), shiftB = -t * 1.6;
-    const pulse = 0.88 + 0.12 * Math.sin(t * 0.7);
+    const shiftA = 2 * Math.sin(t * beamSway), shiftB = -t * beamDrift;
+        const pulse = 0.88 + 0.12 * Math.sin(t * beamPulse);
 
     for (let r = 0; r < H; r++) {
       for (let x = 0; x < W; x++) {
@@ -390,7 +432,7 @@ export default function mistyForest(): Frame {
 
         const ca = cloudAmt[k];
         if (ca > 0.01) {
-          const u = x + t * 0.6, ui = Math.floor(u), uf = u - ui;
+          const u = x + t * cloudSpeed, ui = Math.floor(u), uf = u - ui;
           const c0 = cloud[r * FW + (ui % FW)], c1 = cloud[r * FW + ((ui + 1) % FW)];
           const a = (c0 + (c1 - c0) * uf) * ca;
           if (a > 0.005) {

@@ -11,6 +11,23 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of amer fort. Defaults are the original values. */
+export interface AmerFortOptions {
+  [key: string]: unknown;
+  /** The lake's far shore, under the lowest rampart. */
+  water: number;
+  /** The moon's column. */
+  moonX: number;
+  /** The moon's row. */
+  moonY: number;
+  /** How much the fort's floodlight warms the air. */
+  fortGlow: number;
+  /** How wide the fort's glow spreads. */
+  glowSpread: number;
+  /** How fast the bats and night birds cross. */
+  flockSpeed: number;
+}
+
 export const meta = {
   name: "amer fort",
   category: "scenes",
@@ -20,7 +37,23 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#060915",
-  palette: [
+    options: {
+      water: 62,
+      moonX: 172,
+      moonY: 13,
+      fortGlow: 1,
+      glowSpread: 6,
+      flockSpeed: 1,
+    },
+    params: {
+      water: { label: "water line", min: 50, max: 72, step: 1 },
+      moonX: { label: "moon x", min: 100, max: 195, step: 1 },
+      moonY: { label: "moon y", min: 5, max: 30, step: 1 },
+      fortGlow: { label: "fort glow", min: 0, max: 3, step: 0.05 },
+      glowSpread: { label: "glow spread", min: 2, max: 12, step: 1 },
+      flockSpeed: { label: "bird speed", min: 0, max: 3, step: 0.05 },
+    },
+    palette: [
     "#0a1230", "#101a40", "#16234f", "#1e2e62", "#283c78", "#364d8e", "#4a5f9f", "#6a7fb8",
     "#c9d4ee", "#eef1f8", "#fff6dc",
     "#3a220f", "#5a3415", "#7d4a1c", "#a06426", "#c27f32", "#dc9c44", "#ecb85c", "#f6d07e",
@@ -28,12 +61,10 @@ export const meta = {
     "#0b0f1c", "#121829", "#1a2236", "#2a2228",
     "#4a3a2c", "#4c6e34", "#6f9448", "#8fbf5a", "#b4dc7c", "#a08a62",
   ],
-} satisfies Meta;
+  } satisfies Meta<AmerFortOptions>;
 
 const W = 200, H = 100;
-const WATER = 62; // the lake's far shore, under the lowest rampart
 const ISLE_TOP = 65, ISLE_RIM = 71, ISLE_BASE = 75; // Kesar Kyari: garden top, wall face, waterline
-const MOON = [172, 13];
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
@@ -77,8 +108,6 @@ const bump = (x: number, c: number, w: number) => Math.exp(-(((x - c) / w) ** 2)
 // The far Aravalli ridge, with Jaigarh's peak on the left, and the near hill
 // the palace stands on.
 const farTop = (x: number) => 33 - 21 * bump(x, 24, 24) - 12 * bump(x, 184, 30) - 5 * bump(x, 70, 14) - 4 * fbm(x * 0.07, 1.3, 3);
-const nearTop = (x: number) => WATER - 40 * bump(x, 106, 62) - 2 * fbm(x * 0.12, 4.1, 2);
-const sky = (x: number) => Math.min(farTop(x), nearTop(x));
 
 // Palace blocks, left to right and low to high: x0, x1, top, bottom, rows of
 // jharokha windows (their top rows), the gap between openings.
@@ -101,7 +130,13 @@ const CHHATRIS: [number, number, number][] = [
 // Watchtowers on the ridge walls: x, size.
 const TOWERS: [number, number][] = [[6, 1], [15, 1], [24, 2.4], [36, 1.2], [47, 1], [158, 1], [172, 1.2], [185, 1.6], [196, 1]];
 
-export default function amerFort(): Frame {
+export default function amerFort(o: Partial<AmerFortOptions> = {}): Frame {
+  const { water = meta.options.water, moonX = meta.options.moonX, moonY = meta.options.moonY, fortGlow = meta.options.fortGlow, glowSpread = meta.options.glowSpread, flockSpeed = meta.options.flockSpeed } = o;
+  const WATER = water, MOON = [moonX, moonY];
+  const GLOW_SPREAD = Math.max(1, Math.round(glowSpread));
+  // the near hill the palace stands on
+  const nearTop = (x: number) => WATER - 40 * bump(x, 106, 62) - 2 * fbm(x * 0.12, 4.1, 2);
+  const sky = (x: number) => Math.min(farTop(x), nearTop(x));
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -266,7 +301,7 @@ export default function amerFort(): Frame {
   for (let k = 0; k < N; k++) glow[k] = mat[k] === STONE || mat[k] === DOME ? 1 : 0;
   for (let pass = 0; pass < 3; pass++) {
     const tmp = new Float32Array(N);
-    const R = 6;
+    const R = GLOW_SPREAD;
     for (let r = 0; r < H; r++) {
       for (let x = 0; x < W; x++) {
         let s = 0, n = 0;
@@ -296,7 +331,7 @@ export default function amerFort(): Frame {
       const k = r * W + x;
       const y = r + 0.5;
       const s = shade[k];
-      const g = glow[k];
+      const g = glow[k] * fortGlow;
       let cr = 0, cg = 0, cb = 0;
       switch (mat[k]) {
         case AIR: {
@@ -361,7 +396,7 @@ export default function amerFort(): Frame {
     const birdAt = new Map<number, number>();
     for (const [bx0, by0, sp, fl] of BIRDS) {
       const span = W + 30;
-      const bx = Math.round((((bx0 + sp * t) % span) + span) % span) - 15;
+      const bx = Math.round((((bx0 + sp * flockSpeed * t) % span) + span) % span) - 15;
       const by = Math.round(by0 + 2 * Math.sin(t * 0.7 + bx0));
       const up = Math.sin(t * fl + bx0) > 0 ? 1 : 0;
       const cells = [[0, 0], [-1, -up], [1, -up], [-2, up - 1], [2, up - 1]];

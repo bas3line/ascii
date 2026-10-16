@@ -14,6 +14,31 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of saturn rise. Defaults are the original values. */
+export interface SaturnRiseOptions {
+  [key: string]: unknown;
+  /** The horizon row. */
+  horizon: number;
+  /** Saturn's centre column. */
+  saturnX: number;
+  /** Saturn's centre row. */
+  saturnY: number;
+  /** Saturn's radius in cells. */
+  saturnRadius: number;
+  /** How far the rings tip toward us. */
+  incline: number;
+  /** How much the rings lean up to the right. */
+  roll: number;
+  /** The small moon's orbit, in Saturn radii. */
+  moonOrbit: number;
+  /** The small moon's period, in seconds. */
+  moonPeriod: number;
+  /** The sun's column. */
+  sunX: number;
+  /** The sun's row. */
+  sunY: number;
+}
+
 export const meta = {
   name: "saturn rise",
   category: "scenes",
@@ -23,26 +48,45 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#04050a",
+  options: {
+    horizon: 70,
+    saturnX: 84,
+    saturnY: 33,
+    saturnRadius: 25,
+    incline: 0.34,
+    roll: 0.14,
+    moonOrbit: 2.85,
+    moonPeriod: 140,
+    sunX: 173,
+    sunY: 55,
+  },
+  params: {
+    horizon: { label: "horizon", min: 55, max: 85, step: 1 },
+    saturnX: { label: "saturn position", min: 40, max: 160, step: 1 },
+    saturnY: { label: "saturn height", min: 20, max: 55, step: 1 },
+    saturnRadius: { label: "saturn radius", min: 12, max: 40, step: 1 },
+    incline: { label: "ring tilt", min: 0, max: 0.9, step: 0.02 },
+    roll: { label: "ring roll", min: -0.4, max: 0.4, step: 0.01 },
+    moonOrbit: { label: "moon orbit", min: 1.6, max: 4, step: 0.05 },
+    moonPeriod: { label: "moon period", min: 60, max: 280, step: 5 },
+    sunX: { label: "sun position", min: 100, max: 200, step: 1 },
+    sunY: { label: "sun height", min: 30, max: 75, step: 1 },
+  },
   palette: [
     "#0b0d14", "#161922", "#252935", "#3a3f4c",
     "#3b2a1a", "#5c4027", "#7f5a35", "#a37645", "#c4925a", "#dcae74", "#ecc893", "#f6e0b8",
     "#6b6a6c", "#8a8070", "#b3a892", "#d8cfba", "#7f8a96",
     "#0e1a2e", "#15284a", "#1f3a66", "#2c5085", "#3f6aa3", "#5e8bbf", "#89afd6", "#b6d0ea", "#ddebf8",
     "#2a7fb0", "#56b3dc",
-    "#ffffff", "#fff0c8",
-  ],
-} satisfies Meta;
+        "#ffffff", "#fff0c8",
+      ],
+    } satisfies Meta<SaturnRiseOptions>;
 
-const W = 200, H = 100;
-const HZ = 70; // the horizon row
-const F = 110; // focal length in cells, for the sky
-const FG = 60; // and a wider one for the ice, so the near plates are not squashed flat
-const CAM = 8; // eye height over the ice
-const SC = [84, 33], SR = 25; // Saturn's centre and radius on screen
-const INC = 0.34, ROLL = 0.14; // the rings open toward us and lean up to the right
-const SUN = [173, 55]; // the sun on screen
-const MOON_R = 2.85, MOON_T = 140; // the small moon's orbit, in Saturn radii, and its period
-const DOTS = " ·•●";
+    const W = 200, H = 100;
+    const F = 110; // focal length in cells, for the sky
+    const FG = 60; // and a wider one for the ice, so the near plates are not squashed flat
+    const CAM = 8; // eye height over the ice
+    const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 // the bright stars, which twinkle: [col, row, brightness, period in seconds]
@@ -55,14 +99,9 @@ const norm = (v: number[]): number[] => {
   const l = Math.hypot(...v);
   return v.map((c) => c / l);
 };
-// the ring plane's normal, and two axes in it
-const NR = [-Math.sin(ROLL) * Math.cos(INC), Math.cos(ROLL) * Math.cos(INC), Math.sin(INC)];
-const E1 = norm([NR[1], -NR[0], 0]);
-const E2 = [-NR[2] * E1[1], NR[2] * E1[0], NR[0] * E1[1] - NR[1] * E1[0]];
 // toward the sun, for Saturn (z toward us) and for the ice (z away from us)
 const LS = norm([0.6, 0.28, 0.72]);
 const LG = norm([0.78, 0.42, 0.3]);
-const LV = norm([(SUN[0] - 100) / F, (HZ - SUN[1]) / F, 1]); // the sun's real direction, for glare
 
 function hash(x: number, y: number): number {
   let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
@@ -148,8 +187,19 @@ function plates(X: number, Z: number): [edge: number, id: number] {
   return [d2 - d1, id];
 }
 
-export default function saturnRise(): Frame {
-  const P = meta.palette.map(hex);
+export default function saturnRise(o: Partial<SaturnRiseOptions> = {}): Frame {
+  const { horizon = meta.options.horizon, saturnX = meta.options.saturnX, saturnY = meta.options.saturnY, saturnRadius = meta.options.saturnRadius, incline = meta.options.incline, roll = meta.options.roll, moonOrbit = meta.options.moonOrbit, moonPeriod = meta.options.moonPeriod, sunX = meta.options.sunX, sunY = meta.options.sunY } = o;
+  const HZ = horizon;
+  const SC = [saturnX, saturnY], SR = saturnRadius;
+  const INC = incline, ROLL = roll;
+  const SUN = [sunX, sunY];
+  const MOON_R = moonOrbit, MOON_T = moonPeriod;
+  const LV = norm([(SUN[0] - 100) / F, (HZ - SUN[1]) / F, 1]); // the sun's real direction, for glare
+    // the ring plane's normal, and two axes in it
+    const NR = [-Math.sin(ROLL) * Math.cos(INC), Math.cos(ROLL) * Math.cos(INC), Math.sin(INC)];
+    const E1 = norm([NR[1], -NR[0], 0]);
+    const E2 = [-NR[2] * E1[1], NR[2] * E1[0], NR[0] * E1[1] - NR[1] * E1[0]];
+    const P = meta.palette.map(hex);
   const N = W * H;
 
   const lut = new Uint8Array(32768).fill(255);

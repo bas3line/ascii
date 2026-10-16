@@ -13,6 +13,29 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of earthrise. Defaults are the original values. */
+export interface EarthriseOptions {
+  [key: string]: unknown;
+  /** Screen row of eye level. */
+  eye: number;
+    /** Focal length in cells. */
+    focal: number;
+    /** Camera height above the moon. */
+    cameraHeight: number;
+    /** The moon's radius in ground units. */
+    moonRadius: number;
+    /** The Earth's centre row. */
+    earthRow: number;
+    /** The Earth's radius in cells. */
+    earthRadius: number;
+    /** How fast the Earth turns. */
+    spin: number;
+    /** How far the Earth climbs. */
+    rise: number;
+    /** Seconds over which the Earth climbs. */
+    riseTime: number;
+  }
+
 export const meta = {
   name: "earthrise",
   category: "scenes",
@@ -22,6 +45,28 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#030408",
+  options: {
+      eye: 37,
+      focal: 112,
+      cameraHeight: 20,
+      moonRadius: 1500,
+      earthRow: 32,
+      earthRadius: 22,
+      spin: 0.045,
+      rise: 5,
+      riseTime: 150,
+    },
+    params: {
+      eye: { label: "eye level", min: 25, max: 55, step: 1 },
+      focal: { label: "focal length", min: 80, max: 160, step: 1 },
+      cameraHeight: { label: "camera height", min: 12, max: 40, step: 1 },
+      moonRadius: { label: "horizon curve", min: 800, max: 3000, step: 50 },
+      earthRow: { label: "earth height", min: 20, max: 50, step: 1 },
+      earthRadius: { label: "earth radius", min: 10, max: 36, step: 1 },
+      spin: { label: "earth spin", min: 0, max: 0.2, step: 0.005 },
+      rise: { label: "earth rise", min: 0, max: 20, step: 0.5 },
+      riseTime: { label: "rise time", min: 60, max: 300, step: 5 },
+    },
   palette: [
     "#18181b", "#232326", "#303033", "#414143", "#555556", "#6b6a69", "#83817d", "#9c9993",
     "#b6b2aa", "#cfcac1", "#e6e1d8", "#f7f4ee",
@@ -31,20 +76,14 @@ export const meta = {
     "#6eaeea", "#a8d3f6",
     "#e8f0fa", "#c2d0e3", "#8b9fbc",
     "#2f4a26", "#3b5a2c", "#5b7238", "#7a9150", "#77783f", "#8f8550", "#a8955e", "#6b5634",
-    "#b9774a", "#8a4838",
-  ],
-} satisfies Meta;
+        "#b9774a", "#8a4838",
+      ],
+    } satisfies Meta<EarthriseOptions>;
 
-const W = 200, H = 100;
-const EYE = 37; // screen row of eye level; the horizon dips below it
-const F = 112; // focal length in cells
-const CAM_H = 20;
-const RM = 1500; // the moon's radius, in ground units, for the falling horizon
-const ZMAX = 520;
-const EC = [141, 32], ER = 22; // the Earth on screen, its lower edge still behind the horizon
-const LON0 = 3.5; // which face of the globe is turned to us at the start
-const RISE = 5, RISE_T = 150; // it climbs RISE rows and settles back over RISE_T seconds
-const DOTS = " ·•●";
+    const W = 200, H = 100;
+    const ZMAX = 520;
+    const LON0 = 3.5; // which face of the globe is turned to us at the start
+    const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 // the bright stars, which twinkle: [col, row, brightness, period in seconds]
@@ -159,7 +198,16 @@ function height(X: number, Z: number): number {
   return h;
 }
 
-export default function earthrise(): Frame {
+export default function earthrise(o: Partial<EarthriseOptions> = {}): Frame {
+  const { eye = meta.options.eye, focal = meta.options.focal, cameraHeight = meta.options.cameraHeight, moonRadius = meta.options.moonRadius, earthRow = meta.options.earthRow, earthRadius = meta.options.earthRadius } = o;
+  const spinSpeed = o.spin ?? meta.options.spin;
+  const RISE = o.rise ?? meta.options.rise;
+  const RISE_T = o.riseTime ?? meta.options.riseTime;
+  const EYE = eye;
+  const F = focal;
+  const CAM_H = cameraHeight;
+  const RM = moonRadius;
+  const EC = [141, earthRow], ER = earthRadius;
   const P = meta.palette.map(hex);
   const N = W * H;
 
@@ -395,7 +443,7 @@ export default function earthrise(): Frame {
   for (let r = 0; r < H; r++) lines.push(chars.slice(r * W, (r + 1) * W).join(""));
 
   return (t, { color } = {}) => {
-    const spin = t * 0.045;
+    const spin = t * spinSpeed;
     const drift = t * 0.012; // clouds run a little ahead of the ground
     const ey = EC[1] - RISE * (0.5 - 0.5 * Math.cos((t / RISE_T) * Math.PI * 2));
     for (const k of box) {

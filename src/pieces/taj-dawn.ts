@@ -10,6 +10,25 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of taj dawn. Defaults are the original values. */
+export interface TajDawnOptions {
+  [key: string]: unknown;
+  /** The sun's column. */
+  sunX: number;
+  /** The sun's row. */
+  sunY: number;
+  /** Eye level, the horizon row. */
+  horizon: number;
+  /** Where the Taj meets the garden, and the far end of the canal. */
+  base: number;
+  /** The Taj's axis, and the canal's vanishing point. */
+  tajX: number;
+  /** How much the reflection is foreshortened. */
+  reflect: number;
+  /** Cells per metre on the Taj. */
+  scale: number;
+}
+
 export const meta = {
   name: "taj dawn",
   category: "scenes",
@@ -19,7 +38,25 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#0d0a13",
-  palette: [
+    options: {
+      sunX: 36,
+      sunY: 40,
+      horizon: 60,
+      base: 68,
+      tajX: 128,
+      reflect: 1.55,
+      scale: 0.7,
+    },
+    params: {
+      sunX: { label: "sun x", min: 10, max: 190, step: 1 },
+      sunY: { label: "sun y", min: 10, max: 70, step: 1 },
+      horizon: { label: "eye level", min: 45, max: 70, step: 1 },
+      base: { label: "taj base", min: 55, max: 80, step: 1 },
+      tajX: { label: "taj x", min: 80, max: 170, step: 1 },
+      reflect: { label: "reflection", min: 0.8, max: 2.5, step: 0.05 },
+      scale: { label: "taj scale", min: 0.4, max: 1.2, step: 0.05 },
+    },
+    palette: [
     "#2e2a55", "#3d3870", "#514a8a", "#6a62a3", "#8a83bd",
     "#5a3a5e", "#7a4d72", "#9a6284", "#b97a92", "#d495a2",
     "#b8705a", "#d98d66", "#efab78", "#f8c98e", "#ffe2ae", "#fff3d8", "#fffcf2",
@@ -28,16 +65,10 @@ export const meta = {
     "#8a4a3e", "#b0624a", "#3a2f4a", "#4e3d5a", "#f6d6c0", "#e9bfae",
     "#5e6a40", "#7d8a52", "#a3a064", "#c2b274",
   ],
-} satisfies Meta;
+  } satisfies Meta<TajDawnOptions>;
 
 const W = 200, H = 100;
-const CX = 128; // the Taj's axis, and the canal's vanishing point
-const BASE = 68; // where the Taj meets the garden, and the far end of the canal
-const HZ = 60; // eye level
-const S = 0.7; // cells per metre on the Taj
-const SUN = [36, 40];
 const MX = 45, MB = 67; // the mosque's axis and foot
-const KR = 1.55; // the reflection is foreshortened so the dome reaches the canal
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
@@ -246,7 +277,9 @@ function mosque(xc: number, y: number): number {
   return -1;
 }
 
-export default function tajDawn(): Frame {
+export default function tajDawn(o: Partial<TajDawnOptions> = {}): Frame {
+  const { sunX = meta.options.sunX, sunY = meta.options.sunY, horizon = meta.options.horizon, base = meta.options.base, tajX = meta.options.tajX, reflect = meta.options.reflect, scale = meta.options.scale } = o;
+  const CX = tajX, BASE = base, HZ = horizon, S = scale, SUN = [sunX, sunY], KR = reflect;
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);

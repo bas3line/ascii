@@ -12,6 +12,29 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of planet scale. Defaults are the original values. */
+export interface PlanetScaleOptions {
+  [key: string]: unknown;
+  /** The planet's centre column. */
+  centreX: number;
+  /** The planet's centre row. */
+  centreY: number;
+  /** The planet's radius in cells. */
+  radius: number;
+  /** The backlight star's offset from the planet's centre. */
+  backX: number;
+  /** The backlight star's offset from the planet's centre. */
+  backY: number;
+  /** The moon's radius in cells. */
+  moonRadius: number;
+  /** Seconds for the moon to go round. */
+  orbit: number;
+  /** The moon's wide orbit radius. */
+  orbitWidth: number;
+  /** The moon's tall orbit radius. */
+  orbitHeight: number;
+}
+
 export const meta = {
   name: "planet scale",
   category: "scenes",
@@ -21,12 +44,34 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#050505",
+  options: {
+    centreX: 100,
+    centreY: 50,
+    radius: 41,
+    backX: 18,
+    backY: 18,
+    moonRadius: 7,
+    orbit: 16,
+    orbitWidth: 66,
+    orbitHeight: 11,
+  },
+  params: {
+    centreX: { label: "planet position", min: 40, max: 160, step: 1 },
+    centreY: { label: "planet height", min: 30, max: 70, step: 1 },
+    radius: { label: "planet radius", min: 20, max: 60, step: 1 },
+    backX: { label: "backlight position", min: 0, max: 60, step: 1 },
+    backY: { label: "backlight height", min: 0, max: 60, step: 1 },
+    moonRadius: { label: "moon radius", min: 3, max: 14, step: 0.5 },
+    orbit: { label: "moon orbit", min: 6, max: 36, step: 1 },
+    orbitWidth: { label: "moon orbit width", min: 30, max: 100, step: 1 },
+    orbitHeight: { label: "moon orbit height", min: 6, max: 30, step: 1 },
+  },
   palette: [
     "#101010", "#181818", "#202020", "#282828", "#303030", "#3a3a3a", "#444444", "#4e4e4e",
     "#585858", "#636363", "#6e6e6e", "#797979", "#858585", "#919191", "#9d9d9d", "#a9a9a9",
     "#b5b5b5", "#c1c1c1", "#cccccc", "#d7d7d7", "#e1e1e1", "#eaeaea", "#f3f3f3", "#ffffff",
   ],
-} satisfies Meta;
+    } satisfies Meta<PlanetScaleOptions>;
 
 // The silhouette of src/pieces/planetscale.ts: 0 is the logo, a space is not.
 const INK = String.raw`
@@ -61,10 +106,7 @@ const INK = String.raw`
 `;
 
 const W = 200, H = 100;
-const CX = 100, CY = 50, R = 41; // the planet
 const SUN = [-0.68, -0.68, 0.2]; // toward the sun: upper left, a little toward us
-const MOON_R = 7;
-const ORBIT = 16; // seconds for the moon to go round
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
@@ -126,7 +168,12 @@ function blur(a: Float32Array, passes: number) {
   }
 }
 
-export default function planetScale(): Frame {
+export default function planetScale(o: Partial<PlanetScaleOptions> = {}): Frame {
+  const { centreX = meta.options.centreX, centreY = meta.options.centreY, radius = meta.options.radius, backX = meta.options.backX, backY = meta.options.backY, moonRadius = meta.options.moonRadius, orbit = meta.options.orbit, orbitWidth = meta.options.orbitWidth, orbitHeight = meta.options.orbitHeight } = o;
+  const CX = centreX, CY = centreY, R = radius;
+  const MOON_R = moonRadius;
+  const ORBIT = orbit;
+  const OW = orbitWidth, OH = orbitHeight;
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -220,7 +267,7 @@ export default function planetScale(): Frame {
 
   const L = SUN.map((v) => v / Math.hypot(...SUN));
   const LH = Math.hypot(L[0], L[1]);
-  const BACK = [CX + 18, CY + 18]; // the star behind the planet
+  const BACK = [CX + backX, CY + backY]; // the star behind the planet
   // How far each cell is from the hidden star, and how squarely the limb under
   // it faces the sun, both fixed.
   const back = new Float32Array(N), facing = new Float32Array(N);
@@ -233,7 +280,7 @@ export default function planetScale(): Frame {
   return (t, { color } = {}) => {
     const spin = (t / 120) * LO; // the planet turns once in two minutes
     const a = (t / ORBIT) * Math.PI * 2 + 2.2;
-    const ex = Math.cos(a) * 66, ey = Math.sin(a) * 11;
+    const ex = Math.cos(a) * OW, ey = Math.sin(a) * OH;
     const tilt = -0.32;
     const mx = CX + ex * Math.cos(tilt) - ey * Math.sin(tilt);
     const my = CY + ex * Math.sin(tilt) + ey * Math.cos(tilt);

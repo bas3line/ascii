@@ -11,6 +11,23 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of green storm. Defaults are the original values. */
+export interface GreenStormOptions {
+  [key: string]: unknown;
+  /** The horizon row the lightning lands on. */
+  horizon: number;
+  /** The row the big strike hangs from, at the cloud base. */
+  boltTop: number;
+  /** The storm's loop length in seconds. */
+  stormPeriod: number;
+  /** Speed of the drifting storm clouds. */
+  cloudDrift: number;
+  /** The base fall speed of the rain. */
+  rainSpeed: number;
+  /** The spread of rain speeds between lanes. */
+  rainShear: number;
+}
+
 export const meta = {
   name: "green storm",
   category: "scenes",
@@ -20,13 +37,29 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#0e0e0e",
-  palette: [
+    options: {
+      horizon: 76,
+      boltTop: 28,
+      stormPeriod: 10.8,
+      cloudDrift: 1.1,
+      rainSpeed: 55,
+      rainShear: 25,
+    },
+    params: {
+      horizon: { label: "horizon", min: 60, max: 90, step: 1 },
+      boltTop: { label: "bolt top", min: 10, max: 50, step: 1 },
+      stormPeriod: { label: "storm cycle", min: 4, max: 24, step: 0.1 },
+      cloudDrift: { label: "cloud drift", min: 0, max: 3, step: 0.05 },
+      rainSpeed: { label: "rain speed", min: 0, max: 120, step: 1 },
+      rainShear: { label: "rain spread", min: 0, max: 60, step: 1 },
+    },
+    palette: [
     "#1c1c1c", "#242424", "#2e2e2e", "#3a3a3a", "#4a4a4a", "#5e5e5e", "#777777", "#939393", "#b4b4b4", "#d6d6d6",
     "#1d2a24", "#243a30", "#2d4d3e", "#3a6450", "#4d8066", "#67a084",
     "#0f3324", "#14472f", "#1a5e3e", "#22784f", "#2c9663", "#36b578", "#3ecf8e", "#65dba5", "#8fe6be", "#bdf2d8",
     "#e6fbf1", "#ffffff",
   ],
-} satisfies Meta;
+} satisfies Meta<GreenStormOptions>;
 
 // The Supabase bolt, as the library's own supabase piece draws it: anything
 // not a space is inside. Its cells are text cells, twice as tall as wide.
@@ -60,9 +93,6 @@ const INK = String.raw`
 `;
 
 const W = 200, H = 100;
-const HORIZON = 76;
-const BOLT_TOP = 28; // the big strike hangs from the cloud base here down to the horizon
-const LOOP = 10.8; // three strikes, then it all comes round again
 const STRIKES: [number, number][] = [[0, 100], [3.6, 74], [7.2, 126]]; // [when, centre x]
 // The small bolts: [when, seed]. One lands at t = 6, so the still has one.
 const FORKS: [number, number][] = [[1.5, 1], [2.95, 2], [5.1, 3], [6.0, 4], [8.8, 5], [9.9, 6]];
@@ -153,7 +183,11 @@ const flashAt = (a: number) =>
 // The afterimage burnt into the eye, fading for a couple of seconds.
 const afterAt = (a: number) => (a < 0 ? 0 : Math.exp(-a / 1.8));
 
-export default function greenStorm(): Frame {
+export default function greenStorm(o: Partial<GreenStormOptions> = {}): Frame {
+  const { horizon = meta.options.horizon, boltTop = meta.options.boltTop, stormPeriod = meta.options.stormPeriod, cloudDrift = meta.options.cloudDrift, rainSpeed = meta.options.rainSpeed, rainShear = meta.options.rainShear } = o;
+  const HORIZON = horizon;
+  const BOLT_TOP = boltTop; // the big strike hangs from the cloud base here down to the horizon
+  const LOOP = stormPeriod; // three strikes, then it all comes round again
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -303,7 +337,7 @@ export default function greenStorm(): Frame {
 
   return (t, { color } = {}) => {
     const lt = ((t % LOOP) + LOOP) % LOOP;
-    const drift = t * 1.1;
+    const drift = t * cloudDrift;
     // which strikes are lit or still burning in the eye
     let fl = 0, af = 0, bi = 0;
     for (let s = 0; s < STRIKES.length; s++) {
@@ -437,7 +471,7 @@ export default function greenStorm(): Frame {
         const hr = hash(lane, 17);
         if (hr > 0.5 && y > 12 && m !== HILL && B.mask[k] < 0.5) {
           const len = 10 + hash(lane, 18) * 12;
-          const p = (y - t * (55 + hr * 25) + hash(lane, 19) * 400) / len;
+          const p = (y - t * (rainSpeed + hr * rainShear) + hash(lane, 19) * 400) / len;
           const seg = p - Math.floor(p);
           if (seg < 0.3) {
             const d = 0.13 * (1 - seg / 0.3) * smooth(12, 34, y);

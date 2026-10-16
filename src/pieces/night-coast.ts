@@ -9,6 +9,27 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of night coast. Defaults are the original values. */
+export interface NightCoastOptions {
+  [key: string]: unknown;
+  /** The horizon row. */
+  horizon: number;
+  /** The moon's column. */
+  moonX: number;
+  /** The moon's row. */
+  moonY: number;
+  /** The moon's radius. */
+  moonRadius: number;
+  /** The lighthouse's column. */
+  lampX: number;
+  /** Seconds the beam takes to turn once. */
+  beamTurn: number;
+  /** Speed of the drifting clouds. */
+  cloudDrift: number;
+  /** Speed of the sea's chop. */
+  waveSpeed: number;
+}
+
 export const meta = {
   name: "night coast",
   category: "scenes",
@@ -26,13 +47,30 @@ export const meta = {
     "#232a36", "#363e4c", "#555d6c", "#2a3550", "#3a4868",
     "#9c4136", "#ff5d4d",
   ],
-} satisfies Meta;
+    options: {
+      horizon: 60,
+      moonX: 150,
+      moonY: 19,
+      moonRadius: 6,
+      lampX: 30,
+      beamTurn: 8,
+      cloudDrift: 1.4,
+      waveSpeed: 0.12,
+    },
+    params: {
+      horizon: { label: "horizon", min: 40, max: 75, step: 1 },
+      moonX: { label: "moon position", min: 60, max: 190, step: 1 },
+      moonY: { label: "moon height", min: 5, max: 50, step: 1 },
+      moonRadius: { label: "moon radius", min: 2, max: 12, step: 0.5 },
+      lampX: { label: "lighthouse", min: 10, max: 80, step: 1 },
+      beamTurn: { label: "beam turn", min: 3, max: 30, step: 1 },
+      cloudDrift: { label: "cloud drift", min: 0, max: 3, step: 0.05 },
+      waveSpeed: { label: "wave speed", min: 0, max: 0.5, step: 0.01 },
+    },
+  } satisfies Meta<NightCoastOptions>;
 
-const W = 200, H = 100;
-const HORIZON = 60;
-const MOON = [150, 19];
-const LAMP_X = 30;
-const DOTS = " ·•●";
+  const W = 200, H = 100;
+  const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 
@@ -77,7 +115,14 @@ const smooth = (a: number, b: number, v: number) => {
 const mix = (a: number, b: number, k: number) => a + (b - a) * k;
 const hex = (s: string) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16) / 255);
 
-export default function nightCoast(): Frame {
+export default function nightCoast(o: Partial<NightCoastOptions> = {}): Frame {
+  const { horizon = meta.options.horizon, moonX = meta.options.moonX, moonY = meta.options.moonY, moonRadius = meta.options.moonRadius, lampX = meta.options.lampX } = o;
+  const beamTurn = o.beamTurn ?? meta.options.beamTurn;
+  const cloudDrift = o.cloudDrift ?? meta.options.cloudDrift;
+  const waveSpeed = o.waveSpeed ?? meta.options.waveSpeed;
+  const HORIZON = horizon;
+  const MOON = [moonX, moonY];
+  const LAMP_X = lampX;
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -179,11 +224,11 @@ export default function nightCoast(): Frame {
   }
 
   return (t, { color } = {}) => {
-    const beam = (t / 8) * Math.PI * 2 - 0.75; // starts out over the sea
+    const beam = (t / beamTurn) * Math.PI * 2 - 0.75; // starts out over the sea
     const cb = Math.cos(beam), sb = Math.sin(beam);
     const flash = Math.pow(Math.max(0, sb), 14) * 2.2; // pointed at us
     const lampY = towerTop - 4;
-    const drift = t * 1.4;
+    const drift = t * cloudDrift;
 
     for (let r = 0; r < H; r++) {
       for (let x = 0; x < W; x++) {
@@ -209,10 +254,10 @@ export default function nightCoast(): Frame {
           // a break in the cloud round the moon
           const c = (cover[i0] + (cover[i1] - cover[i0]) * fx) * (0.15 + 0.85 * smooth(7, 24, dm));
           const l = lit[i0] + (lit[i1] - lit[i0]) * fx;
-          if (dm < 6) {
+          if (dm < moonRadius) {
             // the moon, dimmed where cloud crosses it
             const face = 0.86 + 0.14 * fbm(x * 0.5, y * 0.5, 2, 0);
-            const a = (1 - c * 0.8) * smooth(6, 5, dm);
+                      const a = (1 - c * 0.8) * smooth(moonRadius, moonRadius - 1, dm);
             cr = mix(cr, 0.96 * face, a);
             cg = mix(cg, 0.97 * face, a);
             cbl = mix(cbl, 1.0 * face, a);
@@ -237,7 +282,7 @@ export default function nightCoast(): Frame {
         } else if (y >= HORIZON && (m === AIR || m === LAND) && !(m === LAND && y < HORIZON + 4)) {
           // sea: cold, darker toward us, waves stretched along the swell
           const v = (y - HORIZON) / (H - HORIZON);
-          const w = 0.6 * noise(x * 0.07 + t * 0.12, y * 0.45 - t * 0.6, 0) + 0.4 * noise(x * 0.2 - t * 0.25, y * 0.9 - t * 1.1, 0);
+          const w = 0.6 * noise(x * 0.07 + t * waveSpeed, y * 0.45 - t * 0.6, 0) + 0.4 * noise(x * 0.2 - t * 0.25, y * 0.9 - t * 1.1, 0);
           const swell = 0.45 + 0.95 * w;
           cr = (0.08 - 0.04 * v) * swell;
           cg = (0.13 - 0.06 * v) * swell;

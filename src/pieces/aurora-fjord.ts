@@ -10,6 +10,23 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of aurora fjord. Defaults are the original values. */
+export interface AuroraFjordOptions {
+  [key: string]: unknown;
+  /** The waterline row. */
+  waterline: number;
+  /** How tall the main curtain reaches. */
+  auroraHeight: number;
+  /** The main curtain's base height at the left. */
+  auroraBase: number;
+  /** The speed of the main curtain's travelling ripple. */
+  auroraSway: number;
+  /** The row the fainter, higher curtain sits at. */
+  curtainBBase: number;
+  /** How rare a star is: the noise threshold a cell must pass. */
+  starDensity: number;
+}
+
 export const meta = {
   name: "aurora fjord",
   category: "scenes",
@@ -19,7 +36,23 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#05080f",
-  palette: [
+    options: {
+      waterline: 62,
+      auroraHeight: 40,
+      auroraBase: 5,
+      auroraSway: 0.55,
+      curtainBBase: 14,
+      starDensity: 0.986,
+    },
+    params: {
+      waterline: { label: "waterline", min: 45, max: 75, step: 1 },
+      auroraHeight: { label: "aurora height", min: 15, max: 55, step: 1 },
+      auroraBase: { label: "aurora height at left", min: 0, max: 20, step: 1 },
+      auroraSway: { label: "aurora ripple", min: 0, max: 2, step: 0.05 },
+      curtainBBase: { label: "high curtain row", min: 6, max: 24, step: 1 },
+      starDensity: { label: "star density", min: 0.94, max: 0.999, step: 0.001 },
+    },
+    palette: [
     "#0b1322", "#101b30", "#16243f", "#1e3050", "#2a3f63",
     "#0e3a33", "#11573f", "#167a4c", "#22a05c", "#3ccb73", "#7cf0a0", "#c8ffdc",
     "#0f5f5c", "#16877f", "#2cb5a6", "#7fe6d6",
@@ -30,10 +63,9 @@ export const meta = {
     "#ffd27c", "#ffb04a", "#fff2c4",
     "#eef3ff",
   ],
-} satisfies Meta;
+} satisfies Meta<AuroraFjordOptions>;
 
 const W = 200, H = 100;
-const WL = 62; // the waterline
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
@@ -92,7 +124,9 @@ function range(x: number, peaks: [number, number, number][], seed: number, rough
   return [m + j * Math.min(1, Math.max(0, m) / 6), px];
 }
 
-export default function auroraFjord(): Frame {
+export default function auroraFjord(o: Partial<AuroraFjordOptions> = {}): Frame {
+  const { waterline = meta.options.waterline, auroraHeight = meta.options.auroraHeight, auroraBase = meta.options.auroraBase, auroraSway = meta.options.auroraSway, curtainBBase = meta.options.curtainBBase, starDensity = meta.options.starDensity } = o;
+  const WL = waterline; // the waterline
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -290,7 +324,7 @@ export default function auroraFjord(): Frame {
   const star = new Float32Array(WL * W);
   for (let k = 0; k < WL * W; k++) {
     const h = hash(k % W, Math.floor(k / W) + 101);
-    if (h > 0.986) star[k] = 0.35 + (h - 0.986) * 45;
+    if (h > starDensity) star[k] = 0.35 + (h - 0.986) * 45;
   }
   // rows of the water that break the reflection into strips
   const gap = new Uint8Array(H);
@@ -318,13 +352,13 @@ export default function auroraFjord(): Frame {
       const u = x / W;
       // the main curtain sweeps down from the upper left, low over the fjord,
       // and lifts again to the right; ripples travel along it and fold it
-      baseA[x] = 5 + 40 * Math.pow(Math.sin(Math.min(1, u / 0.6) * Math.PI / 2), 1.5) - 13 * smooth(0.6, 0.95, u)
-        + 2.6 * Math.sin(x * 0.07 - t * 0.55) + 1.4 * Math.sin(x * 0.17 + t * 0.9 + 1.3) + 2.2 * Math.sin(x * 0.22 + t * 1.2)
+      baseA[x] = auroraBase + auroraHeight * Math.pow(Math.sin(Math.min(1, u / 0.6) * Math.PI / 2), 1.5) - 13 * smooth(0.6, 0.95, u)
+        + 2.6 * Math.sin(x * 0.07 - t * auroraSway) + 1.4 * Math.sin(x * 0.17 + t * 0.9 + 1.3) + 2.2 * Math.sin(x * 0.22 + t * 1.2)
         + 4 * (fbm(x * 0.015 + t * 0.03, 4.2, 2) - 0.5);
       tallA[x] = 11 + 8 * fbm(x * 0.03 - t * 0.05, 1.7, 2);
       envA[x] = smooth(0.0, 0.2, u) * smooth(0.98, 0.72, u) * (0.4 + 0.8 * fbm(x * 0.022 - t * 0.07, 8.8, 3));
       // a fainter curtain behind, higher up, on the right
-      baseB[x] = 14 + 4 * Math.sin(x * 0.035 + t * 0.3 + 2) + 1.6 * Math.sin(x * 0.11 - t * 0.7);
+      baseB[x] = curtainBBase + 4 * Math.sin(x * 0.035 + t * 0.3 + 2) + 1.6 * Math.sin(x * 0.11 - t * 0.7);
       envB[x] = smooth(0.45, 0.7, u) * smooth(1.05, 0.85, u) * (0.25 + 0.5 * fbm(x * 0.03 + t * 0.05, 3.3, 2));
     }
     for (let i = 0; i <= RAYS + 1; i++) {

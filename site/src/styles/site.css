@@ -193,6 +193,15 @@ a[aria-current="page"] {
 
 /* --- frame: sidebar and page -------------------------------------------- */
 
+/* The pancake button and its scrim live only on small screens. */
+.menu-burger {
+  display: none;
+}
+
+.menu-scrim {
+  display: none;
+}
+
 .frame {
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr);
@@ -1462,77 +1471,102 @@ pre.code {
     display: block;
   }
 
-  .side {
-    position: static;
-    height: auto;
-    overflow: visible;
-    padding: 2.5rem 0 0;
+  /* The sidebar becomes an off-canvas drawer; the pancake button opens it. */
+  .menu-burger {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 90;
+    width: 40px;
+    height: 40px;
     margin: 0;
+    padding: 0;
+    background: var(--bg);
+    border: 1px solid var(--well);
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  .menu-burger .burger-bar {
+    display: block;
+    width: 18px;
+    height: 2px;
+    background: var(--ink);
+    transition: transform 0.18s ease, opacity 0.18s ease;
+  }
+
+  body.menu-open .menu-burger .burger-bar:nth-child(1) {
+    transform: translateY(6px) rotate(45deg);
+  }
+  body.menu-open .menu-burger .burger-bar:nth-child(2) {
+    opacity: 0;
+  }
+  body.menu-open .menu-burger .burger-bar:nth-child(3) {
+    transform: translateY(-6px) rotate(-45deg);
+  }
+
+  .menu-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .side {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 80;
+    width: min(320px, 84vw);
+    height: auto;
+    margin: 0;
+    padding: 1rem 0.5rem 1.5rem;
+    overflow-y: auto;
+    background: var(--bg);
+    border-right: 1px solid var(--well);
+    box-shadow: 0 0 44px rgba(0, 0, 0, 0.35);
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  body.menu-open .side {
+    transform: none;
+  }
+
+  /* The drawer always shows the full index, not the desktop rail. */
+  .frame.side-collapsed .side-expanded-content {
+    display: block;
+  }
+  .frame.side-collapsed .side-rail-icons {
+    display: none;
+  }
+  .frame:not(.side-collapsed) .side-mark-btn,
+  .frame:not(.side-collapsed) .side-rail-icons {
+    display: none;
+  }
+  .frame:not(.side-collapsed) .side-toggle {
+    display: none;
+  }
+  .side-head .logo-link {
+    display: flex;
   }
 
   .side .make {
     margin: 0.5rem 0 1rem;
   }
 
-  .side nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem 3ch;
-  }
-
-  .side h2,
-  .side ul {
-    display: none;
-  }
-
-  .side h3 {
-    display: inline;
-    margin: 0;
-    font-weight: 400;
-  }
-
-  .side h3 .count {
-    display: none;
-  }
-
-  /*
-   * On the home page a phone opened on two screens of links before the first scene, and most phone visits ended
-   * there. The categories are the page's own sections further down, so the line of them and the asks give way and
-   * the scene comes first. The search stays, and its results still show here.
-   */
-  .frame.home .side .asks,
-  .frame.home .side nav:not(.searching) {
-    display: none;
-  }
-
-  .frame.home .side .find {
-    margin-bottom: 0;
-  }
-
-  /* While searching, the line of categories gives way to the pieces found, under their categories. */
   .find {
     margin-bottom: 1rem;
   }
 
-  .side nav.searching {
-    display: block;
-  }
-
-  .side nav.searching h3:not([hidden]) {
-    display: flex;
-    margin-top: 0.75rem;
-    font-weight: 500;
-  }
-
-  .side nav.searching ul:not([hidden]) {
-    display: block;
-  }
-
-  .side nav.searching h3 .count {
-    display: inline;
-  }
-
-  /* The docs' index stays, its pages in a line under each part's name. */
+  /* The docs' index keeps its parts, each page list under its own heading. */
   .side .docs-nav {
     display: block;
   }
@@ -1570,7 +1604,13 @@ pre.code {
   }
 
   .page {
-    padding-top: 2.5rem;
+    padding-top: 3rem;
+  }
+}
+
+@media (min-width: 861px) {
+  .menu-scrim {
+    display: none;
   }
 }
 

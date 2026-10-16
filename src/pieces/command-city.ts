@@ -16,6 +16,25 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of command city. Defaults are the original values. */
+export interface CommandCityOptions {
+  [key: string]: unknown;
+  /** The horizon row, far above the frame. */
+  horizon: number;
+  /** The row where the ground is drawn at its own scale. */
+  groundRow: number;
+  /** How much the tilt squashes the ground up the screen. */
+  tilt: number;
+  /** Ground units to one column of the logo grid. */
+  gridScale: number;
+  /** The tallest wall, in rows. */
+  buildingHeight: number;
+  /** How fast the mist drifts. */
+  mistDrift: number;
+  /** How fast the traffic streaks move. */
+  trafficSpeed: number;
+}
+
 export const meta = {
   name: "command city",
   category: "scenes",
@@ -25,26 +44,41 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#060607",
-  palette: [
+    options: {
+      horizon: -260,
+      groundRow: 50,
+      tilt: 1.5,
+      gridScale: 1.9,
+      buildingHeight: 9,
+      mistDrift: 1,
+      trafficSpeed: 1,
+    },
+    params: {
+      horizon: { label: "horizon", min: -400, max: -100, step: 5 },
+      groundRow: { label: "ground row", min: 35, max: 65, step: 1 },
+      tilt: { label: "tilt", min: 0.5, max: 3, step: 0.05 },
+      gridScale: { label: "mark scale", min: 1, max: 3.5, step: 0.05 },
+      buildingHeight: { label: "building height", min: 3, max: 18, step: 1 },
+      mistDrift: { label: "mist drift", min: 0, max: 3, step: 0.05 },
+      trafficSpeed: { label: "traffic speed", min: 0, max: 3, step: 0.05 },
+    },
+    palette: [
     "#101012", "#17171a", "#1f1f23", "#29292e", "#34343a", "#414148", "#505058", "#62626a",
     "#76767e", "#8c8c93", "#a4a4aa", "#bdbdc2", "#d6d6da", "#ececef", "#ffffff",
     "#3a2a1c", "#5a3c20", "#7e5224", "#a86a2a", "#cf8433", "#ee9e45", "#ffb860", "#ffcf88", "#ffe4b4", "#fff3dc",
     "#c9d3e6", "#8d99b0",
     "#ff7a3a", "#c0522a",
   ],
-} satisfies Meta;
+  } satisfies Meta<CommandCityOptions>;
 
 const W = 200, H = 100;
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 
-// The camera: the horizon far above the frame, a row where the ground is drawn
-// at its own scale, and how much the tilt squashes the ground up the screen.
-const YH = -260, YM = 50, TILT = 1.5, VOFF = 6;
+// The camera stands high above the frame; VOFF lifts the near ground.
 const CX = 100;
-const LS = 1.9; // ground units to one column of the logo grid (a row is two)
-const DMAX = 9; // the tallest wall, in rows
+const VOFF = 6;
 
 // The Command Code mark, from command-code.ts: ink is the rounded square,
 // the gaps inside it are the command key.
@@ -123,10 +157,12 @@ const smooth = (a: number, b: number, v: number) => {
 const hex = (s: string) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16) / 255);
 
 // Screen to ground: columns spread and rows stretch with distance.
-const scaleAt = (y: number) => (y - YH) / (YM - YH);
-const groundV = (y: number) => TILT * (YM - YH) * (1 - (YM - YH) / (y - YH)) + VOFF;
+const scaleAt = (y: number, YH: number, YM: number) => (y - YH) / (YM - YH);
+const groundV = (y: number, YH: number, YM: number, TILT: number) => TILT * (YM - YH) * (1 - (YM - YH) / (y - YH)) + VOFF;
 
-export default function commandCity(): Frame {
+export default function commandCity(o: Partial<CommandCityOptions> = {}): Frame {
+  const { horizon = meta.options.horizon, groundRow = meta.options.groundRow, tilt = meta.options.tilt, gridScale = meta.options.gridScale, buildingHeight = meta.options.buildingHeight, mistDrift = meta.options.mistDrift, trafficSpeed = meta.options.trafficSpeed } = o;
+  const YH = horizon, YM = groundRow, TILT = tilt, LS = gridScale, DMAX = buildingHeight;
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -287,7 +323,7 @@ export default function commandCity(): Frame {
   const key = new Float32Array(N), sq = new Float32Array(N), edge = new Float32Array(N);
   const hgt = new Float32Array(N), lot = new Int32Array(N);
   for (let y = 0; y < H; y++) {
-    const s = scaleAt(y + 0.5), v = groundV(y + 0.5);
+    const s = scaleAt(y + 0.5, YH, YM), v = groundV(y + 0.5, YH, YM, TILT);
     for (let x = 0; x < W; x++) {
       const k = y * W + x;
       const u = (x + 0.5 - CX) / s;
@@ -353,7 +389,7 @@ export default function commandCity(): Frame {
   const water = new Float32Array(N);
   const blink = new Float32Array(N); // lit panes that come and go
   for (let y = 0; y < H; y++) {
-    const s = scaleAt(y + 0.5);
+    const s = scaleAt(y + 0.5, YH, YM);
     const far = smooth(26, 0, y) * 0.8; // the distance, hazed
     for (let x = 0; x < W; x++) {
       const k = y * W + x;
@@ -454,7 +490,7 @@ export default function commandCity(): Frame {
     }
 
   return (t, { color } = {}) => {
-    const drift = t * 2.2;
+    const drift = t * 2.2 * mistDrift;
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const k = y * W + x;
@@ -467,7 +503,7 @@ export default function commandCity(): Frame {
           const l = rL[k], dir = l > 0 ? 1 : -1;
           const lane = Math.floor(Math.abs(l) / 1.3);
           const off = hash(lane, dir + 5) * 40;
-          const sp = 7 + 3 * hash(lane, dir + 9);
+          const sp = (7 + 3 * hash(lane, dir + 9)) * trafficSpeed;
           const ph = (((rP[k] - dir * t * sp + off) % 13) + 13) % 13;
           const len = 7;
           if (ph < len) {

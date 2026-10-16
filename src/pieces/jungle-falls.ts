@@ -12,6 +12,29 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of jungle falls. Defaults are the original values. */
+export interface JungleFallsOptions {
+  [key: string]: unknown;
+  /** The pool's surface row, where the lower fall lands. */
+  pool: number;
+  /** The shelf row between the two tiers. */
+  ledge: number;
+  /** The column where the lower fall plunges. */
+  waterfallX: number;
+  /** The rainbow's centre column. */
+  rainbowX: number;
+  /** The rainbow's centre row. */
+  rainbowY: number;
+  /** The rainbow's radius in cells. */
+  rainbowRadius: number;
+  /** The sun's column, off frame. */
+  sunX: number;
+  /** The sun's row, off frame. */
+  sunY: number;
+  /** How often the macaws cross the gorge, in seconds. */
+  macawPeriod: number;
+}
+
 export const meta = {
   name: "jungle falls",
   category: "scenes",
@@ -22,7 +45,29 @@ export const meta = {
   fps: 15,
   ground: "#07130d",
   still: 6, // the macaws in view
-  palette: [
+    options: {
+      pool: 80,
+      ledge: 50,
+      waterfallX: 101,
+      rainbowX: 118,
+      rainbowY: 116,
+      rainbowRadius: 56,
+      sunX: 30,
+      sunY: -40,
+      macawPeriod: 16,
+    },
+    params: {
+      pool: { label: "pool level", min: 60, max: 90, step: 1 },
+      ledge: { label: "middle shelf", min: 30, max: 65, step: 1 },
+      waterfallX: { label: "falls position", min: 40, max: 180, step: 1 },
+      rainbowX: { label: "rainbow position", min: 40, max: 180, step: 1 },
+      rainbowY: { label: "rainbow height", min: 60, max: 140, step: 1 },
+      rainbowRadius: { label: "rainbow radius", min: 20, max: 90, step: 1 },
+      sunX: { label: "sun position", min: -60, max: 80, step: 1 },
+      sunY: { label: "sun height", min: -80, max: 20, step: 1 },
+      macawPeriod: { label: "macaw interval", min: 4, max: 30, step: 0.5 },
+    },
+    palette: [
     "#0d2616", "#173d1f", "#225a26", "#2f7a2c", "#45983a", "#6bb544", "#9ccf55", "#c9e27a",
     "#2a3436", "#465256", "#6c7676", "#9aa29c",
     "#f7fcfc", "#d6eef0", "#a8dcdf", "#6cc5c6", "#35aeb0", "#1d8b92", "#11636c",
@@ -30,30 +75,14 @@ export const meta = {
     "#e5483b", "#f08c34", "#3d84d6", "#8b6bd0", "#a92d25",
     "#5b8f7a", "#8fb8a0", "#5e4a36",
   ],
-} satisfies Meta;
+} satisfies Meta<JungleFallsOptions>;
 
 const W = 200, H = 100;
-const POOL = 80; // the pool's surface, where the lower fall lands
-const LEDGE = 50; // the shelf between the two tiers
-const BASE_X = 101; // where the lower fall plunges
-const RAIN = [118, 116, 56]; // the rainbow's centre and radius
-const SUN = [30, -40]; // the sun, up and to the left, out of frame
-const LOOP = 16; // the macaws cross once every LOOP seconds
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 
 const SKY = 0, CANOPY = 1, ROCK = 2, FALL = 3, WATER = 4, LEAF = 5, TRUNK = 6, VINE = 7;
-
-// The falls: lip row (0 for the cliff top), foot row, centre at the lip and the
-// foot, half width at the lip and the foot. Two tiers in the middle, two
-// threads down the sides.
-const FALLS: [number, number, number, number, number, number][] = [
-  [0, LEDGE - 1, 100, 100.5, 7, 9.5],
-  [LEDGE + 1, POOL + 1, 101, 101, 14, 20],
-  [31, POOL + 1, 131, 134, 1.6, 3],
-  [37, POOL + 1, 71, 69, 1.2, 2.4],
-];
 
 function hash(x: number, y: number): number {
   let h = Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263);
@@ -99,7 +128,25 @@ const BOW = [
   [0.55, 0.42, 0.82], [0.24, 0.52, 0.84], [0.42, 0.74, 0.34], [0.95, 0.82, 0.38], [0.94, 0.55, 0.2], [0.9, 0.28, 0.23],
 ];
 
-export default function jungleFalls(): Frame {
+export default function jungleFalls(o: Partial<JungleFallsOptions> = {}): Frame {
+  const { pool = meta.options.pool, ledge = meta.options.ledge, waterfallX = meta.options.waterfallX, rainbowX = meta.options.rainbowX, rainbowY = meta.options.rainbowY, rainbowRadius = meta.options.rainbowRadius, sunX = meta.options.sunX, sunY = meta.options.sunY, macawPeriod = meta.options.macawPeriod } = o;
+  const POOL = pool; // the pool's surface, where the lower fall lands
+  const LEDGE = ledge; // the shelf between the two tiers
+  const BASE_X = waterfallX; // where the lower fall plunges
+  const RAIN = [rainbowX, rainbowY, rainbowRadius]; // the rainbow's centre and radius
+  const SUN = [sunX, sunY]; // the sun, up and to the left, out of frame
+  const LOOP = macawPeriod; // the macaws cross once every LOOP seconds
+
+  // The falls: lip row (0 for the cliff top), foot row, centre at the lip and the
+  // foot, half width at the lip and the foot. Two tiers in the middle, two
+  // threads down the sides.
+  const FALLS: [number, number, number, number, number, number][] = [
+    [0, LEDGE - 1, 100, 100.5, 7, 9.5],
+    [LEDGE + 1, POOL + 1, 101, 101, 14, 20],
+    [31, POOL + 1, 131, 134, 1.6, 3],
+    [37, POOL + 1, 71, 69, 1.2, 2.4],
+  ];
+
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -168,7 +215,7 @@ export default function jungleFalls(): Frame {
         const m = fbm(px * 0.09 + 20, y * 0.16, 3, 0);
         moss[k] = clamp(0.8 * smooth(0.58, 0.7, m) + 0.8 * smooth(ct + 4, ct, y));
         // the shelf between the tiers juts out, its top lit and mossy
-        if (Math.abs(px - 101) < 26 - 4 * fbm(px * 0.2, 4, 2, 0) && y >= LEDGE - 1.5 && y < LEDGE + 2.5) {
+        if (Math.abs(px - BASE_X) < 26 - 4 * fbm(px * 0.2, 4, 2, 0) && y >= LEDGE - 1.5 && y < LEDGE + 2.5) {
           shade[k] = y < LEDGE ? 0.95 : 0.3 - 0.1 * (y - LEDGE);
           moss[k] = y < LEDGE ? 1 : 0.2;
         }

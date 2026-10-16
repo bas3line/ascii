@@ -12,6 +12,27 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of snow train. Defaults are the original values. */
+export interface SnowTrainOptions {
+  [key: string]: unknown;
+  /** The moon's column. */
+  moonX: number;
+  /** The moon's row. */
+  moonY: number;
+  /** The moon's radius in cells. */
+  moonRadius: number;
+  /** The train's speed in cells a second. */
+  speed: number;
+  /** The train's roof row. */
+  roof: number;
+  /** The column past which the train is inside the hill. */
+  tunnelMouth: number;
+  /** The engine and coaches, nose to tail, in cells. */
+  trainLength: number;
+  /** The row of the train's lamps. */
+  lampHeight: number;
+}
+
 export const meta = {
   name: "snow train",
   category: "scenes",
@@ -29,17 +50,29 @@ export const meta = {
     "#0b1a1e", "#11262a", "#1a3436", "#26474a",
     "#1e2230", "#2c3242", "#3e4658", "#586276", "#7c8698",
   ],
-} satisfies Meta;
+options: {
+    moonX: 152,
+    moonY: 15,
+    moonRadius: 7,
+    speed: 7,
+    roof: 42,
+    tunnelMouth: 185,
+    trainLength: 156,
+    lampHeight: 47,
+  },
+  params: {
+    moonX: { label: "moon position", min: 60, max: 190, step: 1 },
+    moonY: { label: "moon height", min: 2, max: 40, step: 1 },
+    moonRadius: { label: "moon radius", min: 3, max: 16, step: 0.5 },
+    speed: { label: "train speed", min: 0, max: 20, step: 0.5 },
+    roof: { label: "train height", min: 30, max: 55, step: 1 },
+    tunnelMouth: { label: "tunnel mouth", min: 150, max: 195, step: 1 },
+    trainLength: { label: "train length", min: 60, max: 220, step: 1 },
+    lampHeight: { label: "lamp height", min: 36, max: 52, step: 1 },
+  },
+} satisfies Meta<SnowTrainOptions>;
 
 const W = 200, H = 100;
-const MOON = [152, 15];
-const MOON_R = 7;
-const ROOF = 42; // the train's roof row; the parapet hides it below row 48
-const LAMP_Y = 47;
-const SPEED = 7; // cells a second
-const LEN = 156; // engine and five coaches, nose to tail
-const MOUTH = 185; // the train is inside the hill past this column
-const PERIOD = MOUTH + LEN + 40; // one crossing and a pause on the empty bridge
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
@@ -118,7 +151,16 @@ function pine(x: number, y: number, cx: number, base: number, h: number, w: numb
   return top || lee || (dy < 1.2) ? 2 : 1;
 }
 
-export default function snowTrain(): Frame {
+export default function snowTrain(o: Partial<SnowTrainOptions> = {}): Frame {
+  const { moonX = meta.options.moonX, moonY = meta.options.moonY, moonRadius = meta.options.moonRadius, speed = meta.options.speed, roof = meta.options.roof, tunnelMouth = meta.options.tunnelMouth, trainLength = meta.options.trainLength, lampHeight = meta.options.lampHeight } = o;
+  const MOON = [moonX, moonY];
+  const MOON_R = moonRadius;
+  const ROOF = roof; // the train's roof row; the parapet hides it below row 48
+  const LAMP_Y = lampHeight;
+  const SPEED = speed; // cells a second
+  const LEN = trainLength; // engine and five coaches, nose to tail
+  const MOUTH = tunnelMouth; // the train is inside the hill past this column
+  const PERIOD = MOUTH + LEN + 40; // one crossing and a pause on the empty bridge
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);

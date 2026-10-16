@@ -23,6 +23,16 @@ export type Category =
 
 export type Options = Record<string, unknown>;
 
+/** Studio control metadata for one option: how to present and bound it. */
+export type PieceParam =
+  | { type?: "number"; label?: string; min?: number; max?: number; step?: number; unit?: string }
+  | { type: "boolean"; label?: string }
+  | { type: "select"; label?: string; options: { label: string; value: string }[] }
+  | { type: "color"; label?: string };
+
+/** Option key -> control descriptor, for the studio's sliders and pickers. */
+export type PieceSchema = Record<string, PieceParam>;
+
 export interface Meta<O extends Options = Options> {
   /** Lowercase display name: "newton's cradle". */
   name: string;
@@ -36,6 +46,8 @@ export interface Meta<O extends Options = Options> {
   fps: number;
   /** Defaults for every option the default function takes. */
   options?: O;
+  /** Control descriptors for those options, driving the studio's sliders. */
+  params?: PieceSchema;
   /** True if the picture depends on the real time or date. */
   clock?: boolean;
   /** Up to 64 colours as #rrggbb, indexed by `env.color`; such a piece draws on a canvas. */

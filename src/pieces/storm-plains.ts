@@ -12,6 +12,25 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of storm plains. Defaults are the original values. */
+export interface StormPlainsOptions {
+  [key: string]: unknown;
+  /** The horizon row. */
+  horizon: number;
+  /** The storm's flat base. */
+  base: number;
+  /** The sun's column, just below the horizon. */
+  sunX: number;
+  /** How far below the horizon the sun sits. */
+  sunDepth: number;
+  /** Speed of the drifting streak clouds. */
+  drift: number;
+  /** Speed of the falling rain shafts. */
+  shaft: number;
+  /** Speed of the gusts crossing the field. */
+  gust: number;
+}
+
 export const meta = {
   name: "storm plains",
   category: "scenes",
@@ -21,6 +40,24 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#0b0912",
+  options: {
+    horizon: 64,
+    base: 45,
+    sunX: 30,
+    sunDepth: 6,
+    drift: 1.2,
+    shaft: 0.9,
+    gust: 9,
+  },
+  params: {
+    horizon: { label: "horizon", min: 50, max: 80, step: 1 },
+    base: { label: "storm base", min: 35, max: 60, step: 1 },
+    sunX: { label: "sun position", min: 0, max: 120, step: 1 },
+    sunDepth: { label: "sun depth", min: 1, max: 20, step: 1 },
+    drift: { label: "cloud drift", min: 0, max: 3, step: 0.05 },
+    shaft: { label: "rain speed", min: 0, max: 3, step: 0.05 },
+    gust: { label: "gust speed", min: 0, max: 20, step: 0.5 },
+  },
   palette: [
     // night violets, zenith to dusk
     "#0f0c20", "#141029", "#1c1638", "#261c4a", "#32235a", "#40306c", "#53407e", "#6a5590", "#8670a6",
@@ -37,15 +74,12 @@ export const meta = {
     // lightning
     "#a6a2c8", "#d6d2fa", "#f4f2ff",
     // lamplight
-    "#ffe08a", "#ffb84a",
-  ],
-} satisfies Meta;
+        "#ffe08a", "#ffb84a",
+      ],
+    } satisfies Meta<StormPlainsOptions>;
 
-const W = 200, H = 100;
-const HZ = 64; // the horizon
-const SUN = [30, 70]; // just below the horizon, behind the farmhouse
-const BASE = 45; // the storm's flat base
-const DOTS = " ·•●";
+    const W = 200, H = 100;
+    const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 
@@ -101,7 +135,14 @@ function segDist(px: number, py: number, ax: number, ay: number, bx: number, by:
   return Math.sqrt(ex * ex + ey * ey);
 }
 
-export default function stormPlains(): Frame {
+export default function stormPlains(o: Partial<StormPlainsOptions> = {}): Frame {
+  const { horizon = meta.options.horizon, base = meta.options.base, sunX = meta.options.sunX, sunDepth = meta.options.sunDepth } = o;
+  const driftSpeed = o.drift ?? meta.options.drift;
+  const shaftSpeed = o.shaft ?? meta.options.shaft;
+  const gustSpeed = o.gust ?? meta.options.gust;
+  const HZ = horizon;
+  const SUN = [sunX, HZ + sunDepth];
+  const BASE = base;
   const P = meta.palette.map(hex);
   const STALK = meta.palette.indexOf("#8c6230");
   const N = W * H;
@@ -492,9 +533,9 @@ export default function stormPlains(): Frame {
     if (fl && (!f || f.I < fl.I)) f = fl;
     const I = f ? f.I : 0;
     const inside = f ? f.inside : 0;
-    const drift = t * 1.2;
-    const shaftOff = t * 0.9;
-    const gOff = t * 9;
+    const drift = t * driftSpeed;
+        const shaftOff = t * shaftSpeed;
+        const gOff = t * gustSpeed;
 
     for (const [k, ph, sp, a] of stars) star[k] = a * (0.55 + 0.45 * Math.sin(t * sp + ph));
 

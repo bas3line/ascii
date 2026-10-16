@@ -39,8 +39,11 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
             aria-label="Search all pieces"
           />
         </div>
-        <div class="picker-menu" id="picker-menu" role="menu" aria-label="Every piece"></div>
-      </div>
+              <div class="picker-cascade">
+                <div class="picker-col picker-root" id="picker-root" role="menu" aria-label="Groups"></div>
+                <div class="picker-col picker-branch" id="picker-branch" role="menu" aria-label="Pieces" hidden></div>
+              </div>
+            </div>
     </div>
   </div>
 
@@ -333,22 +336,47 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
     color: var(--muted);
   }
 
-  .picker-menu {
-    max-height: var(--picker-max, 420px);
-    min-height: 60px;
-    overflow-y: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    overscroll-behavior: contain;
-    padding: 0.25rem 0;
+    /* Two-column cascade: the group list stays, a chosen group's items open in a
+    second column beside it. The branch may run twice as tall as the root and
+    scrolls on its own. */
+    .picker-cascade {
+      display: flex;
+      align-items: flex-start;
+      max-height: var(--picker-total, 480px);
+      overflow: hidden;
   }
 
-  .picker-menu::-webkit-scrollbar {
-    display: none;
-    width: 0;
-  }
+    .picker-col {
+      min-height: 60px;
+      overflow-y: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      overscroll-behavior: contain;
+      padding: 0.25rem 0;
+    }
 
-  .picker-row {
+    .picker-col::-webkit-scrollbar {
+      display: none;
+      width: 0;
+    }
+
+    .picker-root {
+      flex: 1 1 45%;
+      max-height: var(--picker-max, 420px);
+    }
+
+    .picker-branch {
+      flex: 1 1 55%;
+      max-height: var(--picker-total, 480px);
+      border-left: 1px solid var(--well);
+    }
+
+    /* The panel widens to make room for both columns side by side. */
+    .picker-panel:has(.picker-branch:not([hidden])) {
+      width: min(560px, calc(100vw - 2rem));
+    }
+
+    .picker-row {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -527,24 +555,22 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
   }
 
   .canvas-box {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 200 / 100;
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #070b16;
-  }
+      position: relative;
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #070b16;
+    }
 
-  #studio-canvas {
-    width: 100%;
-    height: 100%;
-    display: block;
-    image-rendering: pixelated;
-  }
+    #studio-canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
 
   .transport-strip {
     display: flex;
@@ -1051,11 +1077,10 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
   import type { Env, Frame, Meta, Options, Piece } from "ascii.rest";
   import type { SceneSpec, StudioSession } from "ascii.rest/studio";
   import {
-    compileSceneToCode,
-    createStudioSession,
-    getLayerDefinition,
-    hexToRgb,
-      sceneBySlug,
+      compileSceneToCode,
+      createStudioSession,
+      getLayerDefinition,
+      hexToRgb,
     } from "ascii.rest/studio";
 
   // What the studio is showing: a library piece, or a scene-engine spec
@@ -1086,7 +1111,7 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
 
   // DOM Elements
   const canvas = document.getElementById("studio-canvas") as HTMLCanvasElement;
-  const ctx = canvas.getContext("2d", { alpha: false });
+  const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
   const canvasBox = document.getElementById("canvas-box") as HTMLElement;
   const playBtn = document.getElementById("btn-play") as HTMLButtonElement;
   const playIcon = document.getElementById("play-icon") as HTMLSpanElement;
@@ -1124,12 +1149,12 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
   const pickerBtn = document.getElementById("picker-btn") as HTMLButtonElement;
   const pickerValue = document.getElementById("picker-value") as HTMLElement;
   const pickerPanel = document.getElementById("picker-panel") as HTMLElement;
-  const pickerMenu = document.getElementById("picker-menu") as HTMLElement;
+  const pickerRoot = document.getElementById("picker-root") as HTMLElement;
+  const pickerBranch = document.getElementById("picker-branch") as HTMLElement;
   const pickerSearch = document.getElementById("picker-search") as HTMLInputElement;
 
   // Cell colors, indexed the way frames write them: one palette index per cell.
-  let colorIndices = new Uint8Array(0);
-  const colorMap = new Map<number, [number, number, number]>();
+    let colorIndices = new Uint8Array(0);
 
   function activeMeta(): Meta {
     if (!active) throw new Error("nothing is loaded");
@@ -1149,15 +1174,9 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
   }
 
   function updateColorMap() {
-    colorMap.clear();
-    const palette = activePalette();
-    if (!palette || !active) return;
-    const overrides = active.kind === "piece" ? active.colorOverride : undefined;
-    for (let i = 0; i < palette.length; i++) {
-      const hex = overrides && overrides[i] ? overrides[i] : palette[i];
-      colorMap.set(i, hexToRgb(hex));
+      // Colour comes straight from a piece's palette; user recoloring is applied
+      // per palette index when the frame is drawn, so nothing is cached here.
     }
-  }
 
   // Whether a hex color reads as dark, judged the way mount() judges it.
   function isDark(hex: string): boolean {
@@ -1168,104 +1187,172 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
   // One ink for cells the piece left uncolored, honouring the ground.
   function inkFor(ground: string | null): string {
     if (ground) return isDark(ground) ? "#f5f6f7" : "#131518";
-    return "#f5f6f7";
+      return getComputedStyle(canvas).color || "#f5f6f7";
   }
 
-  // Canvas sizing: the bitmap matches the piece's cell grid exactly
-  // (rows * cell cells tall); CSS maps it into the stage box undistorted.
-  function sizeCanvas() {
-    const meta = active?.kind === "piece" ? active.mod.meta : active?.session.piece.meta;
-    if (!meta) return;
-    const dpr = Math.min(devicePixelRatio || 1, 2);
-    const width = Math.max(320, canvasBox.clientWidth * dpr);
-    const nextW = Math.round(width);
-    const nextH = Math.round((width * meta.rows * (meta.cell ?? 2)) / meta.cols);
-    if (canvas.width !== nextW || canvas.height !== nextH) {
-      canvas.width = nextW;
-      canvas.height = nextH;
-    }
-  }
+  // --- canvas rendering: identical to mount() ---------------------------------
+    // Each (char, colour) pair is drawn once into an atlas and copied into its
+    // cell, cell by whole-pixel rectangle, so glyphs tile exactly as the site's.
+    const atlas = document.createElement("canvas");
+    const actx = atlas.getContext("2d") as CanvasRenderingContext2D;
+    const slots = new Map<number, number>();
+    let wpx = 0, sw = 0, sh = 0, pw = 0, ph = 0;
+    let xs = new Int32Array(0), ys = new Int32Array(0), gx = new Int32Array(0), gy = new Int32Array(0);
+    let lastText = "", full = true;
+    let lastColor = new Uint8Array(0);
 
-  // Render on-demand (used when paused or after a resize)
-  function renderOnDemand() {
-    if (active) renderFrame(currentTime);
-  }
-
-  const resizeObserver = new ResizeObserver(() => {
-    if (!active) return;
-    const wasH = canvas.height;
-    sizeCanvas();
-    if (!isPlaying || canvas.height !== wasH) renderOnDemand();
-  });
-  resizeObserver.observe(canvasBox);
-
-  // Draw current frame to canvas using the same logic as mount.ts
-  function renderFrame(t: number) {
-    if (!ctx || !active) return;
-    const started = performance.now();
-    const meta = activeMeta();
-    const ground = currentGround();
-
-    const cols = meta.cols;
-    const rows = meta.rows;
-
-    const needed = cols * rows;
-    if (colorIndices.length !== needed) colorIndices = new Uint8Array(needed);
-
-    const env: Env = { paper: !!ground && !isDark(ground), color: colorIndices };
-
-    let text: string;
-    try {
-      text = active.kind === "piece" ? active.frame(t, env) : active.session.piece.default()(t, env);
-    } catch (err) {
-      pausePlayback();
-      perfDisplay.textContent = "err";
-      codeOutput.textContent = `// ${meta.name}: ${(err as Error).message}`;
-      return;
-    }
-    perfDisplay.textContent = `${(performance.now() - started).toFixed(1)}ms`;
-
-    const cellW = canvas.width / cols;
-    const cellH = canvas.height / rows;
-
-    // Fill background
-    ctx.fillStyle = ground ?? "#070b16";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    ctx.font = `${(cellW * 1.15).toFixed(2)}px "ascii.rest mono", ui-monospace, monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    const ink = inkFor(ground);
-
-    // Draw text character by character, matching mount.ts behavior
-    let x = 0;
-    let y = 0;
-    for (let k = 0; k < text.length; k++) {
-      const c = text.charCodeAt(k);
-      if (c === 10) {
-        // newline
-        x = 0;
-        y++;
-        continue;
+    function glyph(code: number, i: number, palette: readonly string[] | null, ink: string): number {
+      const key = code * 256 + i;
+      let s = slots.get(key);
+      if (s !== undefined) return s;
+      if (slots.size === 1024) {
+        actx.clearRect(0, 0, atlas.width, atlas.height);
+        slots.clear();
       }
-      if (x >= cols) {
-        x = 0;
-        y++;
-      }
-      if (y < rows && c !== 32) {
-        // not a space
-        const idx = y * cols + x;
-        const paletteColor = colorIndices[idx];
-        const charColor = colorMap.get(paletteColor);
-        ctx.fillStyle = charColor
-          ? `rgb(${Math.round(charColor[0] * 255)}, ${Math.round(charColor[1] * 255)}, ${Math.round(charColor[2] * 255)})`
-          : ink;
-        ctx.fillText(text[k], (x + 0.5) * cellW, (y + 0.5) * cellH);
-      }
-      x++;
+      s = slots.size;
+      const x = (s % 32) * pw + 1;
+      const y = Math.floor(s / 32) * ph + 1;
+      actx.font = `${wpx / 0.6}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+      actx.textAlign = "center";
+      actx.textBaseline = "middle";
+      actx.fillStyle = palette ? (palette[i] || palette[0]) : ink;
+      actx.save();
+      actx.beginPath();
+      actx.rect(x - 1, y - 1, pw, ph);
+      actx.clip();
+      actx.fillText(String.fromCharCode(code), x + sw / 2, y + sh / 2);
+      actx.restore();
+      slots.set(key, s);
+      return s;
     }
-  }
+
+    // Canvas sizing: the bitmap matches the piece's cell grid exactly, and the
+    // canvas advertises its own aspect ratio, as mount() does.
+    function sizeCanvas() {
+      if (!active) return;
+      const meta = activeMeta();
+      const cols = meta.cols;
+      const rows = meta.rows;
+      const cell = meta.cell ?? 2;
+      const width = canvas.clientWidth;
+      if (!width) return;
+      wpx = (width * (devicePixelRatio || 1)) / cols;
+      const h = wpx * cell;
+      sw = Math.ceil(wpx);
+      sh = Math.ceil(h);
+      pw = sw + 2;
+      ph = sh + 2;
+      canvas.width = Math.round(wpx * cols);
+      canvas.height = Math.round(h * rows);
+      canvas.style.aspectRatio = `${cols} / ${rows * cell}`;
+      atlas.width = pw * 32;
+      atlas.height = ph * 32;
+      xs = Int32Array.from({ length: cols + 1 }, (_, x) => Math.round(x * wpx));
+      ys = Int32Array.from({ length: rows + 1 }, (_, y) => Math.round(y * h));
+      gx = Int32Array.from({ length: cols }, (_, x) => Math.round(x * wpx + (wpx - sw) / 2));
+      gy = Int32Array.from({ length: rows }, (_, y) => Math.round(y * h + (h - sh) / 2));
+      slots.clear();
+      full = true;
+      lastText = "";
+    }
+
+    // Render on-demand (used when paused or after a resize)
+    function renderOnDemand() {
+      if (active) {
+        sizeCanvas();
+        renderFrame(currentTime);
+      }
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (!active) return;
+      const wasW = canvas.width;
+      const wasH = canvas.height;
+      sizeCanvas();
+      if (!isPlaying || canvas.width !== wasW || canvas.height !== wasH) renderOnDemand();
+    });
+    resizeObserver.observe(canvasBox);
+
+    // Draw one frame: the exact cell-tiled atlas copy mount() uses.
+    function renderFrame(t: number) {
+      if (!active) return;
+      const started = performance.now();
+      const meta = activeMeta();
+      const ground = currentGround();
+      const cols = meta.cols;
+      const rows = meta.rows;
+      // Not measured yet (first paint before layout): the resize observer will draw once it is.
+      if (xs.length !== cols + 1) return;
+
+      const needed = cols * rows;
+      if (colorIndices.length !== needed) colorIndices = new Uint8Array(needed);
+      if (lastColor.length !== needed) lastColor = new Uint8Array(needed);
+
+      const paper = ground ? !isDark(ground) : isDark(getComputedStyle(canvas).color);
+      const env: Env = { paper, color: colorIndices };
+
+      let text: string;
+      try {
+        text = active.kind === "piece" ? active.frame(t, env) : active.session.piece.default()(t, env);
+      } catch (err) {
+        pausePlayback();
+        perfDisplay.textContent = "err";
+        codeOutput.textContent = `// ${meta.name}: ${(err as Error).message}`;
+        return;
+      }
+      perfDisplay.textContent = `${(performance.now() - started).toFixed(1)}ms`;
+
+      const overrides = active.kind === "piece" ? active.colorOverride : undefined;
+      const basePalette = activePalette();
+      const palette = basePalette
+        ? basePalette.map((hex, i) => (overrides && overrides[i] ? overrides[i] : hex))
+        : null;
+      const ink = inkFor(ground);
+
+      if (ground) ctx.fillStyle = ground;
+      if (full) {
+        if (ground) ctx.fillRect(0, 0, canvas.width, canvas.height);
+        else ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+
+      for (let k = 0, x = 0, y = 0; k < text.length; k++) {
+        const c = text.charCodeAt(k);
+        if (c === 10) {
+          x = 0;
+          y++;
+          continue;
+        }
+        const i = y * cols + x;
+        if (full || c !== lastText.charCodeAt(k) || colorIndices[i] !== lastColor[i]) {
+          const x0 = xs[x];
+          const y0 = ys[y];
+          const cw = xs[x + 1] - x0;
+          const ch = ys[y + 1] - y0;
+          if (!full) {
+            if (ground) ctx.fillRect(x0, y0, cw, ch);
+            else ctx.clearRect(x0, y0, cw, ch);
+          }
+          if (c !== 32) {
+            const s = glyph(c, colorIndices[i], palette, ink);
+            ctx.drawImage(
+              atlas,
+              (s % 32) * pw + 1 + x0 - gx[x],
+              Math.floor(s / 32) * ph + 1 + y0 - gy[y],
+              cw,
+              ch,
+              x0,
+              y0,
+              cw,
+              ch,
+            );
+          }
+        }
+        x++;
+      }
+      lastText = text;
+      lastColor.set(colorIndices);
+      full = false;
+    }
 
   // Animation loop with complete pause shutdown (0% CPU when paused)
   function tick(timestamp: number) {
@@ -1338,16 +1425,10 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
     });
   }
 
-    // Picker routing: parametrized scenes (from the studio registry) go through
-    // the scene engine; every other piece loads from the library as before.
+    // Picker routing: every catalog item is a library piece; the image upload is
+    // the only scene-engine path and it is reached directly, not through here.
     function selectBySlug(slug: string) {
-      const spec = sceneBySlug.get(slug);
-      if (spec) {
-        selectSpec(spec);
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        selectPiece(slug);
-      }
+      void selectPiece(slug);
     }
 
   // Scene-engine specs come from the image ingestion, guarded the same way
@@ -1619,141 +1700,225 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
     });
   }
 
-  // A control for every entry in a piece's own defaults: numbers as number
-  // fields, booleans as checkboxes, text as inputs, string lists as
-  // comma-separated values, anything else as JSON.
-  function buildOptionsControls() {
-    if (active?.kind !== "piece") return;
-    const item = active;
-    const defaults: Options = item.mod.meta.options ?? {};
+  // A control for every entry in a piece's own defaults. Number options with a
+    // `meta.params` descriptor render as sliders; selects, booleans and colours
+    // get their native controls. Options without a descriptor fall back to a
+    // plain typed field.
+    function buildOptionsControls() {
+      if (active?.kind !== "piece") return;
+      const item = active;
+      layerControlsEl.innerHTML = "";
+      const defaults: Options = item.mod.meta.options ?? {};
+      const schema = item.mod.meta.params ?? {};
 
-    const commit = (value: Options) => {
-      try {
-        item.frame = item.mod.default(value);
-      } catch (err) {
-        codeOutput.textContent = `// ${item.mod.meta.name}: ${(err as Error).message}`;
-      }
-      renderOnDemand();
+      const commit = (value: Options) => {
+        try {
+          item.frame = item.mod.default(value);
+        } catch (err) {
+          codeOutput.textContent = `// ${item.mod.meta.name}: ${(err as Error).message}`;
+        }
+        renderOnDemand();
+        updateCodeView();
     };
-    const setOption = (key: string, value: unknown) => {
-      item.options[key] = value;
-      commit({ ...defaults, ...item.options });
-    };
+      const setOption = (key: string, value: unknown) => {
+        item.options[key] = value;
+        commit({ ...defaults, ...item.options });
+      };
 
-    Object.entries(defaults).forEach(([key, def]) => {
-      if (typeof def === "number") {
-        const group = document.createElement("div");
-        group.className = "param-control-group param-row-between";
-
-        const label = document.createElement("label");
-        label.className = "param-label";
-        label.textContent = key;
-
-        const input = document.createElement("input");
-        input.type = "number";
-        input.step = "any";
-        input.value = typeof item.options[key] === "number" ? String(item.options[key]) : String(def);
-        input.addEventListener("change", () => {
-          const n = parseFloat(input.value);
-          if (Number.isFinite(n)) setOption(key, n);
-        });
-
-        group.appendChild(label);
-        group.appendChild(input);
-        layerControlsEl.appendChild(group);
-      } else if (typeof def === "boolean") {
-        const group = document.createElement("div");
-        group.className = "param-control-group param-row-between";
-
-        const label = document.createElement("label");
-        label.className = "param-label";
-        label.style.cursor = "pointer";
-        label.textContent = key;
-
-        const cb = document.createElement("input");
-        cb.type = "checkbox";
-        cb.className = "layer-chk";
-        cb.checked = Boolean(item.options[key] ?? def);
-        cb.addEventListener("change", () => setOption(key, cb.checked));
-
-        group.appendChild(label);
-        group.appendChild(cb);
-        layerControlsEl.appendChild(group);
-      } else if (typeof def === "string") {
+      const slider = (key: string, label: string, min: number, max: number, step: number, def: unknown) => {
         const group = document.createElement("div");
         group.className = "param-control-group";
+        const header = document.createElement("div");
+        header.className = "param-control-header";
 
-        const label = document.createElement("div");
-        label.className = "param-label";
-        label.textContent = key;
+        const lab = document.createElement("span");
+        lab.className = "param-label";
+        lab.textContent = label;
+
+        const val = document.createElement("span");
+        val.className = "param-val";
 
         const input = document.createElement("input");
-        input.type = "text";
-        input.value = String(item.options[key] ?? def);
-        input.spellcheck = false;
-        input.addEventListener("change", () => setOption(key, input.value));
+        input.type = "range";
+        input.min = String(min);
+        input.max = String(max);
+        input.step = String(step ?? (max - min) / 100);
+        const cur = typeof item.options[key] === "number" ? item.options[key] as number : def as number;
+        input.value = String(cur);
+        val.textContent = input.value;
 
+        input.addEventListener("input", () => {
+          val.textContent = input.value;
+          setOption(key, parseFloat(input.value));
+        });
+
+        header.appendChild(lab);
+        header.appendChild(val);
+        group.appendChild(header);
         const widget = document.createElement("div");
         widget.className = "param-widget";
         widget.appendChild(input);
-        group.appendChild(label);
         group.appendChild(widget);
         layerControlsEl.appendChild(group);
-      } else if (Array.isArray(def) && def.length > 0 && def.every((v) => typeof v === "string")) {
-        const group = document.createElement("div");
-        group.className = "param-control-group";
+      };
 
-        const label = document.createElement("div");
-        label.className = "param-label";
-        label.textContent = key;
+      Object.entries(defaults).forEach(([key, def]) => {
+        const pd = schema[key];
+        if (pd && typeof def === "number") {
+          slider(key, pd.label || key, pd.min ?? 0, pd.max ?? 100, pd.step ?? 1, def);
+          return;
+        }
+        if (pd && pd.type === "select") {
+          const group = document.createElement("div");
+          group.className = "param-control-group";
+          const header = document.createElement("div");
+          header.className = "param-control-header";
+          const lab = document.createElement("span");
+          lab.className = "param-label";
+          lab.textContent = pd.label || key;
+          header.appendChild(lab);
+          group.appendChild(header);
 
-        const input = document.createElement("input");
-        input.type = "text";
-        const current = item.options[key] ?? def;
-        input.value = Array.isArray(current) ? (current as string[]).join(", ") : String(current);
-        input.placeholder = "comma separated";
-        input.spellcheck = false;
-        input.addEventListener("change", () => {
-          const list = input.value.split(",").map((s) => s.trim()).filter(Boolean);
-          setOption(key, list.length ? list : (def as string[]));
-        });
+          const sel = document.createElement("select");
+          pd.options.forEach((opt) => {
+            const o = document.createElement("option");
+            o.value = opt.value;
+            o.textContent = opt.label;
+            if (opt.value === String(item.options[key] ?? def)) o.selected = true;
+            sel.appendChild(o);
+          });
+          sel.addEventListener("change", () => setOption(key, sel.value));
+          const widget = document.createElement("div");
+          widget.className = "param-widget";
+          widget.appendChild(sel);
+          group.appendChild(widget);
+          layerControlsEl.appendChild(group);
+          return;
+        }
+        if (pd && pd.type === "color" && typeof def === "string") {
+          const group = document.createElement("div");
+          group.className = "param-control-group param-row-between";
+          const lab = document.createElement("span");
+          lab.className = "param-label";
+          lab.textContent = pd.label || key;
+          const right = document.createElement("div");
+          right.className = "param-color-right";
+          const picker = document.createElement("input");
+          picker.type = "color";
+          picker.value = String(item.options[key] ?? def);
+          const hex = document.createElement("span");
+          hex.className = "param-val";
+          hex.textContent = picker.value;
+          picker.addEventListener("input", () => {
+            hex.textContent = picker.value;
+            setOption(key, picker.value);
+          });
+          right.appendChild(picker);
+          right.appendChild(hex);
+          group.appendChild(lab);
+          group.appendChild(right);
+          layerControlsEl.appendChild(group);
+          return;
+        }
 
-        const widget = document.createElement("div");
-        widget.className = "param-widget";
-        widget.appendChild(input);
-        group.appendChild(label);
-        group.appendChild(widget);
-        layerControlsEl.appendChild(group);
-      } else {
-        const group = document.createElement("div");
-        group.className = "param-control-group";
-
-        const label = document.createElement("div");
-        label.className = "param-label";
-        label.textContent = key;
-
-        const textarea = document.createElement("textarea");
-        textarea.rows = 3;
-        textarea.spellcheck = false;
-        const current = item.options[key] ?? def;
-        textarea.value = JSON.stringify(current, null, 2);
-        textarea.addEventListener("change", () => {
-          try {
-            setOption(key, JSON.parse(textarea.value));
-          } catch {
-            textarea.value = JSON.stringify(item.options[key] ?? def, null, 2);
-          }
-        });
-
-        const widget = document.createElement("div");
-        widget.className = "param-widget";
-        widget.appendChild(textarea);
-        group.appendChild(label);
-        group.appendChild(widget);
-        layerControlsEl.appendChild(group);
-      }
-    });
-  }
+        // Generic fallback by type.
+        if (typeof def === "number") {
+          const group = document.createElement("div");
+          group.className = "param-control-group param-row-between";
+          const label = document.createElement("label");
+          label.className = "param-label";
+          label.textContent = key;
+          const input = document.createElement("input");
+          input.type = "number";
+          input.step = "any";
+          input.value = typeof item.options[key] === "number" ? String(item.options[key]) : String(def);
+          input.addEventListener("change", () => {
+            const n = parseFloat(input.value);
+            if (Number.isFinite(n)) setOption(key, n);
+          });
+          group.appendChild(label);
+          group.appendChild(input);
+          layerControlsEl.appendChild(group);
+        } else if (typeof def === "boolean") {
+          const group = document.createElement("div");
+          group.className = "param-control-group param-row-between";
+          const label = document.createElement("label");
+          label.className = "param-label";
+          label.textContent = key;
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.className = "layer-chk";
+          cb.checked = Boolean(item.options[key] ?? def);
+          cb.addEventListener("change", () => setOption(key, cb.checked));
+          group.appendChild(label);
+          group.appendChild(cb);
+          layerControlsEl.appendChild(group);
+        } else if (typeof def === "string") {
+          const group = document.createElement("div");
+          group.className = "param-control-group";
+          const label = document.createElement("div");
+          label.className = "param-label";
+          label.textContent = key;
+          const input = document.createElement("input");
+          input.type = "text";
+          input.value = String(item.options[key] ?? def);
+          input.spellcheck = false;
+          input.addEventListener("change", () => setOption(key, input.value));
+          const widget = document.createElement("div");
+          widget.className = "param-widget";
+          widget.appendChild(input);
+          group.appendChild(label);
+          group.appendChild(widget);
+          layerControlsEl.appendChild(group);
+        } else if (Array.isArray(def) && def.length > 0 && def.every((v) => typeof v === "string")) {
+          const group = document.createElement("div");
+          group.className = "param-control-group";
+          const label = document.createElement("div");
+          label.className = "param-label";
+          label.textContent = key;
+          const input = document.createElement("input");
+          input.type = "text";
+          const current = item.options[key] ?? def;
+          input.value = Array.isArray(current) ? (current as string[]).join(", ") : String(current);
+          input.placeholder = "comma separated";
+          input.spellcheck = false;
+          input.addEventListener("change", () => {
+            const list = input.value.split(",").map((s) => s.trim()).filter(Boolean);
+            setOption(key, list.length ? list : (def as string[]));
+          });
+          const widget = document.createElement("div");
+          widget.className = "param-widget";
+          widget.appendChild(input);
+          group.appendChild(label);
+          group.appendChild(widget);
+          layerControlsEl.appendChild(group);
+        } else {
+          const group = document.createElement("div");
+          group.className = "param-control-group";
+          const label = document.createElement("div");
+          label.className = "param-label";
+          label.textContent = key;
+          const textarea = document.createElement("textarea");
+          textarea.rows = 3;
+          textarea.spellcheck = false;
+          const current = item.options[key] ?? def;
+          textarea.value = JSON.stringify(current, null, 2);
+          textarea.addEventListener("change", () => {
+            try {
+              setOption(key, JSON.parse(textarea.value));
+            } catch {
+              textarea.value = JSON.stringify(item.options[key] ?? def, null, 2);
+            }
+          });
+          const widget = document.createElement("div");
+          widget.className = "param-widget";
+          widget.appendChild(textarea);
+          group.appendChild(label);
+          group.appendChild(widget);
+          layerControlsEl.appendChild(group);
+        }
+      });
+    }
 
   // --- palette tab ------------------------------------------------------------
   // Ground and swatches apply to everything; the halftone rows belong to the
@@ -1923,23 +2088,26 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
   }
 
   // Smart placement: measure the panel, then open it below the button when the
-  // screen has room, above it when it doesn't, capped to the space either way.
-  function positionPanel() {
-    pickerPanel.style.visibility = "hidden";
-    const needed = pickerPanel.scrollHeight;
-    const anchor = pickerBtn.getBoundingClientRect();
-    const below = window.innerHeight - anchor.bottom - 16;
-    const above = anchor.top - 16;
-    const cap = Math.min(needed, 480);
-    if (below < Math.min(cap, 220) && above > below) {
-      pickerPanel.classList.add("open-up");
-      pickerPanel.style.setProperty("--picker-max", `${Math.max(140, Math.min(cap, above))}px`);
-    } else {
-      pickerPanel.classList.remove("open-up");
-      pickerPanel.style.setProperty("--picker-max", `${Math.max(140, Math.min(cap, Math.max(below, 140)))}px`);
+    // screen has room, above it when it doesn't. The root column is capped at one
+    // menu height; the branch column may run up to twice that, clamped to the
+    // viewport, and scrolls within it.
+    function positionPanel() {
+      pickerPanel.style.visibility = "hidden";
+      const anchor = pickerBtn.getBoundingClientRect();
+      const below = window.innerHeight - anchor.bottom - 16;
+      const above = anchor.top - 16;
+
+      const openUp = below < 220 && above > below;
+      if (openUp) pickerPanel.classList.add("open-up");
+      else pickerPanel.classList.remove("open-up");
+      const avail = openUp ? above : below;
+
+      const rootCap = Math.min(420, Math.max(140, avail));
+      const totalCap = Math.min(rootCap * 2, Math.max(140, avail));
+      pickerPanel.style.setProperty("--picker-max", `${rootCap}px`);
+      pickerPanel.style.setProperty("--picker-total", `${totalCap}px`);
+      pickerPanel.style.visibility = "";
     }
-    pickerPanel.style.visibility = "";
-  }
 
   pickerBtn.addEventListener("click", () => {
     pickerOpen ? closePanel() : openPanel();
@@ -1984,7 +2152,7 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
   });
 
   function visibleRows(): Element[] {
-    return Array.from(pickerMenu.querySelectorAll<HTMLElement>(".picker-row:not([hidden])"));
+      return Array.from(pickerPanel.querySelectorAll<HTMLElement>(".picker-col:not([hidden]) .picker-row:not([hidden])"));
   }
 
   function markCursor(rows: Element[]) {
@@ -1993,77 +2161,80 @@ picker reads this catalog and load[name]() fetches the module on selection. */}
   }
 
   function renderMenu() {
-    pickerCursor = -1;
-    pickerMenu.innerHTML = "";
+      pickerCursor = -1;
+      pickerRoot.innerHTML = "";
+      pickerBranch.innerHTML = "";
+      pickerBranch.hidden = true;
 
-    if (pickerView.type === "root") {
+      // Root column: the group list, kept visible while a branch is open.
       catalog.groups.forEach((group, index) => {
         const count = group.categories.reduce((sum, c) => sum + c.items.length, 0);
         const row = document.createElement("button");
         row.type = "button";
-        row.className = "picker-row picker-group";
+        row.className = `picker-row picker-group${pickerView.type === "group" && pickerView.index === index ? " picker-active" : ""}`;
         row.setAttribute("role", "menuitem");
         row.innerHTML = `<span class="picker-icon">${group.icon}</span><span class="picker-label">${group.label}</span><span class="picker-count">${count}</span>`;
         row.addEventListener("click", () => {
           pickerView = { type: "group", index };
           renderMenu();
         });
-        pickerMenu.appendChild(row);
+        pickerRoot.appendChild(row);
       });
-      return;
-    }
 
-    if (pickerView.type === "group") {
-      const group = catalog.groups[pickerView.index];
-      const back = document.createElement("button");
-      back.type = "button";
-      back.className = "picker-row picker-back";
-      back.innerHTML = `<span>‹</span><span>all groups</span>`;
-      back.addEventListener("click", () => {
-        pickerView = { type: "root" };
-        renderMenu();
-      });
-      pickerMenu.appendChild(back);
+      if (pickerView.type === "group") {
+        const group = catalog.groups[pickerView.index];
+        const back = document.createElement("button");
+        back.type = "button";
+        back.className = "picker-row picker-back";
+        back.innerHTML = `<span>‹</span><span>all groups</span>`;
+        back.addEventListener("click", () => {
+          pickerView = { type: "root" };
+          renderMenu();
+        });
+        pickerBranch.appendChild(back);
 
-      const title = document.createElement("div");
-      title.className = "picker-title";
-      title.innerHTML = `<span class="picker-icon">${group.icon}</span><span>${group.label}</span>`;
-      pickerMenu.appendChild(title);
+        const title = document.createElement("div");
+        title.className = "picker-title";
+        title.innerHTML = `<span class="picker-icon">${group.icon}</span><span>${group.label}</span>`;
+        pickerBranch.appendChild(title);
 
-      group.categories.forEach((category) => {
-        const head = document.createElement("div");
-        head.className = "picker-cat";
-        head.innerHTML = `<span>${category.name}</span><span class="picker-count">${category.items.length}</span>`;
-        pickerMenu.appendChild(head);
-        category.items.forEach((item) => pickerMenu.appendChild(itemRow(item)));
-      });
-      return;
-    }
-
-    // search: flat matches across every group, in the order they appear
-    const words = pickerView.query.toLowerCase().split(/\s+/).filter(Boolean);
-    const hits = words.length
-      ? everyItem.filter((i) => words.every((w) => `${i.name} ${i.slug} ${i.category}`.includes(w)))
-      : [];
-    if (!hits.length) {
-      const empty = document.createElement("div");
-      empty.className = "picker-empty";
-      empty.textContent = `nothing matches "${pickerView.query}"`;
-      pickerMenu.appendChild(empty);
-      return;
-    }
-    let lastGroup = "";
-    hits.forEach((item) => {
-      if (item.group !== lastGroup) {
-        lastGroup = item.group;
-        const head = document.createElement("div");
-        head.className = "picker-cat";
-        head.innerHTML = `<span class="picker-icon">${item.icon}</span><span>${item.group}</span>`;
-        pickerMenu.appendChild(head);
+        group.categories.forEach((category) => {
+          const head = document.createElement("div");
+          head.className = "picker-cat";
+          head.innerHTML = `<span>${category.name}</span><span class="picker-count">${category.items.length}</span>`;
+          pickerBranch.appendChild(head);
+          category.items.forEach((item) => pickerBranch.appendChild(itemRow(item)));
+        });
+        pickerBranch.hidden = false;
+      } else if (pickerView.type === "search") {
+        // Flat matches stream into the branch beside the root list.
+        const words = pickerView.query.toLowerCase().split(/\s+/).filter(Boolean);
+        const hits = words.length
+          ? everyItem.filter((i) => words.every((w) => `${i.name} ${i.slug} ${i.category}`.includes(w)))
+          : [];
+        if (!hits.length) {
+          const empty = document.createElement("div");
+          empty.className = "picker-empty";
+          empty.textContent = `nothing matches "${pickerView.query}"`;
+          pickerBranch.appendChild(empty);
+        } else {
+          let lastGroup = "";
+          hits.forEach((item) => {
+            if (item.group !== lastGroup) {
+              lastGroup = item.group;
+              const head = document.createElement("div");
+              head.className = "picker-cat";
+              head.innerHTML = `<span class="picker-icon">${item.icon}</span><span>${item.group}</span>`;
+              pickerBranch.appendChild(head);
+            }
+            pickerBranch.appendChild(itemRow(item));
+          });
+        }
+        pickerBranch.hidden = false;
       }
-      pickerMenu.appendChild(itemRow(item));
-    });
-  }
+
+      if (pickerOpen) positionPanel();
+    }
 
   function itemRow(item: { slug: string; name: string }): HTMLButtonElement {
     const row = document.createElement("button");

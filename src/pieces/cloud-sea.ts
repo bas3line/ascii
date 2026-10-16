@@ -11,6 +11,25 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of cloud sea. Defaults are the original values. */
+export interface CloudSeaOptions {
+  [key: string]: unknown;
+  /** The horizon row. */
+  horizon: number;
+  /** The sun's column. */
+  sunX: number;
+  /** How far below the horizon the sun sits. */
+  sunHeight: number;
+  /** The sun's radius in cells. */
+  sunRadius: number;
+  /** Billow width: one unit of the height profile spans dy / this. */
+  billowWidth: number;
+  /** Speed at which the cloud sea drifts. */
+  drift: number;
+  /** Amount the sun's glow breathes. */
+  breath: number;
+}
+
 export const meta = {
   name: "cloud sea",
   category: "scenes",
@@ -20,6 +39,24 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#0e0e0f",
+  options: {
+    horizon: 40,
+    sunX: 150,
+    sunHeight: 1.5,
+    sunRadius: 10,
+    billowWidth: 1.7,
+    drift: 0.12,
+    breath: 0.12,
+  },
+  params: {
+    horizon: { label: "horizon", min: 30, max: 55, step: 1 },
+    sunX: { label: "sun position", min: 60, max: 190, step: 1 },
+    sunHeight: { label: "sun height", min: 0.5, max: 12, step: 0.5 },
+    sunRadius: { label: "sun radius", min: 4, max: 24, step: 0.5 },
+    billowWidth: { label: "billow width", min: 1, max: 3, step: 0.05 },
+    drift: { label: "cloud drift", min: 0, max: 0.5, step: 0.01 },
+    breath: { label: "sun breath", min: 0, max: 0.4, step: 0.01 },
+  },
   palette: [
     // dusk greys, the Cloudflare grey among them
     "#0e0e0f", "#161617", "#1f1f20", "#2a2a2b", "#353536", "#404041", "#545456", "#6c6c6e", "#8a8a8c",
@@ -27,14 +64,11 @@ export const meta = {
     "#a39a94", "#2c211c", "#43302a", "#5e3c2a", "#7c4826", "#9c521f",
     // the oranges, Cloudflare's two among them
     "#c2601c", "#dc6f1e", "#f38020", "#f6922e", "#faae40", "#fbbd5c", "#fccb7c", "#fdda9e", "#feeac4", "#fff6e6",
-  ],
-} satisfies Meta;
+      ],
+    } satisfies Meta<CloudSeaOptions>;
 
-const W = 200, H = 100;
-const HZ = 40; // the horizon
-const SUN = [150, HZ + 1.5];
-const SR = 10; // the sun's radius
-const DOTS = " ·•●";
+    const W = 200, H = 100;
+    const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 
@@ -114,10 +148,17 @@ const SEA_STOPS = [
 const DY: number[] = [];
 for (let d = 0.7; d < 120; d *= 1.1) DY.push(d);
 const NL = DY.length;
-const WB = 1.7; // billow width: one unit of the height profile spans dy / WB columns
 const PU = 50, RES = 16, US = PU * RES; // the profile wraps every PU units
 
-export default function cloudSea(): Frame {
+export default function cloudSea(o: Partial<CloudSeaOptions> = {}): Frame {
+  const { horizon = meta.options.horizon, sunX = meta.options.sunX, sunHeight = meta.options.sunHeight, sunRadius = meta.options.sunRadius } = o;
+  const billowWidth = o.billowWidth ?? meta.options.billowWidth;
+  const drift = o.drift ?? meta.options.drift;
+  const breath = o.breath ?? meta.options.breath;
+  const HZ = horizon;
+  const SUN = [sunX, HZ + sunHeight];
+  const SR = sunRadius;
+  const WB = billowWidth;
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -204,7 +245,7 @@ export default function cloudSea(): Frame {
   const FR = new Float32Array(N), FG = new Float32Array(N), FB = new Float32Array(N);
 
   return (t, { color } = {}) => {
-    const drift = t * 0.12;
+      const dUp = t * drift;
     const pulse = Math.sin((t / 4) * Math.PI * 2);
     mat.fill(SKY);
 
@@ -215,7 +256,7 @@ export default function cloudSea(): Frame {
       for (let j = NL - 1; j >= 0 && ub > 0; j--) {
         const dy = DY[j];
         const base = HZ + dy;
-        const u = (xc - 100) / dy * WB + drift + j * 13.7;
+        const u = (xc - 100) / dy * WB + dUp + j * 13.7;
         let su = u * RES;
         su = ((su % US) + US) % US;
         const i0 = su | 0, f = su - i0, i1 = (i0 + 1) % US;
@@ -236,7 +277,7 @@ export default function cloudSea(): Frame {
 
     // --- shade every cell -------------------------------------------------
     const sr = SR + 0.35 * pulse;
-    const glowK = 1 + 0.12 * pulse;
+    const glowK = 1 + breath * pulse;
     for (let r = 0; r < H; r++) {
       const y = r + 0.5;
       for (let x = 0; x < W; x++) {

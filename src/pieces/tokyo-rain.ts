@@ -14,6 +14,25 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of tokyo rain. Defaults are the original values. */
+export interface TokyoRainOptions {
+  [key: string]: unknown;
+  /** The row where the street meets the horizon. */
+  horizon: number;
+  /** Perspective strength: cells per metre at a metre's distance. */
+  focus: number;
+  /** The rain haze hides most of what is further than this. */
+  fog: number;
+  /** How fast the rain falls. */
+  rainSpeed: number;
+  /** How much rain there is. */
+  rainCount: number;
+  /** How fast the cloud drifts across the sky strip. */
+  cloudDrift: number;
+  /** How bright the far street glow is. */
+  glow: number;
+}
+
 export const meta = {
   name: "tokyo rain",
   category: "scenes",
@@ -23,7 +42,25 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#07060d",
-  palette: [
+    options: {
+      horizon: 50,
+      focus: 46,
+      fog: 17,
+      rainSpeed: 1,
+      rainCount: 1,
+      cloudDrift: 1,
+      glow: 1,
+    },
+    params: {
+      horizon: { label: "horizon", min: 40, max: 60, step: 1 },
+      focus: { label: "perspective", min: 30, max: 70, step: 1 },
+      fog: { label: "rain haze", min: 5, max: 40, step: 1 },
+      rainSpeed: { label: "rain speed", min: 0, max: 3, step: 0.05 },
+      rainCount: { label: "rain density", min: 0, max: 3, step: 0.1 },
+      cloudDrift: { label: "cloud drift", min: 0, max: 3, step: 0.05 },
+      glow: { label: "street glow", min: 0, max: 2, step: 0.05 },
+    },
+    palette: [
     "#100f22", "#17162f", "#201e3d", "#2b284e", "#383463", "#4a447a", "#4c4890", "#6a64c4",
     "#1d1520", "#2c1f2e", "#3e2b3e", "#553a52",
     "#6a3a74", "#8e4c8a", "#b4649c", "#d885ae",
@@ -36,15 +73,13 @@ export const meta = {
     "#6a7896", "#9ba7c2", "#c9d0e2",
     "#262a36", "#3a3f4e", "#565c6c",
   ],
-} satisfies Meta;
+  } satisfies Meta<TokyoRainOptions>;
 
 const W = 200, H = 100;
-const VX = 100, HY = 50; // the vanishing point, where the street meets the horizon
-const F = 46; // how many cells a metre spans, a metre away
+const VX = 100; // the vanishing point, where the street meets the horizon
 const EYE = 1.5; // the camera's height above the road
 const HALF = 3.2; // from the middle of the street to the walls
 const THICK = 0.3; // how deep a sign box is
-const ZF = 17; // the rain haze hides most of what is further than this
 const EXT = 70; // rows of mirror image kept below the frame, for the gloss to pull up
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1];
@@ -176,10 +211,6 @@ function fbm(x: number, y: number, octaves: number, period: number): number {
 
 // The glow of the busy street the alley runs into, seen through the rain at its far end.
 const END = [1, 0.7, 0.86];
-function endGlow(x: number, y: number): number {
-  const d = Math.hypot((x - VX) * 0.9, (y - HY + 2) * 1.25);
-  return Math.exp(-d / 6.5) * 0.95 + Math.exp(-d / 16) * 0.26 + Math.exp(-d / 45) * 0.08;
-}
 
 const clamp = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const smooth = (a: number, b: number, v: number) => {
@@ -219,7 +250,15 @@ function walkerShape(u: number, v: number, ph: number): number {
   return 0;
 }
 
-export default function tokyoRain(): Frame {
+export default function tokyoRain(o: Partial<TokyoRainOptions> = {}): Frame {
+  const { horizon = meta.options.horizon, focus = meta.options.focus, fog: fogDist = meta.options.fog, rainSpeed = meta.options.rainSpeed, rainCount = meta.options.rainCount, cloudDrift = meta.options.cloudDrift } = o;
+    const HY = horizon, F = focus, ZF = fogDist, GLOW = o.glow ?? meta.options.glow;
+  // The glow of the busy street the alley runs into, seen through the rain at its far end.
+  const endGlow = (x: number, y: number): number => {
+    const d = Math.hypot((x - VX) * 0.9, (y - HY + 2) * 1.25);
+    return (Math.exp(-d / 6.5) * 0.95 + Math.exp(-d / 16) * 0.26 + Math.exp(-d / 45) * 0.08) * GLOW;
+  };
+
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -891,9 +930,9 @@ export default function tokyoRain(): Frame {
   const LAYERS = [[150, 40, 3, 0.18, 0.1], [190, 72, 6, 0.38, 0.13], [60, 125, 11, 0.7, 0.17]];
   const drops: number[][] = [];
   LAYERS.forEach(([count, v, len, b, sl], li) => {
-    for (let i = 0; i < count; i++) {
+      for (let i = 0; i < Math.round(count * rainCount); i++) {
       const h = (n: number) => hash(i * 7 + li * 1001, n);
-      drops.push([h(1) * (W + 30) - 20, h(2) * (H + len + 6), v * (0.85 + 0.3 * h(3)), len, b * (0.75 + 0.5 * h(4)), sl]);
+      drops.push([h(1) * (W + 30) - 20, h(2) * (H + len + 6), v * rainSpeed * (0.85 + 0.3 * h(3)), len, b * (0.75 + 0.5 * h(4)), sl]);
     }
   });
 
@@ -945,7 +984,7 @@ export default function tokyoRain(): Frame {
     }
 
     // the sky: cloud drifting slowly across the strip between the roofs
-    const drift = t * 0.9;
+    const drift = t * 0.9 * cloudDrift;
     for (let i = 0; i < skyK.length; i++) {
       const k = skyK[i], x = k % W, r = (k / W) | 0;
       const sx = x + drift, ix = Math.floor(sx), fx = sx - ix;

@@ -15,6 +15,23 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of edge orbit. Defaults are the original values. */
+export interface EdgeOrbitOptions {
+  [key: string]: unknown;
+  /** The sun's angle along the limb, in degrees. */
+  sunAngle: number;
+  /** How strongly the sun's disc breathes. */
+  sunPulse: number;
+  /** The sun's brightness. */
+  sunGlow: number;
+  /** Seconds for one turn of the globe, and so the loop. */
+  rotation: number;
+  /** How many requests are in flight at once. */
+  requests: number;
+  /** How bright the cities' lights are. */
+  cityLights: number;
+}
+
 export const meta = {
   name: "edge orbit",
   category: "scenes",
@@ -24,7 +41,23 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#04060c",
-  palette: [
+    options: {
+      sunAngle: 63,
+      sunPulse: 0.08,
+      sunGlow: 1,
+      rotation: 1440,
+      requests: 14,
+      cityLights: 1,
+    },
+    params: {
+      sunAngle: { label: "sun angle", min: 20, max: 90, step: 1, unit: "°" },
+      sunPulse: { label: "sun pulse", min: 0, max: 0.3, step: 0.01 },
+      sunGlow: { label: "sun glow", min: 0, max: 2, step: 0.05 },
+      rotation: { label: "rotation", min: 300, max: 3600, step: 30, unit: "s" },
+      requests: { label: "requests", min: 0, max: 30, step: 1 },
+      cityLights: { label: "city lights", min: 0, max: 3, step: 0.05 },
+    },
+    palette: [
     "#080c18", "#0d1529", "#152142", "#1e2f5c", "#2b4479", "#40609c", "#7d9cd2", "#b8cdee",
     "#181d27", "#252b37", "#404041", "#5c6578",
     "#2e1608", "#4f2410", "#7a3812", "#a94f16", "#d0661a",
@@ -32,12 +65,11 @@ export const meta = {
     "#3d2a0e", "#6b4a16", "#a57524", "#d49434",
     "#ffd68a", "#ffe8c0", "#fff6e8", "#ffffff",
   ],
-} satisfies Meta;
+  } satisfies Meta<EdgeOrbitOptions>;
 
 const W = 200, H = 100;
 const CX = 100, CY = 244, R = 196; // the globe on screen, its centre far below the frame
-const DAY = 1440; // seconds for one turn of the globe, and so the loop
-const SLOTS = 14, PD = 6, NC = DAY / PD; // request slots, each relaunching every PD seconds
+const PD = 6; // request slots, each relaunching every PD seconds
 const LON_C = 36; // the longitude under the middle of the frame at t = 0
 const LAT0 = -40, LAT1 = 85, TS = 4; // the maps cover these latitudes, TS texels a degree
 const TW = 360 * TS, TH = (LAT1 - LAT0) * TS;
@@ -53,10 +85,6 @@ const P = [0, Math.cos(TILT), -Math.sin(TILT)];
 const G = [0, Math.sin(TILT), Math.cos(TILT)];
 
 // The sun, just breaking over the limb near the right edge.
-const SUN_A = 63 * DEG;
-const SUN = [CX + R * Math.cos(SUN_A), CY - R * Math.sin(SUN_A)];
-
-// The brand's colours, as light.
 const ORANGE = [0xf3 / 255, 0x80 / 255, 0x20 / 255];
 const TANGERINE = [0xfa / 255, 0xae / 255, 0x40 / 255];
 
@@ -168,7 +196,11 @@ const smooth = (a: number, b: number, v: number) => {
 const mix = (a: number, b: number, k: number) => a + (b - a) * k;
 const hex = (s: string) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16) / 255);
 
-export default function edgeOrbit(): Frame {
+export default function edgeOrbit(o: Partial<EdgeOrbitOptions> = {}): Frame {
+  const { sunAngle = meta.options.sunAngle, sunPulse = meta.options.sunPulse, sunGlow = meta.options.sunGlow, rotation = meta.options.rotation, requests = meta.options.requests, cityLights = meta.options.cityLights } = o;
+  const DAY = rotation, SLOTS = requests, NC = DAY / PD;
+  const SUN_A = sunAngle * DEG;
+  const SUN = [CX + R * Math.cos(SUN_A), CY - R * Math.sin(SUN_A)];
   const PAL = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -452,7 +484,7 @@ export default function edgeOrbit(): Frame {
 
   return (t, { color } = {}) => {
     const spinT = (t / DAY) * 360 * TS; // the turn, in texels
-    const flare = 1 + 0.08 * Math.sin((t / 12) * Math.PI * 2);
+    const flare = 1 + sunPulse * Math.sin((t / 12) * Math.PI * 2);
     aO.fill(0), aT.fill(0);
     for (let s = 0; s < SLOTS; s++) request(s, t);
 
@@ -474,7 +506,7 @@ export default function edgeOrbit(): Frame {
           cg = mix(0.01, 0.045 * tone, l);
           cb = mix(0.03, 0.06 * tone, l);
           // city light, warm, paler in the cores
-          const li = sample(lights, fi, fj);
+          const li = sample(lights, fi, fj) * cityLights;
           if (li > 0.01) {
             const g = Math.min(1.2, li * 1.25);
             cr += g * 0.95, cg += g * (0.6 + 0.25 * g), cb += g * (0.22 + 0.35 * g * g);
@@ -511,7 +543,7 @@ export default function edgeOrbit(): Frame {
         const tan = -dx * Math.sin(SUN_A) - dy * Math.cos(SUN_A); // tangent to the limb
         const across = dx * Math.cos(SUN_A) - dy * Math.sin(SUN_A);
         const streak = Math.exp(-((across / 0.8) ** 2)) * Math.exp(-Math.abs(tan) / 26) * 0.8;
-        const sun = (Math.exp(-ds / 1.2) * 2.6 + Math.exp(-ds / 4) * 0.55) * flare;
+        const sun = (Math.exp(-ds / 1.2) * 2.6 + Math.exp(-ds / 4) * 0.55) * flare * sunGlow;
         cr += sun + streak, cg += sun * 0.85 + streak * 0.62, cb += sun * 0.62 + streak * 0.22;
 
         // The requests, over everything, dimming what they cross so their

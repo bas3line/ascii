@@ -3,7 +3,6 @@
  * Part of ascii.rest, MIT licensed.
  */
 import type { LayerDefinition, LayerInstance } from "../types.ts";
-import { cloudsDefinition } from "./clouds.ts";
 import { heightfieldDefinition } from "./heightfield.ts";
 import { imageDefinition } from "./image.ts";
 import { particlesDefinition } from "./particles.ts";
@@ -12,7 +11,6 @@ import { waterDefinition } from "./water.ts";
 
 const LAYER_REGISTRY = new Map<string, LayerDefinition>([
   [skyDefinition.type, skyDefinition],
-  [cloudsDefinition.type, cloudsDefinition],
   [heightfieldDefinition.type, heightfieldDefinition],
   [waterDefinition.type, waterDefinition],
   [particlesDefinition.type, particlesDefinition],

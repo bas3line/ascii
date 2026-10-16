@@ -11,6 +11,25 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of volcano night. Defaults are the original values. */
+export interface VolcanoNightOptions {
+  [key: string]: unknown;
+  /** The crater's column. */
+  craterX: number;
+  /** The summit's height, in rows. */
+  rim: number;
+  /** Where the cone's slopes would meet flat ground. */
+  base: number;
+  /** How broadly the slopes flare. */
+  span: number;
+  /** The far edge of the lava field. */
+  plain: number;
+  /** The lake's edge, roughly. */
+  shore: number;
+  /** How fast the ash plume rises. */
+  ashRise: number;
+}
+
 export const meta = {
   name: "volcano night",
   category: "scenes",
@@ -20,7 +39,25 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#070405",
-  palette: [
+    options: {
+      craterX: 100,
+      rim: 40,
+      base: 86,
+      span: 32,
+      plain: 76,
+      shore: 81,
+      ashRise: 3.2,
+    },
+    params: {
+      craterX: { label: "crater position", min: 40, max: 160, step: 1 },
+      rim: { label: "summit height", min: 20, max: 60, step: 1 },
+      base: { label: "cone base", min: 70, max: 95, step: 1 },
+      span: { label: "slope spread", min: 16, max: 60, step: 1 },
+      plain: { label: "lava field", min: 60, max: 85, step: 1 },
+      shore: { label: "lake edge", min: 65, max: 90, step: 1 },
+      ashRise: { label: "ash plume speed", min: 0, max: 8, step: 0.1 },
+    },
+    palette: [
     "#5a1a10", "#7a2410", "#982e0e", "#b8380b", "#d4480b", "#ea5e10", "#f77a18", "#ff9628",
     "#ffb244", "#ffcc63", "#ffe28c", "#fff3c0", "#fffcec",
     "#4a3a37", "#63504b", "#7d6863", "#98827b", "#b39d94", "#cdb9af",
@@ -28,16 +65,9 @@ export const meta = {
     "#3c4258", "#5d6280", "#8a90b4", "#b4b9dc", "#dfe2f7", "#b9a8ff", "#f4f0ff",
     "#1a1012", "#2c1a18",
   ],
-} satisfies Meta;
+} satisfies Meta<VolcanoNightOptions>;
 
 const W = 200, H = 100;
-const CX = 100; // the crater
-const RIM = 40; // the summit's height, in rows
-const BASE = 86; // where the cone's slopes would meet flat ground
-const HIGH = BASE - RIM;
-const SPAN = 32; // how broadly the slopes flare
-const PLAIN = 76; // the far edge of the lava field
-const SHORE = 81; // the lake's edge, roughly
 const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
@@ -81,24 +111,33 @@ const smooth = (a: number, b: number, v: number) => {
 const mix = (a: number, b: number, k: number) => a + (b - a) * k;
 const hex = (s: string) => [1, 3, 5].map((i) => parseInt(s.slice(i, i + 2), 16) / 255);
 
-// The cone's profile: flat at the summit, concave slopes flaring to the plain.
-const coneY = (x: number) => {
-  const d = Math.abs(x - CX);
-  if (d < 6) return RIM + 0.9 * (1 - (d / 6) ** 2) - 0.6;
-  return BASE - HIGH / (1 + ((d - 6) / SPAN) ** 1.6) + 1.4 * (fbm(x * 0.13, 1.3, 3) - 0.5) * smooth(6, 20, d);
-};
-// How far from the crater the slope reaches at a given row (the inverse of coneY).
-const reach = (y: number) => {
-  const f = (BASE - y) / HIGH;
-  if (f >= 1) return 6;
-  if (f <= 0.05) return 95;
-  return Math.min(95, 6 + SPAN * Math.pow(1 / f - 1, 1 / 1.6));
-};
-// The plume's spine leans right as it rises; it widens and mushrooms at the top.
-const plumeX = (y: number) => CX + 0.01 * (RIM - y) ** 2;
-const plumeW = (y: number) => 8 + 27 * Math.pow(Math.max(0, RIM - y) / RIM, 0.55) + 16 * smooth(14, -3, y);
+export default function volcanoNight(o: Partial<VolcanoNightOptions> = {}): Frame {
+  const { craterX = meta.options.craterX, rim = meta.options.rim, base = meta.options.base, span = meta.options.span, plain = meta.options.plain, shore = meta.options.shore, ashRise = meta.options.ashRise } = o;
+  const CX = craterX; // the crater
+  const RIM = rim; // the summit's height, in rows
+  const BASE = base; // where the cone's slopes would meet flat ground
+  const HIGH = BASE - RIM;
+  const SPAN = span; // how broadly the slopes flare
+  const PLAIN = plain; // the far edge of the lava field
+  const SHORE = shore; // the lake's edge, roughly
 
-export default function volcanoNight(): Frame {
+  // The cone's profile: flat at the summit, concave slopes flaring to the plain.
+  const coneY = (x: number) => {
+    const d = Math.abs(x - CX);
+    if (d < 6) return RIM + 0.9 * (1 - (d / 6) ** 2) - 0.6;
+    return BASE - HIGH / (1 + ((d - 6) / SPAN) ** 1.6) + 1.4 * (fbm(x * 0.13, 1.3, 3) - 0.5) * smooth(6, 20, d);
+  };
+  // How far from the crater the slope reaches at a given row (the inverse of coneY).
+  const reach = (y: number) => {
+    const f = (BASE - y) / HIGH;
+    if (f >= 1) return 6;
+    if (f <= 0.05) return 95;
+    return Math.min(95, 6 + SPAN * Math.pow(1 / f - 1, 1 / 1.6));
+  };
+  // The plume's spine leans right as it rises; it widens and mushrooms at the top.
+  const plumeX = (y: number) => CX + 0.01 * (RIM - y) ** 2;
+  const plumeW = (y: number) => 8 + 27 * Math.pow(Math.max(0, RIM - y) / RIM, 0.55) + 16 * smooth(14, -3, y);
+
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -326,7 +365,7 @@ export default function volcanoNight(): Frame {
       }
     }
 
-    const rise = t * 3.2;
+    const rise = t * ashRise;
     for (let r = 0; r < H; r++) {
       const y = r + 0.5;
       for (let x = 0; x < W; x++) {

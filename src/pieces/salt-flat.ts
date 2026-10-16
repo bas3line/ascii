@@ -14,6 +14,27 @@
  */
 import type { Frame, Meta } from "../types.ts";
 
+/** Tunable elements of salt flat. Defaults are the original values. */
+export interface SaltFlatOptions {
+  [key: string]: unknown;
+  /** The triangle's centre line. */
+  centre: number;
+  /** Half the triangle's base. */
+  halfBase: number;
+  /** The horizon row. */
+  horizon: number;
+  /** How far the triangle hangs above the horizon and its reflection below. */
+  lift: number;
+  /** How far the sun sits below the triangle's tip. */
+  sunHeight: number;
+  /** How wide each salt plate is, in ground units. */
+  plate: number;
+  /** The loop period, in seconds. */
+  loop: number;
+  /** Strength of the mirror's ripple. */
+  ripple: number;
+}
+
 export const meta = {
   name: "salt flat",
   category: "scenes",
@@ -23,6 +44,26 @@ export const meta = {
   cell: 1,
   fps: 15,
   ground: "#000000",
+  options: {
+    centre: 100,
+    halfBase: 22,
+    horizon: 57,
+    lift: 1.7,
+    sunHeight: 3.2,
+    plate: 2,
+    loop: 24,
+    ripple: 1,
+  },
+  params: {
+    centre: { label: "triangle centre", min: 50, max: 150, step: 1 },
+    halfBase: { label: "triangle width", min: 8, max: 40, step: 0.5 },
+    horizon: { label: "horizon", min: 40, max: 70, step: 1 },
+    lift: { label: "triangle height", min: 0, max: 12, step: 0.2 },
+    sunHeight: { label: "sun height", min: 0, max: 8, step: 0.2 },
+    plate: { label: "salt plate size", min: 1, max: 5, step: 0.1 },
+    loop: { label: "loop", min: 12, max: 48, step: 1 },
+    ripple: { label: "mirror ripple", min: 0, max: 3, step: 0.05 },
+  },
   palette: [
     "#0d0d0e", "#161617", "#1f1f21", "#2a2a2c", "#363638", "#444446", "#555557",
     "#69696b", "#808082", "#9a9a9c", "#b8b8ba", "#d8d8da", "#ffffff",
@@ -30,22 +71,13 @@ export const meta = {
     "#50e3c2", "#0070f3", "#7928ca", "#ff0080", "#ff4d4d", "#f9cb28",
     "#b0f2e3", "#8cbcf9", "#bb94e4", "#ff8cc0", "#ffa6a6", "#fce59a",
     "#24665a", "#00326d", "#36125b", "#73003a", "#732323", "#705b12",
-  ],
-} satisfies Meta;
+      ],
+    } satisfies Meta<SaltFlatOptions>;
 
-const W = 200, H = 100;
-const CX = 100; // the triangle's centre line
-const HW = 22; // half its base
-const PH = HW * Math.sqrt(3); // equilateral, so this tall
-const HORIZON = 57;
-const LIFT = 1.7; // how far it hangs above the horizon, and its reflection below
-const BASE = HORIZON - LIFT;
-const APEX = BASE - PH;
-const SUNY = APEX + 3.2; // the sun sits just behind the tip
-const S3 = Math.sqrt(3) / 2;
-const LOOP = 24; // every motion repeats in this many seconds
-const TAU = Math.PI * 2;
-const DOTS = " ·•●";
+    const W = 200, H = 100;
+    const S3 = Math.sqrt(3) / 2;
+    const TAU = Math.PI * 2;
+    const DOTS = " ·•●";
 const COVER = [0, 0.3, 0.6, 1]; // how much each dot fills, against the largest
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.47);
 
@@ -86,15 +118,27 @@ function spectrum(h: number): void {
 }
 
 // Signed distance to each side of the triangle, positive outside: the two
-// slanted edges, then the base.
-function sideL(x: number, y: number): number {
+// slanted edges, then the base; defined once the triangle's geometry is known.
+function sideL(x: number, y: number, CX: number, HW: number, BASE: number): number {
   return -(x - (CX - HW)) * S3 - (y - BASE) * 0.5;
 }
-function sideR(x: number, y: number): number {
+function sideR(x: number, y: number, CX: number, HW: number, BASE: number): number {
   return (x - (CX + HW)) * S3 - (y - BASE) * 0.5;
 }
 
-export default function saltFlat(): Frame {
+export default function saltFlat(o: Partial<SaltFlatOptions> = {}): Frame {
+  const { centre = meta.options.centre, halfBase = meta.options.halfBase, horizon = meta.options.horizon, lift = meta.options.lift, sunHeight = meta.options.sunHeight, plate = meta.options.plate, loop = meta.options.loop, ripple = meta.options.ripple } = o;
+  const CX = centre;
+  const HW = halfBase;
+  const PH = HW * Math.sqrt(3); // equilateral, so this tall
+  const HORIZON = horizon;
+  const LIFT = lift;
+  const BASE = HORIZON - LIFT;
+  const APEX = BASE - PH;
+  const SUNY = APEX + sunHeight; // the sun sits just behind the tip
+  const LOOP = loop;
+  const SIZE = plate;
+  const RIP = ripple;
   const P = meta.palette.map(hex);
   const N = W * H;
   const out: string[] = new Array(N);
@@ -119,7 +163,7 @@ export default function saltFlat(): Frame {
   // drawn about one cell wide on screen at any distance, using how fast the
   // distance to the nearest edge changes from cell to cell, and fade out
   // where the cells shrink to a few rows near the horizon.
-  const CAM = 250, F = 64, SIZE = 2; // camera height, lens, hexagon radius
+  const CAM = 250, F = 64; // camera height, lens
   const ridge = new Float32Array(N);
   const stars = new Float32Array(N);
   for (let r = 0; r < H; r++) {
@@ -242,7 +286,7 @@ export default function saltFlat(): Frame {
       COV = 0;
 
       // the triangle
-      const sl = sideL(x, y), sr = sideR(x, y), sb = y - BASE;
+      const sl = sideL(x, y, CX, HW, BASE), sr = sideR(x, y, CX, HW, BASE), sb = y - BASE;
       const edge = Math.max(sl, sr);
       const sd = Math.max(edge, sb);
       if (sd > 4) return;
@@ -282,7 +326,7 @@ export default function saltFlat(): Frame {
           // the mirror: the world flipped about the horizon, shaken a little
           // more as the water comes toward us
           const d = y - HORIZON;
-          const amp = 0.06 + d * 0.011;
+          const amp = RIP * (0.06 + d * 0.011);
           const ph = t * w;
           const sx = xc + amp * (Math.sin(y * 0.8 - ph * 6 + Math.sin(xc * 0.05) * 2) * 0.7 + Math.sin(xc * 0.11 + y * 1.3 - ph * 4) * 0.35);
           const sy = 2 * HORIZON - y + amp * 0.4 * Math.sin(xc * 0.07 - ph * 3 + y * 0.6);
