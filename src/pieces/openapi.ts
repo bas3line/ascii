@@ -22,7 +22,7 @@ export const meta = {
   category: "logos",
   note: "the openapi gauge: a green dial and dark pointer, glinting now and then",
   cols: 46,
-  rows: 23,
+  rows: 25,
   fps: 30,
   options: { shine: 5 },
   // The logo's 4 colours for a light page, then for a dark one; each as drawn, then twice lighter for the glint.
