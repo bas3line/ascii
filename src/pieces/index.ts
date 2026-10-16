@@ -34,6 +34,7 @@ export * as centos from "./centos.ts";
 export * as chat from "./chat.ts";
 export * as cherryBlossom from "./cherry-blossom.ts";
 export * as chladni from "./chladni.ts";
+export * as cliffTemple from "./cliff-temple.ts";
 export * as clojure from "./clojure.ts";
 export * as cloudSea from "./cloud-sea.ts";
 export * as cloudflare from "./cloudflare.ts";
