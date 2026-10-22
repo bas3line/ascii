@@ -194,6 +194,7 @@ a:focus-visible,
   background: none;
   color: var(--muted);
   font: inherit;
+  white-space: nowrap;
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
