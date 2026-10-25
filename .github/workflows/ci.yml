@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+# CI only reads the repo; a compromised step gets a token that cannot write.
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
