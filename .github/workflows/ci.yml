@@ -13,6 +13,8 @@ jobs:
   check:
     # Runs on a boat.dev sandbox. Pull requests from forks stay on GitHub's runners:
     # boat only runs this public repository's jobs for bas3line, so a fork's job would never start.
+    # GitHub Actions posts the check whatever the runner, so it always carries GitHub's icon; the name says where it ran.
+    name: ${{ github.event.pull_request.head.repo.fork && 'check' || 'check on boat' }}
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'boat' }}
     steps:
       - uses: actions/checkout@v4
