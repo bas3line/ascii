@@ -18,6 +18,7 @@
  *   const stop = mount(document.querySelector("pre")!, donut);
  */
 import type { Env, Frame, Meta, Options, Piece } from "./types.ts";
+import { cellWidth } from "./width.ts";
 
 /**
  * The piece's option overrides, `fps` to override its frame rate, and `motion`
@@ -77,8 +78,9 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
     const atlas = document.createElement("canvas");
     const actx = atlas.getContext("2d")!;
     const slots = new Map<number, number>();
-    // A slot is a glyph's box with a pixel of clear space round it, which a cell's rectangle may reach into.
-    let w = 0, h = 0, sw = 0, sh = 0, pw = 0, ph = 0, width = -1, ink = "";
+    // A slot is a glyph's box with a pixel of clear space round it, which a cell's rectangle may reach into. A slot
+    // holds two cells across, so a full-width character has room for the two it covers.
+    let w = 0, h = 0, sw = 0, sh = 0, pw = 0, ph = 0, slotW = 0, width = -1, ink = "";
     // Each column's and row's whole-pixel edges, and where its glyph's box starts.
     let xs = new Int32Array(0), ys = new Int32Array(0), gx = new Int32Array(0), gy = new Int32Array(0);
     let last = "", full = true;
@@ -94,9 +96,10 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
       sh = Math.ceil(h);
       pw = sw + 2;
       ph = sh + 2;
+      slotW = 2 * pw;
       canvas.width = Math.round(w * cols);
       canvas.height = Math.round(h * rows);
-      atlas.width = pw * 32;
+      atlas.width = slotW * 32;
       atlas.height = ph * 32;
       xs = Int32Array.from({ length: cols + 1 }, (_, x) => Math.round(x * w));
       ys = Int32Array.from({ length: rows + 1 }, (_, y) => Math.round(y * h));
@@ -106,6 +109,7 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
       full = true;
     };
     const glyph = (code: number, i: number) => {
+      const cells = cellWidth(code);
       const key = code * 256 + i;
       let s = slots.get(key);
       if (s !== undefined) return s;
@@ -114,8 +118,10 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
         slots.clear();
       }
       s = slots.size;
-      const x = (s % 32) * pw + 1, y = Math.floor(s / 32) * ph + 1;
-      actx.font = font(w / 0.6);
+      const x = (s % 32) * slotW + 1, y = Math.floor(s / 32) * ph + 1;
+      // A glyph is drawn at the size that fills its cells: a monospace face draws an ASCII character 0.6em wide, and a
+      // full-width one 1em wide, so a wide glyph takes the font size whose 1em spans the two cells it covers.
+      actx.font = font(cells === 1 ? w / 0.6 : w / 0.5);
       actx.textAlign = "center";
       actx.textBaseline = "middle";
       actx.fillStyle = palette ? palette[i] || palette[0] : ink;
@@ -123,9 +129,9 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
       // the cells of that slot's glyph would then show.
       actx.save();
       actx.beginPath();
-      actx.rect(x - 1, y - 1, pw, ph);
+      actx.rect(x - 1, y - 1, cells * pw, ph);
       actx.clip();
-      actx.fillText(String.fromCharCode(code), x + sw / 2, y + sh / 2);
+      actx.fillText(String.fromCharCode(code), x + (cells * sw) / 2, y + sh / 2);
       actx.restore();
       slots.set(key, s);
       return s;
@@ -150,9 +156,14 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
           y++;
           continue;
         }
+        // A full-width character covers the cell it starts in and the one after it, and the line advances past both.
+        // One that starts in the last column has only that column left, so it is clipped to it rather than overrunning
+        // the row into the columns of the next line's first glyph.
+        const cells = cellWidth(c);
         const i = y * cols + x;
+        const span = Math.min(cells, cols - x);
         if (full || c !== last.charCodeAt(k) || (color && color[i] !== lastColor![i])) {
-          const x0 = xs[x], y0 = ys[y], cw = xs[x + 1] - x0, ch = ys[y + 1] - y0;
+          const x0 = xs[x], y0 = ys[y], cw = xs[x + span] - x0, ch = ys[y + 1] - y0;
           if (!full) {
             if (ground) ctx.fillRect(x0, y0, cw, ch);
             else ctx.clearRect(x0, y0, cw, ch);
@@ -160,10 +171,10 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
           if (c !== 32) {
             const s = glyph(c, color ? color[i] : 0);
             // the cell's own rectangle of the glyph's slot, the glyph's box placed where it always sits
-            ctx.drawImage(atlas, (s % 32) * pw + 1 + x0 - gx[x], Math.floor(s / 32) * ph + 1 + y0 - gy[y], cw, ch, x0, y0, cw, ch);
+            ctx.drawImage(atlas, (s % 32) * slotW + 1 + x0 - gx[x], Math.floor(s / 32) * ph + 1 + y0 - gy[y], span * pw, ph, x0, y0, cw, ch);
           }
         }
-        x++;
+        x += cells;
       }
       last = text;
       if (color) lastColor!.set(color);
