@@ -83,7 +83,16 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
     let w = 0, h = 0, sw = 0, sh = 0, pw = 0, ph = 0, slotW = 0, width = -1, ink = "";
     // Each column's and row's whole-pixel edges, and where its glyph's box starts.
     let xs = new Int32Array(0), ys = new Int32Array(0), gx = new Int32Array(0), gy = new Int32Array(0);
-    let last = "", full = true;
+    let full = true;
+    // What each cell of the canvas shows: the character drawn in it, -1 for a cleared cell, and -2 for the second cell
+    // of a full-width glyph. Frames are compared cell by cell rather than by string index: a character whose index in
+    // the string is unchanged still moves to another cell when one before it on the line changes width, and the cell it
+    // left has to be cleared.
+    const drawn = new Int32Array(cols * rows).fill(-1);
+    const next = new Int32Array(cols * rows);
+    // A piece's colours are indexed by character position, so each is carried to the cell its character is drawn in.
+    // Reading them by display column would hand a character the colour of one further along the row, past a wide glyph.
+    const nextColor = color && new Uint8Array(cols * rows);
     const lastColor = color && new Uint8Array(cols * rows);
     canvas.style.display ||= "block";
     canvas.style.width ||= "100%";
@@ -145,10 +154,9 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
       }
       const text = frame(t, env());
       if (ground) ctx.fillStyle = ground;
-      if (full) {
-        if (ground) ctx.fillRect(0, 0, canvas.width, canvas.height);
-        else ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
+      // What this frame puts in each cell, laid out exactly as the draw loop below lays it out. `k` is the character
+      // position, which is what the piece's colours are indexed by; `x` is the display column it is drawn from.
+      next.fill(-1);
       for (let k = 0, x = 0, y = 0; k < text.length; k++) {
         const c = text.charCodeAt(k);
         if (c === 10) {
@@ -156,28 +164,47 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
           y++;
           continue;
         }
-        // A full-width character covers the cell it starts in and the one after it, and the line advances past both.
-        // One that starts in the last column has only that column left, so it is clipped to it rather than overrunning
-        // the row into the columns of the next line's first glyph.
         const cells = cellWidth(c);
-        const i = y * cols + x;
-        const span = Math.min(cells, cols - x);
-        if (full || c !== last.charCodeAt(k) || (color && color[i] !== lastColor![i])) {
-          const x0 = xs[x], y0 = ys[y], cw = xs[x + span] - x0, ch = ys[y + 1] - y0;
-          if (!full) {
-            if (ground) ctx.fillRect(x0, y0, cw, ch);
-            else ctx.clearRect(x0, y0, cw, ch);
-          }
-          if (c !== 32) {
-            const s = glyph(c, color ? color[i] : 0);
-            // the cell's own rectangle of the glyph's slot, the glyph's box placed where it always sits
-            ctx.drawImage(atlas, (s % 32) * slotW + 1 + x0 - gx[x], Math.floor(s / 32) * ph + 1 + y0 - gy[y], span * pw, ph, x0, y0, cw, ch);
-          }
+        // `meta.cols` counts characters, so a line carrying wide ones can run past the last column. What does not fit
+        // is dropped rather than wrapped onto the next row, which would scatter it across cells it never named.
+        if (x >= cols) {
+          x += cells;
+          continue;
         }
+        const span = Math.min(cells, cols - x);
+        const base = y * cols + x;
+        next[base] = c;
+        for (let n = 1; n < span; n++) next[base + n] = -2;
+        if (color && nextColor) nextColor[base] = color[k];
         x += cells;
       }
-      last = text;
-      if (color) lastColor!.set(color);
+      if (full) {
+        if (ground) ctx.fillRect(0, 0, canvas.width, canvas.height);
+        else ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawn.fill(-1);
+      }
+      for (let i = 0, y = 0, x = 0; i < next.length; i++, (++x === cols) && (x = 0, y++)) {
+        const c = next[i];
+        // The second cell of a wide glyph is covered by the glyph drawn from the cell before it.
+        if (c === -2) continue;
+        if (!full && c === drawn[i] && (!color || nextColor![i] === lastColor![i])) continue;
+        const x0 = xs[x], y0 = ys[y];
+        const cells = c === -1 ? 1 : cellWidth(c);
+        const span = Math.min(cells, cols - x);
+        const cw = xs[x + span] - x0, ch = ys[y + 1] - y0;
+        // The cell is cleared before anything is drawn into it, so a glyph that shrank leaves nothing behind.
+        if (ground) ctx.fillRect(x0, y0, cw, ch);
+        else ctx.clearRect(x0, y0, cw, ch);
+        if (c > 32) {
+          const s = glyph(c, color ? nextColor![i] : 0);
+          // the cell's own rectangle of the glyph's slot, the glyph's box placed where it always sits. The source is
+          // the cell's own size, never the slot's padded box: copying `pw` into a cell `cw` wide would scale a narrow
+          // glyph down and open gaps in box drawing lines that are meant to meet.
+          ctx.drawImage(atlas, (s % 32) * slotW + 1 + x0 - gx[x], Math.floor(s / 32) * ph + 1 + y0 - gy[y], cw, ch, x0, y0, cw, ch);
+        }
+      }
+      drawn.set(next);
+      if (color && nextColor && lastColor) lastColor.set(nextColor);
       full = false;
     };
     size();
