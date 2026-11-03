@@ -8,6 +8,7 @@ import Art from "../components/Art.astro";
 import Downloads from "../components/Downloads.astro";
 import Share from "../components/Share.astro";
 import Usage from "../components/Usage.astro";
+import { highlight } from "../lib/highlight";
 import { IDEAS, REPO, issue, pieces, type Piece } from "../lib/library";
 
 export function getStaticPaths() {
@@ -29,6 +30,7 @@ const logo = Boolean(piece.palette && !piece.ground);
 const bytes = new TextEncoder().encode(piece.source).length;
 const kb = bytes < 1024 ? `${bytes} bytes` : `${(bytes / 1024).toFixed(1)} kB`;
 const idea = IDEAS[piece.slug];
+const sourceHtml = await highlight(piece.source, "ts");
 ---
 
 <Layout
@@ -79,7 +81,7 @@ const idea = IDEAS[piece.slug];
         <a href={`${REPO}/blob/main/src/pieces/${piece.slug}.ts`}>[github]</a>
       </span>
     </div>
-    <pre class="code" id="source-code">{piece.source}</pre>
+    <pre class="code" id="source-code" set:html={sourceHtml} />
   </section>
 
   <nav class="pager" aria-label="Pieces">

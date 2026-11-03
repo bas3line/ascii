@@ -29,6 +29,7 @@ import {
   SPEEDS,
   TAGLINE,
   bannerPath,
+  agentBanner,
   cliBanner,
   markdownBanner,
   reactBanner,
@@ -37,6 +38,7 @@ import {
   terminalBanner,
   type Look,
 } from "../lib/banner";
+import { highlight, type Lang } from "../lib/highlight";
 import { looping } from "../lib/svg";
 
 const text = "ascii.rest";
@@ -100,15 +102,18 @@ const grounds = [
   { theme: "light", dark: false },
   { theme: "dark", dark: true },
 ];
-const ways = [
-  { name: "html", id: "banner-html", code: readmeBanner(text, look) },
-  { name: "markdown", id: "banner-markdown", code: markdownBanner(text, look) },
+// Each way in its language; the URL stays plain. The script below writes them again in the same ones.
+const ways: { name: string; id: string; code: string; lang?: Lang; html?: string }[] = [
+  { name: "html", id: "banner-html", code: readmeBanner(text, look), lang: "html" },
+  { name: "markdown", id: "banner-markdown", code: markdownBanner(text, look), lang: "md" },
   { name: "url", id: "banner-url", code: `https://ascii.rest${bannerPath(text, false, look)}` },
-  { name: "react", id: "banner-react", code: reactBanner(text, look) },
-  { name: "svg", id: "banner-svg", code: svgBanner(text, look) },
-  { name: "terminal", id: "banner-terminal", code: terminalBanner(text, look) },
-  { name: "cli", id: "banner-cli", code: cliBanner(text, look) },
+  { name: "react", id: "banner-react", code: reactBanner(text, look), lang: "tsx" },
+  { name: "svg", id: "banner-svg", code: svgBanner(text, look), lang: "ts" },
+  { name: "terminal", id: "banner-terminal", code: terminalBanner(text, look), lang: "sh" },
+  { name: "cli", id: "banner-cli", code: cliBanner(text, look), lang: "ts" },
+  { name: "agent", id: "banner-agent", code: agentBanner(text, look), lang: "sh" },
 ];
+for (const way of ways) if (way.lang) way.html = await highlight(way.code, way.lang);
 ---
 
 <Layout
@@ -250,7 +255,7 @@ const ways = [
               <button class="button" type="button" data-copy={way.id} hidden><span>[copy]</span></button>
             </span>
           </div>
-          <pre class="code" id={way.id}>{way.code}</pre>
+          {way.html ? <pre class="code" id={way.id} set:html={way.html} /> : <pre class="code" id={way.id}>{way.code}</pre>}
         </div>
       ))}
     </div>
@@ -265,6 +270,7 @@ const ways = [
 </Layout>
 
 <script>
+  import { paint } from "../lib/paint";
   import { inkOf, namespaced } from "ascii.rest/svg";
   import {
     PLAIN,
@@ -273,6 +279,7 @@ const ways = [
     bannerPath,
     clean,
     cleanTagline,
+    agentBanner,
     cliBanner,
     hex,
     markdownBanner,
@@ -366,7 +373,7 @@ const ways = [
     history.replaceState(null, "", s ? `?${s}` : location.pathname);
   };
 
-  const ways = ["banner-html", "banner-markdown", "banner-url", "banner-react", "banner-svg", "banner-terminal", "banner-cli"];
+  const ways = ["banner-html", "banner-markdown", "banner-url", "banner-react", "banner-svg", "banner-terminal", "banner-cli", "banner-agent"];
   const copies = [...document.querySelectorAll<HTMLButtonElement>(".usage button[data-copy]")];
   // Nothing to draw, or a draw still to come: no copying the last banner's snippets, no saving its SVGs.
   const ready = (yes: boolean) => {
@@ -389,7 +396,7 @@ const ways = [
     if (!text) {
       // An empty banner: the previews and snippets go, rather than keep the last name, and so does the name in the URL.
       for (const img of images) img.hidden = true;
-      for (const id of ways) code(id).textContent = "Type some letters or digits above.";
+      for (const id of ways) paint(code(id), "Type some letters or digits above.");
       for (const k of Object.keys(drawn)) delete drawn[k];
       remember("");
       return;
@@ -412,13 +419,14 @@ const ways = [
       img.hidden = false;
       img.alt = `${text}, as a ${img.dataset.groundImg} README shows it`;
     });
-    code("banner-html").textContent = readmeBanner(text, look, centred);
-    code("banner-markdown").textContent = markdownBanner(text, look);
-    code("banner-url").textContent = `https://ascii.rest${bannerPath(text, false, look)}`;
-    code("banner-react").textContent = reactBanner(text, look, ink);
-    code("banner-svg").textContent = svgBanner(text, look);
-    code("banner-terminal").textContent = terminalBanner(text, look, ink);
-    code("banner-cli").textContent = cliBanner(text, look, ink);
+    paint(code("banner-html"), readmeBanner(text, look, centred), "html");
+    paint(code("banner-markdown"), markdownBanner(text, look), "md");
+    paint(code("banner-url"), `https://ascii.rest${bannerPath(text, false, look)}`);
+    paint(code("banner-react"), reactBanner(text, look, ink), "tsx");
+    paint(code("banner-svg"), svgBanner(text, look), "ts");
+    paint(code("banner-terminal"), terminalBanner(text, look, ink), "sh");
+    paint(code("banner-cli"), cliBanner(text, look, ink), "ts");
+    paint(code("banner-agent"), agentBanner(text, look), "sh");
     remember(text);
     ready(true);
   };

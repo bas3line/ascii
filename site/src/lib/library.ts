@@ -81,6 +81,29 @@ export const SITE = "https://ascii.rest";
 export const NAME = "ascii.rest";
 export const REPO = "https://github.com/bas3line/ascii";
 /**
+ * The repo's stars when the site was built, for the header's [github] link; the
+ * page asks GitHub again as it opens (Layout.astro). Null when GitHub can't be
+ * reached, and the link is plain [github]. GITHUB_TOKEN, when set, lifts the
+ * build's shared rate limit.
+ */
+export const STARS: number | null = await (async () => {
+  try {
+    const token = process.env.GITHUB_TOKEN;
+    const res = await fetch(`https://api.github.com/repos/${REPO.slice("https://github.com/".length)}`, {
+      headers: { accept: "application/vnd.github+json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
+    const { stargazers_count } = (await res.json()) as { stargazers_count?: unknown };
+    return typeof stargazers_count === "number" ? stargazers_count : null;
+  } catch (error) {
+    console.warn(`ascii: no star count: ${(error as Error).message}`);
+    return null;
+  }
+})();
+/** 872 as "872", 1234 as "1.2k", 12345 as "12k". */
+export const stars = (n: number) => (n < 1000 ? String(n) : n < 10000 ? `${(Math.floor(n / 100) / 10).toString()}k` : `${Math.floor(n / 1000)}k`);
+/**
  * A new issue on one of the repo's forms (.github/ISSUE_TEMPLATE), opened with
  * some fields filled: GitHub fills a form's text fields, and the title, from
  * query parameters named by their ids.
@@ -128,6 +151,8 @@ export const IDEAS: Partial<Record<string, { handle: string; url: string }>> = {
   "black-prism": { handle: "satvikxs", url: "https://github.com/satvikxs" },
 };
 export const INSTALL = "npm install ascii.rest";
+/** The agent skill (skills/ascii-rest), for Claude Code, Cursor, Codex and the other agents skills.sh lists. */
+export const SKILL = "npx skills add bas3line/ascii";
 
 const optionsOf = (piece: Piece) => (piece.options && Object.keys(piece.options).length ? piece.options : null);
 
@@ -185,6 +210,11 @@ export function moduleUsage(piece: Piece) {
     `const el = document.querySelector<HTML${piece.palette ? "Canvas" : "Pre"}Element>("${tag}")!;`,
     `const stop = mount(el, ${piece.id}${options ? `, ${JSON.stringify(options)}` : ""});`,
   ].join("\n");
+}
+
+/** A coding agent: the skill, then the ask in words. The skill knows the snippet for the user's framework. */
+export function agentUsage(piece: Piece) {
+  return [SKILL, ``, `# then ask your agent:`, `# add the ${piece.slug} piece to my home page`].join("\n");
 }
 
 /** A terminal: the package's own command plays it, nothing to install first. */

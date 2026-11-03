@@ -5,9 +5,17 @@ on:
   push:
     branches: [main]
 
+# CI only reads the repo; a compromised step gets a token that cannot write.
+permissions:
+  contents: read
+
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # Runs on a boat.dev sandbox. Pull requests from forks stay on GitHub's runners:
+    # boat only runs this public repository's jobs for bas3line, so a fork's job would never start.
+    # GitHub Actions posts the check whatever the runner, so it always carries GitHub's icon; the name says where it ran.
+    name: ${{ github.event.pull_request.head.repo.fork && 'check' || 'check on boat' }}
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'boat' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,7 +25,8 @@ jobs:
       # npm ci runs the prepare script, which builds dist/ with tsc.
       - run: npm ci
       - run: npm run typecheck
-      - run: npm run gen && git diff --exit-code src/pieces/index.ts src/library.ts
+      # gen also writes the agent skill (scripts/skill.ts), from the pieces and the docs: a new piece or a docs edit needs it run.
+      - run: npm run gen && git diff --exit-code src/pieces/index.ts src/library.ts skills/
       # The kit: its tests, every example through the frame contract, and the docs' code against the build.
       - run: npm test
       - run: npm run kit:examples

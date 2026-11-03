@@ -75,6 +75,7 @@ Pick the row that fits your project. Each page has a full example.
 | an SVG | a GitHub README, or anywhere scripts can't run | [github readme](/docs/readme/), [svg](/docs/svg/) |
 | the terminal | a splash screen or a banner for your CLI | [terminal](/docs/terminal/) |
 | your own image | your logo or a photo as animated ascii, made in your browser, for a page or a README | [image to ascii](/docs/images/) |
+| an AI coding agent | asking Claude Code, Cursor, Codex or another agent in words: the ascii.rest skill knows every piece and the snippet for your project | [use it with an AI coding agent](#use-it-with-an-ai-coding-agent) |
 | the kit | your own ascii art in one line: looks, motions and widgets by name, then fields, 3D scenes, particles, effects, layouts, images and SVGs | [the kit](/docs/kit/) |
 
 ## Browse the pieces
@@ -115,7 +116,13 @@ Besides the pieces, you can turn any text into a banner. Read [banners](/docs/ba
 
 ## Use it with an AI coding agent
 
-Give your agent one of these plain-text files. Both are built from these docs pages.
+Add the ascii.rest skill to your agent. It works in Claude Code, Cursor, Codex and the other agents [skills.sh](https://skills.sh/bas3line/ascii/ascii-rest) supports, and it holds every piece, the snippet for each framework, and these docs to read offline:
+
+```sh
+npx skills add bas3line/ascii
+```
+
+Or give your agent one of these plain-text files. Both are built from these docs pages.
 
 - [ascii.rest/llms.txt](https://ascii.rest/llms.txt): an index, with one line and a link for each docs page. It includes the rules below.
 - [ascii.rest/llms-full.txt](https://ascii.rest/llms-full.txt): every docs page in one file, to read all at once.
