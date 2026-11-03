@@ -3,7 +3,8 @@
  * The ways to put a piece on a page, as tabs. Without script every way shows,
  * one after another, under its own heading.
  */
-import { astroUsage, moduleUsage, reactUsage, readmeUsage, tagUsage, terminalUsage, type Piece } from "../lib/library";
+import { agentUsage, astroUsage, moduleUsage, reactUsage, readmeUsage, tagUsage, terminalUsage, type Piece } from "../lib/library";
+import { highlight, type Lang } from "../lib/highlight";
 import { looping } from "../lib/svg";
 
 interface Props {
@@ -13,10 +14,11 @@ interface Props {
 const { piece } = Astro.props;
 // A logo comes in colour or in one ink, the page's text colour.
 const logo = Boolean(piece.palette && !piece.ground);
-const ways = [
+const ways: { name: string; code: string; lang: Lang; note: string }[] = [
   {
     name: "html",
     code: tagUsage(piece),
+    lang: "html",
     note:
       "No install and no build step. ascii.js defines the <ascii-art> tag, loads the piece from ascii.rest, plays it while it is on screen, and holds the first frame for anyone who prefers reduced motion." +
       (logo ? ` Add mono, <ascii-art piece="${piece.slug}" mono>, for one ink.` : ""),
@@ -24,6 +26,7 @@ const ways = [
   {
     name: "react",
     code: reactUsage(piece),
+    lang: "tsx",
     note:
       `A client component, so it works in the Next.js app router as it is. Pass the name instead, piece="${piece.slug}", to fetch the piece only when it mounts.` +
       (logo ? " Add mono for one ink." : ""),
@@ -31,11 +34,13 @@ const ways = [
   {
     name: "astro",
     code: astroUsage(piece),
+    lang: "astro",
     note: "Renders the first frame on the server, so the page is whole before any script runs, then plays the piece once it loads." + (logo ? " Add mono for one ink." : ""),
   },
   {
     name: "typescript",
     code: moduleUsage(piece),
+    lang: "ts",
     note:
       "mount plays a piece in a <pre>, or on a <canvas> for the coloured ones, and returns a function that stops it. Every piece, option and frame is typed." +
       (logo ? " Mount it in a <pre> for one ink." : ""),
@@ -43,6 +48,7 @@ const ways = [
   {
     name: "terminal",
     code: terminalUsage(piece),
+    lang: "sh",
     // A scene keeps its own ground in a terminal too, so --light only matters to the rest.
     note:
       `Plays it in your terminal${piece.palette ? ", in colour," : ""} until you press a key.` +
@@ -50,17 +56,25 @@ const ways = [
       (piece.ground ? "" : " Add --light for a light terminal.") +
       ` Add --seconds 5 to stop it on its own; npx ascii.rest list shows every piece. In a CLI of your own, play("${piece.slug}", { seconds: 2 }) from ascii.rest/terminal shows it as a splash screen.`,
   },
+  {
+    name: "agent",
+    code: agentUsage(piece),
+    lang: "sh",
+    note: `Gives Claude Code, Cursor, Codex or another coding agent the ascii.rest skill: every piece, the snippet for your framework, and these docs to read offline. Then ask in your own words, and it adds ${piece.slug} the way your project needs. The skill is on skills.sh.`,
+  },
   ...(looping(piece.category, piece.options)
     ? [
         {
           name: "readme",
           code: readmeUsage(piece),
+          lang: "html" as const,
           note: "An animated SVG that needs no script, so it plays in a GitHub README, which runs none. GitHub shows the dark one in its dark theme. It holds still for anyone who prefers reduced motion.",
         },
       ]
     : []),
 ];
 const id = `use-${piece.slug}`;
+const html = await Promise.all(ways.map((way) => highlight(way.code, way.lang)));
 // Under the readme snippet, what it puts in a README: both SVGs at its width, on GitHub's light and dark grounds.
 const grounds = [
   { theme: "light", file: `${piece.slug}.svg` },
@@ -84,7 +98,7 @@ const grounds = [
           <button class="button" type="button" data-copy={`${id}-code-${i}`} hidden><span>[copy]</span></button>
         </span>
       </div>
-      <pre class="code" id={`${id}-code-${i}`}>{way.code}</pre>
+      <pre class="code" id={`${id}-code-${i}`} set:html={html[i]} />
       {way.name === "readme" && (
         <div class="previews">
           {grounds.map((g) => (

@@ -24,8 +24,9 @@ export default defineConfig({
   // an older deploy keeps getting that deploy's files and banners, for as long as the project's setting holds them.
   adapter: vercel({ skewProtection: true }),
   integrations: [library],
-  // The docs' code is plain, in the site's one face and ink, like the rest of its code.
-  markdown: { syntaxHighlight: false },
+  // The docs' code in the shades of ray.so's Resend theme: Shiki's css-variables theme marks each token with an
+  // --astro-code- variable, and site.css gives them their light and dark values, as src/lib/highlight.ts does elsewhere.
+  markdown: { syntaxHighlight: "shiki", shikiConfig: { theme: "css-variables" } },
   // Astro 7 strips the whitespace between tags the way JSX does; the pages are written for HTML's, which keeps a space.
   compressHTML: true,
   vite: {

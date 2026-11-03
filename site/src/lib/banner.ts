@@ -236,6 +236,20 @@ function options(look: Look, ink?: Ink): [string, string][] {
 }
 const object = (list: [string, string][]) => (list.length ? `{ ${list.map(([k, v]) => `${k}: ${v}`).join(", ")} }` : "");
 
+/**
+ * A coding agent with the skill, asked in words. The banner's URL carries every choice made here, and the skill reads
+ * it, so the agent can draw the same banner as an image or as a component's options.
+ */
+export function agentBanner(text: string, look: Look = PLAIN) {
+  return [
+    "npx skills add bas3line/ascii",
+    ``,
+    `# then ask your agent:`,
+    `# add a banner that says ${JSON.stringify(clean(text, look.font) || "hello")} to my README, like`,
+    `# ${SITE}${bannerPath(text, false, look)}`,
+  ].join("\n");
+}
+
 /** The same in a CLI of your own, as it starts. */
 export function cliBanner(text: string, look: Look = PLAIN, ink?: Ink) {
   const o = object([...options(look, ink), ...(look.tagline ? [["tagline", JSON.stringify(look.tagline)] as [string, string]] : [])]);

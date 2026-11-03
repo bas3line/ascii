@@ -31,6 +31,19 @@
   --pad: 0.5ch;
   --mono: "Paper Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --art: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "ascii.rest mono", monospace;
+  /* Code's text, in the shades of ray.so's Resend theme: names and numbers in full ink, the rest a step back,
+  comments two. It sits on the well, and its comments are darkened from the theme's to 4.5:1 there. */
+  --astro-code-background: var(--well);
+  --astro-code-foreground: #111111;
+  --astro-code-token-function: #111111;
+  --astro-code-token-constant: #666666;
+  --astro-code-token-parameter: #666666;
+  --astro-code-token-string-expression: #666666;
+  --astro-code-token-keyword: #666666;
+  --astro-code-token-punctuation: #666666;
+  --astro-code-token-string: #666666;
+  --astro-code-token-link: #666666;
+  --astro-code-token-comment: #6c6c6c;
   color-scheme: light;
 }
 
@@ -40,6 +53,17 @@
   --text: #c3c9d1;
   --muted: #8c95a1;
   --well: #1a1d21;
+  --astro-code-background: var(--well);
+  --astro-code-foreground: #ffffff;
+  --astro-code-token-function: #ffffff;
+  --astro-code-token-constant: #a7a7a7;
+  --astro-code-token-parameter: #a7a7a7;
+  --astro-code-token-string-expression: #a7a7a7;
+  --astro-code-token-keyword: #a7a7a7;
+  --astro-code-token-punctuation: #a7a7a7;
+  --astro-code-token-string: #a7a7a7;
+  --astro-code-token-link: #a7a7a7;
+  --astro-code-token-comment: #848484;
   color-scheme: dark;
 }
 
@@ -50,6 +74,17 @@
     --text: #c3c9d1;
     --muted: #8c95a1;
     --well: #1a1d21;
+    --astro-code-background: var(--well);
+    --astro-code-foreground: #ffffff;
+    --astro-code-token-function: #ffffff;
+    --astro-code-token-constant: #a7a7a7;
+    --astro-code-token-parameter: #a7a7a7;
+    --astro-code-token-string-expression: #a7a7a7;
+    --astro-code-token-keyword: #a7a7a7;
+    --astro-code-token-punctuation: #a7a7a7;
+    --astro-code-token-string: #a7a7a7;
+    --astro-code-token-link: #a7a7a7;
+    --astro-code-token-comment: #848484;
     color-scheme: dark;
   }
 }
@@ -159,6 +194,7 @@ a:focus-visible,
   background: none;
   color: var(--muted);
   font: inherit;
+  white-space: nowrap;
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
@@ -460,6 +496,29 @@ a[aria-current="page"] {
   display: flex;
   gap: 2ch;
   margin: 0 -1ch 0 auto;
+}
+
+/* [github 872]: the GitHub mark, then a star and the repo's stars. */
+.top .repo,
+.top .repo .stars {
+  display: inline-flex;
+  align-items: center;
+}
+
+.top .repo .icon {
+  margin-right: 0.6ch;
+}
+
+.top .repo > .icon {
+  margin-left: 0.3ch;
+}
+
+.top .repo .stars {
+  margin-left: 1.2ch;
+}
+
+.top .repo .stars[hidden] {
+  display: none;
 }
 
 .lede {
@@ -905,7 +964,7 @@ pre.code {
   padding: 1rem 2ch;
   overflow-x: auto;
   background: var(--well);
-  color: var(--text);
+  color: var(--astro-code-foreground);
   font: inherit;
   font-size: 0.8125rem;
   line-height: 1.6;
@@ -1084,7 +1143,7 @@ pre.code {
   padding: 1rem 2ch;
   overflow-x: auto;
   background: var(--well);
-  color: var(--text);
+  color: var(--astro-code-foreground);
   font-family: var(--mono);
   font-size: 0.8125rem;
   line-height: 1.6;

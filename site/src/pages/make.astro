@@ -310,6 +310,7 @@ const glyphs = await glyphShapes();
   import { mount, names, type Piece } from "ascii.rest";
   import { draw, isSvg, raster, render, type Drawing, type Glyph, type Source, type Style } from "../lib/logo";
   import { about, clean, embed, picture, piece, source, type Kind, type Settings } from "../lib/logo-file";
+  import { paint } from "../lib/paint";
   import { svgOf } from "../lib/svg";
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -432,9 +433,9 @@ const glyphs = await glyphShapes();
     const bytes = new TextEncoder().encode(ts).length;
     $("bytes").textContent = `${(bytes / 1024).toFixed(1)} kB`;
     $("file-name").textContent = `${slug}.ts`;
-    $("source-code").textContent = ts;
-    $("embed-code").textContent = embed(drawing, s, mono);
-    $("readme-code").textContent = picture(drawing, s);
+    paint($("source-code"), ts, "ts");
+    paint($("embed-code"), embed(drawing, s, mono), "html");
+    paint($("readme-code"), picture(drawing, s), "html");
     prompt.hidden = true;
     // The art is showing: the well stops being a button, and [another image] is the way to start again.
     drop.classList.remove("empty");

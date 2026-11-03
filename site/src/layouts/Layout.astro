@@ -10,7 +10,7 @@ import Analytics from "@vercel/analytics/astro";
 import SpeedInsights from "@vercel/speed-insights/astro";
 import Credit from "../components/Credit.astro";
 import Icon from "../components/Icon.astro";
-import { AUTHOR, NAME, REPO, SITE, groups, issue, pieces } from "../lib/library";
+import { AUTHOR, NAME, REPO, SITE, STARS, groups, issue, pieces, stars } from "../lib/library";
 
 interface Props {
   title: string;
@@ -263,7 +263,7 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
           <span class="tools">
             <button id="motion" class="button" type="button" hidden><span>[play anyway]</span></button>
             <a href="/docs/">[docs]</a>
-            <a href={REPO}>[github]</a>
+            <a class="repo" href={REPO} aria-label={STARS === null ? undefined : `GitHub, ${STARS} stars`}>[<Icon name="github" />github<span class="stars" hidden={STARS === null}><Icon name="star" /><span>{STARS === null ? "" : stars(STARS)}</span></span>]</a>
             <button id="theme" class="button" type="button" aria-label="Switch to dark theme" hidden><span>[dark]</span></button>
           </span>
         </div>
@@ -319,6 +319,48 @@ const bug = issue("bug", current ? { title: `${current}: `, where: current } : {
           mq.addEventListener("change", function (e) {
             if (!saved()) show(e.matches ? "dark" : "light");
           });
+      })();
+    </script>
+
+    <script is:inline>
+      // The header's star count is the build's; ask GitHub for today's. Every piece is a full page load and GitHub
+      // allows a visitor 60 asks an hour, so the answer is kept for an hour. Any failure leaves the build's count, and
+      // waits ten minutes before asking again, so an outage or a spent limit isn't asked on every page.
+      (function () {
+        var a = document.querySelector(".top .repo");
+        if (!a || !window.fetch) return;
+        var key = "ascii-stars";
+        var wait = "ascii-stars-wait";
+        var hour = 36e5;
+        function failed() {
+          try {
+            localStorage.setItem(wait, String(Date.now() + 6e5));
+          } catch (e) {}
+        }
+        function show(n) {
+          var s = a.querySelector(".stars");
+          s.lastElementChild.textContent = n < 1000 ? String(n) : n < 10000 ? Math.floor(n / 100) / 10 + "k" : Math.floor(n / 1000) + "k";
+          s.hidden = false;
+          a.setAttribute("aria-label", "GitHub, " + n + " stars");
+        }
+        try {
+          var kept = JSON.parse(localStorage.getItem(key) || "null");
+          if (kept && Date.now() - kept.at < hour && typeof kept.n === "number") return show(kept.n);
+          if (Date.now() < +localStorage.getItem(wait)) return;
+        } catch (e) {}
+        fetch("https://api.github.com/repos/" + a.getAttribute("href").replace("https://github.com/", ""))
+          .then(function (r) {
+            return r.ok ? r.json() : null;
+          })
+          .then(function (repo) {
+            if (!repo || typeof repo.stargazers_count !== "number") return failed();
+            show(repo.stargazers_count);
+            try {
+              localStorage.setItem(key, JSON.stringify({ n: repo.stargazers_count, at: Date.now() }));
+              localStorage.removeItem(wait);
+            } catch (e) {}
+          })
+          .catch(failed);
       })();
     </script>
 

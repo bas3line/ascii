@@ -1,6 +1,7 @@
 // npm run gen: writes the two indexes of src/pieces after a piece is added or
 // renamed. src/pieces/index.ts exports every piece by name for static imports;
-// src/library.ts loads any piece by its file name on demand.
+// src/library.ts loads any piece by its file name on demand; and scripts/skill.ts
+// writes the agent skill in skills/ascii-rest.
 import { readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Piece } from "../src/types.ts";
@@ -45,3 +46,6 @@ writeFileSync(
     `export const isPiece = (name: string): name is PieceName => Object.hasOwn(load, name);\n`,
 );
 console.log(`${slugs.length} pieces, ${canvas.length} on a canvas`);
+
+// The agent skill lists every piece, so it is written again with the indexes.
+await import("./skill.ts");
