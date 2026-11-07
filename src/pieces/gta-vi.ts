@@ -1,16 +1,15 @@
 /*
- * gta-vi: the "VI" of Grand Theft Auto VI, in the mark's pink gradient, with a
- * glint crossing it every few seconds.
+ * gta-vi: the "VI" of Grand Theft Auto VI, in the mark's sunset, with a glint
+ * crossing it every few seconds.
  *
- * Drawn from Rockstar Games' Grand Theft Auto VI mark: two strokes tapering to
- * a point and a bar between them, each flaring out like a trumpet at its ends,
- * so the letters are widest where they begin and end. Each cell holds 8 where
- * a stroke is solid and | on the bar's flat sides. The ink digits carry the
- * gradient, pale pink at the top of the letters and deep pink at the bottom,
- * in eight stops. On a canvas it takes those colours, lifted on a dark page
- * where they would sink into it; in a <pre> it is one ink, from the same
- * drawing. Grand Theft Auto is a trademark of its owner, shown here to name
- * the game.
+ * Drawn from Rockstar Games' Grand Theft Auto VI mark: two thick strokes
+ * meeting in a point below the bar between them, each letter edged in violet
+ * and filled with the Vice City sunset, blue at the top of the letters through
+ * purple, pink and coral to gold at the bottom, palm crowns spread over the
+ * fill. On a canvas the outline takes its violet, the palms a shade sunk into
+ * the sunset, and the fill the gradient, lifted a little on a dark page; in a
+ * <pre> it is one ink, from the same drawing. Grand Theft Auto is a trademark
+ * of its owner, shown here to name the game.
  */
 import type { Frame, Meta } from "../types.ts";
 
@@ -23,19 +22,21 @@ export interface GtaViOptions {
 export const meta = {
   name: "gta vi",
   category: "companies",
-  note: "the vi of grand theft auto vi, in pink, glinting now and then",
-  cols: 72,
-  rows: 30,
+  note: "the vi of grand theft auto vi, in a sunset, glinting now and then",
+  cols: 76,
+  rows: 32,
   fps: 30,
   options: { shine: 5 },
-  // The mark's gradient for a light page, then for a dark one; each as drawn, then twice lighter for the glint.
+  // Per page: the sunset's 7 stops, the palms over them, then twice lighter for the glint; the outline last.
   palette: [
-    "#ffcbe9", "#ffa8d8", "#ff84c7", "#ff61b6", "#fb46a8", "#f3349d", "#eb2192", "#e30f87",
-    "#ffe2f3", "#ffcfea", "#ffbbe0", "#ffa8d7", "#fd99cf", "#f88fc9", "#f485c3", "#f07bbd",
-    "#fff0f9", "#ffe7f4", "#ffddef", "#ffd3eb", "#fecbe7", "#fcc6e4", "#f9c1e0", "#f7bcdd",
-    "#ffd6ee", "#ffb3de", "#ff90cd", "#ff6dbd", "#fd53b0", "#f940a7", "#f62d9d", "#f21a94",
-    "#ffe8f6", "#ffd5ed", "#ffc2e4", "#ffafdb", "#fea0d4", "#fc96cf", "#fa8cc9", "#f881c4",
-    "#fff4fa", "#ffeaf6", "#ffe0f1", "#ffd6ed", "#fecfe9", "#fdcae6", "#fcc4e4", "#fbbfe1",
+    "#4a5ce6", "#7a4bd6", "#b043bc", "#e8418f", "#f87270", "#fb9c52", "#ffc95e", "#3b3294",
+    "#502b8c", "#692781", "#82266c", "#893c5e", "#8a4f51", "#8c6356", "#929df0", "#af93e6",
+    "#d08ed7", "#f18dbc", "#fbaaa9", "#fdc497", "#ffdf9e", "#c9cef8", "#d7c9f3", "#e7c7eb",
+    "#f8c6dd", "#fdd5d4", "#fee1cb", "#ffefcf", "#5c1898", "#5566e8", "#8256d8", "#b54ec0",
+    "#e94c96", "#f87a79", "#fba25c", "#ffcc68", "#403794", "#54308d", "#6b2c82", "#822b70",
+    "#894062", "#8a5255", "#8c655b", "#99a3f1", "#b49ae8", "#d395d9", "#f294c0", "#fbafaf",
+    "#fdc79d", "#ffe0a4", "#ccd1f8", "#daccf3", "#e9caec", "#f8c9e0", "#fdd7d7", "#fee3ce",
+    "#fff0d2", "#8d3ad1",
   ],
 } satisfies Meta<GtaViOptions>;
 
@@ -43,32 +44,34 @@ export const meta = {
 const MONO = String.raw`
 
 
-  88888888888                     88888888888    888888888888
-   8888888888                      8888888888     8888888888
-    888888888                       888888888      8888888888
-     88888888                       88888888        88888888
-      8888888                       8888888          888888
-      8888888                       8888888          |8888|
-       888888                       888888           |8888|
-        888888                     888888            |8888|
-         888888                   888888             |8888|
-          888888                 888888              |8888|
-           88888                 88888               |8888|
-            88888               88888                |8888|
-            888888             888888                |8888|
-             88888             88888                 |8888|
-              88888           88888                  |8888|
-               88888         88888                   |8888|
-                88888       88888                    |8888|
-                 8888       8888                     |8888|
-                  8888     8888                      |8888|
-                   8888   8888                       |8888|
-                    8888 8888                        |8888|
-                    8888 8888                        888888
-                     8888888                        88888888
-                      88888                        8888888888
-                       888                         8888888888
-                        8                         888888888888
+     88888888888888                  88888888888888    88888888888888
+    8888888888888888                8888888888888888  8888888888888888
+     8888888888888888              8888888888888888  888888888888888888
+      888888888888888              888888888888888   888888888888888888
+       888888888888888            888888888888888    888888888888888888
+        88888888888888            88888888888888     888888888888888888
+         88888888888888          88888888888888      888888888888888888
+          88888888888888        88888888888888       888888888888888888
+          88888888888888        88888888888888       888888888888888888
+           88888888888888      88888888888888        888888888888888888
+            88888888888888    88888888888888         888888888888888888
+             8888888888888    8888888888888          888888888888888888
+              8888888888888  8888888888888           888888888888888888
+               888888888888  888888888888            888888888888888888
+                888888888888888888888888             888888888888888888
+                 8888888888888888888888              888888888888888888
+                  88888888888888888888               888888888888888888
+                   888888888888888888                888888888888888888
+                    8888888888888888                 888888888888888888
+                     88888888888888                  888888888888888888
+                     88888888888888                  888888888888888888
+                      888888888888                   888888888888888888
+                       8888888888                    888888888888888888
+                        88888888                     888888888888888888
+                         888888                      888888888888888888
+                          8888                        8888888888888888
+                           88                          88888888888888
+
 
 
 `;
@@ -77,64 +80,104 @@ const MONO = String.raw`
 const ART = String.raw`
 
 
-  88888888888                     88888888888    888888888888
-   8888888888                      8888888888     8888888888
-    888888888                       888888888      8888888888
-     88888888                       88888888        88888888
-      8888888                       8888888          888888
-      8888888                       8888888          |8888|
-       888888                       888888           |8888|
-        888888                     888888            |8888|
-         888888                   888888             |8888|
-          888888                 888888              |8888|
-           88888                 88888               |8888|
-            88888               88888                |8888|
-            888888             888888                |8888|
-             88888             88888                 |8888|
-              88888           88888                  |8888|
-               88888         88888                   |8888|
-                88888       88888                    |8888|
-                 8888       8888                     |8888|
-                  8888     8888                      |8888|
-                   8888   8888                       |8888|
-                    8888 8888                        |8888|
-                    8888 8888                        888888
-                     8888888                        88888888
-                      88888                        8888888888
-                       888                         8888888888
-                        8                         888888888888
+     88888888888888                  88888888888888    88888888888888
+    8888888888888888                8888888888888888  8888888888888888
+     8888888888888888              8888888888888888  888888888888888888
+      888888888888888              888888888888888   888888888888888888
+       888888888888888            888888888888888    888888888888888888
+        88888888888888            88888888888888     888888888888888888
+         88888888888888          88888888888888      888888888888888888
+          88888888888888        88888888888888       888888888888888888
+          88888888888888        88888888888888       888888888888888888
+           88888888888888      88888888888888        888888888888888888
+            88888888888888    88888888888888         888888888888888888
+             8888888888888    8888888888888          888888888888888888
+              8888888888888  8888888888888           888888888888888888
+               888888888888  888888888888            888888888888888888
+                888888888888888888888888             888888888888888888
+                 8888888888888888888888              888888888888888888
+                  88888888888888888888               888888888888888888
+                   888888888888888888                888888888888888888
+                    8888888888888888                 888888888888888888
+                     88888888888888                  888888888888888888
+                     88888888888888                  888888888888888888
+                      888888888888                   888888888888888888
+                       8888888888                    888888888888888888
+                        88888888                     888888888888888888
+                         888888                      888888888888888888
+                          8888                        8888888888888888
+                           88                          88888888888888
+
 
 
 `;
 const INK = String.raw`
 
 
-  00000000000                     00000000000    000000000000
-   0000000000                      0000000000     0000000000
-    000000000                       000000000      0000000000
-     11111111                       11111111        11111111
-      1111111                       1111111          111111
-      1111111                       1111111          111111
-       222222                       222222           222222
-        222222                     222222            222222
-         222222                   222222             222222
-          222222                 222222              222222
-           33333                 33333               333333
-            33333               33333                333333
-            333333             333333                333333
-             44444             44444                 444444
-              44444           44444                  444444
-               44444         44444                   444444
-                55555       55555                    555555
-                 5555       5555                     555555
-                  5555     5555                      555555
-                   6666   6666                       666666
-                    6666 6666                        666666
-                    6666 6666                        666666
-                     6666666                        66666666
-                      77777                        7777777777
-                       777                         7777777777
-                        7                         777777777777
+
+    0000000000000000                0000000000000000  0000000000000000
+     0000000000000000              0000000000000000  000000000000000000
+      000000000000000              000000000000000   000000000000000000
+       000000000000000            000000000000000    000000000000000000
+        11111111111111            11111111111111     111111111111111111
+         11111111111111          11111111111111      111111111111111111
+          11111111111111        11111111111111       111111111111111111
+          11111111111111        11111111111111       111111111111111111
+           22222222222222      22222222222222        222222222222222222
+            22222222222222    22222222222222         222222222222222222
+             2222222222222    2222222222222          222222222222222222
+              2222222222222  2222222222222           222222222222222222
+               333333333333  333333333333            333333333333333333
+                333333333333333333333333             333333333333333333
+                 3333333333333333333333              333333333333333333
+                  44444444444444444444               444444444444444444
+                   444444444444444444                444444444444444444
+                    4444444444444444                 444444444444444444
+                     44444444444444                  444444444444444444
+                     55555555555555                  555555555555555555
+                      555555555555                   555555555555555555
+                       5555555555                    555555555555555555
+                        55555555                     555555555555555555
+                         666666                      666666666666666666
+                          6666                        6666666666666666
+                           66                          66666666666666
+
+
+
+`;
+// f fill, p palm, o outline.
+const LAYER = String.raw`
+
+
+     oooooooooooooo                  oooooooooooooo    oooooooooooooo
+    offffffffffffffo                offffffffffffffo  offfffpffpffpppo
+     offffffffffffffo              oppffffffffffffo  offffffppppfppfffo
+      offfffffffffffo              offfffffffffffo   opppppppppppfffffo
+       offfffffffppppo            offfffffffffffo    offffffppppppppffo
+        offffffffpfffo            oppffffffffffo     offffffffppfffpppo
+         offfffffffffpo          offppppffffffo      offffffffffppffffo
+          offfffffppppfo        offffffpppfffo       offfffffffffppfffo
+          offfffpppffffo        oppffffffpfffo       offffffffffffppffo
+           offfppfffffffo      offpppfffffffo        offfffffffffffppfo
+            ofppfffffffffo    oppfffppfffffo         offffffffffffffppo
+             offfffffffffo    ofppffffppffo          offffffffpffffffpo
+              offffffffppfo  offfppffffppo           offffffffpfffffffo
+               offfffffppfo  offffppffffo            offffffffpfffffffo
+                offffffppffooffffffpfffo             offffffffpfffffffo
+                 offfffppffffffffffppfo              offffffffpfffffffo
+                  offffppfffffffffffpo               offffffffpfffffffo
+                   offppffffffffffffo                offffffffpfffffffo
+                    ofppfffffffffffo                 offffffffpfffffffo
+                     oppffffffffffo                  offffffffpfffffffo
+                     oppffffffffffo                  offffffffpfffffffo
+                      opfffffffffo                   offffffffpfffffffo
+                       offffffffo                    offffffffpfffffffo
+                        offffffo                     offffffffffffffffo
+                         offffo                      offffffffffffffffo
+                          offo                        offffffffffffffo
+                           oo                          oooooooooooooo
+
+
 
 `;
 
@@ -148,8 +191,8 @@ const lines = (art: string) => art.slice(1, -1).split("\n").map((line) => line.p
 
 export default function gtaVi({ shine = meta.options.shine }: Partial<GtaViOptions> = {}): Frame {
   const { cols, rows } = meta;
-  const mono = lines(MONO), art = lines(ART), ink = lines(INK);
-  const n = meta.palette.length / 6;
+  const mono = lines(MONO), art = lines(ART), ink = lines(INK), lay = lines(LAYER);
+  const n = (meta.palette.length - 2) / 8; // colours a gradient stop group holds
   const every = shine > 0 ? Math.max(shine, PASS + 0.5) : 0;
   // The glint crosses the mark's ink, edge to edge, rather than the whole frame.
   let lo = Infinity, hi = -Infinity;
@@ -173,7 +216,11 @@ export default function gtaVi({ shine = meta.options.shine }: Partial<GtaViOptio
           let k = d < HALF ? 1 - d / HALF : 0;
           k = k * k * (3 - 2 * k);
           if (k > 0.55 && SOLID.includes(ch)) ch = "/";
-          if (color) color[y * cols + x] = (paper ? 0 : 3 * n) + (k > 0.6 ? 2 : k > 0.25 ? 1 : 0) * n + parseInt(ink[y][x], 36);
+          if (color) {
+            const l = lay[y][x];
+            color[y * cols + x] = l === "o" ? (paper ? 4 * n : 8 * n + 1)
+              : (paper ? 0 : 4 * n + 1) + ((l === "p" ? 1 : 0) + (k > 0.6 ? 2 : k > 0.25 ? 1 : 0)) * n + parseInt(ink[y][x], 36);
+          }
         }
         line += ch;
       }
