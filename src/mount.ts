@@ -154,16 +154,18 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
       }
       const text = frame(t, env());
       if (ground) ctx.fillStyle = ground;
-      // What this frame puts in each cell, laid out exactly as the draw loop below lays it out. `k` is the character
-      // position, which is what the piece's colours are indexed by; `x` is the display column it is drawn from.
+      // What this frame puts in each cell, laid out exactly as the draw loop below lays it out. `j` is the character's
+      // place in its row: env.color holds one colour a character, row by row, with none for the newlines, so its colour
+      // is at `y * cols + j`. `x` is the display column it is drawn from, which runs ahead of `j` past a wide glyph.
       next.fill(-1);
-      for (let k = 0, x = 0, y = 0; k < text.length; k++) {
+      for (let k = 0, j = 0, x = 0, y = 0; k < text.length; k++) {
         const c = text.charCodeAt(k);
         if (c === 10) {
-          x = 0;
+          x = j = 0;
           y++;
           continue;
         }
+        const at = y * cols + j++;
         const cells = cellWidth(c);
         // `meta.cols` counts characters, so a line carrying wide ones can run past the last column. What does not fit
         // is dropped rather than wrapped onto the next row, which would scatter it across cells it never named.
@@ -175,7 +177,7 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
         const base = y * cols + x;
         next[base] = c;
         for (let n = 1; n < span; n++) next[base + n] = -2;
-        if (color && nextColor) nextColor[base] = color[k];
+        if (color && nextColor) nextColor[base] = color[at];
         x += cells;
       }
       if (full) {
