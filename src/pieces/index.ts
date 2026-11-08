@@ -31,6 +31,7 @@ export * as candle from "./candle.ts";
 export * as candlesticks from "./candlesticks.ts";
 export * as cat from "./cat.ts";
 export * as centos from "./centos.ts";
+export * as charming from "./charming.ts";
 export * as chat from "./chat.ts";
 export * as cherryBlossom from "./cherry-blossom.ts";
 export * as chladni from "./chladni.ts";
