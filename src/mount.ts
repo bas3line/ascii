@@ -18,6 +18,7 @@
  *   const stop = mount(document.querySelector("pre")!, donut);
  */
 import type { Env, Frame, Meta, Options, Piece } from "./types.ts";
+import { cellWidth } from "./width.ts";
 
 /**
  * The piece's option overrides, `fps` to override its frame rate, and `motion`
@@ -77,11 +78,21 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
     const atlas = document.createElement("canvas");
     const actx = atlas.getContext("2d")!;
     const slots = new Map<number, number>();
-    // A slot is a glyph's box with a pixel of clear space round it, which a cell's rectangle may reach into.
-    let w = 0, h = 0, sw = 0, sh = 0, pw = 0, ph = 0, width = -1, ink = "";
+    // A slot is a glyph's box with a pixel of clear space round it, which a cell's rectangle may reach into. A slot
+    // holds two cells across, so a full-width character has room for the two it covers.
+    let w = 0, h = 0, sw = 0, sh = 0, pw = 0, ph = 0, slotW = 0, width = -1, ink = "";
     // Each column's and row's whole-pixel edges, and where its glyph's box starts.
     let xs = new Int32Array(0), ys = new Int32Array(0), gx = new Int32Array(0), gy = new Int32Array(0);
-    let last = "", full = true;
+    let full = true;
+    // What each cell of the canvas shows: the character drawn in it, -1 for a cleared cell, and -2 for the second cell
+    // of a full-width glyph. Frames are compared cell by cell rather than by string index: a character whose index in
+    // the string is unchanged still moves to another cell when one before it on the line changes width, and the cell it
+    // left has to be cleared.
+    const drawn = new Int32Array(cols * rows).fill(-1);
+    const next = new Int32Array(cols * rows);
+    // A piece's colours are indexed by character position, so each is carried to the cell its character is drawn in.
+    // Reading them by display column would hand a character the colour of one further along the row, past a wide glyph.
+    const nextColor = color && new Uint8Array(cols * rows);
     const lastColor = color && new Uint8Array(cols * rows);
     canvas.style.display ||= "block";
     canvas.style.width ||= "100%";
@@ -94,9 +105,10 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
       sh = Math.ceil(h);
       pw = sw + 2;
       ph = sh + 2;
+      slotW = 2 * pw;
       canvas.width = Math.round(w * cols);
       canvas.height = Math.round(h * rows);
-      atlas.width = pw * 32;
+      atlas.width = slotW * 32;
       atlas.height = ph * 32;
       xs = Int32Array.from({ length: cols + 1 }, (_, x) => Math.round(x * w));
       ys = Int32Array.from({ length: rows + 1 }, (_, y) => Math.round(y * h));
@@ -106,6 +118,7 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
       full = true;
     };
     const glyph = (code: number, i: number) => {
+      const cells = cellWidth(code);
       const key = code * 256 + i;
       let s = slots.get(key);
       if (s !== undefined) return s;
@@ -114,8 +127,10 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
         slots.clear();
       }
       s = slots.size;
-      const x = (s % 32) * pw + 1, y = Math.floor(s / 32) * ph + 1;
-      actx.font = font(w / 0.6);
+      const x = (s % 32) * slotW + 1, y = Math.floor(s / 32) * ph + 1;
+      // A glyph is drawn at the size that fills its cells: a monospace face draws an ASCII character 0.6em wide, and a
+      // full-width one 1em wide, so a wide glyph takes the font size whose 1em spans the two cells it covers.
+      actx.font = font(cells === 1 ? w / 0.6 : w / 0.5);
       actx.textAlign = "center";
       actx.textBaseline = "middle";
       actx.fillStyle = palette ? palette[i] || palette[0] : ink;
@@ -123,9 +138,9 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
       // the cells of that slot's glyph would then show.
       actx.save();
       actx.beginPath();
-      actx.rect(x - 1, y - 1, pw, ph);
+      actx.rect(x - 1, y - 1, cells * pw, ph);
       actx.clip();
-      actx.fillText(String.fromCharCode(code), x + sw / 2, y + sh / 2);
+      actx.fillText(String.fromCharCode(code), x + (cells * sw) / 2, y + sh / 2);
       actx.restore();
       slots.set(key, s);
       return s;
@@ -139,34 +154,59 @@ export function mount(el: HTMLElement, piece: Piece | Piece["default"], options:
       }
       const text = frame(t, env());
       if (ground) ctx.fillStyle = ground;
-      if (full) {
-        if (ground) ctx.fillRect(0, 0, canvas.width, canvas.height);
-        else ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-      for (let k = 0, x = 0, y = 0; k < text.length; k++) {
+      // What this frame puts in each cell, laid out exactly as the draw loop below lays it out. `j` is the character's
+      // place in its row: env.color holds one colour a character, row by row, with none for the newlines, so its colour
+      // is at `y * cols + j`. `x` is the display column it is drawn from, which runs ahead of `j` past a wide glyph.
+      next.fill(-1);
+      for (let k = 0, j = 0, x = 0, y = 0; k < text.length; k++) {
         const c = text.charCodeAt(k);
         if (c === 10) {
-          x = 0;
+          x = j = 0;
           y++;
           continue;
         }
-        const i = y * cols + x;
-        if (full || c !== last.charCodeAt(k) || (color && color[i] !== lastColor![i])) {
-          const x0 = xs[x], y0 = ys[y], cw = xs[x + 1] - x0, ch = ys[y + 1] - y0;
-          if (!full) {
-            if (ground) ctx.fillRect(x0, y0, cw, ch);
-            else ctx.clearRect(x0, y0, cw, ch);
-          }
-          if (c !== 32) {
-            const s = glyph(c, color ? color[i] : 0);
-            // the cell's own rectangle of the glyph's slot, the glyph's box placed where it always sits
-            ctx.drawImage(atlas, (s % 32) * pw + 1 + x0 - gx[x], Math.floor(s / 32) * ph + 1 + y0 - gy[y], cw, ch, x0, y0, cw, ch);
-          }
+        const at = y * cols + j++;
+        const cells = cellWidth(c);
+        // `meta.cols` counts characters, so a line carrying wide ones can run past the last column. What does not fit
+        // is dropped rather than wrapped onto the next row, which would scatter it across cells it never named.
+        if (x >= cols) {
+          x += cells;
+          continue;
         }
-        x++;
+        const span = Math.min(cells, cols - x);
+        const base = y * cols + x;
+        next[base] = c;
+        for (let n = 1; n < span; n++) next[base + n] = -2;
+        if (color && nextColor) nextColor[base] = color[at];
+        x += cells;
       }
-      last = text;
-      if (color) lastColor!.set(color);
+      if (full) {
+        if (ground) ctx.fillRect(0, 0, canvas.width, canvas.height);
+        else ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawn.fill(-1);
+      }
+      for (let i = 0, y = 0, x = 0; i < next.length; i++, (++x === cols) && (x = 0, y++)) {
+        const c = next[i];
+        // The second cell of a wide glyph is covered by the glyph drawn from the cell before it.
+        if (c === -2) continue;
+        if (!full && c === drawn[i] && (!color || nextColor![i] === lastColor![i])) continue;
+        const x0 = xs[x], y0 = ys[y];
+        const cells = c === -1 ? 1 : cellWidth(c);
+        const span = Math.min(cells, cols - x);
+        const cw = xs[x + span] - x0, ch = ys[y + 1] - y0;
+        // The cell is cleared before anything is drawn into it, so a glyph that shrank leaves nothing behind.
+        if (ground) ctx.fillRect(x0, y0, cw, ch);
+        else ctx.clearRect(x0, y0, cw, ch);
+        if (c > 32) {
+          const s = glyph(c, color ? nextColor![i] : 0);
+          // the cell's own rectangle of the glyph's slot, the glyph's box placed where it always sits. The source is
+          // the cell's own size, never the slot's padded box: copying `pw` into a cell `cw` wide would scale a narrow
+          // glyph down and open gaps in box drawing lines that are meant to meet.
+          ctx.drawImage(atlas, (s % 32) * slotW + 1 + x0 - gx[x], Math.floor(s / 32) * ph + 1 + y0 - gy[y], cw, ch, x0, y0, cw, ch);
+        }
+      }
+      drawn.set(next);
+      if (color && nextColor && lastColor) lastColor.set(nextColor);
       full = false;
     };
     size();
