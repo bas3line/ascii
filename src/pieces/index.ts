@@ -97,6 +97,7 @@ export * as glxgears from "./glxgears.ts";
 export * as go from "./go.ts";
 export * as greenStorm from "./green-storm.ts";
 export * as greptile from "./greptile.ts";
+export * as gtaVi from "./gta-vi.ts";
 export * as gyroscope from "./gyroscope.ts";
 export * as harmonograph from "./harmonograph.ts";
 export * as haskell from "./haskell.ts";

@@ -99,6 +99,7 @@ export const load = {
   "go": () => import("./pieces/go.ts"),
   "green-storm": () => import("./pieces/green-storm.ts"),
   "greptile": () => import("./pieces/greptile.ts"),
+  "gta-vi": () => import("./pieces/gta-vi.ts"),
   "gyroscope": () => import("./pieces/gyroscope.ts"),
   "harmonograph": () => import("./pieces/harmonograph.ts"),
   "haskell": () => import("./pieces/haskell.ts"),
@@ -253,7 +254,7 @@ export type PieceName = keyof typeof load;
 export const names = Object.keys(load) as PieceName[];
 
 /** The coloured pieces, which draw on a <canvas> rather than a <pre>. */
-export const canvas: ReadonlySet<PieceName> = new Set<PieceName>(["a0","agentmail","almalinux","alpine-dawn","alpine-linux","amer-fort","apple","arch-linux","aurora-fjord","autumn","black-prism","c","centos","charming","clojure","cloud-sea","cloudflare","coderabbit","collabute","command-city","command-code","cpp","csharp","css","dart","databuddy","debian","deep-reef","deepin","desert-night","earthrise","edge-orbit","elementary-os","elixir","elm","endeavouros","erlang","fedora","gangaur-ghat","gentoo","go","green-storm","greptile","haskell","helium","helixdb","helmcode","html","jal-mahal","java","javascript","julia","jungle-falls","kali-linux","keiki","kite-festival","kotlin","kyoto-dusk","lake-pichola","lantern-lake","lava-wall","linux-mint","lua","manjaro","marine-drive","mintlify","misty-forest","night-coast","night-highway","nixos","ocaml","ocean-sunset","omarchy","opensuse","orchid","perl","php","planet-scale","planetscale","playstation","polar","pop-os","prism-city","python","r","red-hat","rocky-linux","ruby","rust","salt-flat","saturn-rise","scala","snow-train","storm-plains","supabase","supermemory","svelte","swift","taj-dawn","tokyo-rain","tux","typescript","ubuntu","varanasi-ghats","vercel","void-linux","volcano-night","zig","zorin-os"]);
+export const canvas: ReadonlySet<PieceName> = new Set<PieceName>(["a0","agentmail","almalinux","alpine-dawn","alpine-linux","amer-fort","apple","arch-linux","aurora-fjord","autumn","black-prism","c","centos","charming","clojure","cloud-sea","cloudflare","coderabbit","collabute","command-city","command-code","cpp","csharp","css","dart","databuddy","debian","deep-reef","deepin","desert-night","earthrise","edge-orbit","elementary-os","elixir","elm","endeavouros","erlang","fedora","gangaur-ghat","gentoo","go","green-storm","greptile","gta-vi","haskell","helium","helixdb","helmcode","html","jal-mahal","java","javascript","julia","jungle-falls","kali-linux","keiki","kite-festival","kotlin","kyoto-dusk","lake-pichola","lantern-lake","lava-wall","linux-mint","lua","manjaro","marine-drive","mintlify","misty-forest","night-coast","night-highway","nixos","ocaml","ocean-sunset","omarchy","opensuse","orchid","perl","php","planet-scale","planetscale","playstation","polar","pop-os","prism-city","python","r","red-hat","rocky-linux","ruby","rust","salt-flat","saturn-rise","scala","snow-train","storm-plains","supabase","supermemory","svelte","swift","taj-dawn","tokyo-rain","tux","typescript","ubuntu","varanasi-ghats","vercel","void-linux","volcano-night","zig","zorin-os"]);
 
 /** Whether a name is a piece in the library. */
 export const isPiece = (name: string): name is PieceName => Object.hasOwn(load, name);
