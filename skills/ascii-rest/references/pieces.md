@@ -139,7 +139,7 @@
 | `command-code` | `commandCode` | canvas | 64×32 | 30 | the command key in a rounded square, glinting now and then | `{"shine":5}` |
 | `databuddy` | `databuddy` | canvas | 56×28 | 30 | the databuddy bunny, glinting now and then | `{"shine":5}` |
 | `greptile` | `greptile` | canvas | 49×28 | 30 | the g folded into a cube, in green, glinting now and then | `{"shine":5}` |
-| `gta-vi` | `gtaVi` | canvas | 70×24 | 30 | the vi of grand theft auto vi, in pink, glinting now and then | `{"shine":5}` |
+| `gta-vi` | `gtaVi` | canvas | 76×32 | 30 | the vi of grand theft auto vi, in a sunset, glinting now and then | `{"shine":5}` |
 | `helium` | `helium` | canvas | 49×28 | 30 | the six-point asterisk, in blue, glinting now and then | `{"shine":5}` |
 | `helixdb` | `helixdb` | canvas | 64×32 | 30 | the stepped rungs of a helix between two posts, glinting now and then | `{"shine":5}` |
 | `helmcode` | `helmcode` | canvas | 53×30 | 30 | the helmcode hexagon in its violet, glinting now and then | `{"shine":5}` |
