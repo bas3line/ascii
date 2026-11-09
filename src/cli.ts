@@ -16,7 +16,7 @@ import { parseArgs } from "node:util";
 import { drawable, fonts, shadows, type Effect, type FontName, type ShadowName } from "./banner.ts";
 import { isPiece, load, names, type PieceName } from "./library.ts";
 import { svg as toSvg } from "./svg.ts";
-import { banner, play, still } from "./terminal.ts";
+import { banner, blockSets, play, still } from "./terminal.ts";
 import type { Category, Piece } from "./types.ts";
 
 const or = (words: string[]) => (words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : words[0]);
@@ -34,6 +34,8 @@ const HELP = `ascii.rest: animated ascii art, in your terminal and in your code.
   --light           for a light terminal: the light colours, and shading flipped
   --fps <n>         frames a second, instead of the piece's own
   --seconds <n>     stops after n seconds; for a banner, how long it moves
+  --blocks <set>    what a scene is drawn in: halves, quadrants, sextants or
+                    octants. The finest your terminal is known to draw, by default
 
   play:
   --watch           plays it again each time you save the file
@@ -326,6 +328,7 @@ async function main() {
       light: { type: "boolean" },
       fps: { type: "string" },
       seconds: { type: "string" },
+      blocks: { type: "string" },
       color: { type: "string" },
       tagline: { type: "string" },
       font: { type: "string" },
@@ -392,6 +395,8 @@ async function main() {
   const fps = number("fps", values.fps, 60);
   const seconds = number("seconds", values.seconds);
   if (positionals.length > 1) throw new Usage(`one piece at a time: npx ascii.rest <piece>`);
+  const blocks = blockSets.find((set) => set === values.blocks);
+  if (values.blocks !== undefined && !blocks) throw new Usage(`--blocks takes ${or([...blockSets])}, not "${values.blocks}"`);
   if (positionals[0] === "list") return list();
 
   const slug = await find(positionals[0]);
@@ -399,7 +404,7 @@ async function main() {
   // Piped or redirected, there is nothing to play on: the first frame, as text.
   if (!process.stdout.isTTY) return void process.stdout.write(`${await still(slug, { light })}\n`);
 
-  const played = await play(slug, { mono: values.mono === true, light, fps, seconds });
+  const played = await play(slug, { mono: values.mono === true, light, fps, seconds, blocks });
   if (played.cropped) {
     const { piece, terminal } = played;
     process.stderr.write(
