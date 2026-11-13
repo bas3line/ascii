@@ -18,6 +18,7 @@ export const load = {
   "aurora-fjord": () => import("./pieces/aurora-fjord.ts"),
   "autumn": () => import("./pieces/autumn.ts"),
   "bar-chart": () => import("./pieces/bar-chart.ts"),
+  "basketball": () => import("./pieces/basketball.ts"),
   "big-text": () => import("./pieces/big-text.ts"),
   "black-hole": () => import("./pieces/black-hole.ts"),
   "black-prism": () => import("./pieces/black-prism.ts"),
