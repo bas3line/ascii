@@ -102,11 +102,17 @@ export default function basketball(options: Partial<BasketballOptions> = {}): Fr
   return drawBasketball(settings(options));
 }
 
-/** Configure a piece with its own loop length for SVG export. */
+/** Compute the same loop that the renderer uses for these options. */
+export function loopDuration(options: Partial<BasketballOptions> = {}): number {
+  return bounceSchedule(settings(options)).loop;
+}
+
+/** Configure a piece with its own defaults for playback and SVG export. */
 export function createBasketball(options: Partial<BasketballOptions> = {}): Piece<BasketballOptions> {
   const config = settings(options);
   return {
     meta: { ...meta, loop: bounceSchedule(config).loop, options: config },
+    loopDuration: (overrides = {}) => bounceSchedule(settings(overrides, config)).loop,
     default: (overrides = {}) => drawBasketball(settings(overrides, config)),
   };
 }

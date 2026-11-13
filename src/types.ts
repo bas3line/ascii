@@ -66,6 +66,8 @@ export type Frame = (t: number, env?: Env) => string;
 /** A piece module, as `import * as donut from ".../donut"` gives it. */
 export interface Piece<O extends Options = Options> {
   meta: Meta<O>;
+  /** Full loop in seconds when its length depends on the piece options. */
+  loopDuration?(options?: Partial<O>): number;
   // A method, so a piece whose options are { text: string } still counts as a Piece.
   default(options?: Partial<O>): Frame;
 }

@@ -182,14 +182,17 @@ export function inkOf({ css, body }: Part): string | null {
 const LOOPS: Record<string, string> = { logos: "shine", companies: "shine", distros: "scan" };
 
 /**
- * The loop a piece's SVG plays: a banner's own motion, its `loop`, a logo's glint or a distro's scan, or 4 seconds; 0 for
- * a still. `once` when it plays once and stays, as a typed banner does.
+ * The loop a piece's SVG plays: a banner's own motion, the piece's option-dependent or fixed loop,
+ * a logo's glint or a distro's scan, or 4 seconds. Still pieces use 0 seconds.
+ * `once` means the animation plays once and holds its last frame.
  */
 export function loopOf(piece: Piece, options: Options = {}): { every: number; from: number; once?: boolean } {
   const { meta } = piece;
   const motion = (piece as Partial<BannerPiece>).motion;
   if (motion) return { every: motion.seconds, from: motion.from, once: motion.once };
   if (!meta.fps) return { every: 0, from: 0 };
+  const configuredLoop = piece.loopDuration?.({ ...meta.options, ...options });
+  if (configuredLoop !== undefined) return { every: configuredLoop, from: 0 };
   if (meta.loop) return { every: meta.loop, from: 0 };
   const key = LOOPS[meta.category];
   const every = key ? ({ ...meta.options, ...options } as Record<string, unknown>)[key] : undefined;
@@ -314,7 +317,7 @@ export function svg(piece: Piece, options: SvgOptions = {}): string {
   // README's SVG isn't left to jump without anyone knowing why.
   const { meta } = piece;
   const key = LOOPS[meta.category];
-  const guessed = meta.fps > 0 && !meta.loop && !(piece as Partial<BannerPiece>).motion && !(key && typeof { ...meta.options, ...options.options }[key] === "number");
+  const guessed = meta.fps > 0 && !meta.loop && !piece.loopDuration && !(piece as Partial<BannerPiece>).motion && !(key && typeof { ...meta.options, ...options.options }[key] === "number");
   if (guessed && options.seconds === undefined && !warned.has(meta.name)) {
     warned.add(meta.name);
     console.warn(`ascii.rest: ${meta.name} moves but has no loop, so its SVG plays its first 4 seconds and jumps back: give it one (a recipe's period, row(), column() or grid()'s loop, or repeat()), or svg's seconds`);
