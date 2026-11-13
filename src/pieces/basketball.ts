@@ -4,6 +4,7 @@
  */
 import type { Frame, Meta, Piece } from "../types.ts";
 
+/** The bounces and final rest must fit within a 30-second loop. */
 export interface BasketballOptions {
   [key: string]: unknown;
   /** Uncompressed radius in character rows (1 to 15), fitted to the frame. */
@@ -35,6 +36,7 @@ const DEFAULTS = {
   ramp: " .:-=+*#%@",
 } satisfies BasketballOptions;
 
+const MAX_LOOP_SECONDS = 30;
 const TAU = 2 * Math.PI;
 const SAMPLE_X = [-0.125, 0.125];
 const SAMPLE_Y = [-0.25, 0.25];
@@ -55,7 +57,12 @@ function bounceSchedule({ gravity, launchSpeed, restitution, restSeconds }: Bask
     bounces.push({ start, land, end, speed });
     speed *= restitution;
   } while (speed >= 4);
-  return { bounces, loop: end + restSeconds };
+  const loop = end + restSeconds;
+  // SVG export samples the whole loop before checking its byte budget.
+  if (loop > MAX_LOOP_SECONDS) {
+    throw new RangeError(`basketball: the bounce and rest loop must be at most ${MAX_LOOP_SECONDS} seconds`);
+  }
+  return { bounces, loop };
 }
 
 export const meta = {
@@ -75,29 +82,36 @@ function bounded(value: unknown, fallback: number, min: number, max: number): nu
     : fallback;
 }
 
-function settings(options: Partial<BasketballOptions>): BasketballOptions {
+function settings(options: Partial<BasketballOptions>, defaults = DEFAULTS): BasketballOptions {
   const ramp = options.ramp;
   const validRamp = typeof ramp === "string" && ramp.startsWith(" ") && ramp.trimEnd().length > 0
     && !/[^\x20-\x7e·°\u2500-\u259f]/u.test(ramp);
   return {
-    radius: bounded(options.radius, DEFAULTS.radius, 1, meta.rows / 2 - 1),
-    gravity: bounded(options.gravity, DEFAULTS.gravity, 1, 300),
-    launchSpeed: bounded(options.launchSpeed, DEFAULTS.launchSpeed, 1, 60),
-    restitution: bounded(options.restitution, DEFAULTS.restitution, 0, 0.95),
-    restSeconds: bounded(options.restSeconds, DEFAULTS.restSeconds, 0, 10),
-    maxSpread: bounded(options.maxSpread, DEFAULTS.maxSpread, 0, 1),
-    maxSquash: bounded(options.maxSquash, DEFAULTS.maxSquash, 0, 0.9),
-    ramp: validRamp ? ramp : DEFAULTS.ramp,
+    radius: bounded(options.radius, defaults.radius, 1, meta.rows / 2 - 1),
+    gravity: bounded(options.gravity, defaults.gravity, 1, 300),
+    launchSpeed: bounded(options.launchSpeed, defaults.launchSpeed, 1, 60),
+    restitution: bounded(options.restitution, defaults.restitution, 0, 0.95),
+    restSeconds: bounded(options.restSeconds, defaults.restSeconds, 0, 10),
+    maxSpread: bounded(options.maxSpread, defaults.maxSpread, 0, 1),
+    maxSquash: bounded(options.maxSquash, defaults.maxSquash, 0, 0.9),
+    ramp: validRamp ? ramp : defaults.ramp,
   };
 }
 
 export default function basketball(options: Partial<BasketballOptions> = {}): Frame {
-  return createBasketball(options).default();
+  return drawBasketball(settings(options));
 }
 
 /** Configure a piece with its own loop length for SVG export. */
 export function createBasketball(options: Partial<BasketballOptions> = {}): Piece<BasketballOptions> {
   const config = settings(options);
+  return {
+    meta: { ...meta, loop: bounceSchedule(config).loop, options: config },
+    default: (overrides = {}) => drawBasketball(settings(overrides, config)),
+  };
+}
+
+function drawBasketball(config: BasketballOptions): Frame {
   const { bounces, loop } = bounceSchedule(config);
   const { cols, rows } = meta;
   const { gravity, launchSpeed, maxSpread, maxSquash, ramp } = config;
@@ -109,7 +123,7 @@ export function createBasketball(options: Partial<BasketballOptions> = {}): Piec
   const left = Array.from({ length: cols }, (_, c) => (c + 0.5 - cols / 2) / 2);
   const output = new Array<string>(rows);
 
-  const frame: Frame = (t, { paper = false } = {}) => {
+  return (t, { paper = false } = {}) => {
     const elapsed = ((t % loop) + loop) % loop;
     const bounce = bounces.find(({ end }) => elapsed < end);
     let height = 0;
@@ -164,6 +178,4 @@ export function createBasketball(options: Partial<BasketballOptions> = {}): Piec
     }
     return output.join("\n");
   };
-
-  return { meta: { ...meta, loop, options: config }, default: () => frame };
 }
