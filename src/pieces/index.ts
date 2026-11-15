@@ -16,6 +16,7 @@ export * as aurora from "./aurora.ts";
 export * as auroraFjord from "./aurora-fjord.ts";
 export * as autumn from "./autumn.ts";
 export * as barChart from "./bar-chart.ts";
+export * as basketball from "./basketball.ts";
 export * as bigText from "./big-text.ts";
 export * as blackHole from "./black-hole.ts";
 export * as blackPrism from "./black-prism.ts";
